@@ -75,7 +75,7 @@
 </style>
 </head>
 <body>
-<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Z] Zahra Gun · [F] reload · right-click to scope (sniper) · [R] unstick</div>
+<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Z] Zahra Gun · [F] reload · right-click or hold [Shift] to scope (sniper) · [R] unstick</div>
 <div id="pausebtn" title="Pause">❚❚ PAUSE</div>
 <div id="pauseoverlay"><div id="pausetitle">PAUSED</div><button id="resumebtn">RESUME</button><div id="pausehint">Press P or Esc to resume</div></div>
 <div id="stats">🔫 <span id="weap">Rifle</span> &nbsp; ⭐ <span id="score">0</span> &nbsp; 🌊 Wave <span id="wave">1</span> &nbsp; 👾 <span id="enemies">0</span></div>
@@ -918,7 +918,11 @@ const SKINS = {
   skeleton: { skinC:0xe7e7dd, face:'skull',  hair:false,   helmet:false, torso:0x413b2d, armor:0x4d4635, pants:0x36332b, boots:0x25231d, hands:0xe7e7dd, glow:null },
   croc:     { skinC:0x4f7a3a, face:'croc',   hair:false,   helmet:false, torso:0x6a2a2a, armor:0x7c3232, pants:0x34362a, boots:0x24201a, hands:0x4f7a3a, glow:null, snout:true, tail:true },
   cyborg:   { skinC:0xaab4be, face:'cyborg', hair:false,   helmet:false, torso:0x3a4048, armor:0x4d555f, pants:0x2b303a, boots:0x1c2026, hands:0x6a727c, glow:0x35d0ff, metal:true },
-  boss:     { skinC:0x2f343b, face:'boss',   hair:false,   helmet:true,  torso:0x2b2f36, armor:0x3b434c, pants:0x24272c, boots:0x17181c, hands:0x2b2f36, glow:0xff7a1a, bossgun:true }
+  boss:     { skinC:0x2f343b, face:'boss',   hair:false,   helmet:true,  torso:0x2b2f36, armor:0x3b434c, pants:0x24272c, boots:0x17181c, hands:0x2b2f36, glow:0xff7a1a, bossgun:true },
+  // ---- pyramid/desert reskins (waves 1-3) ----
+  mummy:    { skinC:0xd9c9a3, face:'mummy',  hair:false,   helmet:false, torso:0xcdbd9c, armor:0xe0d1a8, pants:0xb7a67f, boots:0xb7a67f, hands:0xcdbd9c, glow:0xe8a23d },
+  jackal:   { skinC:0x2b2018, face:'jackal', hair:false,   helmet:false, torso:0x33241a, armor:0x4a3420, pants:0x1c1712, boots:0x17130f, hands:0x17130f, glow:0x5fb8d6, metal:true, jackalSnout:true, ears:true, earsColor:0x1c130d, goldTrim:true },
+  colossus: { skinC:0xc9a671, face:'colossus', hair:false, helmet:false, torso:0xb99a63, armor:0xd8b988, pants:0xa4854f, boots:0x8f7548, hands:0xb99a63, glow:0xe0b040, cracks:true, bossgun:true, bossgunColor:0xe0b040, bossgunColor2:0xffd873 }
 };
 function glowCss(hex){ const c=new THREE.Color(hex==null?0x35d0ff:hex); return `rgb(${c.r*255|0},${c.g*255|0},${c.b*255|0})`; }
 function makeFace(type, skinHex, glowHex){
@@ -941,10 +945,31 @@ function makeFace(type, skinHex, glowHex){
     for(let i=0;i<20;i+=4) px(7+i,23,2,6,'#0c0e11'); // mouth/vent grille
     px(5,22,22,1,'#3a4048'); px(5,29,22,1,'#3a4048'); // grille frame
   }
+  else if(type==='mummy'){
+    // diagonal bandage striping over the base skin fill, sunken sockets, glowing pinprick eyes
+    ctx.strokeStyle='rgba(120,102,68,0.55)'; ctx.lineWidth=3;
+    for(let i=-6;i<38;i+=6){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i+16,32); ctx.stroke(); }
+    px(6,13,7,6,'#150f08'); px(19,13,7,6,'#150f08');
+    px(8,15,3,3,glowCss(glowHex||0xe8a23d)); px(21,15,3,3,glowCss(glowHex||0xe8a23d));
+  }
+  else if(type==='jackal'){
+    // deep-set sockets with visible contrast against the fur, glowing eyes, dark muzzle bridge (no teeth — the snout mesh covers the rest)
+    px(4,8,8,7,'#120c08'); px(20,8,8,7,'#120c08');
+    px(6,10,4,3,glowCss(glowHex||0x5fb8d6)); px(22,10,4,3,glowCss(glowHex||0x5fb8d6));
+    px(10,22,12,4,'#0a0705');
+  }
+  else if(type==='colossus'){
+    px(6,13,6,5,'#2a2013'); px(20,13,6,5,'#2a2013');
+    px(9,15,2,2,glowCss(glowHex||0xe0b040)); px(23,15,2,2,glowCss(glowHex||0xe0b040));
+    ctx.strokeStyle=glowCss(glowHex||0xe0b040); ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(3,3); ctx.lineTo(13,17); ctx.lineTo(9,29); ctx.stroke();
+  }
   const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; return t;
 }
 
 function makeVoxelBot(color, weaponType, skinName){
+  if(skinName==='scarab') return makeScarab();
+  if(skinName==='scorpion') return makeScorpion();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -962,7 +987,7 @@ function makeVoxelBot(color, weaponType, skinName){
   head.position.y = 1.58; g.add(head);
 
   // glowing eyes for cyborg/boss (Basic material → always bright, unaffected by hit-flash)
-  if(cfg.glow && (cfg.face==='cyborg'||cfg.face==='boss')){
+  if(cfg.glow && (cfg.face==='cyborg'||cfg.face==='boss'||cfg.face==='mummy'||cfg.face==='jackal'||cfg.face==='colossus')){
     const eyeMat=new THREE.MeshBasicMaterial({color:cfg.glow, fog:false});
     const eL=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.06,0.05),eyeMat); eL.position.set(-0.1,1.6,0.235); g.add(eL);
     const eR=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.06,0.05),eyeMat); eR.position.set(0.1,1.6,0.235); g.add(eR);
@@ -989,6 +1014,36 @@ function makeVoxelBot(color, weaponType, skinName){
     const teeth=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.05,0.02),new THREE.MeshLambertMaterial({color:0xf2f2ea})); teeth.position.set(0,1.43,0.45); g.add(teeth);
   }
   if(cfg.tail){ const tl=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.5),voxMat(skinC,{noise:12})); tl.position.set(0,0.7,-0.38); tl.rotation.x=0.45; g.add(tl); }
+  // jackal: long, narrowing three-part wedge snout — tapers to a sharp dark point instead of a blunt rounded nose, dusty (not warm/cute) fur tone
+  if(cfg.jackalSnout){
+    const baseMat = voxMat(0x5c4a36,{noise:10});
+    const midMat = voxMat(0x453626,{noise:10});
+    const base=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.16,0.2),baseMat); base.position.set(0,1.47,0.3); g.add(base);
+    const mid=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.12,0.22),midMat); mid.position.set(0,1.46,0.47); g.add(mid);
+    const tip=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.16),voxMat(0x080503,{noise:6})); tip.position.set(0,1.45,0.64); g.add(tip);
+  }
+  // jackal-style pointed ears, dark to match the fur (a thin gold trim reads better than solid gold horns)
+  if(cfg.ears){
+    const earMat = voxMat(cfg.earsColor||0x1c130d,{noise:10});
+    const earL = new THREE.Mesh(new THREE.ConeGeometry(0.075,0.2,4), earMat); earL.position.set(-0.15,1.94,-0.02); earL.rotation.z=0.3; g.add(earL);
+    const earR = new THREE.Mesh(new THREE.ConeGeometry(0.075,0.2,4), earMat); earR.position.set(0.15,1.94,-0.02); earR.rotation.z=-0.3; g.add(earR);
+    const tipMat = new THREE.MeshBasicMaterial({color:0xad8730, fog:false});
+    const tipL = new THREE.Mesh(new THREE.ConeGeometry(0.035,0.06,4), tipMat); tipL.position.set(-0.15,2.05,-0.02); tipL.rotation.z=0.3; g.add(tipL);
+    const tipR = new THREE.Mesh(new THREE.ConeGeometry(0.035,0.06,4), tipMat); tipR.position.set(0.15,2.05,-0.02); tipR.rotation.z=-0.3; g.add(tipR);
+  }
+  // colossus: glowing rune-crack strips across the chest, so the cracked-stone look reads at a distance
+  if(cfg.cracks){
+    const crackMat = new THREE.MeshBasicMaterial({color:cfg.glow||0xe0b040, fog:false});
+    const c1=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.5,0.035),crackMat); c1.position.set(-0.14,1.18,0.19); c1.rotation.z=0.35; g.add(c1);
+    const c2=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.38,0.03),crackMat); c2.position.set(0.17,0.98,0.19); c2.rotation.z=-0.5; g.add(c2);
+    const c3=new THREE.Mesh(new THREE.BoxGeometry(0.025,0.32,0.025),crackMat); c3.position.set(0.02,1.5,0.24); c3.rotation.z=0.15; g.add(c3);
+  }
+  // jackal: a couple of thin gold trim bars on the chest — just a smidge of color against the dark obsidian
+  if(cfg.goldTrim){
+    const trimMat = new THREE.MeshBasicMaterial({color:0xad8730, fog:false});
+    const tr1=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.025,0.02),trimMat); tr1.position.set(0,1.39,0.19); g.add(tr1);
+    const tr2=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.025,0.02),trimMat); tr2.position.set(0,1.01,0.19); g.add(tr2);
+  }
 
   // layered torso
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.66,0.32), voxMat(armorDark,{noise:12})); torso.position.y=1.08; g.add(torso);
@@ -1021,11 +1076,11 @@ function makeVoxelBot(color, weaponType, skinName){
     const guard = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.05,0.16), voxMat(0x3a2e22,{noise:8})); heldGrp.add(guard);
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.18,0.08), voxMat(0x5a3d28,{noise:10})); handle.position.y=0.11; heldGrp.add(handle);
   } else if(cfg.bossgun){
-    // big blue energy cannon (like the boss in the reference)
+    // energy cannon (blue for the default boss; skins can override via bossgunColor/bossgunColor2)
     const dark = voxMat(0x1b2630,{noise:10});
     const barrel=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.5,0.17),dark); barrel.position.y=-0.26; heldGrp.add(barrel);
-    const core=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.52,0.08),new THREE.MeshBasicMaterial({color:0x35c8ff,fog:false})); core.position.y=-0.26; heldGrp.add(core);
-    const ring=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.07,0.22),new THREE.MeshBasicMaterial({color:0x8fe6ff,fog:false})); ring.position.y=-0.52; heldGrp.add(ring);
+    const core=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.52,0.08),new THREE.MeshBasicMaterial({color:cfg.bossgunColor||0x35c8ff,fog:false})); core.position.y=-0.26; heldGrp.add(core);
+    const ring=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.07,0.22),new THREE.MeshBasicMaterial({color:cfg.bossgunColor2||0x8fe6ff,fog:false})); ring.position.y=-0.52; heldGrp.add(ring);
     const grip=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.18,0.11),dark); grip.position.y=0.06; heldGrp.add(grip);
   } else {
     const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.34,0.1), voxMat(0x1b1d22,{noise:10})); barrel.position.y=-0.16; heldGrp.add(barrel);
@@ -1034,7 +1089,7 @@ function makeVoxelBot(color, weaponType, skinName){
   }
   armR.add(heldGrp);
   const botMuzzle = new THREE.Mesh(new THREE.PlaneGeometry(0.35,0.35),
-    new THREE.MeshBasicMaterial({color: cfg.bossgun?0x5ad6ff:0xffe08a, transparent:true, opacity:0, fog:false, side:THREE.DoubleSide}));
+    new THREE.MeshBasicMaterial({color: cfg.bossgun?(cfg.bossgunColor||0x5ad6ff):0xffe08a, transparent:true, opacity:0, fog:false, side:THREE.DoubleSide}));
   botMuzzle.position.set(0,-1.0,0.02); botMuzzle.visible=false; armR.add(botMuzzle);
   g.userData.botMuzzle = botMuzzle;
   g.userData.weaponType = weaponType;
@@ -1074,6 +1129,94 @@ function enemyMarkerTex(){
   ctx.fillStyle='#ff2a2a'; ctx.strokeStyle='#ffffff'; ctx.lineWidth=8;
   ctx.beginPath(); ctx.moveTo(26,20); ctx.lineTo(102,20); ctx.lineTo(64,96); ctx.closePath(); ctx.fill(); ctx.stroke();
   _markerTex=new THREE.CanvasTexture(c); _markerTex.magFilter=THREE.NearestFilter; return _markerTex;
+}
+
+// ---- scarab: small non-humanoid swarm creature (no arms/legs rig — spawned in packs of 5) ----
+// a single beetle — used only as a building block for the swarm group below, never spawned alone
+function makeScarabUnit(){
+  const g = new THREE.Group();
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(0.32,10,6), voxMat(0x4f5c37,{noise:18}));
+  shell.scale.set(1,0.55,0.75); shell.position.y=0.32; g.add(shell);
+  const seam = new THREE.Mesh(new THREE.BoxGeometry(0.015,0.03,0.6), new THREE.MeshBasicMaterial({color:0x171d10,fog:false}));
+  seam.position.y=0.42; g.add(seam);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.1,0.1), voxMat(0x171d10,{noise:10})); head.position.set(0,0.26,0.3); g.add(head);
+  const legMat = voxMat(0x171d10,{noise:8});
+  for(let i=0;i<6;i++){
+    const side = i<3?-1:1, row=i%3;
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.03,0.03), legMat);
+    leg.position.set(side*0.24, 0.14, 0.16-row*0.16);
+    leg.rotation.z = side*0.5; leg.rotation.y = (row-1)*0.3;
+    g.add(leg);
+  }
+  const under = new THREE.Mesh(new THREE.SphereGeometry(0.22,8,4),
+    new THREE.MeshBasicMaterial({color:0x5fb8d6, transparent:true, opacity:0.5, fog:false}));
+  under.scale.set(1,0.2,0.6); under.position.y=0.06; g.add(under);
+  return g;
+}
+// the scarab "swarm": one bot entity made of 5 beetles in a fixed cluster — they share one hitbox/HP
+// and one AI, so the pack always moves, fights, and dies together instead of scattering as individuals
+function makeScarab(){
+  const g = new THREE.Group();
+  const formation = [
+    {x:-0.3, z:0.12,  ry:-0.5, s:0.85},
+    {x:0.24, z:0.2,   ry:0.35, s:1.05},
+    {x:0.02, z:-0.16, ry:0.1,  s:0.95},
+    {x:0.34, z:-0.12, ry:0.8,  s:0.8},
+    {x:-0.2, z:-0.24, ry:-1.0, s:0.75},
+  ];
+  formation.forEach(f=>{
+    const unit = makeScarabUnit();
+    unit.position.set(f.x, 0, f.z); unit.rotation.y = f.ry; unit.scale.setScalar(f.s);
+    g.add(unit);
+  });
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 1.15, 0); marker.scale.set(0.9,0.9,0.9); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
+// ---- scorpion stalker: low fast flanker, non-humanoid — tail arcs up to a glowing stinger ----
+function makeScorpion(){
+  const g = new THREE.Group();
+  const shellMat = voxMat(0xb5502c,{noise:16});
+  const shellMat2 = voxMat(0x9c4423,{noise:16});
+  // narrow, elongated segmented body (front-to-back) instead of a wide flat crab shell
+  const headSeg = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.19,0.22), shellMat); headSeg.position.set(0,0.27,0.32); g.add(headSeg);
+  const seg1 = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.22,0.26), shellMat); seg1.position.set(0,0.28,0.08); g.add(seg1);
+  const seg2 = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.2,0.22), shellMat2); seg2.position.set(0,0.28,-0.15); g.add(seg2);
+  const pincerMat = voxMat(0x8a3a20,{noise:12});
+  [-1,1].forEach(side=>{
+    const pincer = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.08,0.22), pincerMat);
+    pincer.position.set(side*0.11,0.27,0.5); pincer.rotation.y = side*0.15; g.add(pincer);
+  });
+  // legs tucked underneath and angled down, not splayed flat out to the sides
+  const legMat = voxMat(0x3a2216,{noise:10});
+  for(let i=0;i<8;i++){
+    const side = i<4?-1:1, row=i%4;
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.03,0.03), legMat);
+    leg.position.set(side*0.15, 0.12, 0.24-row*0.16);
+    leg.rotation.z = side*0.95; leg.rotation.x = 0.15;
+    g.add(leg);
+  }
+  // segmented tail arcing up and forward, ending in a glowing stinger — the dominant silhouette feature
+  const tailMat = voxMat(0x6a2c1c,{noise:12});
+  [{s:0.19,y:0.32,z:-0.32,rx:-0.3},{s:0.15,y:0.5,z:-0.46,rx:-0.9},{s:0.12,y:0.62,z:-0.4,rx:-1.7},{s:0.095,y:0.68,z:-0.24,rx:-2.3}]
+    .forEach(seg=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s,seg.s*1.3), tailMat); m.position.set(0,seg.y,seg.z); m.rotation.x=seg.rx; g.add(m); });
+  const stinger = new THREE.Mesh(new THREE.ConeGeometry(0.06,0.17,4), new THREE.MeshBasicMaterial({color:0x33c9c9, fog:false}));
+  stinger.position.set(0,0.73,-0.1); stinger.rotation.x = -2.6; g.add(stinger);
+  const glow = new THREE.PointLight(0x33c9c9, 0.6, 2.5); glow.position.copy(stinger.position); g.add(glow);
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 1.15, 0); marker.scale.set(0.85,0.85,0.85); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
 }
 
 const bots = [];
@@ -1326,6 +1469,7 @@ document.addEventListener('keydown', e => {
   }
   if (paused) return;
   keys[e.code]=true;
+  if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && document.pointerLockElement===renderer.domElement) setScope(true);
   if (e.code==='Digit1') selectWeapon(0);
   if (e.code==='Digit2') selectWeapon(1);
   if (e.code==='Digit3') selectWeapon(2);
@@ -1339,7 +1483,10 @@ document.addEventListener('keydown', e => {
     setBanner('↺ repositioned'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='↺ repositioned') setBanner(''); }, 900);
   }
 });
-document.addEventListener('keyup', e => keys[e.code]=false);
+document.addEventListener('keyup', e => {
+  keys[e.code]=false;
+  if (e.code==='ShiftLeft' || e.code==='ShiftRight') setScope(false);
+});
 window.addEventListener('wheel', e => { if(!paused) selectWeapon(currentWeapon + (e.deltaY>0?1:-1)); });
 
 // ===================== PAUSE =====================
@@ -1501,15 +1648,27 @@ function spawnWave(n){
   if(n%2===0) checkpointWaveIdx=n; // wave 1, 3, 5 (idx 0,2,4) are checkpoints — every 2 waves
   clearBots();
   const count=WAVES[n], diff=waveDiff(n);
+  const pyramid = n<3; // waves 1-3: desert/pyramid reskin, ahead of the stone-temple boss dungeon
   let knifeN=0, pistN=0;
   for(let i=0;i<count;i++){
     const sp=SPAWN_POINTS[(i*3 + n*2 + i) % SPAWN_POINTS.length];
     const x=sp[0], z=sp[1];
     const wt=(i%3===2)?'knife':'pistol';
-    const skin = wt==='knife' ? (knifeN++ %2 ? 'skeleton' : 'zombie')
-                              : (pistN++  %2 ? 'cyborg'   : 'croc');
+    const skin = pyramid
+      ? (wt==='knife' ? 'mummy' : 'jackal')
+      : (wt==='knife' ? (knifeN++ %2 ? 'skeleton' : 'zombie')
+                      : (pistN++  %2 ? 'cyborg'   : 'croc'));
     const col=ENEMY_COLORS[(i+n)%ENEMY_COLORS.length];
     spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp:Math.round(BOT_MAX_HP*diff), diff, speed:1+(diff-1)*0.5});
+  }
+  if(pyramid && n===1){ // wave 2: a scarab swarm — one pack entity (5 beetles, one hitbox/HP/AI) that moves and dies together
+    const sx=-10, sz=-16;
+    spawnBot(sx,sz,0x4f5c37,[sx-2,0,sz],[sx+2,0,sz],'knife',
+      {skin:'scarab', hp:Math.round(BOT_MAX_HP*diff*0.85), diff, speed:(1+(diff-1)*0.5)*1.6, scale:0.85});
+  }
+  if(pyramid && n===2){ // wave 3: a scorpion stalker prowls in as a fast elite, ahead of the colossus boss
+    spawnBot(10,16,0xb5502c,[4,0,16],[16,0,16],'knife',
+      {skin:'scorpion', hp:Math.round(BOT_MAX_HP*diff*1.4), diff, speed:(1+(diff-1)*0.5)*1.9, scale:1.3});
   }
   document.getElementById('wave').textContent=(n+1)+'/6';
   setEnemyCount();
@@ -1520,8 +1679,11 @@ function spawnBossFight(){
   enterDungeon();
   bossActive=true;
   const isFinal = bossNum>=2;
-  const bmesh=spawnBot(0,-8,0x15181d,[-7,0,-8],[7,0,-8],'pistol',
-    {hp:isFinal?1700:1050, scale:isFinal?2.7:2.3, boss:true, speed:isFinal?2.0:1.5, skin:'boss', diff:1});
+  // Boss I is the Sandstone Colossus (pyramid arc payoff); Boss II keeps the original design for contrast
+  const skin = isFinal ? 'boss' : 'colossus';
+  const col = isFinal ? 0x15181d : 0xc9a671;
+  const bmesh=spawnBot(0,-8,col,[-7,0,-8],[7,0,-8],'pistol',
+    {hp:isFinal?1700:1450, scale:isFinal?2.7:3.1, boss:true, speed:isFinal?2.0:1.5, skin, diff:1});
   showBossBar(true); setBossBar(bmesh.userData.data);
   document.getElementById('wave').textContent = isFinal?'BOSS II':'BOSS I';
   setEnemyCount('☠'); SFX.boss();
@@ -1593,6 +1755,7 @@ function firstHit(origin, dir, maxDist, ignoreGroup){
   for(const h of hits){
     let o=h.object;
     if(o===sky || o===muzzle || o.userData.isTracer || o.isSprite) continue;
+    if(o===grenadeArcLine || o===grenadeFill || o===grenadeRing) continue;
     // ignore gun viewmodel (descendant of camera) + the shooter's own group
     let p=o, underCam=false, botGroup=null, ignored=false;
     while(p){ if(p===camera) underCam=true; if(p===ignoreGroup) ignored=true; if(p.userData && p.userData.isBot) botGroup=p; p=p.parent; }
@@ -1785,7 +1948,50 @@ function fire(){
   }
 }
 
-// ---- grenade launcher: lob a small shell from the muzzle to the aimed point, then explode for area damage ----
+// ---- grenade landing preview: dashed arc from muzzle to aim point + a ring on the ground showing splash radius ----
+const GRENADE_ARC_SEGMENTS = 24;
+const grenadeArcGeom = new THREE.BufferGeometry().setAttribute('position',
+  new THREE.BufferAttribute(new Float32Array((GRENADE_ARC_SEGMENTS+1)*3), 3));
+const grenadeArcLine = new THREE.Line(grenadeArcGeom,
+  new THREE.LineDashedMaterial({color:0xffb347, dashSize:0.25, gapSize:0.18, transparent:true, opacity:0.85}));
+grenadeArcLine.visible = false; grenadeArcLine.frustumCulled = false;
+scene.add(grenadeArcLine);
+const grenadeFill = new THREE.Mesh(new THREE.CircleGeometry(1, 48),
+  new THREE.MeshBasicMaterial({color:0xff2222, transparent:true, opacity:0.6, depthWrite:false}));
+grenadeFill.rotation.x = -Math.PI/2; grenadeFill.visible = false; grenadeFill.renderOrder = 10;
+scene.add(grenadeFill);
+const grenadeRing = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48),
+  new THREE.MeshBasicMaterial({color:0xff2222, transparent:true, opacity:0.95, side:THREE.DoubleSide, depthWrite:false}));
+grenadeRing.rotation.x = -Math.PI/2; grenadeRing.visible = false; grenadeRing.renderOrder = 11;
+scene.add(grenadeRing);
+const GRENADE_RING_SCALE = 0.55; // draw smaller than the actual splash radius so it reads as a tight target reticle
+function updateGrenadePreview(){
+  const w = weapons[currentWeapon].userData;
+  const show = player.alive && w.grenade && !w.reloading && document.pointerLockElement===renderer.domElement;
+  grenadeArcLine.visible = grenadeFill.visible = grenadeRing.visible = show;
+  if(!show) return;
+  camera.getWorldDirection(_fwd);
+  const origin = camera.position.clone();
+  const hit = firstHit(origin, _fwd, 300);
+  const end = hit ? hit.point : origin.clone().addScaledVector(_fwd, 120);
+  const from = new THREE.Vector3(); muzzle.getWorldPosition(from);
+  const dist = from.distanceTo(end);
+  const pos = grenadeArcGeom.attributes.position.array;
+  for(let i=0;i<=GRENADE_ARC_SEGMENTS;i++){
+    const s = i/GRENADE_ARC_SEGMENTS;
+    pos[i*3]   = from.x + (end.x-from.x)*s;
+    pos[i*3+1] = from.y + (end.y-from.y)*s + Math.sin(s*Math.PI)*dist*0.14;
+    pos[i*3+2] = from.z + (end.z-from.z)*s;
+  }
+  grenadeArcGeom.attributes.position.needsUpdate = true;
+  grenadeArcGeom.computeBoundingSphere();
+  grenadeArcLine.computeLineDistances();
+  grenadeFill.position.set(end.x, end.y+0.03, end.z);
+  grenadeRing.position.set(end.x, end.y+0.04, end.z);
+  grenadeFill.scale.setScalar(w.splashRadius * GRENADE_RING_SCALE);
+  grenadeRing.scale.setScalar(w.splashRadius * GRENADE_RING_SCALE);
+}
+
 const grenades = [];
 function launchGrenade(from, to){
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.14,0.14),
@@ -1975,6 +2181,8 @@ function animate(){
   if(dmgTimer>0){ dmgTimer-=dt; if(dmgTimer<=0 && dmgVignette) dmgVignette.style.opacity='0'; }
   tracers.forEach(tr=>{ if(tr.life>0){ tr.life-=dt; tr.mesh.material.opacity=Math.max(0,tr.life/0.08*0.9); if(tr.life<=0) tr.mesh.visible=false; } });
 
+  updateGrenadePreview();
+
   // ----- grenades: lob from muzzle to the aim point (with an arc), explode on arrival -----
   for(let i=grenades.length-1;i>=0;i--){
     const gr=grenades[i]; gr.t+=dt;
@@ -2044,18 +2252,18 @@ function animate(){
     if(facePlayer) b.mesh.lookAt(camera.position.x, 0, camera.position.z);
     else b.mesh.lookAt(b.mesh.position.x+Math.cos(b.heading), 0, b.mesh.position.z+Math.sin(b.heading));
 
-    // ---- animation: legs/arms swing only while actually moving ----
+    // ---- animation: legs/arms swing only while actually moving (skipped by non-humanoid rigs, e.g. scarabs) ----
     const walk = Math.sin(t*7 + b.t*3) * (b.moving?1:0);
-    b.mesh.userData.legL.rotation.x = walk*0.5;
-    b.mesh.userData.legR.rotation.x = -walk*0.5;
+    if(ud.legL){ ud.legL.rotation.x = walk*0.5; ud.legR.rotation.x = -walk*0.5; }
     // aim blend: 0 = arm down swinging, 1 = arm raised toward player
     const targetAim = canEngage ? 1 : 0;
     b.aim += (targetAim - b.aim) * Math.min(1, dt*8);
     b.swing = Math.max(0, b.swing - dt*5);
-    const armR = b.mesh.userData.armR, armL = b.mesh.userData.armL;
-    // right arm: raise to -90° when aiming; add stab/recoil via swing
-    armR.rotation.x = (-1.5*b.aim) + walk*0.4*(1-b.aim) - b.swing*1.2;
-    armL.rotation.x = -walk*0.4*(1-b.aim) - 0.2*b.aim;
+    if(ud.armR){
+      // right arm: raise to -90° when aiming; add stab/recoil via swing
+      ud.armR.rotation.x = (-1.5*b.aim) + walk*0.4*(1-b.aim) - b.swing*1.2;
+      ud.armL.rotation.x = -walk*0.4*(1-b.aim) - 0.2*b.aim;
+    }
 
     // ---- combat ----
     b.fireCd -= dt;
