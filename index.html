@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>BLOCKFRONT</title>
+<title>NILEFRONT</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#87CEEB;font-family:sans-serif;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
   #hud{position:absolute;top:10px;left:10px;color:#fff;text-shadow:0 1px 2px #000;font-size:14px;z-index:2}
@@ -22,12 +22,14 @@
   #hitmark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff5555;font-size:26px;font-weight:bold;z-index:3;opacity:0;transition:opacity 0.05s;text-shadow:0 0 3px #000;pointer-events:none}
   #dmg{position:absolute;inset:0;z-index:2;opacity:0;pointer-events:none;transition:opacity 0.25s;box-shadow:inset 0 0 220px 40px rgba(200,0,0,0.85)}
   #banner{position:absolute;top:42%;left:0;width:100%;text-align:center;color:#fff;font-size:40px;font-weight:800;z-index:3;opacity:0;transition:opacity 0.2s;text-shadow:0 2px 8px #000;pointer-events:none}
-  #lock{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.62);color:#fff;z-index:4}
-  #title{font-size:74px;font-weight:900;letter-spacing:4px;color:#eaf2f8;text-shadow:0 4px 0 #1c2a33,0 6px 14px rgba(0,0,0,0.7);line-height:1}
-  #title span{color:#ff3b3b}
-  #startbtn{margin-top:28px;padding:16px 54px;font-size:26px;font-weight:900;letter-spacing:2px;color:#fff;
-    background:linear-gradient(#ff5a4d,#d61f2b);border:3px solid #fff;border-radius:12px;cursor:pointer;
-    box-shadow:0 5px 0 #7a0f16,0 8px 18px rgba(0,0,0,0.5);transition:transform 0.08s,box-shadow 0.08s;font-family:sans-serif}
+  #lock{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(120% 140% at 50% 30%, rgba(22,49,80,0.78) 0%, rgba(10,26,44,0.82) 55%, rgba(6,15,26,0.85) 100%);color:#fff;z-index:4}
+  #title{font-size:74px;font-weight:900;letter-spacing:6px;color:#ffd54a;font-family:Georgia,'Times New Roman',serif;
+    text-shadow:0 4px 0 #0e2942,0 8px 22px rgba(0,0,0,0.8),0 0 34px rgba(70,170,210,0.55);line-height:1}
+  #title span{color:#3ec6d9}
+  #startbtn{margin-top:28px;padding:16px 54px;font-size:26px;font-weight:900;letter-spacing:2px;color:#0d1f2e;
+    background:linear-gradient(#ffd54a,#c99a1e);border:3px solid #1a4a68;border-radius:4px;cursor:pointer;
+    box-shadow:0 5px 0 #1a4a68,0 8px 18px rgba(0,0,0,0.5);transition:transform 0.08s,box-shadow 0.08s;font-family:sans-serif}
   #startbtn:hover{filter:brightness(1.08)}
   #startbtn:active{transform:translateY(4px);box-shadow:0 1px 0 #7a0f16,0 3px 8px rgba(0,0,0,0.5)}
   /* hide all in-game UI until the game starts (title screen shows only logo + START + background) */
@@ -87,7 +89,7 @@
 <div id="banner"></div>
 <div id="hpbar"><div id="hpfill"></div><div id="hptext">100</div></div>
 <div id="scopeoverlay"><div id="scopering"></div></div>
-<div id="lock"><div id="title">BLOCK<span>FRONT</span></div><button id="startbtn">START</button></div>
+<div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button></div>
 <div id="mobile">
   <div id="stick"><div id="knob"></div></div>
   <div id="wbtns"><div class="wbtn" data-w="0">1</div><div class="wbtn sel" data-w="1">2</div><div class="wbtn" data-w="2">3</div><div class="wbtn" data-w="3">4</div></div>
@@ -876,6 +878,103 @@ function switchToOriginalWorld(){
   activeHeightZones = heightZonesOriginal;
 }
 
+// ===== NILE WAVE — automatic bonus wave between wave 2 and wave 3: adrift on a boat, crocodiles and hippos
+// attack from the water, harpoon-only loadout. Triggered by the wave/boss pending state machine, no portal. =====
+const nileColliders = [];
+const nileWorld = new THREE.Group();
+let inNileArea = false;
+let weaponsBeforeNile = null, currentWeaponBeforeNile = 0;
+addTarget = nileColliders;
+function waterRippleTex(){
+  const P=48, c=_mkCanvas(P), x=c.getContext('2d');
+  x.fillStyle='#1a5f88'; x.fillRect(0,0,P,P);
+  for(let j=0;j<10;j++){
+    const y=(j+0.5)*(P/10);
+    x.strokeStyle=`rgba(255,255,255,${0.1+Math.random()*0.14})`; x.lineWidth=1+Math.random()*1.5;
+    x.beginPath(); x.moveTo(0,y);
+    x.bezierCurveTo(P*0.3,y+Math.random()*6-3,P*0.7,y+Math.random()*6-3,P,y);
+    x.stroke();
+  }
+  return c;
+}
+(function buildNileWorld(){
+  function nblock(w,h,d,color,x,y,z,opts){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), voxMat(color,opts||{noise:16})); m.position.set(x,y,z); nileWorld.add(m); return m; }
+  // open water in every direction — a big flat sea, no walls, no ceiling, with a rippled surface texture instead of a flat color
+  const rippleTex=_finish(waterRippleTex(),24);
+  const waterMat = new THREE.MeshPhongMaterial({map:rippleTex, color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52});
+  const water = new THREE.Mesh(new THREE.BoxGeometry(400,1,400), waterMat);
+  water.position.set(0,-0.5,0); water.userData.isWater=true; nileWorld.add(water);
+  // the boat: a walkable wooden deck (no collider on the deck itself — only its railings are solid) so the
+  // player can move freely on it, while crocs/hippos (which never get colliders) attack from the water around it
+  nblock(5,0.3,8,0x8a6a42,0,0.05,0,{noise:20,pattern:'plate'});
+  nblock(4.8,0.15,7.8,0x6b4a2c,0,0.22,0,{noise:14}); // plank seam layer for texture depth
+  [-2.6,2.6].forEach(rx=>{ nblock(0.25,0.5,8,0x6b4a2c,rx,0.35,0,{noise:14}); addBox(rx,0,0.25,8); });
+  [-4.1,4.1].forEach(rz=>{ nblock(5.4,0.5,0.25,0x6b4a2c,0,0.35,rz,{noise:14}); addBox(0,rz,5.4,0.25); });
+  // raised bow and stern points for a real boat silhouette, not a plain rectangle
+  nblock(3.2,0.6,1.4,0x6b4a2c,0,0.35,4.6,{noise:14});
+  nblock(2.2,0.7,1,0x6b4a2c,0,0.4,5.3,{noise:14});
+  nblock(3.6,0.6,1,0x6b4a2c,0,0.35,-4.4,{noise:14});
+  const mast = new THREE.Mesh(new THREE.BoxGeometry(0.22,3.6,0.22), voxMat(0x6b4a2c,{noise:12})); mast.position.set(0,1.8,-1.2); nileWorld.add(mast);
+  const sail = new THREE.Mesh(new THREE.BoxGeometry(1.8,2.2,0.06), voxMat(0xe8dcc0,{noise:10})); sail.position.set(0,2.6,-1.35); nileWorld.add(sail);
+  // deck clutter for character: barrels, crates, coiled rope
+  function barrel(x,z){ nblock(0.5,0.7,0.5,0x445544,x,0.4,z,{noise:22,pattern:'plate'}); }
+  barrel(-1.6,2.2); barrel(1.7,-2.6); barrel(-1.4,-3.2);
+  function crate(x,z){ nblock(0.6,0.6,0.6,0xa87c4f,x,0.4,z,{noise:20,pattern:'plate'}); }
+  crate(1.6,2.4); crate(-1.7,-2.7);
+  const rope = new THREE.Mesh(new THREE.TorusGeometry(0.35,0.05,5,10), voxMat(0xd9c9a0,{noise:10}));
+  rope.rotation.x=Math.PI/2; rope.position.set(1.7,0.25,3.4); nileWorld.add(rope);
+  // distant desert shoreline all around the horizon — low, wide, rounded dune mounds (not tall thin "buildings")
+  function duneMound(x,z){
+    const w=16+Math.random()*20, d=w*0.75;
+    nblock(w,3+Math.random()*2,d,0xd8b982,x,1.5,z,{noise:18});
+    nblock(w*0.6,2.5+Math.random()*2,d*0.6,0xe0c48f,x,3.4,z,{noise:16});
+    nblock(w*0.3,1.8,d*0.35,0xcfa96a,x,4.6,z,{noise:14});
+  }
+  for(let i=0;i<26;i++){
+    const a=(i/26)*Math.PI*2 + Math.random()*0.15, dist=100+Math.random()*50;
+    duneMound(Math.sin(a)*dist, Math.cos(a)*dist);
+  }
+})();
+addTarget = colliders;
+
+function spawnNileWave(){
+  // crocodiles and hippos spawn out in the open water, ringed around the boat, and swim in to attack
+  const ring=[[-14,10],[14,10],[-16,-8],[16,-8],[0,16],[-9,-14],[9,-14]];
+  ring.slice(0,5).forEach(([x,z])=>{
+    spawnBot(x,z,0x3e5c2e,[x*0.3,0,z*0.3],[x,0,z],'knife',{skin:'crocodile', hp:130, diff:1.2, speed:1.5});
+  });
+  spawnBot(0,-16,0x7a7a82,[0,0,-4],[0,0,-16],'knife',{skin:'hippo', hp:420, diff:1.3, speed:0.9, scale:1.3});
+  spawnBot(0,16,0x7a7a82,[0,0,4],[0,0,16],'knife',{skin:'hippo', hp:420, diff:1.3, speed:0.9, scale:1.3});
+}
+function enterNileWave(){
+  inNileArea = true;
+  scene.remove(pyramidOverworld); scene.add(nileWorld); sky.visible=true;
+  activeColliders = nileColliders; activeHeightZones = heightZonesOriginal;
+  scene.background.set(0x4a90b8); scene.fog.color.set(0x4a90b8); scene.fog.near=30; scene.fog.far=140;
+  hemi.intensity=0.9; hemi.color.set(0xcfe8f5); hemi.groundColor.set(0x1a4a5f);
+  sun.intensity=1.0; fill.intensity=0.3; fill.color.set(0xaecbe0);
+  camera.position.set(0,1.7,0); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  // harpoon-only loadout for the duration of the wave
+  weaponsBeforeNile = weapons; currentWeaponBeforeNile = currentWeapon;
+  weapons.forEach(w=>w.visible=false);
+  weapons = nileWeapons; selectWeapon(0);
+  clearBots(); spawnNileWave();
+  setBanner('NILE WAVE'); setTimeout(()=>{ if(inNileArea) setBanner(''); },1800);
+}
+function exitNileWave(){
+  inNileArea = false;
+  scene.remove(nileWorld); scene.add(pyramidOverworld); sky.visible=true;
+  activeColliders = pyramidColliders; activeHeightZones = heightZonesPyramid;
+  scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
+  hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
+  sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
+  camera.position.copy(spawnPoint); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  // restore whatever loadout was active before the Nile wave
+  weapons.forEach(w=>w.visible=false);
+  weapons = weaponsBeforeNile; selectWeapon(currentWeaponBeforeNile);
+  clearBots();
+}
+
 function fenceSeg(x,z,rotY){
   const grp = new THREE.Group();
   const mat = voxMat(0x6b5a42,{noise:14});
@@ -1201,6 +1300,8 @@ function makeFace(type, skinHex, glowHex){
 function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='scarab') return makeScarab();
   if(skinName==='scorpion') return makeScorpion();
+  if(skinName==='hippo') return makeHippo();
+  if(skinName==='crocodile') return makeCrocodile();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -1495,6 +1596,66 @@ function makeScorpion(){
   return g;
 }
 
+// ---- hippo: low, wide, tanky river charger — non-humanoid ----
+function makeHippo(){
+  const g = new THREE.Group();
+  const skinMat = voxMat(0x7a7a82,{noise:16});
+  const bellyMat = voxMat(0x9a8a86,{noise:12});
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.7,1.3), skinMat); body.position.y=0.55; g.add(body);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.94,0.3,1.3), bellyMat); belly.position.set(0,0.25,0); g.add(belly);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.5,0.55), skinMat); head.position.set(0,0.65,0.78); g.add(head);
+  const jawLower = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.18,0.5), bellyMat); jawLower.position.set(0,0.42,0.95); g.add(jawLower);
+  [-1,1].forEach(side=>{
+    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.08),skinMat); ear.position.set(side*0.22,0.94,0.75); g.add(ear);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.05),voxMat(0x201c1c,{noise:4})); eye.position.set(side*0.18,0.86,0.98); g.add(eye);
+    const tusk=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.16,0.06),new THREE.MeshLambertMaterial({color:0xf2f0e6})); tusk.position.set(side*0.16,0.32,1.15); g.add(tusk);
+  });
+  const legMat = voxMat(0x6a6a72,{noise:14});
+  [[-0.35,-0.5],[0.35,-0.5],[-0.35,0.5],[0.35,0.5]].forEach(([lx,lz])=>{
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.5,0.28),legMat); leg.position.set(lx,0.25,lz); g.add(leg);
+  });
+  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.25),skinMat); tail.position.set(0,0.6,-0.68); g.add(tail);
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 1.3, 0); marker.scale.set(1.1,1.1,1.1); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
+// ---- crocodile: a real animal-shaped crocodile — long low body, snapping jaw, tapering tail — not a humanoid reskin ----
+function makeCrocodile(){
+  const g = new THREE.Group();
+  const skinMat = voxMat(0x3e5c2e,{noise:16});
+  const bellyMat = voxMat(0xc9c9a0,{noise:10});
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.35,1.4), skinMat); body.position.set(0,0.35,0); g.add(body);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.15,1.4), bellyMat); belly.position.set(0,0.2,0); g.add(belly);
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.22,0.6), skinMat); snout.position.set(0,0.32,0.95); g.add(snout);
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.1,0.55), bellyMat); jaw.position.set(0,0.2,0.95); g.add(jaw);
+  const teeth = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.04,0.02), new THREE.MeshLambertMaterial({color:0xf0f0e0})); teeth.position.set(0,0.26,1.2); g.add(teeth);
+  [-1,1].forEach(side=>{
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.08), voxMat(0x1c2410,{noise:6})); eye.position.set(side*0.14,0.46,0.68); g.add(eye);
+  });
+  const legMat = voxMat(0x35501f,{noise:14});
+  [[-0.28,-0.4],[0.28,-0.4],[-0.28,0.4],[0.28,0.4]].forEach(([lx,lz])=>{
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.24,0.22),legMat); leg.position.set(lx,0.13,lz); g.add(leg);
+  });
+  // tapering tail
+  [{s:0.4,z:-0.8},{s:0.3,z:-1.1},{s:0.2,z:-1.35}].forEach(seg=>{
+    const t=new THREE.Mesh(new THREE.BoxGeometry(0.32*seg.s/0.4,0.22*seg.s/0.4,0.35), skinMat); t.position.set(0,0.3,seg.z); g.add(t);
+  });
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 0.9, 0); marker.scale.set(0.9,0.9,0.9); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
 const bots = [];
 const BOT_MAX_HP = 100;
 function spawnBot(x,z,color,pA,pB,weaponType,opts){
@@ -1700,21 +1861,51 @@ function makeBow(){
   return g;
 }
 // KHOPESH — curved bronze blade (straight base + hooked tip), melee: a short-range swing, no ammo
+// small engraved Eye of Horus decal for the khopesh pommel
+function eyeOfHorusTex(){
+  const P=64, c=document.createElement('canvas'); c.width=c.height=P; const x=c.getContext('2d');
+  x.clearRect(0,0,P,P);
+  const ink='#5a4018';
+  x.fillStyle=ink;
+  // eyebrow
+  x.beginPath(); x.moveTo(9,17); x.lineTo(48,17); x.lineTo(54,13); x.lineTo(48,21); x.lineTo(9,23); x.closePath(); x.fill();
+  // almond eye
+  x.beginPath();
+  x.moveTo(8,32); x.quadraticCurveTo(26,20,48,30); x.quadraticCurveTo(30,40,8,32); x.closePath(); x.fill();
+  // pupil (cut a lighter hole so it doesn't read as a solid blob)
+  x.fillStyle='#c9a030';
+  x.beginPath(); x.arc(27,31,5,0,Math.PI*2); x.fill();
+  x.fillStyle='#2a1c10';
+  x.beginPath(); x.arc(27,31,2.6,0,Math.PI*2); x.fill();
+  // teardrop marking
+  x.fillStyle=ink;
+  x.beginPath(); x.moveTo(46,32); x.quadraticCurveTo(51,42,44,50); x.lineTo(40,48); x.quadraticCurveTo(44,40,42,33); x.closePath(); x.fill();
+  // spiral tail
+  x.strokeStyle=ink; x.lineWidth=3; x.beginPath(); x.arc(18,48,5,0.2,Math.PI*1.6); x.stroke();
+  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; return t;
+}
 function makeKhopesh(){
   const g=new THREE.Group();
-  const bronze=metalMatP(0xad8730,85,0xffe9b0), dark=metalMatP(0x2a1c12,20);
-  // handle at the bottom: pommel, then grip, then guard where the blade begins
-  part(g,0.09,0.05,0.07,bronze,0,0.0,0.04);           // pommel cap
-  part(g,0.05,0.2,0.05,dark,0,0.12,0.04);             // grip
-  const guard=part(g,0.16,0.03,0.09,dark,0,0.23,0.04); guard.rotation.z=0.05;
-  // blade: based on real khopesh reference photos — mostly straight (~55% of the length), then a tight compact
-  // hook. Curls in the X-Y plane (screen right/up) — the plane the camera actually sees — curling toward -X
-  // (left) so it reads as a clear hook instead of one that only shows up from the side.
-  // Verified by plotting the exact box transforms before applying (see khopesh_render3.png).
-  part(g,0.05,0.22,0.05,bronze,0,0.325,0.04);                          // straight blade — most of the length
-  part(g,0.045,0.07,0.05,bronze,-0.0136,0.447,0.04).rotation.z=0.4;    // hook begins, curling left
-  part(g,0.042,0.06,0.05,bronze,-0.0498,0.478,0.04).rotation.z=1.2;
-  part(g,0.04,0.05,0.05,bronze,-0.0884,0.475,0.04).rotation.z=1.9;     // hooked tip
+  const goldDeep=metalMatP(0x9a7020,80,0xd9b872), goldBlade=metalMatP(0xd4af37,90,0xfff4c0);
+  const leatherLight=voxMat(0x6b4226,{noise:16}), leatherDark=voxMat(0x4a2c18,{noise:14});
+  // pommel: gold cap with an engraved Eye of Horus decal on its face
+  part(g,0.09,0.06,0.07,goldDeep,0,0.0,0.04);
+  const eyePlane=new THREE.Mesh(new THREE.PlaneGeometry(0.08,0.08), new THREE.MeshBasicMaterial({map:eyeOfHorusTex(), transparent:true}));
+  eyePlane.position.set(0,0.0,0.076); g.add(eyePlane);
+  // ribbed leather-wrapped grip: stacked matte segments alternating tones, not shiny gold
+  for(let i=0;i<5;i++){
+    const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.042,8), i%2?leatherDark:leatherLight);
+    seg.position.set(0,0.04+i*0.04,0.04); g.add(seg);
+  }
+  const guard=part(g,0.16,0.03,0.09,goldDeep,0,0.23,0.04); guard.rotation.z=0.05;
+  // blade: a tiny straight rise, then an obtuse ~140° curve (a "C", not a full doubled-back semicircle) —
+  // verified by plotting the exact chain-walked box transforms first.
+  part(g,0.05,0.1,0.05,goldBlade,0,0.27,0.04);                            // tiny straight base
+  part(g,0.045,0.1,0.05,goldBlade,-0.0109,0.3387,0.04).rotation.z=0.2443; // curve begins
+  part(g,0.042,0.1,0.05,goldBlade,-0.0475,0.3983,0.04).rotation.z=0.733;
+  part(g,0.04,0.1,0.05,goldBlade,-0.1079,0.4338,0.04).rotation.z=1.2217;
+  part(g,0.038,0.1,0.05,goldBlade,-0.1778,0.4367,0.04).rotation.z=1.7104;
+  part(g,0.036,0.1,0.05,goldBlade,-0.241,0.4065,0.04).rotation.z=2.1991; // tip
   g.scale.setScalar(1.05);  // bigger — uniform scale keeps every part's proportions/connections intact
   g.userData={muzzleZ:-0.1,muzzleY:0.4,pos:new THREE.Vector3(0.22,-0.22,-0.42),recoil:0.16,name:'Khopesh',
     damage:60, fireRate:0.42, melee:true, range:2.5, auto:false, spread:0, tracer:0xffe9b0,
@@ -1738,13 +1929,31 @@ function makeWasScepter(){
   return g;
 }
 
+// HARPOON — the only weapon during the Nile Wave: a heavy barbed spear, powerful enough to drop a charging hippo
+function makeHarpoon(){
+  const g=new THREE.Group();
+  const wood=metalMatP(0x6b4a2c,20,0x442211), metal=metalMatP(0xaab4be,90,0xffffff);
+  part(g,0.04,0.04,0.9,wood,0,0,-0.1);                     // shaft
+  const head=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.28,4), metal); head.position.set(0,0,-0.62); head.rotation.x=-Math.PI/2; g.add(head);
+  [-1,1].forEach(side=>{ // barbs
+    const barb=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.03,0.14), metal); barb.position.set(side*0.05,0,-0.5); barb.rotation.y=side*0.5; g.add(barb);
+  });
+  part(g,0.05,0.22,0.06,wood,0,0.2,0.32);                  // grip
+  const rope=new THREE.Mesh(new THREE.BoxGeometry(0.015,0.015,0.5), new THREE.MeshBasicMaterial({color:0xd9c9a0,fog:false})); rope.position.set(0.06,0,0.1); g.add(rope);
+  g.userData={muzzleZ:-0.7,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.4),recoil:0.2,name:'Harpoon',
+    damage:120, fireRate:0.9, auto:false, spread:0, tracer:0xaab4be,
+    magSize:5, ammo:5, reloadTime:1.5, reloading:false, reloadT:0};
+  return g;
+}
+
 const DEFAULT_FOV = 75;
 let scoped = false; // declared here (before selectWeapon's initial call) to avoid a temporal-dead-zone crash
 const originalWeapons = [makeSniper(), makeRifle(), makeRayGun(), makeGrenadeLauncher(), makeZahraGun()];
 const pyramidWeapons = [makeBow(), makeKhopesh(), makeWasScepter()];
+const nileWeapons = [makeHarpoon()];
 let weapons = pyramidWeapons; // waves 1-3 + Boss I start on the pyramid loadout; swapped back after Boss I
 const gunGroup = new THREE.Group();
-originalWeapons.concat(pyramidWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
+originalWeapons.concat(pyramidWeapons).concat(nileWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
 gunGroup.add(muzzle);
 let currentWeapon = 0; // start on the bow
 function setAmmoHUD(){
@@ -1857,6 +2066,12 @@ document.addEventListener('keydown', e => {
     camera.position.y = playerHeight + 1.7; vel.set(0,0,0); stuckTimer = 0;
     setBanner('↺ repositioned'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='↺ repositioned') setBanner(''); }, 900);
   }
+  // ==================== DEBUG — REMOVE BEFORE SHIPPING ====================
+  // K: instantly kills every living enemy on screen (wave, boss, Nile wave — whatever's active), for testing.
+  if (e.code==='KeyK' && player.alive){
+    bots.forEach(b=>{ if(b.alive) damageBot(b, 99999, b.mesh.position); });
+  }
+  // ==========================================================================
 });
 document.addEventListener('keyup', e => {
   keys[e.code]=false;
@@ -2016,11 +2231,15 @@ const SPAWN_POINTS=[[-6,-6],[9,4],[-9,9],[-14,-14],[16,-6],[4,16],[-20,4],[18,14
 const WAVES=[3,4,5, 6,7,9]; // 6 waves; a boss after wave 3 and after wave 6 — noticeably bigger later waves
 function waveDiff(n){ return 1 + n*n*0.05 + n*0.16; } // accelerating curve: each wave is meaningfully tougher than the last
 let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWon=false, gameStarted=false;
-let checkpointWaveIdx=0; // checkpoints only every 2 waves (idx 0, 2, 4 = wave 1, 3, 5) — dying rolls back to here
+// era system: dying always respawns at the START of the CURRENT era, never an earlier one (e.g. dying in a
+// later Greek/Roman/Islamic era must not roll back into the Egyptian/pyramid era). currentEra indexes into
+// ERA_START_WAVE; extend both when a new era arc is added later, incrementing currentEra at that era's
+// boss-defeat transition (see the pyramidPhase branch in onAllDead()).
+let currentEra=0;
+const ERA_START_WAVE=[0,3]; // waveIdx where each era begins — era 0 (pyramid) starts at wave 1, era 1 at wave 4
 function clearBots(){ bots.forEach(b=>scene.remove(b.mesh)); bots.length=0; }
 function setEnemyCount(txt){ const e=document.getElementById('enemies'); if(e) e.textContent = txt!==undefined?txt:bots.filter(b=>b.alive).length; }
 function spawnWave(n){
-  if(n%2===0) checkpointWaveIdx=n; // wave 1, 3, 5 (idx 0,2,4) are checkpoints — every 2 waves
   clearBots();
   const count=WAVES[n], diff=waveDiff(n);
   const pyramid = n<3; // waves 1-3: desert/pyramid reskin, ahead of the stone-temple boss dungeon
@@ -2068,9 +2287,9 @@ function startGame(){
   SFX.init();
   document.body.classList.add('playing');
   gunGroup.visible = true;
-  gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; checkpointWaveIdx=0;
+  gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
   player.score=0; player.hp=player.maxHp; player.alive=true; player.lastHit=-99;
-  pyramidPhase=true; dungeonWasPyramid=true; weapons=pyramidWeapons; selectWeapon(0); // reset to the pyramid map/loadout in case this is a replay
+  pyramidPhase=true; dungeonWasPyramid=true; inNileArea=false; weapons=pyramidWeapons; selectWeapon(0); // reset to the pyramid map/loadout in case this is a replay
   exitDungeon(); // ensure we start in the overworld (also positions the player)
   targetYaw=0; targetPitch=0; vel.set(0,0,0);
   showBossBar(false); clearBots(); spawnWave(0);
@@ -2084,12 +2303,19 @@ function onAllDead(){
     bossActive=false; showBossBar(false);
     if(bossNum>=2){ gameWon=true; exitDungeon(); setBanner('🏆 YOU WIN!  (click to play again)'); return; }
     exitDungeon();
-    if(pyramidPhase){ pyramidPhase=false; switchToOriginalWorld(); switchToOriginalLoadout(); }
+    if(pyramidPhase){ pyramidPhase=false; switchToOriginalWorld(); switchToOriginalLoadout(); currentEra=1; }
     waveIdx++; pending='wave'; betweenTimer=2.6; setBanner('Boss down! Back to the surface…');
     return;
   }
-  // a normal wave was cleared: boss after wave 3 (idx 2) and after wave 6 (idx 5)
+  if(inNileArea){
+    // Nile Wave cleared — return to the pyramid map/loadout and continue straight on to wave 3
+    exitNileWave();
+    waveIdx++; pending='wave'; betweenTimer=2.5; setBanner('WAVE '+(waveIdx+1)+' incoming…');
+    return;
+  }
+  // a normal wave was cleared: boss after wave 3 (idx 2) and after wave 6 (idx 5); Nile Wave after wave 2 (idx 1)
   if(waveIdx===2 || waveIdx===5){ pending='boss'; betweenTimer=2.2; setBanner(waveIdx===5?'The final boss stirs…':'A boss awaits below…'); }
+  else if(waveIdx===1 && pyramidPhase){ pending='nile'; betweenTimer=2.2; setBanner('The Nile stirs…'); }
   else { waveIdx++; pending='wave'; betweenTimer=2.5; setBanner('WAVE '+(waveIdx+1)+' incoming…'); }
 }
 function updateWaves(dt){
@@ -2098,6 +2324,7 @@ function updateWaves(dt){
     if(betweenTimer <= 0){
       if(pending==='wave'){ spawnWave(waveIdx); setBanner('WAVE '+(waveIdx+1)); setTimeout(()=>{ if(!gameWon) setBanner(''); },1200); }
       else if(pending==='boss'){ spawnBossFight(); }
+      else if(pending==='nile'){ enterNileWave(); }
       pending=null;
     }
   } else if(gameStarted && !gameWon && bots.length>0 && bots.filter(b=>b.alive).length===0){
@@ -2312,6 +2539,7 @@ function fire(){
   else if(w.name==='Zahra Gun') SFX.playerZahra();
   else if(w.name==='Was Scepter') SFX.playerRay();
   else if(w.name==='Bow') SFX.playerRifle();
+  else if(w.name==='Harpoon') SFX.playerSniper();
   else SFX.playerGrenade();
   // recoil + flash
   gunGroup.position.z = gunBaseZ + w.recoil;
@@ -2425,12 +2653,17 @@ function damagePlayer(dmg){
 }
 function respawnPlayer(){
   player.hp = player.maxHp; player.alive = true; player.lastHit=-99;
-  // dying always rolls progress back to the last checkpoint (every 2 waves) with that wave's
-  // enemies freshly respawned — no continuing a wave (or a boss fight) from where you died
+  // dying always rolls progress back to the START OF THE CURRENT ERA, with that wave's enemies freshly
+  // respawned — never back into an earlier era (e.g. dying in a later era must not send you back to the
+  // Egyptian/pyramid one). No continuing a wave (or a boss fight) from where you died, either.
   pending = null; bossActive = false; showBossBar(false);
-  bossNum = checkpointWaveIdx>=4 ? 1 : 0; // keep credit for a boss already beaten in an earlier checkpoint group
+  if(inNileArea){ // clean up a mid-Nile-Wave death: same restore steps as exitNileWave()
+    inNileArea=false; scene.remove(nileWorld);
+    weapons.forEach(w=>w.visible=false); weapons=weaponsBeforeNile||weapons; selectWeapon(currentWeaponBeforeNile||0);
+  }
+  bossNum = currentEra; // keep credit for any boss(es) already defeated in earlier eras
   exitDungeon();
-  waveIdx = checkpointWaveIdx;
+  waveIdx = ERA_START_WAVE[currentEra];
   clearBots(); spawnWave(waveIdx);
   setBanner('💀 back to Wave '+(waveIdx+1)); setTimeout(()=>{ if(!gameWon) setBanner(''); },1500);
   const sp = pickSpawnPoint();
@@ -2603,7 +2836,7 @@ function animate(){
     if(wd.reloadT >= wd.reloadTime){ wd.reloading=false; wd.ammo=wd.magSize; if(idx===currentWeapon) setAmmoHUD(); }
   });
   const rg = weapons[2];
-  if (rg.visible){ rg.traverse(o=>{ if(o.material && o.material.emissiveIntensity!==undefined) o.material.emissiveIntensity = 0.8 + Math.sin(t*8)*0.35; }); }
+  if (rg && rg.visible){ rg.traverse(o=>{ if(o.material && o.material.emissiveIntensity!==undefined) o.material.emissiveIntensity = 0.8 + Math.sin(t*8)*0.35; }); }
 
   // ----- bot AI + animation -----
   const _dir = new THREE.Vector3(); const _chest = new THREE.Vector3();
