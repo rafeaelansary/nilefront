@@ -125,16 +125,22 @@ sun.shadow.camera.bottom = -45;
 sun.shadow.bias = -0.0004;
 scene.add(sun);
 // ---- collision registry (top-down AABB rectangles; buildings/props are full-height blockers) ----
-const colliders = [];            // overworld colliders
-const dungeonColliders = [];     // dungeon colliders
+const colliders = [];            // original overworld colliders
+const pyramidColliders = [];     // pyramid overworld colliders (waves 1-3)
+const dungeonColliders = [];     // original boss dungeon colliders (Boss II)
+const pyramidDungeonColliders = []; // pyramid boss dungeon colliders (Boss I)
 let addTarget = colliders;       // where addBox pushes during world build
 let activeColliders = colliders; // which set physics currently uses
 function addBox(cx,cz,w,d,roofY){ addTarget.push({x1:cx-w/2, z1:cz-d/2, x2:cx+w/2, z2:cz+d/2, roofY}); }
+let pyramidPhase = true; // waves 1-3 + Boss I use the pyramid map/loadout; reverts to the original after Boss I
 // height zones let the player climb onto rooftops via ramps (bots stay ground-level, unaffected)
-const heightZones = [];
+const heightZonesOriginal = [];
+const heightZonesPyramid = [];
+let heightZoneTarget = heightZonesOriginal;   // where sniperTower()/plaza() push during world build
+let activeHeightZones = heightZonesPyramid;   // which set getTerrainHeight() reads at runtime (pyramid phase starts active)
 function getTerrainHeight(x,z){
   let h=0;
-  for(const zn of heightZones){
+  for(const zn of activeHeightZones){
     if(x<zn.x1||x>zn.x2||z<zn.z1||z>zn.z2) continue;
     if(zn.type==='plateau'){ h=Math.max(h,zn.y); }
     else if(zn.axisX){ const t=Math.max(0,Math.min(1,(x-zn.x1)/Math.max(0.001,(zn.x2-zn.x1)))); h=Math.max(h, zn.y1+(zn.y2-zn.y1)*t); }
@@ -555,7 +561,7 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
   const pMat={noise:14};
   block(size,0.5,0.25,wallColor,x,height+0.35,z-half,pMat); block(size,0.5,0.25,wallColor,x,height+0.35,z+half,pMat);
   block(0.25,0.5,size,wallColor,x-half,height+0.35,z,pMat); block(0.25,0.5,size,wallColor,x+half,height+0.35,z,pMat);
-  heightZones.push({type:'plateau', x1:x-half,z1:z-half,x2:x+half,z2:z+half, y:height});
+  heightZoneTarget.push({type:'plateau', x1:x-half,z1:z-half,x2:x+half,z2:z+half, y:height});
   // exterior wooden staircase up one side (dir: 'n'|'s'|'e'|'w' — which face it climbs)
   const steps=Math.max(6,Math.round(height/0.45));
   const rampWidth=2.8, rampLen=height*1.7; // wide margin so a fast/diagonal step can't drift off the walkable corridor
@@ -570,10 +576,10 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
     block(w,0.45,d,wallColor,sx,y+0.22,sz,woodMat);
   }
   const nearD=half, farD=half+rampLen; // ramp butts right up against the wall — no dead gap between ramp and roof
-  if(rampDir==='s') heightZones.push({type:'ramp', x1:x-rampWidth/2,x2:x+rampWidth/2, z1:z+nearD,z2:z+farD, y1:height,y2:0});
-  else if(rampDir==='n') heightZones.push({type:'ramp', x1:x-rampWidth/2,x2:x+rampWidth/2, z1:z-farD,z2:z-nearD, y1:0,y2:height});
-  else if(rampDir==='e') heightZones.push({type:'ramp', x1:x+nearD,x2:x+farD, z1:z-rampWidth/2,z2:z+rampWidth/2, y1:height,y2:0, axisX:true});
-  else heightZones.push({type:'ramp', x1:x-farD,x2:x-nearD, z1:z-rampWidth/2,z2:z+rampWidth/2, y1:0,y2:height, axisX:true});
+  if(rampDir==='s') heightZoneTarget.push({type:'ramp', x1:x-rampWidth/2,x2:x+rampWidth/2, z1:z+nearD,z2:z+farD, y1:height,y2:0});
+  else if(rampDir==='n') heightZoneTarget.push({type:'ramp', x1:x-rampWidth/2,x2:x+rampWidth/2, z1:z-farD,z2:z-nearD, y1:0,y2:height});
+  else if(rampDir==='e') heightZoneTarget.push({type:'ramp', x1:x+nearD,x2:x+farD, z1:z-rampWidth/2,z2:z+rampWidth/2, y1:height,y2:0, axisX:true});
+  else heightZoneTarget.push({type:'ramp', x1:x-farD,x2:x-nearD, z1:z-rampWidth/2,z2:z+rampWidth/2, y1:0,y2:height, axisX:true});
 }
 sniperTower(26,-2, 4.5, 6, 0x8f8d88, 'w'); // relocated off the parked car/crate that used to block this tower's ramp
 sniperTower(20,20, 4.5, 7, 0xa9865a, 'w');
@@ -717,6 +723,23 @@ function stoneBrickTex(){ const P=32,c=document.createElement('canvas'); c.width
   x.strokeStyle='rgba(0,0,0,0.5)'; x.lineWidth=1;
   for(let by=0;by<=P;by+=8) x.strokeRect(0,by,P,0);
   const t=_finish(c,10); return t; }
+// genuine sandstone brick texture (not a tint of the grey stone) for the pyramid dungeon walls
+function sandBrickTex(){ const P=32,c=document.createElement('canvas'); c.width=c.height=P; const x=c.getContext('2d');
+  const st=['#cfa768','#d9b978','#c29a5c','#e0c288'];
+  x.fillStyle='#b98f52'; x.fillRect(0,0,P,P);
+  for(let by=0,row=0;by<P;by+=8,row++){
+    const off=(row%2)*4;
+    for(let bx=-4;bx<P;bx+=8){ const n=Math.abs(Math.sin(bx*4.1+by*9.3)*137%1); x.fillStyle=st[(n*4)|0]; x.fillRect(bx+off+1,by+1,6,6); }
+  }
+  x.strokeStyle='rgba(80,55,20,0.45)'; x.lineWidth=1;
+  for(let by=0;by<=P;by+=8) x.strokeRect(0,by,P,0);
+  const t=_finish(c,10); return t; }
+// sandstone flagstone floor texture, for both the pyramid dungeon floor and the overworld path tiles
+function sandFloorTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  const st=['#c9a671','#d8b982','#b8934f','#e0c48f'];
+  x.fillStyle='#a9824a'; x.fillRect(0,0,P,P);
+  for(let by=0;by<P;by+=5)for(let bx=0;bx<P;bx+=5){ const n=Math.abs(Math.sin(bx*4.1+by*9.3)*137%1); x.fillStyle=st[(n*4)|0]; x.fillRect(bx+1,by+1,4,4); }
+  return c; }
 (function buildDungeon(){
   const stoneMat = new THREE.MeshLambertMaterial({map:stoneBrickTex()});
   const floorMat = new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),16)});
@@ -754,25 +777,103 @@ function stoneBrickTex(){ const P=32,c=document.createElement('canvas'); c.width
   const dHemi = new THREE.HemisphereLight(0x5a7fcc, 0x1a1e26, 0.55); dungeon.add(dHemi);
   const dTop = new THREE.PointLight(0x8fb8ff, 0.6, 60); dTop.position.set(0,11,0); dungeon.add(dTop);
 })();
+
+// ===== PYRAMID DUNGEON (Boss I chamber) — same room layout/mechanics, sandstone + gold/teal instead of stone + blue/orange =====
+const pyramidDungeon = new THREE.Group();
+addTarget = pyramidDungeonColliders;
+(function buildPyramidDungeon(){
+  const sandBrickMat = new THREE.MeshLambertMaterial({map:sandBrickTex()});
+  const sandFloorMat = new THREE.MeshLambertMaterial({map:_finish(sandFloorTex(),16)});
+  const goldMat = metalMatP(0xad8730,80,0xffe9b0); // Phong + specular so the gold reads as polished metal, not flat paint
+  const glowGold = new THREE.MeshBasicMaterial({color:0xe0b040, fog:false});
+  const glowTeal = new THREE.MeshBasicMaterial({color:0x33c9c9, fog:false});
+  function pblock(w,h,d,mat,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; pyramidDungeon.add(m); return m; }
+  const R=23;
+  pblock(R*2,1,R*2,sandFloorMat,0,-0.5,0);
+  pblock(R*2,12,1,sandBrickMat,0,6,-R); pblock(R*2,12,1,sandBrickMat,0,6,R);
+  pblock(1,12,R*2,sandBrickMat,-R,6,0); pblock(1,12,R*2,sandBrickMat,R,6,0);
+  for(let k=-2;k<=2;k++) pblock(2,1,R*2,sandBrickMat,k*8,11.4,0);
+  [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
+    pblock(2,10,2,sandBrickMat,x,5,z); addBox(x,z,2.3,2.3);
+    pblock(2.3,0.5,2.3, i%2?glowTeal:glowGold, x, 8.6, z);
+    pblock(0.7,10,0.7, i%2?glowTeal:glowGold, x, 5, z+1.05);
+    pblock(2.5,0.3,2.5, goldMat, x, 10.15, z); // gold capital atop each pillar, so they read as carved columns, not plain brick posts
+    const L=new THREE.PointLight(i%2?0x33c9c9:0xe0b040, 2.4, 22); L.position.set(x,7,z); pyramidDungeon.add(L);
+  });
+  for(let k=-2;k<=2;k++) pblock(0.6,0.07,R*2, k%2?glowTeal:glowGold, k*7, 0.05, 0);
+  for(let k=-2;k<=2;k++) pblock(R*2,0.07,0.6, k%2?glowGold:glowTeal, 0, 0.05, k*7);
+  // ring of gold inlay around the boss spawn point, marking it as a ritual chamber
+  for(let i=0;i<16;i++){ const a=i/16*Math.PI*2;
+    pblock(0.9,0.06,0.35, glowGold, Math.cos(a)*6, 0.05, -8+Math.sin(a)*6).rotation.y = a; }
+  const sconceSpots=[];
+  for(let x=-R+4;x<=R-4;x+=13){ sconceSpots.push([x,-R+0.6,0]); sconceSpots.push([x,R-0.6,1]); }
+  for(let z=-R+4;z<=R-4;z+=13){ sconceSpots.push([-R+0.6,z,1]); sconceSpots.push([R-0.6,z,0]); }
+  sconceSpots.forEach(([x,z,o],i)=>{
+    pblock(0.5,1.3,0.5, o?glowTeal:glowGold, x,4.2,z);
+    pblock(0.7,0.15,0.7, sandBrickMat, x,3.5,z);
+    const L=new THREE.PointLight(o?0x33c9c9:0xe0b040, 2.1, 20); L.position.set(x*0.94,4.6,z*0.94); pyramidDungeon.add(L);
+  });
+  // carved hieroglyph accents along the north/south walls — abstract glowing marks at varying heights, not plain brick
+  [-R+0.1, R-0.1].forEach(wz=>{
+    for(let i=-3;i<=3;i++){ if(i===0) continue; const wx=i*6;
+      for(let row=0;row<3;row++){
+        pblock(0.45,0.4,0.1, glowGold, wx+(row%2?0.25:-0.25), 3.0+row*0.7, wz);
+      }
+    }
+  });
+  // Anubis guardian statues flanking the entrance corridor (player enters from +Z)
+  function anubisStatue(x,z,facing){
+    const dark = voxMat(0x1c1712,{noise:16});
+    const base=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.5,1.6),goldMat); base.position.set(x,0.25,z); pyramidDungeon.add(base);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(1.1,2.6,0.9),dark); body.position.set(x,1.8,z); pyramidDungeon.add(body);
+    const collar=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.3,0.95),goldMat); collar.position.set(x,2.9,z); pyramidDungeon.add(collar);
+    const g=new THREE.Group(); g.position.set(x,3.35,z); g.rotation.y=facing; pyramidDungeon.add(g);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.6,0.7),dark); g.add(head);
+    const earL=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.5,4),dark); earL.position.set(-0.24,0.45,0); earL.rotation.z=0.3; g.add(earL);
+    const earR=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.5,4),dark); earR.position.set(0.24,0.45,0); earR.rotation.z=-0.3; g.add(earR);
+    const snout=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.25,0.4),dark); snout.position.set(0,-0.15,0.45); g.add(snout);
+    const eyes=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.05),glowGold); eyes.position.set(0,0.07,0.56); g.add(eyes);
+    addBox(x,z,1.7,1.7);
+  }
+  anubisStatue(-9,13,Math.PI); anubisStatue(9,13,Math.PI);
+  pyramidDungeon.add(new THREE.AmbientLight(0x8a6f4a, 0.9));
+  const dHemi = new THREE.HemisphereLight(0xccaa66, 0x2a1e12, 0.55); pyramidDungeon.add(dHemi);
+  const dTop = new THREE.PointLight(0xffd88f, 0.6, 60); dTop.position.set(0,11,0); pyramidDungeon.add(dTop);
+})();
 addTarget = colliders;   // back to overworld for anything built later
-// dungeon begins detached from the scene (overworld is active)
+// both dungeons begin detached from the scene (pyramid overworld is active)
 
 // ===== world switching (swap in/out of scene so raycasts/LOS only see the active world) =====
+let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDungeon() used, so exitDungeon() restores the right one even if pyramidPhase flips while inside
 function enterDungeon(){
-  scene.remove(overworld); scene.add(dungeon); sky.visible=false;
-  activeColliders = dungeonColliders;
+  dungeonWasPyramid = pyramidPhase;
+  scene.remove(dungeonWasPyramid ? pyramidOverworld : overworld);
+  scene.add(dungeonWasPyramid ? pyramidDungeon : dungeon);
+  sky.visible=false;
+  activeColliders = dungeonWasPyramid ? pyramidDungeonColliders : dungeonColliders;
+  activeHeightZones = heightZonesOriginal; // neither dungeon has climbable rooftops; keep this deterministic regardless of overworld phase
   scene.background.set(0x141726); scene.fog.color.set(0x141726); scene.fog.near=14; scene.fog.far=58;
   hemi.intensity=0.35; hemi.color.set(0x4a6fbf); hemi.groundColor.set(0x1a1e26);
   sun.intensity=0.0; fill.intensity=0.18; fill.color.set(0x6f8fdd);
   camera.position.set(0,1.7,18); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
 function exitDungeon(){
-  scene.remove(dungeon); scene.add(overworld); sky.visible=true;
-  activeColliders = colliders;
+  scene.remove(dungeonWasPyramid ? pyramidDungeon : dungeon);
+  scene.add(dungeonWasPyramid ? pyramidOverworld : overworld);
+  sky.visible=true;
+  activeColliders = dungeonWasPyramid ? pyramidColliders : colliders;
+  activeHeightZones = dungeonWasPyramid ? heightZonesPyramid : heightZonesOriginal;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
   camera.position.copy(spawnPoint); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+}
+// called once, right after Boss I's exitDungeon() has restored the pyramid overworld — swaps it for the original for the rest of the game
+function switchToOriginalWorld(){
+  scene.remove(pyramidOverworld);
+  scene.add(overworld);
+  activeColliders = colliders;
+  activeHeightZones = heightZonesOriginal;
 }
 
 function fenceSeg(x,z,rotY){
@@ -873,6 +974,136 @@ function sign(x,z,rotY,panelColor){
 }
 sign(0,-3,0,0xc0392b); sign(18,10,-Math.PI/2,0x2c6fb0);
 
+// sweep up anything added after the first capture (fences/pool/bench/sign) so it's properly part of `overworld` too
+scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld) return; overworld.add(o); });
+
+// ===================== PYRAMID OVERWORLD (waves 1-3 + Boss I) — a full separate layout, swapped in/out like the dungeon =====================
+addTarget = pyramidColliders;
+heightZoneTarget = heightZonesPyramid;
+(function buildPyramidOverworld(){
+  // sand ground
+  const pground = new THREE.Mesh(new THREE.BoxGeometry(60,1,60), voxMat(0xd8b982,{noise:18}));
+  pground.position.y=-0.5; scene.add(pground);
+
+  // sandstone perimeter walls with gold-capped corner obelisk posts
+  block(60,8,1,0xc9a671,0,4,-30,{noise:24});
+  block(60,8,1,0xc9a671,0,4,30,{noise:24});
+  block(1,8,60,0xc9a671,-30,4,0,{noise:24});
+  block(1,8,60,0xc9a671,30,4,0,{noise:24});
+  function obeliskPost(x,z){
+    block(1.6,10,1.6,0xb99a63,x,5,z,{noise:22});
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.9,1.6,0.9), metalMatP(0xe0b040,85,0xfff2c8)); // shiny gold cap
+    cap.position.set(x,10.6,z); scene.add(cap);
+  }
+  obeliskPost(-29,-29); obeliskPost(29,-29); obeliskPost(-29,29); obeliskPost(29,29);
+
+  // sandstone flagstone crossroads (own texture — warm tan, not the grey overworld cobblestone)
+  const sandPathMat = new THREE.MeshLambertMaterial({map:_finish(sandFloorTex(),8), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
+  function sandPath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),sandPathMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
+  sandPath(0,0,9,60);
+  sandPath(-17.25,0,25.5,9);
+  sandPath(17.25,0,25.5,9);
+
+  // central stepped pyramid landmark (solid monument, not climbable — the 3 towers below cover that role)
+  function stepPyramid(x,z,baseSize){
+    addBox(x,z,baseSize,baseSize);
+    const half=baseSize/2;
+    // real Giza slope (~51.8°): height ≈ 1.27x the half-base — one smooth 4-sided body, not stacked tiers,
+    // for an actual triangular silhouette instead of a ziggurat
+    const bodyH=half*1.27;
+    // a plain voxMat (NearestFilter, no mipmaps, hard-edged 'plate' pattern) causes bad shimmer/flicker at a
+    // cone's apex, where every side face's UVs converge to a single degenerate point — use a mipmapped,
+    // pattern-free texture instead, which is what a cone actually needs
+    const bodyTex = makeVoxelTexture(0xc9a671, {noise:18});
+    bodyTex.minFilter = THREE.LinearMipmapLinearFilter; bodyTex.magFilter = THREE.LinearFilter; bodyTex.generateMipmaps = true;
+    const body=new THREE.Mesh(new THREE.ConeGeometry(half*Math.SQRT2,bodyH,4), new THREE.MeshLambertMaterial({map:bodyTex}));
+    body.rotation.y=Math.PI/4; body.position.set(x,bodyH/2,z); scene.add(body);
+    // small gilded pyramidion capping the tip (electrum-clad capstones are historically attested)
+    const capH=bodyH*0.07;
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(half*Math.SQRT2*0.05,capH,4), metalMatP(0xe0b040,85,0xfff2c8));
+    cap.rotation.y=Math.PI/4; cap.position.set(x,bodyH-capH*0.25,z); scene.add(cap);
+    // dark recessed entrance archway low on the south face
+    block(baseSize*0.14, bodyH*0.12, 0.25, 0x241c10, x, bodyH*0.06, z+half-0.05, {noise:8});
+    // a grand staircase climbing up to the entrance (decorative)
+    const stairSteps=10, stairRun=baseSize*0.55;
+    for(let s=0;s<stairSteps;s++){
+      const t=s/stairSteps;
+      // low steps start far out from the pyramid; high steps end right at the entrance (z increases toward the base face)
+      const stairZ = z+half-0.15+(1-t)*stairRun;
+      block(baseSize*0.2, 0.22, 0.4, 0xb99a63, x, t*bodyH*0.12+0.11, stairZ, {noise:16});
+    }
+    // one single solid collider for the whole staircase run, flush against the pyramid's own collider (no gap
+    // between them) — ten small side-by-side colliders here caused a cascading multi-push in one frame instead
+    // (the player's collision radius bridged the small gaps between steps, so the resolver shoved them through
+    // several boxes in sequence on a single frame)
+    addBox(x, z+half+stairRun/2-0.15, baseSize*0.22, stairRun+0.3);
+  }
+  stepPyramid(10,-8, 10);
+
+  // 3 climbable pyramid-tier towers — same proven positions/mechanic as the original sniper towers, sandstone-reskinned
+  // a ramp's height zone is just a rectangle — walking into it sideways at ground level (e.g. patrolling along
+  // the wall) reports the same near-full climbing height as someone who actually walked up it, and the camera
+  // eases toward that height fast enough to feel like a violent fling. Block sideways entry into the ramp
+  // corridor (flanking its long edges) so the only way in is the intended climb from the low/far end.
+  function blockRampSides(x,z,size,height,rampDir){
+    const half=size/2, rampLen=height*1.7, rampWidth=2.8, mid=half+rampLen/2, pad=0.15, thin=0.3;
+    if(rampDir==='w'){ addBox(x-mid, z+rampWidth/2+pad, rampLen, thin); addBox(x-mid, z-rampWidth/2-pad, rampLen, thin); }
+    else if(rampDir==='e'){ addBox(x+mid, z+rampWidth/2+pad, rampLen, thin); addBox(x+mid, z-rampWidth/2-pad, rampLen, thin); }
+    else if(rampDir==='s'){ addBox(x+rampWidth/2+pad, z+mid, thin, rampLen); addBox(x-rampWidth/2-pad, z+mid, thin, rampLen); }
+    else { addBox(x+rampWidth/2+pad, z-mid, thin, rampLen); addBox(x-rampWidth/2-pad, z-mid, thin, rampLen); }
+  }
+  sniperTower(24,-4, 4.5, 6, 0xc9a671, 'w'); blockRampSides(24,-4,4.5,6,'w');
+  sniperTower(18,20, 4.5, 7, 0xb99a63, 'w'); blockRampSides(18,20,4.5,7,'w');
+  sniperTower(-8,-22, 4, 5.5, 0xa4854f, 's'); blockRampSides(-8,-22,4,5.5,'s');
+
+  // obelisks (landmark cover)
+  function obelisk(x,z,h){
+    block(1.1,h,1.1,0xb99a63,x,h/2,z,{noise:20});
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.6,1,0.6), metalMatP(0xe0b040,85,0xfff2c8)); // shiny gold cap
+    cap.position.set(x,h+0.5,z); scene.add(cap);
+    addBox(x,z,1.3,1.3);
+  }
+  obelisk(10,4,7); obelisk(-16,-4,6); obelisk(6,-16,6.5);
+
+  // pottery jars + rubble piles (cover, standing in for the original's crates/barrels)
+  function potteryJar(x,z){
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.5,0.9,8), voxMat(0xb5502c,{noise:18,pattern:'plate'}));
+    m.position.set(x,0.45,z); scene.add(m); addBox(x,z,0.8,0.8);
+  }
+  function rubble(x,z){
+    for(let i=0;i<4;i++){ const s=0.3+Math.random()*0.3;
+      block(s,s,s,0xa4854f,x+(Math.random()-0.5)*0.8,s/2,z+(Math.random()-0.5)*0.8,{noise:20}); }
+    addBox(x,z,1.3,1.3);
+  }
+  potteryJar(4.5,4.6); potteryJar(-19,3.2); potteryJar(19.4,7.6);
+  rubble(-6,-3); rubble(7,2); rubble(-2,7);
+
+  // oasis pool, palm-fringed
+  function oasisPool(x,z,w,d){
+    block(w+0.8,0.5,d+0.8,0xa4854f,x,0.0,z,{noise:16,pattern:'plate'});
+    addBox(x,z,w+0.8,d+0.8);
+    const waterMat = new THREE.MeshPhongMaterial({color:0x2f9fd6, shininess:120, specular:0xbfefff, transparent:true, opacity:0.85, emissive:0x0a3a52});
+    const water = new THREE.Mesh(new THREE.BoxGeometry(w,0.35,d), waterMat);
+    water.position.set(x,0.22,z); water.userData.isWater=true; scene.add(water);
+    waterSurfaces.push(water);
+  }
+  oasisPool(-2,16, 5, 4);
+  function palm(x,z){
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.2,3.4,6), voxMat(0x7a5a38,{noise:14})); trunk.position.set(x,1.7,z); trunk.rotation.z=0.08; scene.add(trunk);
+    const leafMat = voxMat(0x4f7a3a,{noise:14});
+    for(let i=0;i<5;i++){ const a=i/5*Math.PI*2;
+      const leaf=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.12,0.4),leafMat); leaf.position.set(x+Math.cos(a)*0.5,3.3,z+Math.sin(a)*0.5); leaf.rotation.y=a; leaf.rotation.z=0.25; scene.add(leaf); }
+    addBox(x,z,0.6,0.6);
+  }
+  palm(-4,17); palm(0,18.5); palm(-3,14.5);
+})();
+const pyramidOverworld = new THREE.Group();
+scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld) return; pyramidOverworld.add(o); });
+scene.remove(overworld);
+scene.add(pyramidOverworld); // pyramid phase is active by default at load
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
 // ---- voxel humanoid bot (Minecraft/Pixel-Gun proportions: blocky head+helmet, layered torso armor, segmented limbs) ----
 function makeVoxelTexture(baseHex, {noise=22, size=48, pattern=null, cell=6} = {}){
   const c = document.createElement('canvas');
@@ -920,8 +1151,8 @@ const SKINS = {
   cyborg:   { skinC:0xaab4be, face:'cyborg', hair:false,   helmet:false, torso:0x3a4048, armor:0x4d555f, pants:0x2b303a, boots:0x1c2026, hands:0x6a727c, glow:0x35d0ff, metal:true },
   boss:     { skinC:0x2f343b, face:'boss',   hair:false,   helmet:true,  torso:0x2b2f36, armor:0x3b434c, pants:0x24272c, boots:0x17181c, hands:0x2b2f36, glow:0xff7a1a, bossgun:true },
   // ---- pyramid/desert reskins (waves 1-3) ----
-  mummy:    { skinC:0xd9c9a3, face:'mummy',  hair:false,   helmet:false, torso:0xcdbd9c, armor:0xe0d1a8, pants:0xb7a67f, boots:0xb7a67f, hands:0xcdbd9c, glow:0xe8a23d },
-  jackal:   { skinC:0x2b2018, face:'jackal', hair:false,   helmet:false, torso:0x33241a, armor:0x4a3420, pants:0x1c1712, boots:0x17130f, hands:0x17130f, glow:0x5fb8d6, metal:true, jackalSnout:true, ears:true, earsColor:0x1c130d, goldTrim:true },
+  mummy:    { skinC:0xd9c9a3, face:'mummy',  hair:false,   helmet:false, torso:0xcdbd9c, armor:0xe0d1a8, pants:0xb7a67f, boots:0xb7a67f, hands:0xcdbd9c, glow:0xe8a23d, heldWeapon:'khopesh' },
+  jackal:   { skinC:0x2b2018, face:'jackal', hair:false,   helmet:false, torso:0x33241a, armor:0x4a3420, pants:0x1c1712, boots:0x17130f, hands:0x17130f, glow:0x5fb8d6, metal:true, jackalSnout:true, ears:true, earsColor:0x1c130d, goldTrim:true, heldWeapon:'bow' },
   colossus: { skinC:0xc9a671, face:'colossus', hair:false, helmet:false, torso:0xb99a63, armor:0xd8b988, pants:0xa4854f, boots:0x8f7548, hands:0xb99a63, glow:0xe0b040, cracks:true, bossgun:true, bossgunColor:0xe0b040, bossgunColor2:0xffd873 }
 };
 function glowCss(hex){ const c=new THREE.Color(hex==null?0x35d0ff:hex); return `rgb(${c.r*255|0},${c.g*255|0},${c.b*255|0})`; }
@@ -1027,7 +1258,7 @@ function makeVoxelBot(color, weaponType, skinName){
     const earMat = voxMat(cfg.earsColor||0x1c130d,{noise:10});
     const earL = new THREE.Mesh(new THREE.ConeGeometry(0.075,0.2,4), earMat); earL.position.set(-0.15,1.94,-0.02); earL.rotation.z=0.3; g.add(earL);
     const earR = new THREE.Mesh(new THREE.ConeGeometry(0.075,0.2,4), earMat); earR.position.set(0.15,1.94,-0.02); earR.rotation.z=-0.3; g.add(earR);
-    const tipMat = new THREE.MeshBasicMaterial({color:0xad8730, fog:false});
+    const tipMat = metalMatP(0xad8730,85,0xfff2c8); // shiny gold, catches highlights instead of flat color
     const tipL = new THREE.Mesh(new THREE.ConeGeometry(0.035,0.06,4), tipMat); tipL.position.set(-0.15,2.05,-0.02); tipL.rotation.z=0.3; g.add(tipL);
     const tipR = new THREE.Mesh(new THREE.ConeGeometry(0.035,0.06,4), tipMat); tipR.position.set(0.15,2.05,-0.02); tipR.rotation.z=-0.3; g.add(tipR);
   }
@@ -1040,7 +1271,7 @@ function makeVoxelBot(color, weaponType, skinName){
   }
   // jackal: a couple of thin gold trim bars on the chest — just a smidge of color against the dark obsidian
   if(cfg.goldTrim){
-    const trimMat = new THREE.MeshBasicMaterial({color:0xad8730, fog:false});
+    const trimMat = metalMatP(0xad8730,85,0xfff2c8); // shiny gold, catches highlights instead of flat color
     const tr1=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.025,0.02),trimMat); tr1.position.set(0,1.39,0.19); g.add(tr1);
     const tr2=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.025,0.02),trimMat); tr2.position.set(0,1.01,0.19); g.add(tr2);
   }
@@ -1070,7 +1301,52 @@ function makeVoxelBot(color, weaponType, skinName){
   // ---- held weapon (barrel/blade points down the arm, -Y local) ----
   const heldGrp = new THREE.Group();
   heldGrp.position.set(0,-0.78,0.02);
-  if(weaponType==='knife'){
+  if(cfg.heldWeapon==='khopesh'){
+    // mummy's held weapon: a small khopesh hanging from the hand, blade down with a compact hook near the tip
+    const bronze=metalMatP(0xad8730,80,0xffe9b0), dark=voxMat(0x2a1c12,{noise:14});
+    const handle=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.16,0.07),dark); handle.position.y=0.05; heldGrp.add(handle);
+    const guard=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.03,0.09),dark); guard.position.y=-0.04; heldGrp.add(guard);
+    const blade=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.2,0.05),bronze); blade.position.y=-0.15; heldGrp.add(blade);
+    const hook1=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.08,0.05),bronze); hook1.position.set(0.017,-0.266,0); hook1.rotation.z=0.45; heldGrp.add(hook1);
+    const hook2=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.07,0.05),bronze); hook2.position.set(0.06,-0.313,0); hook2.rotation.z=0.9; heldGrp.add(hook2);
+  } else if(cfg.heldWeapon==='bow'){
+    // jackal's held weapon: a small bow, limbs chain-walked the same verified way as the player's bow.
+    // Built in its own sub-group scaled down and pulled forward — full size, it reached up into the arm mesh.
+    const wood=voxMat(0x6b4a2c,{noise:14}), gold=voxMat(0xad8730,{noise:10});
+    function heldLimb(dir){
+      const grp=new THREE.Group();
+      let y=0.03, z=0, theta=0;
+      const dtheta=0.28, L=0.09, overlap=0.01;
+      let tipY=y, tipZ=z;
+      for(let i=0;i<3;i++){
+        const thetaMid=theta+dtheta/2;
+        const dy=Math.cos(thetaMid), dz=Math.sin(thetaMid);
+        const cy=y+(L/2)*dy, cz=z+(L/2)*dz;
+        const m=new THREE.Mesh(new THREE.BoxGeometry(0.026,0.09,0.026), wood); // single color — alternating per-segment color was flickering at the overlap seams
+        m.position.set(0, cy*dir, cz);
+        m.rotation.x = thetaMid*dir;
+        grp.add(m);
+        tipY=y+L*dy; tipZ=z+L*dz;
+        y=tipY-overlap*dy; z=tipZ-overlap*dz;
+        theta+=dtheta;
+      }
+      const tipCap=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.04,0.04), gold);
+      tipCap.position.set(0, tipY*dir, tipZ); grp.add(tipCap);
+      return {grp, tipY:tipY*dir, tipZ};
+    }
+    const bowGrp=new THREE.Group();
+    const hUp=heldLimb(1), hDown=heldLimb(-1);
+    bowGrp.add(hUp.grp); bowGrp.add(hDown.grp);
+    const grip=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.16,0.06),wood); bowGrp.add(grip);
+    const strLen=Math.hypot(hUp.tipY-hDown.tipY, hUp.tipZ-hDown.tipZ);
+    const string=new THREE.Mesh(new THREE.BoxGeometry(0.01,strLen,0.01),new THREE.MeshBasicMaterial({color:0xe8dcc0,fog:false}));
+    string.position.set(0,(hUp.tipY+hDown.tipY)/2,(hUp.tipZ+hDown.tipZ)/2);
+    string.rotation.x = Math.atan2(hUp.tipZ-hDown.tipZ, hUp.tipY-hDown.tipY);
+    bowGrp.add(string);
+    bowGrp.scale.setScalar(0.42); // small enough to sit in the hand without reaching up into the arm mesh
+    bowGrp.position.z += 0.1;     // pulled slightly forward, clear of the arm
+    heldGrp.add(bowGrp);
+  } else if(weaponType==='knife'){
     const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06,0.5,0.12), new THREE.MeshPhongMaterial({color:0xd8dde3, shininess:110, specular:0xffffff}));
     blade.position.y=-0.28; heldGrp.add(blade);
     const guard = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.05,0.16), voxMat(0x3a2e22,{noise:8})); heldGrp.add(guard);
@@ -1372,16 +1648,109 @@ function makeZahraGun(){
   return g;
 }
 
+// ===================== PYRAMID LOADOUT (waves 1-3 + Boss I) =====================
+// BOW — curved wooden limbs (built from angled segments), taut string, nocked arrow
+function makeBow(){
+  const g=new THREE.Group();
+  const wood=metalMatP(0x6b4a2c,18,0x332211), gold=metalMatP(0xad8730,55,0xffdd99);
+  const stringMat=new THREE.MeshBasicMaterial({color:0xe8dcc0, fog:false});
+  // each segment is walked along the previous one's own rotated direction (verified against a plotted render),
+  // so the limb is a properly connected curve instead of segments that only touch at one corner.
+  // Kept a single consistent wood color (not alternating per segment) — alternating colors right at the
+  // overlap seams was the likely source of the z-fighting flicker. A small gold tip cap replaces the
+  // per-segment gold accent instead. The function returns the true tip position so the string can be
+  // placed exactly, rather than guessed.
+  function limb(dir){
+    const grp=new THREE.Group();
+    let y=0.05, z=0.03, theta=0;
+    const dtheta=0.22, L=0.15, overlap=0.01;
+    let tipY=y, tipZ=z;
+    for(let i=0;i<5;i++){
+      const thetaMid = theta + dtheta/2;
+      const dy=Math.cos(thetaMid), dz=Math.sin(thetaMid);
+      const cy=y+(L/2)*dy, cz=z+(L/2)*dz;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(0.032,0.15,0.032), wood);
+      m.position.set(0, cy*dir, cz);
+      m.rotation.x = thetaMid*dir;
+      grp.add(m);
+      tipY = y+L*dy; tipZ = z+L*dz;
+      y = tipY-overlap*dy; z = tipZ-overlap*dz;
+      theta += dtheta;
+    }
+    const tipCap=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05), gold);
+    tipCap.position.set(0, tipY*dir, tipZ); grp.add(tipCap);
+    return {grp, tipY:tipY*dir, tipZ};
+  }
+  const limbUp=limb(1), limbDown=limb(-1);
+  g.add(limbUp.grp); g.add(limbDown.grp);
+  part(g,0.06,0.22,0.07,wood,0,0,0.03);              // grip
+  const stringLen=Math.hypot(limbUp.tipY-limbDown.tipY, limbUp.tipZ-limbDown.tipZ);
+  const string=new THREE.Mesh(new THREE.BoxGeometry(0.012,stringLen,0.012),stringMat);
+  string.position.set(0,(limbUp.tipY+limbDown.tipY)/2,(limbUp.tipZ+limbDown.tipZ)/2);
+  string.rotation.x = Math.atan2(limbUp.tipZ-limbDown.tipZ, limbUp.tipY-limbDown.tipY);
+  g.add(string);
+  // nocked arrow, tip pointing forward (-Z) to match muzzleZ
+  part(g,0.02,0.02,0.62,metalMatP(0x8a6a42,20),0,0,-0.18);
+  const head=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.09,4),metalMatP(0xaab4be,80,0xffffff)); head.position.set(0,0,-0.52); head.rotation.x=-Math.PI/2; g.add(head);
+  const fletch=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.01),new THREE.MeshLambertMaterial({color:0xb5502c})); fletch.position.set(0,0,0.1); fletch.rotation.z=Math.PI/4; g.add(fletch);
+  g.scale.setScalar(0.66); // smaller
+  g.userData={muzzleZ:-0.55,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.35),recoil:0.1,name:'Bow',
+    damage:55, fireRate:0.5, auto:false, spread:0.008, tracer:0xd9b872,
+    magSize:6, ammo:6, reloadTime:1.3, reloading:false, reloadT:0};
+  return g;
+}
+// KHOPESH — curved bronze blade (straight base + hooked tip), melee: a short-range swing, no ammo
+function makeKhopesh(){
+  const g=new THREE.Group();
+  const bronze=metalMatP(0xad8730,85,0xffe9b0), dark=metalMatP(0x2a1c12,20);
+  // handle at the bottom: pommel, then grip, then guard where the blade begins
+  part(g,0.09,0.05,0.07,bronze,0,0.0,0.04);           // pommel cap
+  part(g,0.05,0.2,0.05,dark,0,0.12,0.04);             // grip
+  const guard=part(g,0.16,0.03,0.09,dark,0,0.23,0.04); guard.rotation.z=0.05;
+  // blade: based on real khopesh reference photos — mostly straight (~55% of the length), then a tight compact
+  // hook. Curls in the X-Y plane (screen right/up) — the plane the camera actually sees — curling toward -X
+  // (left) so it reads as a clear hook instead of one that only shows up from the side.
+  // Verified by plotting the exact box transforms before applying (see khopesh_render3.png).
+  part(g,0.05,0.22,0.05,bronze,0,0.325,0.04);                          // straight blade — most of the length
+  part(g,0.045,0.07,0.05,bronze,-0.0136,0.447,0.04).rotation.z=0.4;    // hook begins, curling left
+  part(g,0.042,0.06,0.05,bronze,-0.0498,0.478,0.04).rotation.z=1.2;
+  part(g,0.04,0.05,0.05,bronze,-0.0884,0.475,0.04).rotation.z=1.9;     // hooked tip
+  g.scale.setScalar(1.05);  // bigger — uniform scale keeps every part's proportions/connections intact
+  g.userData={muzzleZ:-0.1,muzzleY:0.4,pos:new THREE.Vector3(0.22,-0.22,-0.42),recoil:0.16,name:'Khopesh',
+    damage:60, fireRate:0.42, melee:true, range:2.5, auto:false, spread:0, tracer:0xffe9b0,
+    magSize:1, ammo:1, reloadTime:0.1, reloading:false, reloadT:0};
+  return g;
+}
+// WAS SCEPTER — forked-base staff with a glowing animal-head finial, channels a rapid sand-magic bolt
+function makeWasScepter(){
+  const g=new THREE.Group();
+  const shaftMat=metalMatP(0x8a6a42,30,0x664422), goldMat=metalMatP(0xad8730,70,0xffe9b0);
+  const glowMat=new THREE.MeshBasicMaterial({color:0x5fe8c9, fog:false});
+  part(g,0.05,0.05,0.62,shaftMat,0,0,-0.05);          // long shaft
+  const prongL=part(g,0.03,0.16,0.03,goldMat,-0.05,-0.1,0.28); prongL.rotation.z=0.3;  // forked base
+  const prongR=part(g,0.03,0.16,0.03,goldMat,0.05,-0.1,0.28); prongR.rotation.z=-0.3;
+  part(g,0.09,0.11,0.14,goldMat,0,0.04,-0.36);        // animal-head finial
+  const core=new THREE.Mesh(new THREE.SphereGeometry(0.05,8,6),glowMat); core.position.set(0,0.04,-0.42); g.add(core);
+  const emit=new THREE.PointLight(0x5fe8c9,0.5,2.2); emit.position.copy(core.position); g.add(emit);
+  g.userData={muzzleZ:-0.44,muzzleY:0.04,pos:new THREE.Vector3(0.24,-0.24,-0.4),recoil:0.05,name:'Was Scepter',
+    damage:13, fireRate:0.1, auto:true, spread:0.025, tracer:0x5fe8c9,
+    magSize:36, ammo:36, reloadTime:1.5, reloading:false, reloadT:0};
+  return g;
+}
+
 const DEFAULT_FOV = 75;
 let scoped = false; // declared here (before selectWeapon's initial call) to avoid a temporal-dead-zone crash
-const weapons = [makeSniper(), makeRifle(), makeRayGun(), makeGrenadeLauncher(), makeZahraGun()];
+const originalWeapons = [makeSniper(), makeRifle(), makeRayGun(), makeGrenadeLauncher(), makeZahraGun()];
+const pyramidWeapons = [makeBow(), makeKhopesh(), makeWasScepter()];
+let weapons = pyramidWeapons; // waves 1-3 + Boss I start on the pyramid loadout; swapped back after Boss I
 const gunGroup = new THREE.Group();
-weapons.forEach(w=>{ w.visible=false; gunGroup.add(w); });
+originalWeapons.concat(pyramidWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
 gunGroup.add(muzzle);
-let currentWeapon = 1; // start on the rifle
+let currentWeapon = 0; // start on the bow
 function setAmmoHUD(){
   const el=document.getElementById('ammoBig'); if(!el) return;
   const w = weapons[currentWeapon].userData;
+  if(w.melee){ el.classList.remove('reloading','empty'); el.innerHTML = '&infin;'; return; }
   el.classList.toggle('reloading', w.reloading);
   el.classList.toggle('empty', !w.reloading && w.ammo<=0);
   el.innerHTML = w.reloading ? 'RELOADING…' : `${w.ammo}<span class="max">/${w.magSize}</span>`;
@@ -1405,10 +1774,16 @@ function selectWeapon(i){
   if(window.syncWeaponButtons) window.syncWeaponButtons();
   if(!active.userData.scoped) setScope(false); // auto-unscope when switching away from the sniper
 }
+// called once Boss I is defeated: swap from the 3-weapon pyramid loadout back to the original 5 weapons
+function switchToOriginalLoadout(){
+  weapons.forEach(w=>w.visible=false); // hide whichever pyramid weapon was showing — the new array's forEach in selectWeapon() won't touch it
+  weapons = originalWeapons;
+  selectWeapon(1);
+}
 let gunBaseZ = -0.5;
 camera.add(gunGroup);
 scene.add(camera);
-selectWeapon(1);
+selectWeapon(0);
 gunGroup.visible = false; // hidden on the title screen until START
 
 // ---- pointer lock + WASD look/move ----
@@ -1695,6 +2070,7 @@ function startGame(){
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; checkpointWaveIdx=0;
   player.score=0; player.hp=player.maxHp; player.alive=true; player.lastHit=-99;
+  pyramidPhase=true; dungeonWasPyramid=true; weapons=pyramidWeapons; selectWeapon(0); // reset to the pyramid map/loadout in case this is a replay
   exitDungeon(); // ensure we start in the overworld (also positions the player)
   targetYaw=0; targetPitch=0; vel.set(0,0,0);
   showBossBar(false); clearBots(); spawnWave(0);
@@ -1707,7 +2083,9 @@ function onAllDead(){
     // boss defeated
     bossActive=false; showBossBar(false);
     if(bossNum>=2){ gameWon=true; exitDungeon(); setBanner('🏆 YOU WIN!  (click to play again)'); return; }
-    exitDungeon(); waveIdx++; pending='wave'; betweenTimer=2.6; setBanner('Boss down! Back to the surface…');
+    exitDungeon();
+    if(pyramidPhase){ pyramidPhase=false; switchToOriginalWorld(); switchToOriginalLoadout(); }
+    waveIdx++; pending='wave'; betweenTimer=2.6; setBanner('Boss down! Back to the surface…');
     return;
   }
   // a normal wave was cleared: boss after wave 3 (idx 2) and after wave 6 (idx 5)
@@ -1913,6 +2291,16 @@ function fire(){
   const w = weapons[currentWeapon].userData;
   const now = performance.now()*0.001;
   if(now - lastShot < w.fireRate) return;
+  if(w.melee){
+    // khopesh: a short-range swing — same raycast every hitscan weapon uses, just a very short max distance and no ammo/reload
+    lastShot = now;
+    SFX.knife(1.5);
+    gunGroup.position.z = gunBaseZ + w.recoil;
+    camera.getWorldDirection(_fwd);
+    const hit = firstHit(camera.position, _fwd, w.range||2.4);
+    if(hit && hit.bot){ damageBot(hit.bot, w.damage, hit.point); showHitmarker(); SFX.hitmark(); }
+    return;
+  }
   if(w.reloading) return;
   if(w.ammo<=0){ lastShot = now; SFX.dryFire(); return; }
   lastShot = now;
@@ -1922,6 +2310,8 @@ function fire(){
   else if(w.name==='Rifle') SFX.playerRifle();
   else if(w.name==='Ray Gun') SFX.playerRay();
   else if(w.name==='Zahra Gun') SFX.playerZahra();
+  else if(w.name==='Was Scepter') SFX.playerRay();
+  else if(w.name==='Bow') SFX.playerRifle();
   else SFX.playerGrenade();
   // recoil + flash
   gunGroup.position.z = gunBaseZ + w.recoil;
