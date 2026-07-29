@@ -6,11 +6,12 @@
 
 **Architecture:** `index.html` stays a single static file (no build step) and gains `supabase-js` via CDN for auth/session/leaderboard reads. A new Supabase Edge Function (`submit-score`) is the only thing allowed to write to the `runs` table — it re-derives the score from raw stats the client sends, so the leaderboard can't be forged by editing client JS or the network request.
 
-**Tech Stack:** Vanilla JS + three.js (existing), `@supabase/supabase-js` v2 (CDN), Supabase Postgres + Auth + Edge Functions (Deno), Supabase CLI (`npx supabase`).
+**Tech Stack:** Vanilla JS + three.js (existing), `@supabase/supabase-js` v2 (CDN), Supabase Postgres + Auth + Edge Functions (Deno), Supabase CLI (`supabase`).
 
 ## Global Constraints
 
-- No Docker on this machine — never use `npx supabase start` or any local dev stack. All schema/function work targets the real hosted Supabase project directly (link + push/deploy).
+- No Docker on this machine — never use `supabase start` or any local dev stack. All schema/function work targets the real hosted Supabase project directly (link + push/deploy).
+- The Supabase CLI is installed via Homebrew at `/opt/homebrew/bin/supabase` (v2.110.0) — invoke it directly as `supabase` (no `npx` needed).
 - No build step for the game itself. `index.html` stays a single file; `supabase-js` loads via `<script>` CDN tag, same pattern as three.js.
 - The client-side Supabase client instance must be named `sb`, not `supabase` — the UMD CDN build exposes a global `window.supabase` namespace (`supabase.createClient(...)`), and shadowing it breaks that call.
 - Only the Edge Function's service-role client (key auto-provisioned by Supabase into the function's environment, never present in `index.html`) may write to `runs` or `profiles`. No client-side INSERT/UPDATE/DELETE policy is added for either table.
@@ -24,7 +25,7 @@
 
 These require your own Supabase account and cannot be done by an agent:
 
-1. Install Node.js/npm if not already present (needed for `npx supabase`).
+1. Install Node.js/npm if not already present (needed for `supabase`).
 2. Create a Supabase account and a new project at https://supabase.com/dashboard. Note the project's database password when prompted — you'll need it once, when linking.
 3. In the new project, go to **Project Settings → API** and copy:
    - The **Project URL** (e.g. `https://abcdefgh.supabase.co`)
@@ -41,34 +42,34 @@ These require your own Supabase account and cannot be done by an agent:
 - Modify: none in `index.html` yet
 
 **Interfaces:**
-- Produces: a linked Supabase CLI project in `supabase/`, used by every later task's `npx supabase` commands.
+- Produces: a linked Supabase CLI project in `supabase/`, used by every later task's `supabase` commands.
 
 - [ ] **Step 1: Initialize the Supabase CLI project**
 
 Run from the repo root:
 ```bash
-npx supabase init
+supabase init
 ```
 This creates `supabase/config.toml` and `supabase/.gitignore` (the CLI's own gitignore covers `.branches`/`.temp`; no manual edits needed there).
 
 - [ ] **Step 2: Log in (interactive — you do this step)**
 
 ```bash
-npx supabase login
+supabase login
 ```
 This opens a browser for you to authenticate. Complete it, then confirm the CLI prints a success message.
 
 - [ ] **Step 3: Link to the project created in Prerequisites**
 
 ```bash
-npx supabase link --project-ref <your-project-ref>
+supabase link --project-ref <your-project-ref>
 ```
 Enter the database password when prompted (from Prerequisites step 2).
 
 - [ ] **Step 4: Verify the link**
 
 ```bash
-npx supabase projects list
+supabase projects list
 ```
 Expected: your project appears in the list with a `●` (linked) marker in the CLI's output — confirms login + link both worked, without needing Docker or a local stack.
 
@@ -92,7 +93,7 @@ git commit -m "Initialize and link the Supabase CLI project"
 - [ ] **Step 1: Create the migration file**
 
 ```bash
-npx supabase migration new scoring_schema
+supabase migration new scoring_schema
 ```
 Note the exact filename the CLI prints (e.g. `supabase/migrations/20260729123456_scoring_schema.sql`) — edit that file in the next step.
 
@@ -173,11 +174,18 @@ order by r.user_id, r.score desc, r.created_at asc;
 - [ ] **Step 4: Apply the migration to the hosted project**
 
 ```bash
-npx supabase db push
+supabase db push
 ```
 Expected: CLI reports the migration applied successfully.
 
-- [ ] **Step 5: Verify RLS lockdown and the leaderboard view via the REST API**
+- [ ] **Step 5: Run the security advisors**
+
+```bash
+supabase db advisors
+```
+Expected: no unresolved warnings about missing RLS or overly permissive policies on `profiles` or `runs`. If it flags something, fix it in a new migration (don't hand-edit the applied one) before moving on.
+
+- [ ] **Step 6: Verify RLS lockdown and the leaderboard view via the REST API**
 
 Using the Project URL and anon key from Prerequisites:
 
@@ -205,7 +213,7 @@ curl -s "https://<project-ref>.supabase.co/rest/v1/leaderboard?select=*" \
 # Expected: 200 with an empty array [] (no runs submitted yet)
 ```
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add supabase/migrations/
@@ -230,7 +238,7 @@ Fetch `https://supabase.com/docs/guides/functions/secrets.md` and `https://supab
 - [ ] **Step 2: Scaffold the function**
 
 ```bash
-npx supabase functions new submit-score
+supabase functions new submit-score
 ```
 
 - [ ] **Step 3: Write the function**
@@ -353,7 +361,7 @@ Deno.serve(async (req) => {
 - [ ] **Step 4: Deploy**
 
 ```bash
-npx supabase functions deploy submit-score
+supabase functions deploy submit-score
 ```
 If this errors requesting Docker, check `https://supabase.com/docs/guides/functions/deploy.md` for the current no-Docker deploy path; if none exists, deploy instead via the Supabase Dashboard: **Edge Functions → Create a new function → `submit-score`**, and paste the contents of `supabase/functions/submit-score/index.ts`.
 
