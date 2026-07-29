@@ -1272,6 +1272,59 @@ heightZoneTarget = heightZonesPyramid;
     addBox(x,z,0.6,0.6);
   }
   palm(-4,17); palm(0,18.5); palm(-3,14.5);
+
+  // ---- more hiding spots: taller, more enclosing cover than the jars/rubble/obelisks above ----
+  // a broken L-shaped temple wall, tall enough to fully break line of sight
+  function ruinedWall(x,z){
+    // full player height (~1.8) — this one fully hides you, not just a peek-over
+    block(3.2,1.8,0.4,0xa4854f,x,0.9,z,{noise:20});
+    block(0.4,1.5,2.6,0xa4854f,x+1.4,0.75,z+1.3,{noise:20});
+    for(let i=0;i<4;i++){ block(0.7,0.3+Math.random()*0.25,0.4,0xa4854f,x-1.3+i*0.9,1.85,z,{noise:22}); }
+    addBox(x,z,3.2,0.4); addBox(x+1.4,z+1.3,0.4,2.6);
+  }
+  ruinedWall(-21,-19);
+  // a crouching sphinx statue — a big solid landmark you can duck behind on any side
+  function sphinxStatue(x,z){
+    const stoneMat=0xc9a671;
+    block(2.2,1.1,3.6,stoneMat,x,0.7,z,{noise:18});
+    block(1.4,0.9,1.0,stoneMat,x,1.3,z+1.3,{noise:18});
+    block(0.9,1.0,0.9,stoneMat,x,2.2,z+1.6,{noise:18});
+    const headdress=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.3,1.0), metalMatP(0xe0b040,85,0xfff2c8)); headdress.position.set(x,2.65,z+1.6); scene.add(headdress);
+    [-1,1].forEach(side=>{ block(0.5,0.5,1.3,stoneMat,x+side*0.6,0.25,z+2.3,{noise:18}); });
+    addBox(x,z,2.2,3.6); addBox(x,z+2.3,1.6,1.5);
+  }
+  sphinxStatue(-23,17);
+  // toppled/half-buried columns, sandstone-toned
+  function buriedColumns(x,z){
+    const colMat=voxMat(0xb99a63,{noise:18});
+    [0,1,2].forEach(i=>{
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,2.4,8), colMat);
+      col.rotation.z=Math.PI/2; col.rotation.y=i*0.5; col.position.set(x+i*0.9-0.9,0.34,z+i*0.3-0.3); scene.add(col);
+    });
+    addBox(x,z,3.2,1.6);
+  }
+  buriedColumns(15,-21);
+  // a bigger boulder cluster than the small rubble piles elsewhere
+  function boulderCluster(x,z){
+    for(let i=0;i<4;i++){ const s=0.7+Math.random()*0.6;
+      block(s,s*0.85,s,0x9a8560,x+(Math.random()-0.5)*1.6,s*0.42,z+(Math.random()-0.5)*1.6,{noise:20}); }
+    addBox(x,z,2.6,2.6);
+  }
+  boulderCluster(26,26);
+  // a proper 3-sided alcove (U-shaped nook), open to the south — real cover from every other direction
+  function alcove(x,z){
+    // full player height (~1.8) — a true duck-in nook, fully hidden from the other three sides
+    block(0.4,1.8,2.2,0xa4854f,x-1.0,0.9,z,{noise:20});
+    block(0.4,1.8,2.2,0xa4854f,x+1.0,0.9,z,{noise:20});
+    block(2.4,1.8,0.4,0xa4854f,x,0.9,z-1.0,{noise:20});
+    addBox(x-1.0,z,0.4,2.2); addBox(x+1.0,z,0.4,2.2); addBox(x,z-1.0,2.4,0.4);
+  }
+  alcove(-15,-15);
+  // a few more, spread into the other open corners
+  ruinedWall(22,-16);
+  alcove(-24,-8);
+  boulderCluster(8,-24);
+  buriedColumns(-12,22);
 })();
 const pyramidOverworld = new THREE.Group();
 scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld) return; pyramidOverworld.add(o); });
