@@ -131,6 +131,8 @@ const colliders = [];            // original overworld colliders
 const pyramidColliders = [];     // pyramid overworld colliders (waves 1-3)
 const dungeonColliders = [];     // original boss dungeon colliders (Boss II)
 const pyramidDungeonColliders = []; // pyramid boss dungeon colliders (Boss I)
+const greekColliders = [];       // Greek/Ptolemaic overworld colliders (waves 4-6)
+const greekDungeonColliders = []; // Greek boss dungeon colliders (Boss II — the Ammit Companion)
 let addTarget = colliders;       // where addBox pushes during world build
 let activeColliders = colliders; // which set physics currently uses
 function addBox(cx,cz,w,d,roofY){ addTarget.push({x1:cx-w/2, z1:cz-d/2, x2:cx+w/2, z2:cz+d/2, roofY}); }
@@ -138,6 +140,7 @@ let pyramidPhase = true; // waves 1-3 + Boss I use the pyramid map/loadout; reve
 // height zones let the player climb onto rooftops via ramps (bots stay ground-level, unaffected)
 const heightZonesOriginal = [];
 const heightZonesPyramid = [];
+const heightZonesGreek = [];
 let heightZoneTarget = heightZonesOriginal;   // where sniperTower()/plaza() push during world build
 let activeHeightZones = heightZonesPyramid;   // which set getTerrainHeight() reads at runtime (pyramid phase starts active)
 function getTerrainHeight(x,z){
@@ -742,6 +745,23 @@ function sandFloorTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   x.fillStyle='#a9824a'; x.fillRect(0,0,P,P);
   for(let by=0;by<P;by+=5)for(let bx=0;bx<P;bx+=5){ const n=Math.abs(Math.sin(bx*4.1+by*9.3)*137%1); x.fillStyle=st[(n*4)|0]; x.fillRect(bx+1,by+1,4,4); }
   return c; }
+// pale marble brick texture, for the Greek (Ptolemaic Alexandria) overworld/dungeon walls
+function marbleBrickTex(){ const P=32,c=document.createElement('canvas'); c.width=c.height=P; const x=c.getContext('2d');
+  const st=['#d8d2c2','#e2ddd0','#cfc8b6','#ece6d8'];
+  x.fillStyle='#c7c0ae'; x.fillRect(0,0,P,P);
+  for(let by=0,row=0;by<P;by+=8,row++){
+    const off=(row%2)*4;
+    for(let bx=-4;bx<P;bx+=8){ const n=Math.abs(Math.sin(bx*4.1+by*9.3)*137%1); x.fillStyle=st[(n*4)|0]; x.fillRect(bx+off+1,by+1,6,6); }
+  }
+  x.strokeStyle='rgba(90,85,70,0.4)'; x.lineWidth=1;
+  for(let by=0;by<=P;by+=8) x.strokeRect(0,by,P,0);
+  const t=_finish(c,10); return t; }
+// pale marble floor tile texture, for both the Greek dungeon floor and the overworld path tiles
+function marbleFloorTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  const st=['#b0a894','#bcb49e','#a49c86','#c4bca6'];
+  x.fillStyle='#998f78'; x.fillRect(0,0,P,P);
+  for(let by=0;by<P;by+=5)for(let bx=0;bx<P;bx+=5){ const n=Math.abs(Math.sin(bx*4.1+by*9.3)*137%1); x.fillStyle=st[(n*4)|0]; x.fillRect(bx+1,by+1,4,4); }
+  return c; }
 (function buildDungeon(){
   const stoneMat = new THREE.MeshLambertMaterial({map:stoneBrickTex()});
   const floorMat = new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),16)});
@@ -842,40 +862,97 @@ addTarget = pyramidDungeonColliders;
   const dHemi = new THREE.HemisphereLight(0xccaa66, 0x2a1e12, 0.55); pyramidDungeon.add(dHemi);
   const dTop = new THREE.PointLight(0xffd88f, 0.6, 60); dTop.position.set(0,11,0); pyramidDungeon.add(dTop);
 })();
+
+// ===== GREEK DUNGEON (Boss II chamber) — same room layout/mechanics, marble + bronze/purple dark-magic instead of sandstone + gold/teal =====
+const greekDungeon = new THREE.Group();
+addTarget = greekDungeonColliders;
+(function buildGreekDungeon(){
+  const marbleWallMat = new THREE.MeshLambertMaterial({map:marbleBrickTex()});
+  const marbleFloorMat = new THREE.MeshLambertMaterial({map:_finish(marbleFloorTex(),16)});
+  const bronzeMat = metalMatP(0xad8730,80,0xffe9b0);
+  const glowBronze = new THREE.MeshBasicMaterial({color:0xe0b040, fog:false});
+  const glowPurple = new THREE.MeshBasicMaterial({color:0x9a3fe0, fog:false});
+  function gblock(w,h,d,mat,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; greekDungeon.add(m); return m; }
+  const R=23;
+  gblock(R*2,1,R*2,marbleFloorMat,0,-0.5,0);
+  gblock(R*2,12,1,marbleWallMat,0,6,-R); gblock(R*2,12,1,marbleWallMat,0,6,R);
+  gblock(1,12,R*2,marbleWallMat,-R,6,0); gblock(1,12,R*2,marbleWallMat,R,6,0);
+  for(let k=-2;k<=2;k++) gblock(2,1,R*2,marbleWallMat,k*8,11.4,0);
+  [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
+    gblock(2,10,2,marbleWallMat,x,5,z); addBox(x,z,2.3,2.3);
+    gblock(2.3,0.5,2.3, i%2?glowPurple:glowBronze, x, 8.6, z);
+    gblock(0.7,10,0.7, i%2?glowPurple:glowBronze, x, 5, z+1.05);
+    gblock(2.5,0.3,2.5, bronzeMat, x, 10.15, z); // bronze capital atop each column
+    const L=new THREE.PointLight(i%2?0x9a3fe0:0xe0b040, 2.4, 22); L.position.set(x,7,z); greekDungeon.add(L);
+  });
+  for(let k=-2;k<=2;k++) gblock(0.6,0.07,R*2, k%2?glowPurple:glowBronze, k*7, 0.05, 0);
+  for(let k=-2;k<=2;k++) gblock(R*2,0.07,0.6, k%2?glowBronze:glowPurple, 0, 0.05, k*7);
+  // ring of dark-magic inlay around the boss spawn point, marking it as the Ammit Companion's summoning circle
+  for(let i=0;i<16;i++){ const a=i/16*Math.PI*2;
+    gblock(0.9,0.06,0.35, glowPurple, Math.cos(a)*6, 0.05, -8+Math.sin(a)*6).rotation.y = a; }
+  const sconceSpots=[];
+  for(let x=-R+4;x<=R-4;x+=13){ sconceSpots.push([x,-R+0.6,0]); sconceSpots.push([x,R-0.6,1]); }
+  for(let z=-R+4;z<=R-4;z+=13){ sconceSpots.push([-R+0.6,z,1]); sconceSpots.push([R-0.6,z,0]); }
+  sconceSpots.forEach(([x,z,o],i)=>{
+    gblock(0.5,1.3,0.5, o?glowPurple:glowBronze, x,4.2,z);
+    gblock(0.7,0.15,0.7, marbleWallMat, x,3.5,z);
+    const L=new THREE.PointLight(o?0x9a3fe0:0xe0b040, 2.1, 20); L.position.set(x*0.94,4.6,z*0.94); greekDungeon.add(L);
+  });
+  // Sobek guardian statues flanking the entrance corridor (player enters from +Z) — crocodile-headed, foreshadowing Ammit
+  function sobekStatue(x,z,facing){
+    const dark = voxMat(0x1c2618,{noise:16});
+    const base=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.5,1.6),bronzeMat); base.position.set(x,0.25,z); greekDungeon.add(base);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(1.1,2.6,0.9),dark); body.position.set(x,1.8,z); greekDungeon.add(body);
+    const collar=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.3,0.95),bronzeMat); collar.position.set(x,2.9,z); greekDungeon.add(collar);
+    const g=new THREE.Group(); g.position.set(x,3.35,z); g.rotation.y=facing; greekDungeon.add(g);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.5,0.7),dark); g.add(head);
+    const snout=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.22,0.55),dark); snout.position.set(0,-0.2,0.5); g.add(snout);
+    const teeth=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.05,0.03),new THREE.MeshLambertMaterial({color:0xf2f2ea})); teeth.position.set(0,-0.32,0.75); g.add(teeth);
+    const eyes=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.07,0.05),glowPurple); eyes.position.set(0,0.08,0.36); g.add(eyes);
+    addBox(x,z,1.7,1.7);
+  }
+  sobekStatue(-9,13,Math.PI); sobekStatue(9,13,Math.PI);
+  greekDungeon.add(new THREE.AmbientLight(0x8a6fa0, 0.9));
+  const dHemi = new THREE.HemisphereLight(0xccaadd, 0x241a2e, 0.55); greekDungeon.add(dHemi);
+  const dTop = new THREE.PointLight(0xd8b8ff, 0.6, 60); dTop.position.set(0,11,0); greekDungeon.add(dTop);
+})();
 addTarget = colliders;   // back to overworld for anything built later
-// both dungeons begin detached from the scene (pyramid overworld is active)
+// all three dungeons begin detached from the scene (pyramid overworld is active)
 
 // ===== world switching (swap in/out of scene so raycasts/LOS only see the active world) =====
 let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDungeon() used, so exitDungeon() restores the right one even if pyramidPhase flips while inside
 function enterDungeon(){
-  dungeonWasPyramid = pyramidPhase;
-  scene.remove(dungeonWasPyramid ? pyramidOverworld : overworld);
-  scene.add(dungeonWasPyramid ? pyramidDungeon : dungeon);
+  dungeonWasPyramid = pyramidPhase; // false during era 1 (Greek) — the only other era currently reachable
+  scene.remove(dungeonWasPyramid ? pyramidOverworld : greekOverworld);
+  scene.add(dungeonWasPyramid ? pyramidDungeon : greekDungeon);
   sky.visible=false;
-  activeColliders = dungeonWasPyramid ? pyramidDungeonColliders : dungeonColliders;
-  activeHeightZones = heightZonesOriginal; // neither dungeon has climbable rooftops; keep this deterministic regardless of overworld phase
+  activeColliders = dungeonWasPyramid ? pyramidDungeonColliders : greekDungeonColliders;
+  activeHeightZones = heightZonesOriginal; // neither dungeon has climbable rooftops; keep this deterministic regardless of era
   scene.background.set(0x141726); scene.fog.color.set(0x141726); scene.fog.near=14; scene.fog.far=58;
   hemi.intensity=0.35; hemi.color.set(0x4a6fbf); hemi.groundColor.set(0x1a1e26);
   sun.intensity=0.0; fill.intensity=0.18; fill.color.set(0x6f8fdd);
   camera.position.set(0,1.7,18); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
 function exitDungeon(){
-  scene.remove(dungeonWasPyramid ? pyramidDungeon : dungeon);
-  scene.add(dungeonWasPyramid ? pyramidOverworld : overworld);
+  scene.remove(dungeonWasPyramid ? pyramidDungeon : greekDungeon);
+  scene.add(dungeonWasPyramid ? pyramidOverworld : greekOverworld);
   sky.visible=true;
-  activeColliders = dungeonWasPyramid ? pyramidColliders : colliders;
-  activeHeightZones = dungeonWasPyramid ? heightZonesPyramid : heightZonesOriginal;
+  activeColliders = dungeonWasPyramid ? pyramidColliders : greekColliders;
+  activeHeightZones = dungeonWasPyramid ? heightZonesPyramid : heightZonesGreek;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
   camera.position.copy(spawnPoint); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
-// called once, right after Boss I's exitDungeon() has restored the pyramid overworld — swaps it for the original for the rest of the game
-function switchToOriginalWorld(){
+// called once, right after Boss I's exitDungeon() has restored the pyramid overworld — swaps it for the Greek era for the rest of the game
+function switchToGreekWorld(){
   scene.remove(pyramidOverworld);
-  scene.add(overworld);
-  activeColliders = colliders;
-  activeHeightZones = heightZonesOriginal;
+  scene.add(greekOverworld);
+  activeColliders = greekColliders;
+  activeHeightZones = heightZonesGreek;
+  // without this, dying in a normal Greek-era wave (before ever entering the Greek dungeon for Boss II)
+  // would call exitDungeon() with a stale dungeonWasPyramid=true and wrongly restore the pyramid map
+  dungeonWasPyramid = false;
 }
 
 // ===== NILE WAVE — automatic bonus wave between wave 2 and wave 3: adrift on a boat, crocodiles and hippos
@@ -1081,7 +1158,7 @@ addTarget = pyramidColliders;
 heightZoneTarget = heightZonesPyramid;
 (function buildPyramidOverworld(){
   // sand ground
-  const pground = new THREE.Mesh(new THREE.BoxGeometry(60,1,60), voxMat(0xd8b982,{noise:18}));
+  const pground = new THREE.Mesh(new THREE.BoxGeometry(60,1,60), voxMat(0xb89860,{noise:18}));
   pground.position.y=-0.5; scene.add(pground);
 
   // sandstone perimeter walls with gold-capped corner obelisk posts
@@ -1113,7 +1190,7 @@ heightZoneTarget = heightZonesPyramid;
     // a plain voxMat (NearestFilter, no mipmaps, hard-edged 'plate' pattern) causes bad shimmer/flicker at a
     // cone's apex, where every side face's UVs converge to a single degenerate point — use a mipmapped,
     // pattern-free texture instead, which is what a cone actually needs
-    const bodyTex = makeVoxelTexture(0xc9a671, {noise:18});
+    const bodyTex = makeVoxelTexture(0xb0a355, {noise:22});
     bodyTex.minFilter = THREE.LinearMipmapLinearFilter; bodyTex.magFilter = THREE.LinearFilter; bodyTex.generateMipmaps = true;
     const body=new THREE.Mesh(new THREE.ConeGeometry(half*Math.SQRT2,bodyH,4), new THREE.MeshLambertMaterial({map:bodyTex}));
     body.rotation.y=Math.PI/4; body.position.set(x,bodyH/2,z); scene.add(body);
@@ -1203,6 +1280,185 @@ scene.add(pyramidOverworld); // pyramid phase is active by default at load
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
+// ===================== GREEK OVERWORLD (Ptolemaic Alexandria, waves 4-6 + Boss II) =====================
+// Same swap architecture as the pyramid overworld: a full separate layout, built into its own collider/height-zone
+// arrays, then swept into its own group below and swapped in once Boss I falls (see switchToGreekWorld()).
+addTarget = greekColliders;
+heightZoneTarget = heightZonesGreek;
+(function buildGreekOverworld(){
+  const bronzeMat = metalMatP(0xad8730,80,0xffe9b0);
+
+  // pale marble ground
+  const gground = new THREE.Mesh(new THREE.BoxGeometry(60,1,60), voxMat(0xb0a894,{noise:16}));
+  gground.position.y=-0.5; scene.add(gground);
+
+  // no perimeter wall this time — an open waterfront, not a walled compound. The player is already hard-clamped
+  // to [-29,29] in animate() regardless of colliders, so nothing here is needed to keep them in bounds; the open
+  // edges are dressed with scattered Mediterranean trees/rocks/fallen columns instead (below), and the Med Sea
+  // itself forms a natural boundary along the north edge (see the harbor section further down).
+
+  // marble flagstone crossroads (same footprint as the pyramid's sand paths — keeps the same verified-clear spawns clear)
+  const marblePathMat = new THREE.MeshLambertMaterial({map:_finish(marbleFloorTex(),8), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
+  function marblePath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),marblePathMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
+  marblePath(0,0,9,60);
+  marblePath(-17.25,0,25.5,9);
+  marblePath(17.25,0,25.5,9);
+
+  // ---- Pharos Lighthouse: the era's central monument (solid, not climbable — the towers below cover that role) ----
+  function pharosLighthouse(x,z){
+    addBox(x,z,9,9);
+    const base=new THREE.Mesh(new THREE.BoxGeometry(9,5,9), voxMat(0xe0dbc9,{noise:16,pattern:'plate'})); base.position.set(x,2.5,z); scene.add(base);
+    const mid=new THREE.Mesh(new THREE.CylinderGeometry(3,3.6,6,8), voxMat(0xd8d2c0,{noise:14})); mid.position.set(x,8,z); scene.add(mid);
+    const top=new THREE.Mesh(new THREE.CylinderGeometry(1.6,2.2,4,8), voxMat(0xcfc8b6,{noise:14})); top.position.set(x,13,z); scene.add(top);
+    const beaconBase=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,1,8), bronzeMat); beaconBase.position.set(x,15.5,z); scene.add(beaconBase);
+    const flame=new THREE.Mesh(new THREE.ConeGeometry(0.7,1.4,8), new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false})); flame.position.set(x,16.7,z); scene.add(flame);
+    const L=new THREE.PointLight(0xffa040, 2.4, 40); L.position.set(x,17,z); scene.add(L);
+    for(let i=0;i<8;i++){ const a=i/8*Math.PI*2;
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.4,4.2,8), voxMat(0xe8e3d6,{noise:10}));
+      col.position.set(x+Math.cos(a)*5.4, 2.1, z+Math.sin(a)*5.4); scene.add(col);
+    }
+  }
+  pharosLighthouse(10,-8);
+
+  // 3 climbable watchtowers — same proven positions/mechanic as the pyramid towers, marble/bronze-reskinned
+  function blockRampSides(x,z,size,height,rampDir){
+    const half=size/2, rampLen=height*1.7, rampWidth=2.8, mid=half+rampLen/2, pad=0.15, thin=0.3;
+    if(rampDir==='w'){ addBox(x-mid, z+rampWidth/2+pad, rampLen, thin); addBox(x-mid, z-rampWidth/2-pad, rampLen, thin); }
+    else if(rampDir==='e'){ addBox(x+mid, z+rampWidth/2+pad, rampLen, thin); addBox(x+mid, z-rampWidth/2-pad, rampLen, thin); }
+    else if(rampDir==='s'){ addBox(x+rampWidth/2+pad, z+mid, thin, rampLen); addBox(x-rampWidth/2-pad, z+mid, thin, rampLen); }
+    else { addBox(x+rampWidth/2+pad, z-mid, thin, rampLen); addBox(x-rampWidth/2-pad, z-mid, thin, rampLen); }
+  }
+  sniperTower(24,-4, 4.5, 6, 0xa8a89a, 'w'); blockRampSides(24,-4,4.5,6,'w');
+  sniperTower(18,20, 4.5, 7, 0xb0b0a0, 'w'); blockRampSides(18,20,4.5,7,'w');
+  sniperTower(-8,-22, 4, 5.5, 0x9a9a88, 's'); blockRampSides(-8,-22,4,5.5,'s');
+
+  // ---- Temple of Poseidon: the era's second landmark — a full peristyle (columns ring all 4 sides), a
+  // weathered sea-stone statue of the god out front holding a bronze trident ----
+  function templeOfPoseidon(x,z){
+    const w=13, d=9;
+    addBox(x,z,w,d);
+    block(w+1.5,0.6,d+1.5,0xd8d2c0,x,0.3,z,{noise:14,pattern:'plate'}); // stylobate platform
+    block(w,5.5,d,0xe0dbc9,x,3.1,z,{noise:16,pattern:'plate'});
+    const roofMat = voxMat(0xc9a671,{noise:14}); // aged bronze-green roof
+    const roofL=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofMat); roofL.position.set(x,6.1,z-d*0.19); roofL.rotation.x=0.4; scene.add(roofL);
+    const roofR=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofMat); roofR.position.set(x,6.1,z+d*0.19); roofR.rotation.x=-0.4; scene.add(roofR);
+    const colMat = voxMat(0xece6d8,{noise:10});
+    for(let i=0;i<5;i++){ const cz=-d/2+(i/4)*d;
+      [x-w/2-0.9, x+w/2+0.9].forEach(cx=>{ const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), colMat); col.position.set(cx,3,z+cz); scene.add(col); });
+    }
+    for(let i=0;i<5;i++){ const cx=-w/2+(i/4)*w;
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), colMat); col.position.set(x+cx,3,z-d/2-0.9); scene.add(col);
+    }
+    const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.55,0.6,0.4), voxMat(0xe8e3d6,{noise:10})); pediment.position.set(x,6.2,z-d/2-0.9); scene.add(pediment);
+    // Poseidon statue on its own plinth, out front
+    const sz = z-d/2-3.2;
+    const plinth=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.7,1.6), voxMat(0xcfc8b6,{noise:12})); plinth.position.set(x,0.65,sz); scene.add(plinth);
+    const statueMat = voxMat(0xb8c4c0,{noise:10}); // weathered sea-stone
+    const body=new THREE.Mesh(new THREE.BoxGeometry(0.7,2.0,0.6), statueMat); body.position.set(x,2.0,sz); scene.add(body);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.45,0.42,0.42), statueMat); head.position.set(x,3.2,sz); scene.add(head);
+    const beard=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.3,0.15),voxMat(0x8a9490,{noise:10})); beard.position.set(x,2.9,sz+0.2); scene.add(beard);
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.06,3.2,6), bronzeMat); shaft.position.set(x+0.55,2.6,sz); scene.add(shaft);
+    [-0.13,0,0.13].forEach(off=>{ const prong=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.5,4), bronzeMat); prong.position.set(x+0.55+off,4.3,sz); scene.add(prong); });
+    addBox(x,sz,2,2);
+  }
+  templeOfPoseidon(-17,10);
+
+  // a small altar with a bronze offering bowl and eternal flame
+  function altar(x,z){
+    const stoneMat=voxMat(0xb0a894,{noise:14});
+    const base=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.9,1.4),stoneMat); base.position.set(x,0.45,z); scene.add(base);
+    const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.4,0.3,10), bronzeMat); bowl.position.set(x,1.05,z); scene.add(bowl);
+    const flame=new THREE.Mesh(new THREE.ConeGeometry(0.3,0.5,6),new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false})); flame.position.set(x,1.35,z); scene.add(flame);
+    const L=new THREE.PointLight(0xff8a2a,1.6,10); L.position.set(x,1.4,z); scene.add(L);
+    addBox(x,z,1.6,1.6);
+  }
+  altar(7,-20);
+
+  // a sea cave/grotto — a rock archway near the shore, purely atmospheric
+  function seaCave(x,z){
+    const rockMat = voxMat(0x8a8478,{noise:20});
+    block(5,3.2,3, 0x8a8478, x-2.6,1.6,z,{noise:20});
+    block(5,3.2,3, 0x8a8478, x+2.6,1.6,z,{noise:20});
+    block(9.5,1,3, 0x8a8478, x,3.4,z,{noise:20});
+    addBox(x-2.6,z,5,3); addBox(x+2.6,z,5,3);
+  }
+  seaCave(-6,16);
+
+  // ---- the open Mediterranean Sea along the north edge: a sandy beach slope into real open water, no quay wall ----
+  const beachZ0=19, harborZ0=24, harborZ1=42; // water pushed well past the play boundary for a horizon feel
+  block(70,0.4,harborZ0-beachZ0, 0xd8c49a, 0, -0.05, (beachZ0+harborZ0)/2, {noise:18}); // sandy beach slope, no hard edge
+  const harborWaterMat = new THREE.MeshPhongMaterial({color:0x2fa0b0, shininess:120, specular:0xbfefff, transparent:true, opacity:0.85, emissive:0x0a3a4a});
+  const harborWater = new THREE.Mesh(new THREE.BoxGeometry(70,0.35,harborZ1-harborZ0), harborWaterMat);
+  harborWater.position.set(0,0.22,(harborZ0+harborZ1)/2); harborWater.userData.isWater=true; scene.add(harborWater);
+  waterSurfaces.push(harborWater);
+  addBox(0,harborZ0+0.5,70,1); // invisible shoreline — keeps the player from wading in, not a built wall
+  function mooredShip(x,z){
+    const hull=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.9,5.5), voxMat(0x6b4a2c,{noise:14})); hull.position.set(x,0.6,z); scene.add(hull);
+    const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,4,6), voxMat(0x4a3320,{noise:10})); mast.position.set(x,2.9,z); scene.add(mast);
+    const sail=new THREE.Mesh(new THREE.BoxGeometry(1.6,2.2,0.06), new THREE.MeshLambertMaterial({color:0xe8dcc0})); sail.position.set(x,3.4,z+0.4); scene.add(sail);
+  }
+  mooredShip(-11,harborZ0+3); mooredShip(6,harborZ0+3);
+
+  // one obelisk (Egyptian holdover motif, tying the Ptolemaic-Greek era back to Egypt)
+  function obelisk(x,z,h){
+    block(1.1,h,1.1,0xd8d2c0,x,h/2,z,{noise:18});
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.6,1,0.6), bronzeMat); cap.position.set(x,h+0.5,z); scene.add(cap);
+    addBox(x,z,1.3,1.3);
+  }
+  obelisk(10,4,7);
+  // weathered broken statues, toppled and snapped — a quiet nod to Medusa's petrifying gaze
+  function brokenStatue(x,z,rot){
+    const stoneMat = voxMat(0xa8a49a,{noise:16});
+    const base=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.4,0.9),stoneMat); base.position.set(x,0.2,z); scene.add(base);
+    const torso=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.1,0.4),stoneMat); torso.position.set(x,0.95,z); torso.rotation.z=rot||0.3; scene.add(torso);
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.34,0.32),stoneMat); head.position.set(x+0.7,0.17,z+0.4); head.rotation.y=0.6; scene.add(head);
+    addBox(x,z,1.1,1.1);
+  }
+  brokenStatue(6,-16,0.3); brokenStatue(-24,-10,-0.4);
+  function amphora(x,z){
+    const m=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.42,0.95,8), voxMat(0xc9703c,{noise:16,pattern:'plate'}));
+    m.position.set(x,0.475,z); scene.add(m); addBox(x,z,0.7,0.7);
+  }
+  amphora(4.5,4.6); amphora(-9,-3.4); amphora(21,3.2);
+
+  // open Mediterranean dressing — takes over the wall's old framing role now that the map has no boundary:
+  // olive and cypress trees, low rock outcrops, and a couple of fallen columns scattered toward the open edges
+  function oliveTree(x,z){
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,2.2,6), voxMat(0x6b6048,{noise:14})); trunk.position.set(x,1.1,z); trunk.rotation.z=0.06; scene.add(trunk);
+    const leafMat=voxMat(0x7a8a5a,{noise:16});
+    for(let i=0;i<4;i++){ const a=i/4*Math.PI*2;
+      const leaf=new THREE.Mesh(new THREE.SphereGeometry(0.7,7,5),leafMat); leaf.scale.set(1,0.7,1);
+      leaf.position.set(x+Math.cos(a)*0.5,2.5,z+Math.sin(a)*0.5); scene.add(leaf); }
+    addBox(x,z,0.7,0.7);
+  }
+  function cypressTree(x,z){
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.45,3.6,6), voxMat(0x2f4a30,{noise:14})); trunk.position.set(x,1.8,z); scene.add(trunk);
+    const tip=new THREE.Mesh(new THREE.ConeGeometry(0.28,1,6), voxMat(0x2a3f28,{noise:12})); tip.position.set(x,3.9,z); scene.add(tip);
+    addBox(x,z,0.7,0.7);
+  }
+  function rockOutcrop(x,z,s){
+    for(let i=0;i<3;i++){ const r=s*(0.4+Math.random()*0.3);
+      block(r,r*0.8,r,0x9a9284,x+(Math.random()-0.5)*s,r*0.4,z+(Math.random()-0.5)*s,{noise:18}); }
+    addBox(x,z,s*1.3,s*1.3);
+  }
+  function fallenColumn(x,z,rot){
+    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,2.6,8), voxMat(0xd8d2c0,{noise:12})); col.rotation.z=Math.PI/2; col.rotation.y=rot||0; col.position.set(x,0.32,z); scene.add(col);
+    addBox(x,z,2.8,0.8);
+  }
+  cypressTree(-27,-6); cypressTree(-27,8); cypressTree(27,-18); cypressTree(27,-4);
+  oliveTree(-26,-22); oliveTree(-20,8); oliveTree(22,6); oliveTree(-8,-27); oliveTree(15,-26);
+  rockOutcrop(-28,14,2.2); rockOutcrop(28,10,2.5); rockOutcrop(-16,-27,2);
+  fallenColumn(-22,-2,0.4); fallenColumn(24,-24,1.1);
+})();
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+const greekOverworld = new THREE.Group();
+// sweeps its meshes out of scene.children into the group (Object3D.add() reparents) — begins detached from the
+// scene, like both dungeons; switchToGreekWorld()/enterDungeon()/exitDungeon() add it once Boss I falls
+scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld || o===pyramidOverworld) return; greekOverworld.add(o); });
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
 // ---- voxel humanoid bot (Minecraft/Pixel-Gun proportions: blocky head+helmet, layered torso armor, segmented limbs) ----
 function makeVoxelTexture(baseHex, {noise=22, size=48, pattern=null, cell=6} = {}){
   const c = document.createElement('canvas');
@@ -1252,7 +1508,10 @@ const SKINS = {
   // ---- pyramid/desert reskins (waves 1-3) ----
   mummy:    { skinC:0xd9c9a3, face:'mummy',  hair:false,   helmet:false, torso:0xcdbd9c, armor:0xe0d1a8, pants:0xb7a67f, boots:0xb7a67f, hands:0xcdbd9c, glow:0xe8a23d, heldWeapon:'khopesh' },
   jackal:   { skinC:0x2b2018, face:'jackal', hair:false,   helmet:false, torso:0x33241a, armor:0x4a3420, pants:0x1c1712, boots:0x17130f, hands:0x17130f, glow:0x5fb8d6, metal:true, jackalSnout:true, ears:true, earsColor:0x1c130d, goldTrim:true, heldWeapon:'bow' },
-  colossus: { skinC:0xc9a671, face:'colossus', hair:false, helmet:false, torso:0xb99a63, armor:0xd8b988, pants:0xa4854f, boots:0x8f7548, hands:0xb99a63, glow:0xe0b040, cracks:true, bossgun:true, bossgunColor:0xe0b040, bossgunColor2:0xffd873 }
+  colossus: { skinC:0xc9a671, face:'colossus', hair:false, helmet:false, torso:0xb99a63, armor:0xd8b988, pants:0xa4854f, boots:0x8f7548, hands:0xb99a63, glow:0xe0b040, cracks:true, bossgun:true, bossgunColor:0xe0b040, bossgunColor2:0xffd873 },
+  // ---- the Greek era's regular enemies (waves 4-6) are all non-humanoid creatures (minotaur/griffin/medusa,
+  // dispatched directly in makeVoxelBot like the scarab/scorpion/hippo/crocodile) — no SKINS entry needed ----
+  ammit:        { skinC:0x35502e, face:'croc',     hair:false, helmet:false, torso:0x22331e, armor:0x2e4526, pants:0x1c2818, boots:0x141d10, hands:0x35502e, glow:0x8a2fd0, snout:true, tail:true, cracks:true, mane:true, hump:true, bossgun:true, bossgunColor:0x8a2fd0, bossgunColor2:0xc98fff }
 };
 function glowCss(hex){ const c=new THREE.Color(hex==null?0x35d0ff:hex); return `rgb(${c.r*255|0},${c.g*255|0},${c.b*255|0})`; }
 function makeFace(type, skinHex, glowHex){
@@ -1302,6 +1561,9 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='scorpion') return makeScorpion();
   if(skinName==='hippo') return makeHippo();
   if(skinName==='crocodile') return makeCrocodile();
+  if(skinName==='minotaur') return makeMinotaur();
+  if(skinName==='griffin') return makeGriffin();
+  if(skinName==='medusa') return makeMedusa();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -1319,7 +1581,7 @@ function makeVoxelBot(color, weaponType, skinName){
   head.position.y = 1.58; g.add(head);
 
   // glowing eyes for cyborg/boss (Basic material → always bright, unaffected by hit-flash)
-  if(cfg.glow && (cfg.face==='cyborg'||cfg.face==='boss'||cfg.face==='mummy'||cfg.face==='jackal'||cfg.face==='colossus')){
+  if(cfg.glow && (cfg.face==='cyborg'||cfg.face==='boss'||cfg.face==='mummy'||cfg.face==='jackal'||cfg.face==='colossus'||cfg.face==='croc')){
     const eyeMat=new THREE.MeshBasicMaterial({color:cfg.glow, fog:false});
     const eL=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.06,0.05),eyeMat); eL.position.set(-0.1,1.6,0.235); g.add(eL);
     const eR=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.06,0.05),eyeMat); eR.position.set(0.1,1.6,0.235); g.add(eR);
@@ -1375,6 +1637,18 @@ function makeVoxelBot(color, weaponType, skinName){
     const trimMat = metalMatP(0xad8730,85,0xfff2c8); // shiny gold, catches highlights instead of flat color
     const tr1=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.025,0.02),trimMat); tr1.position.set(0,1.39,0.19); g.add(tr1);
     const tr2=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.025,0.02),trimMat); tr2.position.set(0,1.01,0.19); g.add(tr2);
+  }
+  // ammit: nods to all three of the real myth's animal parts — croc head (cfg.snout/tail), a lion's
+  // mane behind it, and hippo-like bulk in a raised rear hump
+  if(cfg.mane){
+    const maneMat = voxMat(0x4a3018,{noise:16});
+    for(let i=0;i<6;i++){ const a=(i/6)*Math.PI*2;
+      const tuft=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.22,0.12),maneMat);
+      tuft.position.set(Math.cos(a)*0.28, 1.62+Math.sin(a)*0.1, Math.sin(a)*0.22-0.05); g.add(tuft);
+    }
+  }
+  if(cfg.hump){
+    const hump=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.4,0.4),voxMat(cfg.skinC,{noise:14})); hump.position.set(0,1.35,-0.22); g.add(hump);
   }
 
   // layered torso
@@ -1656,6 +1930,194 @@ function makeCrocodile(){
   return g;
 }
 
+// ---- Greek era creatures (waves 4-6): none of these are humanoid reskins — real monster shapes ----
+// minotaur: hunched bull-headed brute — presents its horned head like a shield when engaging (pairs with the
+// facing-based front-block mechanic in the AI loop/damageBot, keyed off skin==='minotaur')
+function makeMinotaur(){
+  const g = new THREE.Group();
+  // the AI loop points this group's local -Z toward whatever it's facing (same convention every other bot's
+  // mesh.lookAt() produces); build the actual model facing +Z as usual, then flip it once here so the horns/
+  // snout end up on the correct side instead of literally facing away from its target
+  const body = new THREE.Group(); body.rotation.y = Math.PI; g.add(body);
+  const skinMat = voxMat(0xa87850,{noise:14});   // lean human-toned torso/arms/thighs
+  const furMat = voxMat(0x5a3a24,{noise:16});    // dark fur — bull head, shins, tail
+  const hideMat = voxMat(0xc9a878,{noise:12});   // lighter muzzle patch
+  const hornMat = metalMatP(0xe0d8c0,55,0xffffff);
+  const hornTipMat = voxMat(0x2a241c,{noise:8});
+  const hoofMat = voxMat(0x1c1712,{noise:10});
+  const browMat = voxMat(0x2e1c14,{noise:10});
+  const teethMat = new THREE.MeshLambertMaterial({color:0xe8e4d4});
+
+  // lean, upright human torso — standing tall, not hunched
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.5,0.32), skinMat); chest.position.set(0,1.45,0.02); body.add(chest);
+  const abs = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.36,0.28), skinMat); abs.position.set(0,1.08,0); body.add(abs);
+  const absLine = new THREE.Mesh(new THREE.BoxGeometry(0.03,0.34,0.02), new THREE.MeshBasicMaterial({color:0x5a3f28,fog:false})); absLine.position.set(0,1.08,0.15); body.add(absLine);
+  // pelvis, bridging abs to thighs with no floating gap
+  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.2,0.3), skinMat); pelvis.position.set(0,0.86,0); body.add(pelvis);
+  // neck, bridging chest to head with no floating gap
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.18,0.22), furMat); neck.position.set(0,1.78,0.16); body.add(neck);
+  // bulky shoulders — broad deltoid caps overlapping both the chest and the upper arms, so nothing floats apart
+  [-1,1].forEach(side=>{
+    const shoulder=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.32), skinMat); shoulder.position.set(side*0.33,1.58,0.05); body.add(shoulder);
+  });
+
+  // angry bull head: furrowed brow, bared teeth, narrowed eyes, big sweeping horns
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.4,0.44), furMat); head.position.set(0,2.0,0.14); body.add(head);
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.1,0.2), browMat); brow.position.set(0,2.14,0.3); brow.rotation.x=0.35; body.add(brow);
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.22,0.26), hideMat); snout.position.set(0,1.86,0.38); body.add(snout);
+  const teeth = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.04,0.02), teethMat); teeth.position.set(0,1.76,0.5); body.add(teeth);
+  [-1,1].forEach(side=>{ const tusk=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.09,0.04),teethMat); tusk.position.set(side*0.1,1.72,0.5); tusk.rotation.x=0.4; body.add(tusk); });
+  const nostrilMat = new THREE.MeshBasicMaterial({color:0x1c1210, fog:false});
+  [-1,1].forEach(side=>{
+    const nostril=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.03),nostrilMat); nostril.position.set(side*0.07,1.9,0.5); body.add(nostril);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.035,0.05), new THREE.MeshBasicMaterial({color:0xff3a1a,fog:false})); eye.position.set(side*0.17,2.06,0.34); eye.rotation.z=side*0.25; body.add(eye);
+    const hornBase=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.34,5),hornMat); hornBase.position.set(side*0.22,2.28,0.14); hornBase.rotation.z=side*0.5; hornBase.rotation.x=-0.2; body.add(hornBase);
+    const hornTip=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.26,5),hornTipMat); hornTip.position.set(side*0.36,2.5,-0.06); hornTip.rotation.z=side*0.85; hornTip.rotation.x=-0.3; body.add(hornTip);
+  });
+
+  // defined arms — two segments each, plugged straight into the shoulder caps above (no gap)
+  [-1,1].forEach(side=>{
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.38,0.24), skinMat); upper.position.set(side*0.36,1.45,0.06); upper.rotation.z=side*-0.12; body.add(upper);
+    const lower=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.34,0.18), skinMat); lower.position.set(side*0.44,1.12,0.13); lower.rotation.z=side*-0.1; body.add(lower);
+    const fist=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.17,0.17), furMat); fist.position.set(side*0.48,0.92,0.17); body.add(fist);
+  });
+
+  // human-like thighs into furred bull shins and hooves
+  [-1,1].forEach(side=>{
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.46,0.24), skinMat); thigh.position.set(side*0.16,0.72,0); body.add(thigh);
+    const shin=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.4,0.2), furMat); shin.position.set(side*0.16,0.32,0.02); body.add(shin);
+    const hoof=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.16,0.28), hoofMat); hoof.position.set(side*0.16,0.09,0.05); body.add(hoof);
+  });
+  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.36),furMat); tail.position.set(0,1.3,-0.22); tail.rotation.x=0.6; body.add(tail);
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 2.7, 0); marker.scale.set(1.1,1.1,1.1); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
+// griffin: eagle head/wings + lion body and tail — a real four-legged beast, not a person-shaped bird.
+// Dives in with a screech at range, then closes to claw/beak melee (weaponType==='javelin' hybrid mechanic).
+function makeGriffin(){
+  const g = new THREE.Group();
+  // NOTE: this bot is turned via mesh.lookAt() in the shared AI loop (not a custom rotation.y assignment like
+  // the minotaur), and Three.js's lookAt() already points a plain Object3D's local +Z at the target — so the
+  // model is simply built facing +Z directly on `g`, with no extra flip wrapper needed.
+  const furMat = voxMat(0xb5904a,{noise:16});
+  const furMat2 = voxMat(0x8a6a34,{noise:14});
+  const featherMat = voxMat(0x8a5a2e,{noise:16});
+  const featherMat2 = voxMat(0x6a4020,{noise:14});
+  const beakMat = new THREE.MeshLambertMaterial({color:0xd8a030});
+  const talonMat = new THREE.MeshLambertMaterial({color:0x2a2018});
+
+  // low, long lion body with a feathered chest, and a mane collar where fur transitions into feathers
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.55,1.1), furMat); torso.position.set(0,0.75,-0.1); g.add(torso);
+  const chestFeathers = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.5,0.42), featherMat); chestFeathers.position.set(0,0.85,0.46); g.add(chestFeathers);
+  const maneMat = voxMat(0x9a7a3e,{noise:16});
+  for(let i=0;i<5;i++){ const a=(i/5-0.4)*1.6;
+    const tuft=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.22,0.09),maneMat); tuft.position.set(Math.sin(a)*0.2,1.1+Math.cos(a)*0.05,0.4+Math.cos(a)*0.1); tuft.rotation.x=-0.3; g.add(tuft); }
+  // eagle head + neck, plugged straight into the chest — no floating gap
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.42,0.3), featherMat); neck.position.set(0,1.22,0.55); neck.rotation.x=-0.25; g.add(neck);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.3,0.34), featherMat2); head.position.set(0,1.55,0.74); g.add(head);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.09,0.3,4), beakMat); beak.rotation.x=1.5708; beak.position.set(0,1.52,0.98); g.add(beak);
+  [-1,1].forEach(side=>{
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.04), new THREE.MeshBasicMaterial({color:0xffd23a,fog:false})); eye.position.set(side*0.13,1.62,0.88); g.add(eye);
+    const ear=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.14,4), featherMat2); ear.position.set(side*0.1,1.76,0.67); ear.rotation.x=-0.3; g.add(ear);
+  });
+  // shoulder bulk where the wings root — keeps the wing joint from floating off the torso
+  [-1,1].forEach(side=>{
+    const shoulder=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.3,0.4), featherMat); shoulder.position.set(side*0.34,1.0,0.05); g.add(shoulder);
+  });
+  // swept-back, tapering wings — 3 layered segments instead of 2 flat slabs, angled close to the body
+  [-1,1].forEach(side=>{
+    const wingRoot=new THREE.Group(); wingRoot.position.set(side*0.36,1.1,-0.05); wingRoot.rotation.z=side*-0.55; wingRoot.rotation.y=side*0.35; g.add(wingRoot);
+    const w1=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.12,0.42),featherMat); w1.position.set(side*0.32,0.06,0); wingRoot.add(w1);
+    const w2=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.09,0.34),featherMat2); w2.position.set(side*0.72,-0.05,-0.02); wingRoot.add(w2);
+    const w3=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.06,0.24),featherMat); w3.position.set(side*1.05,-0.14,-0.04); wingRoot.add(w3);
+  });
+  // front legs, eagle-taloned, overlapping the torso underside
+  [-1,1].forEach(side=>{
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.42,0.17),featherMat2); leg.position.set(side*0.22,0.4,0.32); g.add(leg);
+    const talon=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.09,0.26),talonMat); talon.position.set(side*0.22,0.2,0.42); g.add(talon);
+  });
+  // rear legs, lion-pawed
+  [-1,1].forEach(side=>{
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.42,0.2),furMat2); leg.position.set(side*0.22,0.4,-0.55); g.add(leg);
+    const paw=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.11,0.26),furMat2); paw.position.set(side*0.22,0.22,-0.5); g.add(paw);
+  });
+  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.55),furMat); tail.position.set(0,0.85,-0.75); tail.rotation.x=0.5; g.add(tail);
+  const tuft=new THREE.Mesh(new THREE.SphereGeometry(0.11,6,5),furMat2); tuft.position.set(0,0.65,-1.05); g.add(tuft);
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 1.9, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
+// medusa: serpentine coiled lower body instead of legs, snake-tendrils ringing the head
+// instead of hair, glowing petrifying-gaze eyes. Heavy tank role (high HP, no special mechanic beyond that).
+function makeMedusa(){
+  const g = new THREE.Group();
+  // NOTE: same as makeGriffin — this bot is turned via mesh.lookAt() in the shared AI loop, which already
+  // points a plain Object3D's local +Z at the target, so the model is built facing +Z directly with no flip wrapper.
+  const scaleMat = voxMat(0x3a5c3e,{noise:16});
+  const scaleMat2 = voxMat(0x2a4a30,{noise:14});
+  const bellyMat = voxMat(0x8a9a6a,{noise:10});
+  const goldMat = metalMatP(0xad8730,80,0xffe9b0); // cursed-beauty jewelry accents, for material contrast against the scales
+  // coiled tail, overlapping segments so nothing floats apart, with a belly-plate scored down the front
+  const coilSegs = [{s:0.58,y:0.3,z:0.05},{s:0.5,y:0.28,z:-0.32},{s:0.4,y:0.32,z:-0.6},{s:0.3,y:0.42,z:-0.82},{s:0.2,y:0.55,z:-0.98}];
+  coilSegs.forEach((seg,i)=>{
+    const coil=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s*0.7,seg.s*1.35), i%2?scaleMat2:scaleMat); coil.position.set(0,seg.y,seg.z); coil.rotation.y=i*0.35; g.add(coil);
+    const plate=new THREE.Mesh(new THREE.BoxGeometry(seg.s*0.4,seg.s*0.5,0.04), bellyMat); plate.position.set(0,seg.y-seg.s*0.05,seg.z+seg.s*0.66); g.add(plate);
+  });
+  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.75,0.5), scaleMat); torso.position.set(0,1.05,0.15); g.add(torso);
+  const belly=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.6,0.1), bellyMat); belly.position.set(0,1.0,0.39); g.add(belly);
+  const goldBelt=new THREE.Mesh(new THREE.BoxGeometry(0.64,0.09,0.54), goldMat); goldBelt.position.set(0,0.68,0.15); g.add(goldBelt);
+  const neck=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.2,0.3), scaleMat); neck.position.set(0,1.48,0.2); g.add(neck);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.36,0.4), scaleMat); head.position.set(0,1.68,0.24); g.add(head);
+  // slit-pupil glowing eyes and a wide fanged mouth
+  [-1,1].forEach(side=>{
+    const eyeWhite=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.08,0.05), new THREE.MeshBasicMaterial({color:0x5aff6a,fog:false})); eyeWhite.position.set(side*0.1,1.72,0.42); g.add(eyeWhite);
+    const pupil=new THREE.Mesh(new THREE.BoxGeometry(0.025,0.08,0.05), new THREE.MeshBasicMaterial({color:0x0a1a0a,fog:false})); pupil.position.set(side*0.1,1.72,0.45); g.add(pupil);
+  });
+  const fangMat=new THREE.MeshLambertMaterial({color:0xf0f0e0});
+  const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.05,0.06), new THREE.MeshBasicMaterial({color:0x1c2418,fog:false})); jaw.position.set(0,1.56,0.42); g.add(jaw);
+  [-1,1].forEach(side=>{ const fang=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.14,0.03),fangMat); fang.position.set(side*0.09,1.5,0.43); g.add(fang); });
+  // a cobra-style hood flaring out behind the head — the single most iconic Medusa silhouette element
+  [-1,1].forEach(side=>{
+    const hood=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.42,0.34), scaleMat2); hood.position.set(side*0.26,1.66,0.08); hood.rotation.y=side*0.5; g.add(hood);
+  });
+  // wild starburst of snake tendrils instead of a flat ring — thicker, and a few carry their own tiny glowing eyes
+  const snakeMat=voxMat(0x4a6a3a,{noise:14});
+  for(let i=0;i<9;i++){ const a=i/9*Math.PI*2;
+    const rise = 0.1+Math.sin(i*1.7)*0.06;
+    const s1=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.22),snakeMat); s1.position.set(Math.cos(a)*0.2,1.9+rise,Math.sin(a)*0.2+0.08); s1.rotation.y=a; s1.rotation.x=-0.5; g.add(s1);
+    if(i%3===0){ const se=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.03,0.02), new THREE.MeshBasicMaterial({color:0x5aff6a,fog:false}));
+      se.position.set(Math.cos(a)*0.28,1.93+rise,Math.sin(a)*0.28+0.14); g.add(se); }
+  }
+  const armMat=voxMat(0x355234,{noise:14});
+  [-1,1].forEach(side=>{
+    const shoulder=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.24), scaleMat); shoulder.position.set(side*0.34,1.32,0.18); g.add(shoulder);
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.55,0.2),armMat); arm.position.set(side*0.42,1.0,0.2); arm.rotation.z=side*0.2; g.add(arm);
+    const bracelet=new THREE.Mesh(new THREE.BoxGeometry(0.23,0.05,0.23), goldMat); bracelet.position.set(side*0.43,0.86,0.22); g.add(bracelet);
+    const claw=new THREE.Mesh(new THREE.ConeGeometry(0.09,0.2,4),new THREE.MeshLambertMaterial({color:0xe8e4d4})); claw.position.set(side*0.46,0.7,0.32); claw.rotation.x=1.4; g.add(claw);
+  });
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 2.3, 0); marker.scale.set(1.05,1.05,1.05); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
 const bots = [];
 const BOT_MAX_HP = 100;
 function spawnBot(x,z,color,pA,pB,weaponType,opts){
@@ -1666,10 +2128,10 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
   bot.userData.isBot = true;
   scene.add(bot);
   const hp = opts.hp || BOT_MAX_HP;
-  const data = {mesh:bot, color, weaponType, pA:new THREE.Vector3(...pA), pB:new THREE.Vector3(...pB),
+  const data = {mesh:bot, color, weaponType, skin:opts.skin, pA:new THREE.Vector3(...pA), pB:new THREE.Vector3(...pB),
     t:Math.random()*6, hp, maxHp:hp, alive:true, flash:0, diff:opts.diff||1,
     fireCd:1+Math.random()*2, aim:0, swing:0, boss:!!opts.boss, speed:opts.speed||1,
-    heading:Math.random()*Math.PI*2, wanderT:0, moving:0};
+    heading:Math.random()*Math.PI*2, wanderT:0, moving:0, facing:0};
   bot.userData.data = data;
   bots.push(data);
   return bot;
@@ -1908,7 +2370,7 @@ function makeKhopesh(){
   part(g,0.036,0.1,0.05,goldBlade,-0.241,0.4065,0.04).rotation.z=2.1991; // tip
   g.scale.setScalar(1.05);  // bigger — uniform scale keeps every part's proportions/connections intact
   g.userData={muzzleZ:-0.1,muzzleY:0.4,pos:new THREE.Vector3(0.22,-0.22,-0.42),recoil:0.16,name:'Khopesh',
-    damage:60, fireRate:0.42, melee:true, range:2.5, auto:false, spread:0, tracer:0xffe9b0,
+    damage:90, fireRate:0.42, melee:true, range:2.5, auto:false, spread:0, tracer:0xffe9b0,
     magSize:1, ammo:1, reloadTime:0.1, reloading:false, reloadT:0};
   return g;
 }
@@ -1946,14 +2408,66 @@ function makeHarpoon(){
   return g;
 }
 
+// ---- Greek/Ptolemaic era weapons (waves 4-6): Sling (fast ranged), Xiphos (melee), Trident (heavy ranged) ----
+// SLING — leather pouch + crossed cords, a stone nocked and ready; fast, precise, low recoil
+function makeSling(){
+  const g=new THREE.Group();
+  const leather=metalMatP(0x5a3d28,20,0x332211), bronze=metalMatP(0x8a6a30,70,0xd9c48a);
+  const cordMat=new THREE.MeshBasicMaterial({color:0xc9b48a, fog:false});
+  const cordL=new THREE.Mesh(new THREE.BoxGeometry(0.014,0.014,0.42),cordMat); cordL.position.set(-0.08,0,-0.16); cordL.rotation.y=0.35; g.add(cordL);
+  const cordR=new THREE.Mesh(new THREE.BoxGeometry(0.014,0.014,0.42),cordMat); cordR.position.set(0.08,0,-0.16); cordR.rotation.y=-0.35; g.add(cordR);
+  const pouch=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.05,0.2),leather); pouch.position.set(0,0,-0.36); g.add(pouch);
+  const stone=new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6), metalMatP(0x8a8a86,40,0x555555)); stone.position.set(0,0,-0.36); g.add(stone);
+  part(g,0.05,0.2,0.06,leather,0,0.16,0.18);        // wrist strap/handle
+  const cap=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.06),bronze); cap.position.set(0,0.26,0.18); g.add(cap);
+  g.userData={muzzleZ:-0.4,muzzleY:0,pos:new THREE.Vector3(0.2,-0.2,-0.32),recoil:0.05,name:'Sling',
+    damage:32, fireRate:0.2, auto:true, spread:0.006, tracer:0xdcd0b0,
+    magSize:14, ammo:14, reloadTime:1.0, reloading:false, reloadT:0};
+  return g;
+}
+// XIPHOS — short leaf-shaped double-edged blade; fast melee, quicker than the khopesh
+function makeXiphos(){
+  const g=new THREE.Group();
+  const bronze=metalMatP(0x9a7838,85,0xe8d9a8), leather=voxMat(0x3a2a1a,{noise:12});
+  const pommel=new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6),bronze); pommel.position.y=0.16; g.add(pommel);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.03,0.16,8),leather); grip.position.y=0.06; g.add(grip);
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.035,0.09),bronze); guard.position.y=-0.03; g.add(guard);
+  // leaf shape: narrow at the guard, widest at mid-blade, tapering to a point
+  part(g,0.085,0.09,0.045,bronze,0,-0.09,0);
+  part(g,0.105,0.16,0.04,bronze,0,-0.2,0);
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.052,0.14,4),bronze); tip.rotation.y=Math.PI/4; tip.position.set(0,-0.35,0); g.add(tip);
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.12,name:'Xiphos',
+    melee:true, range:2.2, damage:48, fireRate:0.3};
+  return g;
+}
+// TRIDENT — long shaft, three bronze prongs; heavy, slow, hits hard — the Mediterranean/coastal-flavored heavy weapon
+function makeTrident(){
+  const g=new THREE.Group();
+  const wood=metalMatP(0x5a3d22,25,0x332211), bronze=metalMatP(0x3f8f8a,75,0xbfe8e4);
+  part(g,0.045,0.045,0.85,wood,0,0,-0.05);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.055,0.22,8),wood); grip.rotation.x=Math.PI/2; grip.position.set(0,0,0.34); g.add(grip);
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.06,0.1,8),bronze); base.rotation.x=Math.PI/2; base.position.set(0,0,-0.42); g.add(base);
+  function prong(x){
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.02,0.28,6),bronze); shaft.rotation.x=Math.PI/2; shaft.position.set(x,0,-0.6); g.add(shaft);
+    const tip=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.16,4),bronze); tip.rotation.x=-Math.PI/2; tip.position.set(x,0,-0.78); g.add(tip);
+  }
+  prong(0); prong(-0.11); prong(0.11);
+  const crossbar=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.03,0.03),bronze); crossbar.position.set(0,0,-0.48); g.add(crossbar);
+  g.userData={muzzleZ:-0.75,muzzleY:0,pos:new THREE.Vector3(0.24,-0.22,-0.4),recoil:0.22,name:'Trident',
+    damage:95, fireRate:0.85, auto:false, spread:0, tracer:0x6fd6c9,
+    magSize:4, ammo:4, reloadTime:1.7, reloading:false, reloadT:0};
+  return g;
+}
+
 const DEFAULT_FOV = 75;
 let scoped = false; // declared here (before selectWeapon's initial call) to avoid a temporal-dead-zone crash
 const originalWeapons = [makeSniper(), makeRifle(), makeRayGun(), makeGrenadeLauncher(), makeZahraGun()];
 const pyramidWeapons = [makeBow(), makeKhopesh(), makeWasScepter()];
 const nileWeapons = [makeHarpoon()];
+const greekWeapons = [makeSling(), makeXiphos(), makeTrident()];
 let weapons = pyramidWeapons; // waves 1-3 + Boss I start on the pyramid loadout; swapped back after Boss I
 const gunGroup = new THREE.Group();
-originalWeapons.concat(pyramidWeapons).concat(nileWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
+originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
 gunGroup.add(muzzle);
 let currentWeapon = 0; // start on the bow
 function setAmmoHUD(){
@@ -1983,11 +2497,11 @@ function selectWeapon(i){
   if(window.syncWeaponButtons) window.syncWeaponButtons();
   if(!active.userData.scoped) setScope(false); // auto-unscope when switching away from the sniper
 }
-// called once Boss I is defeated: swap from the 3-weapon pyramid loadout back to the original 5 weapons
-function switchToOriginalLoadout(){
+// called once Boss I is defeated: swap from the 3-weapon pyramid loadout to the 3-weapon Greek loadout
+function switchToGreekLoadout(){
   weapons.forEach(w=>w.visible=false); // hide whichever pyramid weapon was showing — the new array's forEach in selectWeapon() won't touch it
-  weapons = originalWeapons;
-  selectWeapon(1);
+  weapons = greekWeapons;
+  selectWeapon(0);
 }
 let gunBaseZ = -0.5;
 camera.add(gunGroup);
@@ -2243,15 +2757,20 @@ function spawnWave(n){
   clearBots();
   const count=WAVES[n], diff=waveDiff(n);
   const pyramid = n<3; // waves 1-3: desert/pyramid reskin, ahead of the stone-temple boss dungeon
-  let knifeN=0, pistN=0;
   for(let i=0;i<count;i++){
     const sp=SPAWN_POINTS[(i*3 + n*2 + i) % SPAWN_POINTS.length];
     const x=sp[0], z=sp[1];
-    const wt=(i%3===2)?'knife':'pistol';
-    const skin = pyramid
-      ? (wt==='knife' ? 'mummy' : 'jackal')
-      : (wt==='knife' ? (knifeN++ %2 ? 'skeleton' : 'zombie')
-                      : (pistN++  %2 ? 'cyborg'   : 'croc'));
+    let wt, skin;
+    if(pyramid){
+      wt=(i%3===2)?'knife':'pistol';
+      skin = wt==='knife' ? 'mummy' : 'jackal';
+    } else {
+      // Greek era (waves 4-6): Minotaur (front-immune charging brute) / Griffin (dive-then-claw hybrid) /
+      // Medusa (heavy melee tank), in rotation — see the bot AI loop for their combat mechanics
+      const cyc = i%3;
+      skin = cyc===0 ? 'minotaur' : cyc===1 ? 'griffin' : 'medusa';
+      wt = skin==='griffin' ? 'javelin' : 'knife';
+    }
     const col=ENEMY_COLORS[(i+n)%ENEMY_COLORS.length];
     spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp:Math.round(BOT_MAX_HP*diff), diff, speed:1+(diff-1)*0.5});
   }
@@ -2264,6 +2783,10 @@ function spawnWave(n){
     spawnBot(10,16,0xb5502c,[4,0,16],[16,0,16],'knife',
       {skin:'scorpion', hp:Math.round(BOT_MAX_HP*diff*1.4), diff, speed:(1+(diff-1)*0.5)*1.9, scale:1.3});
   }
+  if(!pyramid && n===5){ // wave 6: an elite Medusa prowls in ahead of the Ammit Companion
+    spawnBot(10,16,0x3a5c3e,[4,0,16],[16,0,16],'knife',
+      {skin:'medusa', hp:Math.round(BOT_MAX_HP*diff*1.6), diff, speed:(1+(diff-1)*0.5)*1.1, scale:1.25});
+  }
   document.getElementById('wave').textContent=(n+1)+'/6';
   setEnemyCount();
 }
@@ -2273,9 +2796,9 @@ function spawnBossFight(){
   enterDungeon();
   bossActive=true;
   const isFinal = bossNum>=2;
-  // Boss I is the Sandstone Colossus (pyramid arc payoff); Boss II keeps the original design for contrast
-  const skin = isFinal ? 'boss' : 'colossus';
-  const col = isFinal ? 0x15181d : 0xc9a671;
+  // Boss I is the Sandstone Colossus (pyramid arc payoff); Boss II is the Ammit Companion (Greek arc payoff)
+  const skin = isFinal ? 'ammit' : 'colossus';
+  const col = isFinal ? 0x35502e : 0xc9a671;
   const bmesh=spawnBot(0,-8,col,[-7,0,-8],[7,0,-8],'pistol',
     {hp:isFinal?1700:1450, scale:isFinal?2.7:3.1, boss:true, speed:isFinal?2.0:1.5, skin, diff:1});
   showBossBar(true); setBossBar(bmesh.userData.data);
@@ -2303,8 +2826,10 @@ function onAllDead(){
     bossActive=false; showBossBar(false);
     if(bossNum>=2){ gameWon=true; exitDungeon(); setBanner('🏆 YOU WIN!  (click to play again)'); return; }
     exitDungeon();
-    if(pyramidPhase){ pyramidPhase=false; switchToOriginalWorld(); switchToOriginalLoadout(); currentEra=1; }
-    waveIdx++; pending='wave'; betweenTimer=2.6; setBanner('Boss down! Back to the surface…');
+    const enteringGreekEra = pyramidPhase; // about to flip below — capture it now for the banner text
+    if(pyramidPhase){ pyramidPhase=false; switchToGreekWorld(); switchToGreekLoadout(); currentEra=1; }
+    waveIdx++; pending='wave'; betweenTimer=2.6;
+    setBanner(enteringGreekEra ? 'Boss down! Now entering the Greek period…' : 'Boss down! Back to the surface…');
     return;
   }
   if(inNileArea){
@@ -2540,6 +3065,8 @@ function fire(){
   else if(w.name==='Was Scepter') SFX.playerRay();
   else if(w.name==='Bow') SFX.playerRifle();
   else if(w.name==='Harpoon') SFX.playerSniper();
+  else if(w.name==='Sling') SFX.playerRifle();
+  else if(w.name==='Trident') SFX.playerSniper();
   else SFX.playerGrenade();
   // recoil + flash
   gunGroup.position.z = gunBaseZ + w.recoil;
@@ -2635,6 +3162,14 @@ function explodeAt(point){
 }
 function damageBot(bd, dmg, point){
   if(!bd.alive) return;
+  if(bd.skin==='minotaur'){
+    // the lowered horned head: damage from within its facing arc is nearly blocked —
+    // flank or hit it from behind while its slow turn rate hasn't caught up (see the AI loop above)
+    const dx=camera.position.x-bd.mesh.position.x, dz=camera.position.z-bd.mesh.position.z;
+    let da = Math.atan2(-dx,-dz) - bd.facing;
+    da = ((da+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2) - Math.PI;
+    if(Math.abs(da) < 1.15) dmg *= 0.12;
+  }
   bd.hp -= dmg; bd.flash = 0.12;
   if(bd.boss) setBossBar(bd);
   if(bd.hp <= 0){
@@ -2853,7 +3388,11 @@ function animate(){
     const hh = firstHit(_chest, _dir, distToPlayer+1, b.mesh);
     const los = !hh || hh.dist >= distToPlayer - 1.2;
     const isKnife = b.weaponType==='knife';
-    const canEngage = player.alive && los && (isKnife ? distToPlayer < 3.4 : distToPlayer < 30);
+    // griffin: dive-screeches at range, closes to talon/beak melee once the player is close — meleeNow flips the
+    // combat mode below without needing a second bot type; the engage distance flips with it (3.4 melee / 30 ranged)
+    const isJavelin = b.weaponType==='javelin';
+    const meleeNow = isKnife || (isJavelin && distToPlayer < 3.4);
+    const canEngage = player.alive && los && (meleeNow ? distToPlayer < 3.4 : distToPlayer < 30);
 
     // ---- movement & facing (walk toward where you go; only face the player when engaging) ----
     const R = b.boss?1.2:0.55;
@@ -2872,8 +3411,19 @@ function animate(){
       if(blocked || b.wanderT<=0){ b.heading += blocked ? (2.0+Math.random()*1.6) : (Math.random()*1.6-0.8); b.wanderT = 1.2+Math.random()*1.8; }
       b.moving=1; facePlayer=false;
     }
-    if(facePlayer) b.mesh.lookAt(camera.position.x, 0, camera.position.z);
-    else b.mesh.lookAt(b.mesh.position.x+Math.cos(b.heading), 0, b.mesh.position.z+Math.sin(b.heading));
+    // minotaur: "slow to turn" — a capped turn rate instead of instantly snapping to face the player, so a
+    // player circling fast enough ends up hitting its flank/back before its horned head can re-orient (see damageBot)
+    const wantFacing = facePlayer ? Math.atan2(-toPX,-toPZ) : Math.atan2(-Math.cos(b.heading),-Math.sin(b.heading));
+    if(b.skin==='minotaur'){
+      let df = wantFacing - b.facing; df = ((df+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2) - Math.PI;
+      const maxTurn = 1.1*dt;
+      b.facing += Math.max(-maxTurn, Math.min(maxTurn, df));
+      b.mesh.rotation.y = b.facing;
+    } else {
+      b.facing = wantFacing;
+      if(facePlayer) b.mesh.lookAt(camera.position.x, 0, camera.position.z);
+      else b.mesh.lookAt(b.mesh.position.x+Math.cos(b.heading), 0, b.mesh.position.z+Math.sin(b.heading));
+    }
 
     // ---- animation: legs/arms swing only while actually moving (skipped by non-humanoid rigs, e.g. scarabs) ----
     const walk = Math.sin(t*7 + b.t*3) * (b.moving?1:0);
@@ -2891,20 +3441,20 @@ function animate(){
     // ---- combat ----
     b.fireCd -= dt;
     if(b.fireCd <= 0 && canEngage){
-      if(isKnife){
-        // melee stab — scales a little with wave difficulty
+      if(meleeNow){
+        // melee stab — scales a little with wave difficulty; the medusa's bite/claws hit noticeably harder
         b.swing = 1.0; SFX.knife(distToPlayer);
-        damagePlayer(Math.round(7*b.diff));
+        damagePlayer(Math.round((b.skin==='medusa'?14:7)*b.diff));
         b.fireCd = Math.max(1.0, 1.5/b.diff);
       } else {
-        // pistol shot — accuracy/damage/rate ramp with wave difficulty
-        spawnTracer(_chest.clone(), camera.position.clone(), 0xff8a3a);
+        // pistol shot, or a griffin's dive-screech at range — accuracy/damage/rate ramp with wave difficulty
+        spawnTracer(_chest.clone(), camera.position.clone(), isJavelin?0xd7c49a:0xff8a3a);
         SFX.enemyShot(distToPlayer);
         if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
         b.swing = 0.5; // recoil kick
         const hitChance = Math.max(0.2, Math.min(0.82, (b.boss?0.8:(0.5+(b.diff-1)*0.2)) - distToPlayer*0.015));
-        if((Math.sin(t*131.7+b.t*13.3)*0.5+0.5) < hitChance) damagePlayer(b.boss ? 11 : Math.round(3*b.diff));
-        b.fireCd = (b.boss?0.28:Math.max(0.55,1.1/b.diff)) + (Math.sin(t*53.1+b.t)*0.5+0.5)*(b.boss?0.4:1.0);
+        if((Math.sin(t*131.7+b.t*13.3)*0.5+0.5) < hitChance) damagePlayer(b.boss ? 11 : Math.round((isJavelin?5:3)*b.diff));
+        b.fireCd = ((b.boss?0.28:Math.max(0.55,1.1/b.diff)) + (Math.sin(t*53.1+b.t)*0.5+0.5)*(b.boss?0.4:1.0)) * (isJavelin?1.6:1);
       }
     } else if(b.fireCd <= 0){ b.fireCd = 0.4; }
   });
