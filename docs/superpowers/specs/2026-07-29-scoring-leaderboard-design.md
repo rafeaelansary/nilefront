@@ -21,8 +21,13 @@ map — is out of scope here and will get its own spec.
   username (leaderboard shows usernames, never emails).
 - **Login is required before START** — the title screen shows sign-in/sign-up in
   place of (or ahead of) the START button. There is no guest/anonymous play path.
-- **Score submission**: one row per completed run (death or win), submitted at
-  game-over. The leaderboard shows each player's *best* run, not every run.
+- **Score submission**: the game has no permadeath — dying respawns the player
+  at the start of the current era and `player.score` keeps accumulating; the
+  only true "run over" state is defeating the final boss. So submission is tied
+  to *wave-clear checkpoints*, not a single game-over moment: a row is
+  submitted every time `onAllDead()` fires — after any regular wave, the Nile
+  Wave, or a boss — using the score accumulated so far in that play session.
+  The leaderboard shows each player's *best* checkpoint, not every submission.
 - **Leaderboard**: a single all-time top-10 list, shown on the title screen and
   again on the game-over screen with the player's own entry highlighted if
   present.
@@ -136,13 +141,18 @@ a preview, the server's is what's stored.
    `supabase-js`'s `localStorage` handling, so returning players stay logged in.
 2. **During play**: the game tracks the raw stats the formula needs — kills by
    type, boss kills, shots fired/hit, current/max streak, wave/era reached
-   (wave/era already tracked today), and a run-start timestamp.
-3. **On death or win** (game-over): tracking stops; the client calls
-   `submit-score` with the raw stats and the user's auth token.
-4. **Game-over screen**: shows the score returned by the Edge Function
-   (authoritative — may differ slightly from the live HUD preview if the two
-   formula copies drift) and the top-10 leaderboard, with the player's own
-   entry highlighted if present.
+   (wave/era already tracked today), and a run-start timestamp. These persist
+   across deaths/respawns within the same play session, matching how
+   `player.score` already behaves — they only reset in `startGame()`.
+3. **On every wave clear** (`onAllDead()` — regular wave, Nile Wave, or boss):
+   the client calls `submit-score` with the raw stats accumulated so far and
+   the user's auth token, then play continues as normal (wave transitions,
+   respawns, etc. are unaffected by this).
+4. **Leaderboard display**: after each submission, briefly show the score
+   returned by the Edge Function (authoritative — may differ slightly from the
+   live HUD preview if the two formula copies drift) alongside the current
+   top-10 leaderboard, with the player's own entry highlighted if present. Also
+   shown on the title screen at all times.
 
 ## Error handling
 
@@ -159,11 +169,13 @@ a preview, the server's is what's stored.
 The project has no existing automated test harness — it's a single static HTML
 file. Verification is manual:
 - Sign-up and sign-in flow, including duplicate-username handling.
-- A full run end-to-end against a real Supabase project, confirming the score
-  shown at game-over matches what lands in `runs`.
+- A full play session end-to-end against a real Supabase project, clearing at
+  least one wave, confirming the score shown after that wave-clear matches
+  what lands in `runs`.
 - Confirming a direct client-side `INSERT` into `runs` is rejected by RLS (the
   security property this design is built around).
-- Leaderboard ordering and best-per-user dedup.
+- Leaderboard ordering and best-per-user dedup across multiple checkpoints
+  from the same session.
 
 ## Out of scope
 
