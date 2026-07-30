@@ -3321,12 +3321,13 @@ function explodeAt(point){
 function damageBot(bd, dmg, point){
   if(!bd.alive) return;
   if(bd.skin==='minotaur'){
-    // the lowered horned head: damage from within its facing arc is nearly blocked —
-    // flank or hit it from behind while its slow turn rate hasn't caught up (see the AI loop above)
+    // the lowered horned head: damage from within its facing arc is reduced (not nearly blocked) —
+    // flanking or hitting it from behind while its slow turn rate hasn't caught up still hits full damage,
+    // but frontal hits aren't supposed to feel like shooting a brick wall
     const dx=camera.position.x-bd.mesh.position.x, dz=camera.position.z-bd.mesh.position.z;
     let da = Math.atan2(-dx,-dz) - bd.facing;
     da = ((da+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2) - Math.PI;
-    if(Math.abs(da) < 1.15) dmg *= 0.12;
+    if(Math.abs(da) < 1.15) dmg *= 0.5;
   }
   bd.hp -= dmg; bd.flash = 0.12;
   if(bd.boss) setBossBar(bd);
