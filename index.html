@@ -143,13 +143,19 @@ const heightZonesPyramid = [];
 const heightZonesGreek = [];
 let heightZoneTarget = heightZonesOriginal;   // where sniperTower()/plaza() push during world build
 let activeHeightZones = heightZonesPyramid;   // which set getTerrainHeight() reads at runtime (pyramid phase starts active)
-function getTerrainHeight(x,z){
+function getTerrainHeight(x,z,curH){
   let h=0;
   for(const zn of activeHeightZones){
     if(x<zn.x1||x>zn.x2||z<zn.z1||z>zn.z2) continue;
-    if(zn.type==='plateau'){ h=Math.max(h,zn.y); }
-    else if(zn.axisX){ const t=Math.max(0,Math.min(1,(x-zn.x1)/Math.max(0.001,(zn.x2-zn.x1)))); h=Math.max(h, zn.y1+(zn.y2-zn.y1)*t); }
-    else { const t=Math.max(0,Math.min(1,(z-zn.z1)/Math.max(0.001,(zn.z2-zn.z1)))); h=Math.max(h, zn.y1+(zn.y2-zn.y1)*t); }
+    if(zn.type==='plateau'){ h=Math.max(h,zn.y); continue; }
+    let zh;
+    if(zn.axisX){ const t=Math.max(0,Math.min(1,(x-zn.x1)/Math.max(0.001,(zn.x2-zn.x1)))); zh=zn.y1+(zn.y2-zn.y1)*t; }
+    else { const t=Math.max(0,Math.min(1,(z-zn.z1)/Math.max(0.001,(zn.z2-zn.z1)))); zh=zn.y1+(zn.y2-zn.y1)*t; }
+    // a ramp is just a flat XZ rectangle with no real 3D "under vs. on top of" distinction, so only let it
+    // raise you if you're already close to that height (i.e. you actually climbed up to this point) — walking
+    // underneath/beside it at ground level would otherwise register as standing on it and float you up
+    if(curH!==undefined && Math.abs(zh-curH) > 1.5) continue;
+    h=Math.max(h,zh);
   }
   return h;
 }
@@ -961,6 +967,8 @@ const nileColliders = [];
 const nileWorld = new THREE.Group();
 let inNileArea = false;
 let weaponsBeforeNile = null, currentWeaponBeforeNile = 0;
+let boatHoles = 0; // the boat sinks once 3 holes have been chewed through it — visible chunks, not an HP bar
+const boatHoleMeshes = [];
 addTarget = nileColliders;
 function waterRippleTex(){
   const P=48, c=_mkCanvas(P), x=c.getContext('2d');
@@ -1014,6 +1022,39 @@ function waterRippleTex(){
 })();
 addTarget = colliders;
 
+// a visible chomped-out chunk of hull, left behind wherever a croc/hippo finishes gnawing through it
+function spawnBoatHole(x,z){
+  // a real bite-shaped tear, not a neat little dark circle: several overlapping irregular missing-chunk
+  // slabs (so the gap reads jagged, not a clean hole) surrounded by big splintered wood shards jutting out
+  // at broken angles, like something with real jaws actually tore into the hull. Plus a flash/light burst
+  // at the moment of impact so it reads clearly even if you weren't looking right at it.
+  const dark = new THREE.MeshBasicMaterial({color:0x0a0602, fog:false});
+  const splinterMat = new THREE.MeshBasicMaterial({color:0xe0c9a0, fog:false});
+  const splinterMat2 = new THREE.MeshBasicMaterial({color:0xb08858, fog:false});
+  const grp = new THREE.Group(); grp.position.set(x, 0.3, z); nileWorld.add(grp);
+  const biteChunks = [ {s:0.55,ox:0,oz:0}, {s:0.4,ox:0.28,oz:0.18}, {s:0.36,ox:-0.24,oz:0.22}, {s:0.32,ox:0.08,oz:-0.3} ];
+  biteChunks.forEach(c=>{
+    const chunk=new THREE.Mesh(new THREE.BoxGeometry(c.s,0.16,c.s), dark);
+    chunk.position.set(c.ox,-0.02,c.oz); chunk.rotation.y=Math.random()*Math.PI;
+    grp.add(chunk);
+  });
+  for(let i=0;i<10;i++){
+    const a=(i/10)*Math.PI*2 + Math.random()*0.3;
+    const len=0.26+Math.random()*0.36, dist=0.36+Math.random()*0.3;
+    const splinter=new THREE.Mesh(new THREE.BoxGeometry(0.07+Math.random()*0.05, len, 0.06), i%2?splinterMat:splinterMat2);
+    splinter.position.set(Math.cos(a)*dist, len*0.32, Math.sin(a)*dist);
+    splinter.rotation.z = (Math.random()-0.5)*0.9;
+    splinter.rotation.x = (Math.random()-0.5)*0.9;
+    splinter.rotation.y = a;
+    grp.add(splinter);
+  }
+  boatHoleMeshes.push(grp);
+  const fMat = new THREE.MeshBasicMaterial({color:0xffd9a0, transparent:true, opacity:0.95, fog:false});
+  const flash = new THREE.Mesh(new THREE.SphereGeometry(0.3,8,6), fMat);
+  flash.position.set(x,0.5,z); scene.add(flash);
+  const light = new THREE.PointLight(0xffb347, 3.0, 10); light.position.set(x,0.6,z); scene.add(light);
+  explosions.push({mesh:flash, light, t:0, dur:0.5});
+}
 function spawnNileWave(){
   // crocodiles and hippos spawn out in the open water, ringed around the boat, and swim in to attack
   const ring=[[-14,10],[14,10],[-16,-8],[16,-8],[0,16],[-9,-14],[9,-14]];
@@ -1025,6 +1066,8 @@ function spawnNileWave(){
 }
 function enterNileWave(){
   inNileArea = true;
+  boatHoles = 0;
+  boatHoleMeshes.forEach(m=>nileWorld.remove(m)); boatHoleMeshes.length = 0; // fresh hull on a replay
   scene.remove(pyramidOverworld); scene.add(nileWorld); sky.visible=true;
   activeColliders = nileColliders; activeHeightZones = heightZonesOriginal;
   scene.background.set(0x4a90b8); scene.fog.color.set(0x4a90b8); scene.fog.near=30; scene.fog.far=140;
@@ -1208,29 +1251,20 @@ heightZoneTarget = heightZonesPyramid;
       const stairZ = z+half-0.15+(1-t)*stairRun;
       block(baseSize*0.2, 0.22, 0.4, 0xb99a63, x, t*bodyH*0.12+0.11, stairZ, {noise:16});
     }
-    // one single solid collider for the whole staircase run, flush against the pyramid's own collider (no gap
-    // between them) — ten small side-by-side colliders here caused a cascading multi-push in one frame instead
-    // (the player's collision radius bridged the small gaps between steps, so the resolver shoved them through
-    // several boxes in sequence on a single frame)
-    addBox(x, z+half+stairRun/2-0.15, baseSize*0.22, stairRun+0.3);
+    // no collider on the staircase itself: it's purely decorative (not climbable — the sniper towers cover
+    // that role), and a full-run blocking collider turned the whole approach to the pyramid into a wall
+    // neither the player nor bots could walk through or under. The pyramid body's own addBox() above is
+    // the only real obstacle here.
   }
   stepPyramid(10,-8, 10);
 
-  // 3 climbable pyramid-tier towers — same proven positions/mechanic as the original sniper towers, sandstone-reskinned
-  // a ramp's height zone is just a rectangle — walking into it sideways at ground level (e.g. patrolling along
-  // the wall) reports the same near-full climbing height as someone who actually walked up it, and the camera
-  // eases toward that height fast enough to feel like a violent fling. Block sideways entry into the ramp
-  // corridor (flanking its long edges) so the only way in is the intended climb from the low/far end.
-  function blockRampSides(x,z,size,height,rampDir){
-    const half=size/2, rampLen=height*1.7, rampWidth=2.8, mid=half+rampLen/2, pad=0.15, thin=0.3;
-    if(rampDir==='w'){ addBox(x-mid, z+rampWidth/2+pad, rampLen, thin); addBox(x-mid, z-rampWidth/2-pad, rampLen, thin); }
-    else if(rampDir==='e'){ addBox(x+mid, z+rampWidth/2+pad, rampLen, thin); addBox(x+mid, z-rampWidth/2-pad, rampLen, thin); }
-    else if(rampDir==='s'){ addBox(x+rampWidth/2+pad, z+mid, thin, rampLen); addBox(x-rampWidth/2-pad, z+mid, thin, rampLen); }
-    else { addBox(x+rampWidth/2+pad, z-mid, thin, rampLen); addBox(x-rampWidth/2-pad, z-mid, thin, rampLen); }
-  }
-  sniperTower(24,-4, 4.5, 6, 0xc9a671, 'w'); blockRampSides(24,-4,4.5,6,'w');
-  sniperTower(18,20, 4.5, 7, 0xb99a63, 'w'); blockRampSides(18,20,4.5,7,'w');
-  sniperTower(-8,-22, 4, 5.5, 0xa4854f, 's'); blockRampSides(-8,-22,4,5.5,'s');
+  // 3 climbable pyramid-tier towers — same proven positions/mechanic as the original sniper towers, sandstone-reskinned.
+  // Ramps used to have flanking colliders walling off sideways entry (to stop a jarring height-zone "fling" —
+  // see the rate-capped playerHeight easing in animate() now instead), but that also blocked the player and
+  // bots from ever walking under/around the towers at all. Removed; the rate cap handles the fling risk instead.
+  sniperTower(24,-4, 4.5, 6, 0xc9a671, 'w');
+  sniperTower(18,20, 4.5, 7, 0xb99a63, 'w');
+  sniperTower(-8,-22, 4, 5.5, 0xa4854f, 's');
 
   // obelisks (landmark cover)
   function obelisk(x,z,h){
@@ -1373,17 +1407,12 @@ heightZoneTarget = heightZonesGreek;
   }
   pharosLighthouse(10,-8);
 
-  // 3 climbable watchtowers — same proven positions/mechanic as the pyramid towers, marble/bronze-reskinned
-  function blockRampSides(x,z,size,height,rampDir){
-    const half=size/2, rampLen=height*1.7, rampWidth=2.8, mid=half+rampLen/2, pad=0.15, thin=0.3;
-    if(rampDir==='w'){ addBox(x-mid, z+rampWidth/2+pad, rampLen, thin); addBox(x-mid, z-rampWidth/2-pad, rampLen, thin); }
-    else if(rampDir==='e'){ addBox(x+mid, z+rampWidth/2+pad, rampLen, thin); addBox(x+mid, z-rampWidth/2-pad, rampLen, thin); }
-    else if(rampDir==='s'){ addBox(x+rampWidth/2+pad, z+mid, thin, rampLen); addBox(x-rampWidth/2-pad, z+mid, thin, rampLen); }
-    else { addBox(x+rampWidth/2+pad, z-mid, thin, rampLen); addBox(x-rampWidth/2-pad, z-mid, thin, rampLen); }
-  }
-  sniperTower(24,-4, 4.5, 6, 0xa8a89a, 'w'); blockRampSides(24,-4,4.5,6,'w');
-  sniperTower(18,20, 4.5, 7, 0xb0b0a0, 'w'); blockRampSides(18,20,4.5,7,'w');
-  sniperTower(-8,-22, 4, 5.5, 0x9a9a88, 's'); blockRampSides(-8,-22,4,5.5,'s');
+  // 3 climbable watchtowers — same proven positions/mechanic as the pyramid towers, marble/bronze-reskinned.
+  // No more flanking ramp colliders (see the pyramid overworld build for why) — walkable underneath now,
+  // with the rate-capped playerHeight easing in animate() handling the sideways-entry fling risk instead.
+  sniperTower(24,-4, 4.5, 6, 0xa8a89a, 'w');
+  sniperTower(18,20, 4.5, 7, 0xb0b0a0, 'w');
+  sniperTower(-8,-22, 4, 5.5, 0x9a9a88, 's');
 
   // ---- Temple of Poseidon: the era's second landmark — a full peristyle (columns ring all 4 sides), a
   // weathered sea-stone statue of the god out front holding a bronze trident ----
@@ -2436,7 +2465,7 @@ function makeKhopesh(){
   part(g,0.036,0.1,0.05,goldBlade,-0.241,0.4065,0.04).rotation.z=2.1991; // tip
   g.scale.setScalar(1.05);  // bigger — uniform scale keeps every part's proportions/connections intact
   g.userData={muzzleZ:-0.1,muzzleY:0.4,pos:new THREE.Vector3(0.22,-0.22,-0.42),recoil:0.16,name:'Khopesh',
-    damage:90, fireRate:0.42, melee:true, range:2.5, auto:false, spread:0, tracer:0xffe9b0,
+    damage:100, fireRate:0.42, melee:true, range:2.5, auto:false, spread:0, tracer:0xffe9b0,
     magSize:1, ammo:1, reloadTime:0.1, reloading:false, reloadT:0};
   return g;
 }
@@ -2470,40 +2499,88 @@ function makeHarpoon(){
   const rope=new THREE.Mesh(new THREE.BoxGeometry(0.015,0.015,0.5), new THREE.MeshBasicMaterial({color:0xd9c9a0,fog:false})); rope.position.set(0.06,0,0.1); g.add(rope);
   g.userData={muzzleZ:-0.7,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.4),recoil:0.2,name:'Harpoon',
     damage:120, fireRate:0.9, auto:false, spread:0, tracer:0xaab4be,
-    magSize:5, ammo:5, reloadTime:1.5, reloading:false, reloadT:0};
+    magSize:6, ammo:6, reloadTime:1.5, reloading:false, reloadT:0};
   return g;
 }
 
 // ---- Greek/Ptolemaic era weapons (waves 4-6): Sling (fast ranged), Xiphos (melee), Trident (heavy ranged) ----
 // SLING — leather pouch + crossed cords, a stone nocked and ready; fast, precise, low recoil
 function makeSling(){
+  // a real Y-fork slingshot (per reference image), not a classical hand-swung strap: a wooden fork with two
+  // splayed prongs, elastic bands running from each prong tip down to a shared pouch/stone.
   const g=new THREE.Group();
-  const leather=metalMatP(0x5a3d28,20,0x332211), bronze=metalMatP(0x8a6a30,70,0xd9c48a);
-  const cordMat=new THREE.MeshBasicMaterial({color:0xc9b48a, fog:false});
-  const cordL=new THREE.Mesh(new THREE.BoxGeometry(0.014,0.014,0.42),cordMat); cordL.position.set(-0.08,0,-0.16); cordL.rotation.y=0.35; g.add(cordL);
-  const cordR=new THREE.Mesh(new THREE.BoxGeometry(0.014,0.014,0.42),cordMat); cordR.position.set(0.08,0,-0.16); cordR.rotation.y=-0.35; g.add(cordR);
-  const pouch=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.05,0.2),leather); pouch.position.set(0,0,-0.36); g.add(pouch);
-  const stone=new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6), metalMatP(0x8a8a86,40,0x555555)); stone.position.set(0,0,-0.36); g.add(stone);
-  part(g,0.05,0.2,0.06,leather,0,0.16,0.18);        // wrist strap/handle
-  const cap=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.06),bronze); cap.position.set(0,0.26,0.18); g.add(cap);
-  g.userData={muzzleZ:-0.4,muzzleY:0,pos:new THREE.Vector3(0.2,-0.2,-0.32),recoil:0.05,name:'Sling',
+  const Z = -0.15; // keeps every piece well clear of the camera's near plane (see the earlier near-plane bug)
+  const woodDark = voxMat(0x4a3018,{noise:12});
+  const woodLight = voxMat(0xc9a878,{noise:10}); // pale wood-grain band partway up each prong
+  const bandMat = new THREE.MeshBasicMaterial({color:0xc9b48a, fog:false});
+  const leatherMat = voxMat(0x2a1c12,{noise:10});
+  const stoneMat = metalMatP(0x8a8a86,40,0x555555);
+
+  part(g,0.06,0.2,0.07,woodDark,0,-0.1,0.1+Z);   // grip, near the hand
+  part(g,0.06,0.12,0.06,woodDark,0,0.04,0.05+Z); // fork base, bridging the grip up to where the prongs split
+
+  // two diverging prongs (dark wood + a lighter grain band + dark tip), and each prong's tip position computed
+  // analytically (rotation.z only mixes x/y, so z is unaffected) so the elastic bands below can target it exactly.
+  // Shorter than the first pass — the prongs used to reach so far above the pouch that the bands read as
+  // "string way up, pouch way down" instead of one compact fork.
+  const TIP_Y = 0.16; // local (pre-rotation) height of the tip along the prong — keep in sync with the geometry below
+  const tips=[];
+  [-1,1].forEach(side=>{
+    const grp=new THREE.Group(); grp.position.set(0,0.1,0.02+Z); grp.rotation.z=side*0.5; g.add(grp);
+    const pbase=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.13,0.045),woodDark); pbase.position.set(0,0.065,0); grp.add(pbase);
+    const band=new THREE.Mesh(new THREE.BoxGeometry(0.052,0.04,0.052),woodLight); band.position.set(0,0.12,0); grp.add(band);
+    const tip=new THREE.Mesh(new THREE.BoxGeometry(0.038,0.06,0.038),woodDark); tip.position.set(0,TIP_Y,0); grp.add(tip);
+    const th=side*0.5;
+    tips.push(new THREE.Vector3(-TIP_Y*Math.sin(th), 0.1+TIP_Y*Math.cos(th), 0.02+Z));
+  });
+
+  // pouch + stone, hanging just below the fork — close enough to the prong tips to read as one compact object
+  const pouchPos = new THREE.Vector3(0,0.1,0.08+Z);
+  const pouch=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.05,0.07),leatherMat); pouch.position.copy(pouchPos); g.add(pouch);
+  const stone=new THREE.Mesh(new THREE.SphereGeometry(0.04,8,6), stoneMat); stone.position.copy(pouchPos).add(new THREE.Vector3(0,0.02,0.03)); g.add(stone);
+
+  // two elastic bands, prong tip -> pouch: centered at the midpoint with length along local Z, then lookAt()
+  // the far end — the same positioning technique spawnTracer() uses elsewhere in this file for beam-like shapes.
+  // Kept as live references (not just built once) so the fire animation below can restretch them every frame.
+  const bandMeshes=[], bandBaseLen=[];
+  tips.forEach(tip=>{
+    const mid = tip.clone().add(pouchPos).multiplyScalar(0.5);
+    const len = tip.distanceTo(pouchPos);
+    const elastic = new THREE.Mesh(new THREE.BoxGeometry(0.018,0.018,len), bandMat);
+    elastic.position.copy(mid);
+    elastic.lookAt(pouchPos);
+    g.add(elastic);
+    bandMeshes.push(elastic); bandBaseLen.push(len);
+  });
+  g.userData={muzzleZ:-0.4+Z,muzzleY:0,pos:new THREE.Vector3(0.2,-0.2,-0.32),recoil:0.05,name:'Sling',
     damage:32, fireRate:0.2, auto:true, spread:0.006, tracer:0xdcd0b0,
-    magSize:14, ammo:14, reloadTime:1.0, reloading:false, reloadT:0};
+    magSize:14, ammo:14, reloadTime:1.0, reloading:false, reloadT:0,
+    // release-snap animation on fire: the pouch/stone/bands pull back toward the player then snap back to rest
+    // (see the "sling release" block in animate()), instead of just the generic whole-gun recoil kick every weapon gets
+    slingAnim:true, pullT:0, tips, pouchRest:pouchPos.clone(),
+    pouchMesh:pouch, stoneMesh:stone, bandMeshes, bandBaseLen};
   return g;
 }
 // XIPHOS — short leaf-shaped double-edged blade; fast melee, quicker than the khopesh
 function makeXiphos(){
+  // was upside down: pommel at the top with the blade hanging below (which also pushed the blade off the
+  // bottom of the screen). The khopesh's convention is the hand near y=0 with the blade rising upward from
+  // there — flipped to match that instead of just shifting the inverted version into view.
   const g=new THREE.Group();
   const bronze=metalMatP(0x9a7838,85,0xe8d9a8), leather=voxMat(0x3a2a1a,{noise:12});
-  const pommel=new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6),bronze); pommel.position.y=0.16; g.add(pommel);
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.03,0.16,8),leather); grip.position.y=0.06; g.add(grip);
-  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.035,0.09),bronze); guard.position.y=-0.03; g.add(guard);
-  // leaf shape: narrow at the guard, widest at mid-blade, tapering to a point
-  part(g,0.085,0.09,0.045,bronze,0,-0.09,0);
-  part(g,0.105,0.16,0.04,bronze,0,-0.2,0);
-  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.052,0.14,4),bronze); tip.rotation.y=Math.PI/4; tip.position.set(0,-0.35,0); g.add(tip);
+  const pommel=new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6),bronze); pommel.position.y=0; g.add(pommel);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.03,0.16,8),leather); grip.position.y=0.1; g.add(grip);
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.035,0.09),bronze); guard.position.y=0.19; g.add(guard);
+  // one continuous blade — a single 4-sided cone (a real dagger taper, not stacked segments), flattened
+  // into a blade cross-section and rotated 45° so a flat face points at the player instead of an edge
+  const bladeLen = 0.37, bladeY = 0.2075 + bladeLen/2; // base sits flush against the guard's top edge
+  const blade = new THREE.Mesh(new THREE.ConeGeometry(0.075, bladeLen, 4), bronze);
+  blade.scale.set(1, 1, 0.45); // flatten the square cross-section into a blade profile
+  blade.rotation.y = Math.PI/4;
+  blade.position.set(0, bladeY, 0);
+  g.add(blade);
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.12,name:'Xiphos',
-    melee:true, range:2.2, damage:48, fireRate:0.3};
+    melee:true, range:2.2, damage:120, fireRate:0.3};
   return g;
 }
 // TRIDENT — long shaft, three bronze prongs; heavy, slow, hits hard — the Mediterranean/coastal-flavored heavy weapon
@@ -2520,7 +2597,7 @@ function makeTrident(){
   prong(0); prong(-0.11); prong(0.11);
   const crossbar=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.03,0.03),bronze); crossbar.position.set(0,0,-0.48); g.add(crossbar);
   g.userData={muzzleZ:-0.75,muzzleY:0,pos:new THREE.Vector3(0.24,-0.22,-0.4),recoil:0.22,name:'Trident',
-    damage:95, fireRate:0.85, auto:false, spread:0, tracer:0x6fd6c9,
+    damage:135, fireRate:0.85, auto:false, spread:0, tracer:0x6fd6c9,
     magSize:4, ammo:4, reloadTime:1.7, reloading:false, reloadT:0};
   return g;
 }
@@ -2657,7 +2734,16 @@ document.addEventListener('keyup', e => {
   keys[e.code]=false;
   if (e.code==='ShiftLeft' || e.code==='ShiftRight') setScope(false);
 });
-window.addEventListener('wheel', e => { if(!paused) selectWeapon(currentWeapon + (e.deltaY>0?1:-1)); });
+// a touchpad fires dozens of tiny wheel events per physical scroll gesture (unlike a mouse's discrete notches),
+// so switching weapons on every single event flew through the whole loadout in one swipe — debounce it instead
+let lastWheelSwitch = 0;
+window.addEventListener('wheel', e => {
+  if(paused) return;
+  const now = performance.now();
+  if(now - lastWheelSwitch < 350) return;
+  lastWheelSwitch = now;
+  selectWeapon(currentWeapon + (e.deltaY>0?1:-1));
+});
 
 // ===================== PAUSE =====================
 let paused = false;
@@ -2838,7 +2924,10 @@ function spawnWave(n){
       wt = skin==='griffin' ? 'javelin' : 'knife';
     }
     const col=ENEMY_COLORS[(i+n)%ENEMY_COLORS.length];
-    spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp:Math.round(BOT_MAX_HP*diff), diff, speed:1+(diff-1)*0.5});
+    // Greek grunts all share the same HP curve now (minotaur no longer weaker); wave 6 (the last regular
+    // wave) is capped at a flat 280 instead of letting the difficulty curve keep scaling it up
+    const hp = (!pyramid && n===5) ? 280 : Math.round(BOT_MAX_HP*diff);
+    spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp, diff, speed:1+(diff-1)*0.5});
   }
   if(pyramid && n===1){ // wave 2: a scarab swarm — one pack entity (5 beetles, one hitbox/HP/AI) that moves and dies together
     const sx=-10, sz=-16;
@@ -2851,7 +2940,7 @@ function spawnWave(n){
   }
   if(!pyramid && n===5){ // wave 6: an elite Medusa prowls in ahead of the Ammit Companion
     spawnBot(10,16,0x3a5c3e,[4,0,16],[16,0,16],'knife',
-      {skin:'medusa', hp:Math.round(BOT_MAX_HP*diff*1.6), diff, speed:(1+(diff-1)*0.5)*1.1, scale:1.25});
+      {skin:'medusa', hp:350, diff, speed:(1+(diff-1)*0.5)*1.1, scale:1.25});
   }
   document.getElementById('wave').textContent=(n+1)+'/6';
   setEnemyCount();
@@ -3114,6 +3203,7 @@ function fire(){
     lastShot = now;
     SFX.knife(1.5);
     gunGroup.position.z = gunBaseZ + w.recoil;
+    gunGroup.rotation.x -= 0.16; // swing kick — every weapon gets a visible kick now, not just the position punch
     camera.getWorldDirection(_fwd);
     const hit = firstHit(camera.position, _fwd, w.range||2.4);
     if(hit && hit.bot){ damageBot(hit.bot, w.damage, hit.point); showHitmarker(); SFX.hitmark(); }
@@ -3123,6 +3213,7 @@ function fire(){
   if(w.ammo<=0){ lastShot = now; SFX.dryFire(); return; }
   lastShot = now;
   w.ammo--; setAmmoHUD();
+  if(w.slingAnim){ w.pullT = 1; w.animT = 0; } // (re)triggers the draw/release cycle in animate()
   // distinct player weapon sound
   if(w.name==='Sniper') SFX.playerSniper();
   else if(w.name==='Rifle') SFX.playerRifle();
@@ -3136,6 +3227,7 @@ function fire(){
   else SFX.playerGrenade();
   // recoil + flash
   gunGroup.position.z = gunBaseZ + w.recoil;
+  gunGroup.rotation.x -= 0.05 + w.recoil*0.3; // muzzle-rise kick — scales with each weapon's own recoil strength
   muzzle.visible = true; muzzle.material.opacity = 0.95;
   muzzle.material.color.set(w.glow ? 0x5ad6ff : (w.grenade?0xffb347:0xffe08a));
   muzzle.scale.setScalar(w.glow ? 1.3 : 1.0);
@@ -3366,10 +3458,21 @@ function animate(){
     if(rx!==camera.position.x) vel.x=0;   // kill velocity into a wall so you don't stutter against it
     if(rz!==camera.position.z) vel.z=0;
     camera.position.x = rx; camera.position.z = rz;
-    // climb ramps up to rooftops: ease toward the terrain height under the player (smooth stairs, no snapping)
-    const targetGroundY = getTerrainHeight(camera.position.x, camera.position.z);
-    playerHeight += (targetGroundY - playerHeight) * Math.min(1, dt*10);
+    // climb ramps up to rooftops: ease toward the terrain height under the player (smooth stairs, no snapping).
+    // getTerrainHeight() is passed the player's current height so it can ignore a ramp zone entirely when
+    // walking under/beside it at ground level (see the continuity check inside it) — you no longer float up
+    // just from passing underneath a ramp — plus a rate cap as a second layer against any remaining edge case.
+    const targetGroundY = getTerrainHeight(camera.position.x, camera.position.z, playerHeight);
+    const maxHeightStep = 5*dt;
+    playerHeight += Math.max(-maxHeightStep, Math.min(maxHeightStep, (targetGroundY - playerHeight) * Math.min(1, dt*10)));
     camera.position.y = playerHeight + 1.7;
+
+    // Nile Wave: the water is crocodile-infested — stepping off the boat (past the railings, e.g. off the
+    // bow/stern tips which extend past them) is fatal, not just a scenery boundary
+    if(inNileArea){
+      const onDeck = camera.position.x > -2.7 && camera.position.x < 2.7 && camera.position.z > -4.6 && camera.position.z < 5.5;
+      if(!onDeck) damagePlayer(9999);
+    }
 
     // ---- stuck watchdog: if you're wedged (visual height mismatched with actual terrain, e.g. you
     // slipped off a narrow rooftop ramp mid-climb and got boxed in by a wall), auto-recover instead of
@@ -3427,6 +3530,7 @@ function animate(){
 
   // recoil recovery toward the active weapon's base position + idle sway
   gunGroup.position.z += (gunBaseZ - gunGroup.position.z) * Math.min(1, dt*10);
+  gunGroup.rotation.x += (0 - gunGroup.rotation.x) * Math.min(1, dt*9); // eases the muzzle-rise/swing kick back level
   gunGroup.position.y = weapons[currentWeapon].userData.pos.y + Math.sin(t*3)*0.008;
   if (muzzleTimer > 0){ muzzleTimer -= dt; muzzle.material.opacity = Math.max(0, muzzleTimer/0.05); if (muzzleTimer<=0) muzzle.visible=false; }
   // tick any weapon currently reloading (not just the active one, so switching away mid-reload doesn't pause it)
@@ -3438,14 +3542,60 @@ function animate(){
   });
   const rg = weapons[2];
   if (rg && rg.visible){ rg.traverse(o=>{ if(o.material && o.material.emissiveIntensity!==undefined) o.material.emissiveIntensity = 0.8 + Math.sin(t*8)*0.35; }); }
+  // sling release-snap: sits loose at rest; on fire it draws back, snaps forward past rest (the release),
+  // then eases back to the same loose resting position — a real 3-phase cycle instead of just pull-and-return
+  weapons.forEach(wp=>{
+    const wd = wp.userData;
+    if(!wd.slingAnim || wd.pullT<=0) return;
+    wd.animT = (wd.animT||0) + dt;
+    const T1=0.06, T2=0.13, T3=0.32;      // draw back / snap-release / ease back to loose
+    const PULL=0.09, RELEASE=-0.05;        // draw-back offset, then overshoot past rest toward the target on release
+    let z;
+    if(wd.animT<T1){ z = (wd.animT/T1)*PULL; }
+    else if(wd.animT<T2){ const f=(wd.animT-T1)/(T2-T1); z = PULL + (RELEASE-PULL)*f; }
+    else if(wd.animT<T3){ const f=(wd.animT-T2)/(T3-T2); z = RELEASE + (0-RELEASE)*f; }
+    else { z = 0; wd.pullT = 0; wd.animT = 0; }
+    wd.pouchMesh.position.z = wd.pouchRest.z + z;
+    wd.stoneMesh.position.z = wd.pouchRest.z + z + 0.03;
+    wd.bandMeshes.forEach((band,i)=>{
+      const tip = wd.tips[i], pouchPos = wd.pouchMesh.position;
+      const mid = tip.clone().add(pouchPos).multiplyScalar(0.5);
+      band.position.copy(mid); band.lookAt(pouchPos);
+      band.scale.z = tip.distanceTo(pouchPos) / wd.bandBaseLen[i];
+    });
+  });
 
   // ----- bot AI + animation -----
   const _dir = new THREE.Vector3(); const _chest = new THREE.Vector3();
+  let nileEngageCount = 0; // caps how many crocs/hippos can be actively biting the player at once (see below)
   bots.forEach(b => {
     const ud = b.mesh.userData;
     if(ud.botMuzzle && ud.botMuzzle.visible){ ud.botMuzzle.material.opacity -= dt*18; if(ud.botMuzzle.material.opacity<=0) ud.botMuzzle.visible=false; }
     if(!b.alive) return; // dead bots stay down (wave manager handles new spawns)
     if(b.flash>0){ b.flash-=dt; setBotEmissive(b, 0x661111); if(b.flash<=0) setBotEmissive(b, 0x000000); }
+
+    // Nile Wave: a croc/hippo that lingers touching the boat's hull unchecked chews a chunk out of it —
+    // tracked separately from the normal player-melee-range combat below, since these bots attack the boat
+    // itself, not just the player standing on it
+    if(inNileArea && (b.skin==='crocodile' || b.skin==='hippo') && !b.hasChewed){
+      const hx = Math.max(-2.7, Math.min(2.7, b.mesh.position.x));
+      const hz = Math.max(-4.6, Math.min(5.5, b.mesh.position.z));
+      const distToHull = Math.hypot(b.mesh.position.x-hx, b.mesh.position.z-hz);
+      if(distToHull < 1.2){
+        b.boatTouchT = (b.boatTouchT||0) + dt;
+        if(b.boatTouchT >= 7.0){
+          b.boatTouchT = 0;
+          b.hasChewed = true; // each animal only gets to take one chunk out, ever — not the same one repeatedly
+          spawnBoatHole(hx, hz); // a visible chomped-out chunk, not just an HP number — damages the boat only
+          boatHoles = Math.min(4, boatHoles + 1);
+          setBanner(boatHoles<4 ? `⚠ a chunk was chewed out of the boat! (${boatHoles}/4 holes)` : '⚠ THE BOAT IS SINKING!');
+          setTimeout(()=>{ if(bannerEl && (bannerEl.textContent.includes('boat')||bannerEl.textContent.includes('BOAT'))) setBanner(''); },1200);
+          if(boatHoles>=4 && player.alive) damagePlayer(9999); // 4 holes and it goes under — into the water either way
+        }
+      } else {
+        b.boatTouchT = 0;
+      }
+    }
 
     // ---- perception (before moving) ----
     _chest.set(b.mesh.position.x, b.boss?2.9:1.2, b.mesh.position.z);
@@ -3458,7 +3608,13 @@ function animate(){
     // combat mode below without needing a second bot type; the engage distance flips with it (3.4 melee / 30 ranged)
     const isJavelin = b.weaponType==='javelin';
     const meleeNow = isKnife || (isJavelin && distToPlayer < 3.4);
-    const canEngage = player.alive && los && (meleeNow ? distToPlayer < 3.4 : distToPlayer < 30);
+    let canEngage = player.alive && los && (meleeNow ? distToPlayer < 3.4 : distToPlayer < 30);
+    // Nile Wave: only let 2 crocs/hippos actively bite at once instead of the whole pack piling on simultaneously
+    // (the boat is small enough that all of them could otherwise reach melee range together) — the rest keep
+    // closing in and lingering near the hull instead, which is also what lets the boat-chew timer above matter
+    if(inNileArea && (b.skin==='crocodile' || b.skin==='hippo')){
+      if(canEngage){ if(nileEngageCount>=2) canEngage=false; else nileEngageCount++; }
+    }
 
     // ---- movement & facing (walk toward where you go; only face the player when engaging) ----
     const R = b.boss?1.2:0.55;
