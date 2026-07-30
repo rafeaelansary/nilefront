@@ -98,6 +98,23 @@
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
+// slightly lower the opacity of every material in the game (a subtle overall softening), without touching the
+// many individual material call sites: wrap the shared constructors so any material built at its default
+// opacity (1, i.e. nothing already gave it an intentional transparency/fade of its own) gets nudged down a
+// touch. Anything that explicitly sets its own opacity (smoke puffs, muzzle flash, explosion fades, etc.)
+// passes that check and is left alone.
+(function(){
+  const GLOBAL_OPACITY = 0.90;
+  ['MeshLambertMaterial','MeshPhongMaterial','MeshBasicMaterial','MeshStandardMaterial','SpriteMaterial','PointsMaterial'].forEach(name=>{
+    const Orig = THREE[name];
+    if(!Orig) return;
+    THREE[name] = function(params){
+      const mat = new Orig(params);
+      if(mat.opacity === 1){ mat.transparent = true; mat.opacity = GLOBAL_OPACITY; }
+      return mat;
+    };
+  });
+})();
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8fd6f2);
 scene.fog = new THREE.Fog(0x9fdcf0, 40, 220);
@@ -147,13 +164,15 @@ function getTerrainHeight(x,z,curH){
   let h=0;
   for(const zn of activeHeightZones){
     if(x<zn.x1||x>zn.x2||z<zn.z1||z>zn.z2) continue;
-    if(zn.type==='plateau'){ h=Math.max(h,zn.y); continue; }
     let zh;
-    if(zn.axisX){ const t=Math.max(0,Math.min(1,(x-zn.x1)/Math.max(0.001,(zn.x2-zn.x1)))); zh=zn.y1+(zn.y2-zn.y1)*t; }
+    if(zn.type==='plateau'){ zh=zn.y; }
+    else if(zn.axisX){ const t=Math.max(0,Math.min(1,(x-zn.x1)/Math.max(0.001,(zn.x2-zn.x1)))); zh=zn.y1+(zn.y2-zn.y1)*t; }
     else { const t=Math.max(0,Math.min(1,(z-zn.z1)/Math.max(0.001,(zn.z2-zn.z1)))); zh=zn.y1+(zn.y2-zn.y1)*t; }
-    // a ramp is just a flat XZ rectangle with no real 3D "under vs. on top of" distinction, so only let it
-    // raise you if you're already close to that height (i.e. you actually climbed up to this point) — walking
-    // underneath/beside it at ground level would otherwise register as standing on it and float you up
+    // a rooftop/ramp zone is just a flat XZ rectangle with no real 3D "under vs. on top of" distinction, so
+    // only let it count if you're already close to that height (i.e. you actually climbed up to this point).
+    // This has to apply to plateaus too, not just ramps — a tower roof's footprint is the same rectangle as
+    // its own walls, so without this check, resolveCollision's roof-skip logic (below) would treat anyone
+    // standing outside at ground level as "already on the roof" and let them walk straight through the wall.
     if(curH!==undefined && Math.abs(zh-curH) > 1.5) continue;
     h=Math.max(h,zh);
   }
@@ -165,8 +184,11 @@ function resolveCollision(px,pz,R,curH){
     const nz=Math.max(c.z1,Math.min(pz,c.z2));
     // Skip this wall only if the terrain height AT THE WALL ITSELF (the nearest point the player's
     // radius actually touches) already matches its own roof — not a global "am I elevated" check,
-    // which could let you phase through an unrelated building while easing down from a different roof
-    if(c.roofY!=null && getTerrainHeight(nx,nz) >= c.roofY-0.4) continue;
+    // which could let you phase through an unrelated building while easing down from a different roof.
+    // Passing curH through means this only fires once you've actually climbed to that height (see the
+    // continuity check in getTerrainHeight) — otherwise ground-level players could walk straight through
+    // a tower's wall since the roof's height-zone rectangle shares the same footprint as the wall itself.
+    if(c.roofY!=null && getTerrainHeight(nx,nz,curH) >= c.roofY-0.4) continue;
     const dx=px-nx, dz=pz-nz; const d2=dx*dx+dz*dz;
     if(d2 < R*R){
       if(d2>1e-6){ const d=Math.sqrt(d2); px=nx+dx/d*R; pz=nz+dz/d*R; }
@@ -779,6 +801,9 @@ function marbleFloorTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   dblock(R*2,1,R*2,floorMat,0,-0.5,0);
   dblock(R*2,12,1,stoneMat,0,6,-R); dblock(R*2,12,1,stoneMat,0,6,R);
   dblock(1,12,R*2,stoneMat,-R,6,0); dblock(1,12,R*2,stoneMat,R,6,0);
+  // the perimeter walls above only ever had visual meshes — no collider, so the player could walk straight
+  // through them into the empty void beyond (only the pillars got addBox() calls). Fixed.
+  addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
   // vaulted ceiling strips so the room doesn't feel like an open dark void
   for(let k=-2;k<=2;k++) dblock(2,1,R*2,stoneMat,k*8,11.4,0);
   // pillars for cover, capped with alternating blue/orange glow + a strong point light
@@ -820,6 +845,8 @@ addTarget = pyramidDungeonColliders;
   pblock(R*2,1,R*2,sandFloorMat,0,-0.5,0);
   pblock(R*2,12,1,sandBrickMat,0,6,-R); pblock(R*2,12,1,sandBrickMat,0,6,R);
   pblock(1,12,R*2,sandBrickMat,-R,6,0); pblock(1,12,R*2,sandBrickMat,R,6,0);
+  // same missing-collider bug as the original dungeon — the perimeter walls were purely visual
+  addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
   for(let k=-2;k<=2;k++) pblock(2,1,R*2,sandBrickMat,k*8,11.4,0);
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     pblock(2,10,2,sandBrickMat,x,5,z); addBox(x,z,2.3,2.3);
@@ -883,6 +910,8 @@ addTarget = greekDungeonColliders;
   gblock(R*2,1,R*2,marbleFloorMat,0,-0.5,0);
   gblock(R*2,12,1,marbleWallMat,0,6,-R); gblock(R*2,12,1,marbleWallMat,0,6,R);
   gblock(1,12,R*2,marbleWallMat,-R,6,0); gblock(1,12,R*2,marbleWallMat,R,6,0);
+  // same missing-collider bug as the original dungeon — the perimeter walls were purely visual
+  addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
   for(let k=-2;k<=2;k++) gblock(2,1,R*2,marbleWallMat,k*8,11.4,0);
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     gblock(2,10,2,marbleWallMat,x,5,z); addBox(x,z,2.3,2.3);
@@ -2411,9 +2440,12 @@ function makeBow(){
   part(g,0.02,0.02,0.62,metalMatP(0x8a6a42,20),0,0,-0.18);
   const head=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.09,4),metalMatP(0xaab4be,80,0xffffff)); head.position.set(0,0,-0.52); head.rotation.x=-Math.PI/2; g.add(head);
   const fletch=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.01),new THREE.MeshLambertMaterial({color:0xb5502c})); fletch.position.set(0,0,0.1); fletch.rotation.z=Math.PI/4; g.add(fletch);
-  g.scale.setScalar(0.66); // smaller
+  // a small bronze aiming ring mounted just above the grip — a peep sight, not a glass sniper scope, but
+  // wired to the same scoped/scopeFov mechanic (right-click/hold-shift zooms in, same as the sniper rifle)
+  const sightRing=new THREE.Mesh(new THREE.TorusGeometry(0.045,0.009,6,12), gold); sightRing.position.set(-0.05,0.16,0.03); g.add(sightRing);
+  g.scale.setScalar(0.58); // a touch smaller than before
   g.userData={muzzleZ:-0.55,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.35),recoil:0.1,name:'Bow',
-    damage:55, fireRate:0.5, auto:false, spread:0.008, tracer:0xd9b872,
+    damage:80, fireRate:0.5, auto:false, spread:0.008, tracer:0xd9b872, scoped:true, scopeFov:45,
     magSize:6, ammo:6, reloadTime:1.3, reloading:false, reloadT:0};
   return g;
 }
@@ -2535,29 +2567,45 @@ function makeSling(){
   });
 
   // pouch + stone, hanging just below the fork — close enough to the prong tips to read as one compact object
-  const pouchPos = new THREE.Vector3(0,0.1,0.08+Z);
+  const pouchPos = new THREE.Vector3(0,0.14,0.08+Z);
   const pouch=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.05,0.07),leatherMat); pouch.position.copy(pouchPos); g.add(pouch);
-  const stone=new THREE.Mesh(new THREE.SphereGeometry(0.04,8,6), stoneMat); stone.position.copy(pouchPos).add(new THREE.Vector3(0,0.02,0.03)); g.add(stone);
+  // sits just inside the pouch's top opening — the stone is bigger than the pouch is deep, so it should bulge
+  // out the top a little (realistic, like a stone actually cradled in a shallow pouch), never poke out the bottom
+  const stone=new THREE.Mesh(new THREE.SphereGeometry(0.028,8,6), stoneMat); stone.position.copy(pouchPos).add(new THREE.Vector3(0,0.015,0.005)); g.add(stone);
+  // each band attaches to its OWN side edge of the pouch (the actual box face, not an inset point floating
+  // above the top) at the pouch's vertical center — the height a rope naturally sits at when it cradles a
+  // pouch from both sides. tips[0] is on the +x side and tips[1] on the -x side (see the [-1,1] loop above) —
+  // match each to the SAME side of the pouch so the two bands run roughly parallel instead of crossing
+  const pouchAttach = [ new THREE.Vector3(0.045,0,0), new THREE.Vector3(-0.045,0,0) ];
 
-  // two elastic bands, prong tip -> pouch: centered at the midpoint with length along local Z, then lookAt()
-  // the far end — the same positioning technique spawnTracer() uses elsewhere in this file for beam-like shapes.
-  // Kept as live references (not just built once) so the fire animation below can restretch them every frame.
+  // two elastic bands, prong tip -> its own pouch corner: a cylinder along its local +Y axis, rotated onto
+  // the tip->target direction via setFromUnitVectors (not lookAt — a cylinder's length axis is Y, not Z, and
+  // this sidesteps any lookAt-specific edge case). Built 20% longer than the exact tip-to-pouch distance and
+  // centered on the midpoint, so both ends visibly bury themselves into the tip and pouch geometry instead of
+  // just barely grazing them — small positioning drift during the fire animation can never open a visible gap.
+  const UP = new THREE.Vector3(0,1,0);
   const bandMeshes=[], bandBaseLen=[];
-  tips.forEach(tip=>{
-    const mid = tip.clone().add(pouchPos).multiplyScalar(0.5);
-    const len = tip.distanceTo(pouchPos);
-    const elastic = new THREE.Mesh(new THREE.BoxGeometry(0.018,0.018,len), bandMat);
+  tips.forEach((tip,i)=>{
+    const target = pouchPos.clone().add(pouchAttach[i]);
+    const dir = target.clone().sub(tip);
+    const len = dir.length();
+    const mid = tip.clone().add(target).multiplyScalar(0.5);
+    const elastic = new THREE.Mesh(new THREE.CylinderGeometry(0.016,0.016,len*1.2,6), bandMat);
     elastic.position.copy(mid);
-    elastic.lookAt(pouchPos);
+    elastic.quaternion.setFromUnitVectors(UP, dir.normalize());
     g.add(elastic);
     bandMeshes.push(elastic); bandBaseLen.push(len);
   });
+  // small leather knots where each band actually meets its own corner of the pouch — children of the pouch
+  // mesh itself so they track its position automatically during the fire animation. No dedicated sight
+  // object — aiming is just through the gap between the two prongs, like the reference image.
+  pouchAttach.forEach(a=>{ const knot=new THREE.Mesh(new THREE.SphereGeometry(0.02,8,6), leatherMat); knot.position.copy(a); pouch.add(knot); });
   g.userData={muzzleZ:-0.4+Z,muzzleY:0,pos:new THREE.Vector3(0.2,-0.2,-0.32),recoil:0.05,name:'Sling',
-    damage:32, fireRate:0.2, auto:true, spread:0.006, tracer:0xdcd0b0,
+    damage:32, fireRate:0.35, auto:true, spread:0.006, tracer:0xdcd0b0, scoped:true, scopeFov:50,
     magSize:14, ammo:14, reloadTime:1.0, reloading:false, reloadT:0,
     // release-snap animation on fire: the pouch/stone/bands pull back toward the player then snap back to rest
     // (see the "sling release" block in animate()), instead of just the generic whole-gun recoil kick every weapon gets
-    slingAnim:true, pullT:0, tips, pouchRest:pouchPos.clone(),
+    slingAnim:true, pullT:0, tips, pouchRest:pouchPos.clone(), pouchAttach,
     pouchMesh:pouch, stoneMesh:stone, bandMeshes, bandBaseLen};
   return g;
 }
@@ -3549,7 +3597,12 @@ function animate(){
     const wd = wp.userData;
     if(!wd.slingAnim || wd.pullT<=0) return;
     wd.animT = (wd.animT||0) + dt;
-    const T1=0.06, T2=0.13, T3=0.32;      // draw back / snap-release / ease back to loose
+    // draw back / snap-release / ease back to loose — the whole cycle has to fit inside the sling's own fire
+    // rate (0.35s) or a held/rapid trigger interrupts it mid-flight every shot, snapping the pouch/bands to a
+    // discontinuous position instead of ever settling (that's what read as "coming apart" during sustained fire).
+    // Slower/smoother than the first pass at this — that one had to be so fast to fit inside a 0.2s fire rate
+    // that the whole cycle read as an abrupt snap rather than an actual draw-and-release motion.
+    const T1=0.08, T2=0.16, T3=0.32;
     const PULL=0.09, RELEASE=-0.05;        // draw-back offset, then overshoot past rest toward the target on release
     let z;
     if(wd.animT<T1){ z = (wd.animT/T1)*PULL; }
@@ -3557,12 +3610,14 @@ function animate(){
     else if(wd.animT<T3){ const f=(wd.animT-T2)/(T3-T2); z = RELEASE + (0-RELEASE)*f; }
     else { z = 0; wd.pullT = 0; wd.animT = 0; }
     wd.pouchMesh.position.z = wd.pouchRest.z + z;
-    wd.stoneMesh.position.z = wd.pouchRest.z + z + 0.03;
+    wd.stoneMesh.position.z = wd.pouchRest.z + z + 0.005; // must match the stone's construction-time offset in makeSling()
     wd.bandMeshes.forEach((band,i)=>{
-      const tip = wd.tips[i], pouchPos = wd.pouchMesh.position;
-      const mid = tip.clone().add(pouchPos).multiplyScalar(0.5);
-      band.position.copy(mid); band.lookAt(pouchPos);
-      band.scale.z = tip.distanceTo(pouchPos) / wd.bandBaseLen[i];
+      const tip = wd.tips[i], target = wd.pouchMesh.position.clone().add(wd.pouchAttach[i]);
+      const dir = target.clone().sub(tip);
+      const mid = tip.clone().add(target).multiplyScalar(0.5);
+      band.position.copy(mid);
+      band.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
+      band.scale.y = dir.length() / wd.bandBaseLen[i];
     });
   });
 
