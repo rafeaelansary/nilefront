@@ -1259,7 +1259,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 // can happen in). clearWorldGroups() sweeps every possible world group unconditionally before any add, so
 // the invariant "at most one world group in the scene" holds no matter what state the flags are in.
 function clearWorldGroups(){
-  [pyramidOverworld, greekOverworld, romanOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
 }
 function enterDungeon(){
   dungeonWasPyramid = pyramidPhase; // false during era 1 (Greek) — the only other era currently reachable
@@ -4846,19 +4846,26 @@ function onAllDead(){
     bossActive=false; showBossBar(false);
     // used to set gameWon=true + exitDungeon() here and just show "YOU WIN" — but gameWon disables firing
     // entirely and turns the next pointer-lock click into a full restart, so there was nowhere to actually
-    // go afterward. Ammit falling now leads into the Roman map instead (playable, not "game over") — wave 7
-    // (the first Roman wave) spawns after the usual between-wave pause, same as any other era transition.
+    // go afterward. Each mid-campaign boss falling leads into the next era's map instead (playable, not
+    // "game over"); only the actual final boss (currently the Ifrit King) ends the run.
     if(bossNum===2){
       // Hydra down → cross into the Roman frontier (wave 7)
       enterRomanWorld('🏆 The Hydra falls! The Roman frontier awaits…');
       currentEra=2; waveIdx=ERA_START_WAVE[2]; pending='wave'; betweenTimer=2.4;
       return;
     }
-    if(bossNum>=3){
-      // Colosseum Champion down → the campaign's final boss; victory. gameWon disables firing and turns the
-      // next pointer-lock click into a fresh run (the intended "you beat it" end state).
+    if(bossNum===3){
+      // Colosseum Champion down → cross into Mamluk Cairo (wave 10) — this used to just set gameWon and
+      // strand the player in the empty Colosseum arena with nowhere to go; that was the reported bug.
+      enterIslamicWorld('🏆 The Champion falls! The gates of Cairo open…');
+      currentEra=3; waveIdx=ERA_START_WAVE[3]; pending='wave'; betweenTimer=2.4;
+      return;
+    }
+    if(bossNum>=4){
+      // Ifrit King down → the campaign's final boss; victory. gameWon disables firing and turns the next
+      // pointer-lock click into a fresh run (the intended "you beat it" end state).
       gameWon=true;
-      setBanner('🏆 THE CHAMPION FALLS — you have conquered the arena! 🏛');
+      setBanner('🏆 THE IFRIT KING FALLS — you have conquered Cairo! 🕌');
       return;
     }
     exitDungeon();
@@ -5290,9 +5297,10 @@ function respawnPlayer(){
     weapons.forEach(w=>w.visible=false); weapons=weaponsBeforeNile||weapons; selectWeapon(currentWeaponBeforeNile||0);
   }
   bossNum = currentEra; // keep credit for any boss(es) already defeated in earlier eras
-  // exitDungeon() only knows the pyramid/greek pairing (dungeonWasPyramid) — there's no Roman dungeon yet,
-  // so era 2 gets its own reset here instead of routing through that
-  if(currentEra >= 2) enterRomanWorld('💀 back to Wave 7');
+  // exitDungeon() only knows the pyramid/greek pairing (dungeonWasPyramid) — there's no Roman/Islamic
+  // dungeon, so eras 2 and 3 each get their own reset here instead of routing through that
+  if(currentEra >= 3) enterIslamicWorld('💀 back to Wave 10');
+  else if(currentEra >= 2) enterRomanWorld('💀 back to Wave 7');
   else exitDungeon();
   waveIdx = ERA_START_WAVE[currentEra];
   clearBots(); spawnWave(waveIdx);
