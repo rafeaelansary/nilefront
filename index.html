@@ -136,6 +136,7 @@ const greekDungeonColliders = []; // Greek boss dungeon colliders (Boss II — t
 const romanColliders = [];       // Roman overworld colliders (map built, not yet wired into wave/era progression)
 const hydraColliders = [];       // Greek boss arena colliders (Boss II — the Hydra; an open-air marsh arena, not a dungeon)
 const colosseumColliders = [];   // Roman boss arena colliders (Boss III — the Colosseum Champion; a full arena)
+const ifritColliders = [];       // Islamic boss arena colliders (Boss IV — the Ifrit King; the Citadel courtyard)
 const islamicColliders = [];     // Islamic/Mamluk Cairo overworld colliders (waves 10-12)
 let addTarget = colliders;       // where addBox pushes during world build
 let activeColliders = colliders; // which set physics currently uses
@@ -1204,6 +1205,45 @@ addTarget = colosseumColliders;
   pitBlock(-2,10); pitBlock(2,-6);
 
   colosseumArena.add(new THREE.AmbientLight(0xffe6c0, 0.5));
+})();
+
+// ===== IFRIT ARENA (Boss IV) — the Citadel's inner courtyard: a walled, crenellated square, open sky,
+// fire braziers lighting a warm dusk fight. Open-air like the Hydra marsh/Colosseum pit, not a dungeon. =====
+const ifritArena = new THREE.Group();
+addTarget = ifritColliders;
+(function buildIfritArena(){
+  const wallMat = voxMat(0xb89468,{noise:14,pattern:'plate'});
+  const merlonMat = voxMat(0xa07f52,{noise:12});
+  const darkMat = voxMat(0x241c14,{noise:10});
+  const floorMat = new THREE.MeshLambertMaterial({map:_finish(zellijeTex(),16)});
+  function iblock(w,h,d,mat,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; ifritArena.add(m); return m; }
+  const R=17;
+  const floor=new THREE.Mesh(new THREE.BoxGeometry(R*2,0.4,R*2), floorMat); floor.position.set(0,-0.2,0); ifritArena.add(floor);
+  [[0,-R,R*2+2,1.4],[0,R,R*2+2,1.4],[-R,0,1.4,R*2+2],[R,0,1.4,R*2+2]].forEach(([x,z,w,d])=>{
+    iblock(w,4.4,d, wallMat, x,2.2,z); addBox(x,z,w,d);
+  });
+  const merlonSpacing=1.8;
+  for(let x=-R;x<=R;x+=merlonSpacing){
+    [-R,R].forEach(z=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(x,4.85,z); ifritArena.add(m); });
+  }
+  for(let z=-R;z<=R;z+=merlonSpacing){
+    [-R,R].forEach(x=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(x,4.85,z); ifritArena.add(m); });
+  }
+  [[-R+2,-R+2],[R-2,-R+2],[-R+2,R-2],[R-2,R-2]].forEach(([x,z])=>{
+    const stand=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,1.1,8), darkMat); stand.position.set(x,0.55,z); ifritArena.add(stand);
+    const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.24,0.24,8), darkMat); bowl.position.set(x,1.15,z); ifritArena.add(bowl);
+    const flame=new THREE.Mesh(new THREE.ConeGeometry(0.24,0.5,7), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false})); flame.position.set(x,1.5,z); ifritArena.add(flame);
+    const light=new THREE.PointLight(0xff8a2a,1.1,9); light.position.set(x,1.6,z); ifritArena.add(light);
+  });
+  // cover in the courtyard, same broad/tall logic as the Colosseum's coverWall (the boss fires fast at
+  // chest height) — just two, so the fire-meteor telegraph (the boss's other tool) still has room to punish camping
+  function courtyardCover(x,z,w,rot){
+    const wall=new THREE.Group(); wall.position.set(x,0,z); wall.rotation.y=rot||0; ifritArena.add(wall);
+    const main=new THREE.Mesh(new THREE.BoxGeometry(w,3.2,0.7), wallMat); main.position.set(0,1.6,0); wall.add(main);
+    addBox(x,z,w,0.9); // axis-aligned approximation — small rotation (±0.25 rad), same approach the Colosseum's coverWall main panel uses
+  }
+  courtyardCover(-5,9,4.6,0.25); courtyardCover(5,9,4.6,-0.25);
+  ifritArena.add(new THREE.AmbientLight(0xffb87a, 0.5));
 })();
 
 addTarget = colliders;   // back to overworld for anything built later
@@ -2533,6 +2573,7 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='ifrit') return makeIfrit();
   if(skinName==='ghoul') return makeGhoul();
   if(skinName==='roc') return makeRocPack();
+  if(skinName==='ifritking') return makeIfritKing();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -3511,6 +3552,51 @@ function makeRocPack(){
   return g;
 }
 
+// ifrit king: a towering fire djinn lord — Boss IV, the Islamic era's boss and (per the current roadmap)
+// the campaign's final boss. Built like a scaled-up, more ornamented ifrit: a wider ember-glass chest
+// plate, a crown of curved horns, a raging multi-cone flame column instead of the regular ifrit's slim
+// flame tail, and twin burning braziers floating at its shoulders.
+function makeIfritKing(){
+  const g = new THREE.Group();
+  const emberMat = voxMat(0xc93a14,{noise:14});
+  const emberMat2 = voxMat(0x8a2008,{noise:12});
+  const goldMat = metalMatP(0xe0a830,85,0xfff2c8);
+  const flameMat = new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false});
+  const flameMat2 = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
+  const darkMat = voxMat(0x201008,{noise:10});
+
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.85,0.55), emberMat); chest.position.set(0,2.1,0); g.add(chest);
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.55,0.05), goldMat); plate.position.set(0,2.15,0.29); g.add(plate);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.55,0.42), emberMat2); belly.position.set(0,1.55,0); g.add(belly);
+  [{y:1.0,r:0.44,h:0.85},{y:0.5,r:0.3,h:0.7},{y:0.14,r:0.18,h:0.55},{y:-0.1,r:0.08,h:0.4}].forEach((c,i)=>{
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,8), i%2? flameMat:flameMat2); cone.position.set(0,c.y,0); g.add(cone);
+  });
+  const flameLight = new THREE.PointLight(0xff8a2a,1.6,7); flameLight.position.set(0,0.6,0); g.add(flameLight);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.52,0.46), emberMat); head.position.set(0,2.75,0); g.add(head);
+  [-1,1].forEach(side=>{
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.1,0.05), flameMat2); eye.position.set(side*0.13,2.78,0.25); g.add(eye);
+    for(let i=0;i<2;i++){ const horn=new THREE.Mesh(new THREE.ConeGeometry(0.07-i*0.02,0.4-i*0.12,4), darkMat);
+      horn.position.set(side*(0.2+i*0.1),3.05+i*0.1,-0.05-i*0.08); horn.rotation.x=-0.6; horn.rotation.z=side*(0.35+i*0.15); g.add(horn); }
+  });
+  const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.1,0.08), darkMat); jaw.position.set(0,2.5,0.25); g.add(jaw);
+  const crownBand=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.3,0.1,8), goldMat); crownBand.position.set(0,3.0,0); g.add(crownBand);
+  [-1,1].forEach(side=>{
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.7,0.24), emberMat2); arm.position.set(side*0.62,2.0,0.12); arm.rotation.z=side*-0.4; g.add(arm);
+    const hand=new THREE.Mesh(new THREE.SphereGeometry(0.16,7,6), flameMat); hand.position.set(side*0.85,1.55,0.36); g.add(hand);
+    const brazier=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.2,0.16,8), darkMat); brazier.position.set(side*1.0,2.6,-0.1); g.add(brazier);
+    const brazierFlame=new THREE.Mesh(new THREE.ConeGeometry(0.13,0.3,6), flameMat2); brazierFlame.position.set(side*1.0,2.78,-0.1); g.add(brazierFlame);
+    const brazierLight = new THREE.PointLight(0xffb84a,0.8,3); brazierLight.position.set(side*1.0,2.7,-0.1); g.add(brazierLight);
+  });
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 3.5, 0); marker.scale.set(1.4,1.4,1); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
 // ===== BOSS II — HYDRA: a low serpent body with a central hump and FIVE rising necks, each a chain-built
 // serpentine tower ending in a fanged head with glowing eyes. Built facing +Z (turned via mesh.lookAt() in
 // the shared AI loop). Boss-scaled up at spawn, so keep local proportions modest. =====
@@ -4355,6 +4441,17 @@ function enterColosseumArena(){
   sun.intensity=1.0; fill.intensity=0.25; fill.color.set(0xffd8a0);
   camera.position.set(0,1.7,17); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
+function enterIfritArena(){
+  clearWorldGroups();
+  scene.add(ifritArena);
+  sky.visible = true;
+  activeColliders = ifritColliders;
+  activeHeightZones = heightZonesOriginal;
+  scene.background.set(0x8a4a2e); scene.fog.color.set(0xa85a34); scene.fog.near=22; scene.fog.far=90; // warm dusk, fire-lit
+  hemi.intensity=0.55; hemi.color.set(0xffb87a); hemi.groundColor.set(0x3a2414);
+  sun.intensity=0.5; fill.intensity=0.3; fill.color.set(0xff8a4a);
+  camera.position.set(0,1.7,14); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+}
 // ==========================================================================
 let gunBaseZ = -0.5;
 camera.add(gunGroup);
@@ -4707,7 +4804,8 @@ function spawnBossFight(){
   bossNum++;
   bossActive=true;
   // Boss I = Sandstone Colossus (pyramid dungeon); Boss II = Lernaean Hydra (open-air marsh arena);
-  // Boss III = Colosseum Champion (amphitheatre arena). Each swaps in its own arena world.
+  // Boss III = Colosseum Champion (amphitheatre arena); Boss IV = Ifrit King (Citadel courtyard, the
+  // current final boss). Each swaps in its own arena world.
   let skin, col, hp, scale, speed, label;
   if(bossNum===1){
     enterDungeon();
@@ -4715,9 +4813,12 @@ function spawnBossFight(){
   } else if(bossNum===2){
     enterHydraArena();
     skin='hydra'; col=0x35502e; hp=1750; scale=2.4; speed=1.7; label='BOSS II';
-  } else {
+  } else if(bossNum===3){
     enterColosseumArena();
     skin='champion'; col=0x8a9299; hp=2100; scale=2.3; speed=2.1; label='BOSS III';
+  } else {
+    enterIfritArena();
+    skin='ifritking'; col=0xc93a14; hp=2450; scale=2.0; speed=1.8; label='BOSS IV';
   }
   const bmesh=spawnBot(0,-8,col,[-7,0,-8],[7,0,-8],'pistol',{hp, scale, boss:true, speed, skin, diff:1});
   showBossBar(true); setBossBar(bmesh.userData.data);
@@ -4775,8 +4876,8 @@ function onAllDead(){
   }
   // a normal wave was cleared: a boss follows wave 3 (idx 2), wave 6 (idx 5) and wave 9 (idx 8 — the last
   // Roman wave); the Nile Wave follows wave 2 (idx 1)
-  if(waveIdx===2 || waveIdx===5 || waveIdx===8){ pending='boss'; betweenTimer=2.2;
-    setBanner(waveIdx===5?'The Lernaean Hydra rises from the marsh…':waveIdx===8?'The Champion of the arena strides forth…':'A boss awaits below…'); }
+  if(waveIdx===2 || waveIdx===5 || waveIdx===8 || waveIdx===11){ pending='boss'; betweenTimer=2.2;
+    setBanner(waveIdx===5?'The Lernaean Hydra rises from the marsh…':waveIdx===8?'The Champion of the arena strides forth…':waveIdx===11?'The Ifrit King rises from the flame…':'A boss awaits below…'); }
   else if(waveIdx===1 && pyramidPhase){ pending='nile'; betweenTimer=2.2; setBanner('The Nile stirs…'); }
   else { waveIdx++; pending='wave'; betweenTimer=2.5; setBanner('WAVE '+(waveIdx+1)+' incoming…'); }
 }
@@ -5139,6 +5240,18 @@ function spawnQuakeEffect(x,z){
   const light = new THREE.PointLight(0xd8b982, 2.4, 14); light.position.y = 1; grp.add(light);
   quakeEffects.push({grp, cracks, debris, dustMat, dust, light, t:0, dur:1.1});
 }
+// Ifrit King fire meteor: a telegraph ring grows/pulses at the target point for `impactAt` seconds (the
+// player's real dodge window), then a burst deals AOE damage if they're still standing in it. Modeled on
+// spawnQuakeEffect()'s timed-array-of-effects pattern.
+const fireMeteors = [];
+function spawnFireMeteor(x,z){
+  const grp = new THREE.Group(); grp.position.set(x,0.05,z); scene.add(grp);
+  const ringMat = new THREE.MeshBasicMaterial({color:0xff4a1a, transparent:true, opacity:0.85, fog:false, side:THREE.DoubleSide});
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.6,2.0,20), ringMat); ring.rotation.x=-Math.PI/2; grp.add(ring);
+  const fillMat = new THREE.MeshBasicMaterial({color:0xff8a2a, transparent:true, opacity:0.3, fog:false, side:THREE.DoubleSide});
+  const fill = new THREE.Mesh(new THREE.CircleGeometry(2.0,20), fillMat); fill.rotation.x=-Math.PI/2; fill.position.y=0.01; grp.add(fill);
+  fireMeteors.push({grp, ring, ringMat, fillMat, x, z, t:0, impactAt:0.9, dur:1.5, impacted:false});
+}
 function damageBot(bd, dmg, point){
   if(!bd.alive) return;
   if(bd.skin==='minotaur'){
@@ -5381,6 +5494,31 @@ function animate(){
     if(s>=1){ scene.remove(q.grp); quakeEffects.splice(i,1); }
   }
 
+  // ----- fire meteors (Ifrit King): telegraph ring grows/pulses, then a burst deals AOE damage if the
+  // player is still standing in it — the dodge window IS the telegraph duration -----
+  for(let i=fireMeteors.length-1;i>=0;i--){
+    const m=fireMeteors[i]; m.t+=dt;
+    if(!m.impacted){
+      const growT = Math.min(1, m.t/m.impactAt);
+      m.ring.scale.setScalar(0.3+growT*0.7);
+      m.ringMat.opacity = 0.5 + Math.sin(m.t*18)*0.35; // fast pulse reads as urgent, not just growing
+      if(m.t >= m.impactAt){
+        m.impacted = true;
+        const distToImpact = Math.hypot(camera.position.x-m.x, camera.position.z-m.z);
+        if(distToImpact < 2.0 && player.alive) damagePlayer(Math.round(24*(1-distToImpact/2.0*0.3)));
+        shakeAmt = Math.max(shakeAmt, 0.25);
+        SFX.explosion();
+        m.fillMat.opacity = 0.9; m.fillMat.color.set(0xffd23a);
+      }
+    } else {
+      const fadeT = Math.min(1, (m.t-m.impactAt)/(m.dur-m.impactAt));
+      m.ringMat.opacity = 0.6*(1-fadeT);
+      m.fillMat.opacity = 0.9*(1-fadeT);
+      m.grp.scale.setScalar(1+fadeT*1.5);
+    }
+    if(m.t >= m.dur){ scene.remove(m.grp); fireMeteors.splice(i,1); }
+  }
+
   // recoil recovery toward the active weapon's base position + idle sway
   gunGroup.position.z += (gunBaseZ - gunGroup.position.z) * Math.min(1, dt*10);
   gunGroup.rotation.x += (0 - gunGroup.rotation.x) * Math.min(1, dt*9); // eases the muzzle-rise/swing kick back level
@@ -5594,6 +5732,17 @@ function animate(){
       });
       SFX.boss();
       setBanner('⚠ The Champion looses two tigers!'); setTimeout(()=>{ if(bossActive) setBanner(''); },1800);
+    }
+
+    // Ifrit King (Boss IV): periodically calls down a telegraphed fire meteor at the player's CURRENT
+    // position — a ranged, dodge-driven hazard, distinct from the Colossus's proximity quake (no telegraph,
+    // can't be dodged by movement alone) and the Champion's one-time add-summon above.
+    if(b.boss && b.skin==='ifritking' && player.alive){
+      b.meteorCd = b.meteorCd===undefined ? 4 : b.meteorCd - dt;
+      if(b.meteorCd <= 0 && distToPlayer < 26){
+        b.meteorCd = 7 + Math.random()*2;
+        spawnFireMeteor(camera.position.x, camera.position.z);
+      }
     }
 
     // ---- animation: legs/arms swing only while actually moving (skipped by non-humanoid rigs, e.g. scarabs) ----
