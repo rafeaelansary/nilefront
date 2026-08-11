@@ -2342,11 +2342,16 @@ heightZoneTarget = heightZonesIslamic;
     post(-1,-0.7); post(1,-0.7); post(-1,0.7); post(1,0.7);
     const roof=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.15,1.8), awningMat); roof.position.set(0,1.85,0); stall.add(roof);
     const table=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.6,1.4), woodMat); table.position.set(0,0.3,0); stall.add(table);
-    addBox(x,z,2.4,1.8);
+    // collider in world space: compute rotated bounding box (same pattern as ruinedWall/coverWall)
+    const c=Math.cos(rot||0), s=Math.sin(rot||0);
+    const w=2.4, d=1.8;
+    const new_w=Math.abs(w*c)+Math.abs(d*s), new_d=Math.abs(w*s)+Math.abs(d*c);
+    addBox(x, z, new_w, new_d);
   }
-  marketStall(-3,-2,0); marketStall(3,-2,0.15); marketStall(0,3,1.5708);
+  // Moved to (12, 12) to clear the road intersection (x∈[-4,4], z∈[-4,4]); positioned relative to bazaar center
+  marketStall(9,10,0); marketStall(15,10,0.15); marketStall(12,15,1.5708);
   const bazaarFloor=new THREE.Mesh(new THREE.BoxGeometry(11,0.05,10), new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),9)}));
-  bazaarFloor.position.set(0,-0.005,0.5); scene.add(bazaarFloor);
+  bazaarFloor.position.set(12,-0.005,12); scene.add(bazaarFloor);
 
   // ---- 1 more legion-tower-style lookout, reused across every era ----
   sniperTower(23,20, 4, 5.5, 0xa89e8c, 'w');
@@ -2360,7 +2365,7 @@ heightZoneTarget = heightZonesIslamic;
     addBox(x,z,0.7,0.7);
   }
   courtyardPalm(-27,-20); courtyardPalm(27,22); courtyardPalm(-27,25); courtyardPalm(27,-22);
-  courtyardPalm(-24,-3); courtyardPalm(24,4);
+  courtyardPalm(-24,-6); courtyardPalm(24,6);  // moved z out of road band (z∈[-4,4])
 })();
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
