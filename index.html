@@ -1227,6 +1227,7 @@ addTarget = ifritColliders;
     [-R,R].forEach(z=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(x,4.85,z); ifritArena.add(m); });
   }
   for(let z=-R;z<=R;z+=merlonSpacing){
+    if(z===-R || z===R) continue; // the four corners are already placed by the x-direction loop above — skip them here to avoid coincident/z-fighting cubes
     [-R,R].forEach(x=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(x,4.85,z); ifritArena.add(m); });
   }
   [[-R+2,-R+2],[R-2,-R+2],[-R+2,R-2],[R-2,R-2]].forEach(([x,z])=>{
@@ -1240,7 +1241,11 @@ addTarget = ifritColliders;
   function courtyardCover(x,z,w,rot){
     const wall=new THREE.Group(); wall.position.set(x,0,z); wall.rotation.y=rot||0; ifritArena.add(wall);
     const main=new THREE.Mesh(new THREE.BoxGeometry(w,3.2,0.7), wallMat); main.position.set(0,1.6,0); wall.add(main);
-    addBox(x,z,w,0.9); // axis-aligned approximation — small rotation (±0.25 rad), same approach the Colosseum's coverWall main panel uses
+    // rotated bounding box (same formula as marketStall's collider, rather than the Colosseum coverWall's
+    // axis-aligned approximation) — cheap to compute exactly, so no reason to carry the overhang here
+    const c=Math.cos(rot||0), s=Math.sin(rot||0), d=0.7;
+    const new_w=Math.abs(w*c)+Math.abs(d*s), new_d=Math.abs(w*s)+Math.abs(d*c);
+    addBox(x,z,new_w,new_d);
   }
   courtyardCover(-5,9,4.6,0.25); courtyardCover(5,9,4.6,-0.25);
   ifritArena.add(new THREE.AmbientLight(0xffb87a, 0.5));
@@ -2350,14 +2355,20 @@ heightZoneTarget = heightZonesIslamic;
       [cz-d/2,cz+d/2].forEach(z=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), merlonMat); m.position.set(cx+x,3.8,z); scene.add(m); });
     }
     for(let z=-d/2;z<=d/2;z+=1.6){
+      if(z===-d/2 || z===d/2) continue; // the four corners are already placed by the x-direction loop above — skip them here to avoid coincident/z-fighting cubes
       [cx-w/2,cx+w/2].forEach(x=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), merlonMat); m.position.set(x,3.8,cz+z); scene.add(m); });
     }
     const gate=new THREE.Mesh(new THREE.BoxGeometry(3.2,3,0.6), voxMat(0x241c14,{noise:10})); gate.position.set(cx,1.5,cz-d/2-0.35); scene.add(gate);
     const gateArch=new THREE.Mesh(new THREE.TorusGeometry(1.6,0.3,8,14,Math.PI), voxMat(sandstone,{noise:12})); gateArch.position.set(cx,3,cz-d/2-0.35); scene.add(gateArch);
   }
   citadel(-19,17);
-  sniperTower(-25,10, 4.5, 7, 0xb8a074, 'e'); // Citadel's climbable corner towers, same proven mechanic as every prior era
-  sniperTower(-13,24, 4, 6.5, 0xc0a878, 's');
+  // Citadel's climbable corner towers, same proven mechanic as every prior era. Both moved off their original
+  // spots (-25,10) and (-13,24): the Citadel's own addBox(-19,17,16,14) footprint (x∈[-27,-11], z∈[10,24]) is
+  // a full-height collider with no roofY, so it was silently swallowing roughly half of each tower's roof
+  // plateau/ramp corridor as an invisible wall — and the second tower's 's' ramp used to run off the far edge
+  // of the reachable map entirely (z up to 37, past the z∈[-29,29] movement clamp). Verified by hand below.
+  sniperTower(-25,6, 4.5, 7, 0xb8a074, 'e');   // roof x[-27.25,-22.75] z[3.75,8.25], ramp x[-22.75,-10.85] z[4.6,7.4] — z stays <10, clear of the Citadel box regardless of x
+  sniperTower(-6,25, 4, 6.5, 0xc0a878, 'e');   // roof x[-8,-4] z[23,27], ramp x[-4,7.05] z[23.6,26.4] — x stays >-11, clear of the Citadel box regardless of z; ramp lands well inside z<29
 
   // ---- Mosque: cube base, a single hemisphere dome (turquoise-glazed), and a tall minaret ----
   function mosque(cx,cz){
@@ -2373,7 +2384,7 @@ heightZoneTarget = heightZonesIslamic;
     const cap=new THREE.Mesh(new THREE.ConeGeometry(0.7,1.6,10), domeMat); cap.position.set(minaretX,10.2,minaretZ); scene.add(cap);
     const capFinial=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.5,6), goldMat); capFinial.position.set(minaretX,11.3,minaretZ); scene.add(capFinial);
   }
-  mosque(19,-17);
+  mosque(19,-22); // shifted 5 south of the original spot (19,-17) — its 9x9 footprint was overlapping the shared PLAYER_SPAWNS entry at (20,-15)
 
   // ---- Khan bazaar: a small cluster of market stalls around a cobbled square ----
   function marketStall(x,z,rot){
@@ -3452,8 +3463,9 @@ function makeIfrit(){
     const arm=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.42,0.13), emberMat2); arm.position.set(side*0.38,1.18,0.08); arm.rotation.z=side*-0.5; g.add(arm);
     const hand=new THREE.Mesh(new THREE.SphereGeometry(0.09,6,5), flameMat); hand.position.set(side*0.5,0.98,0.22); g.add(hand);
   });
+  const wispMat = voxMat(0x4a4038,{noise:10}); // hoisted out of the loop below — one shared material for all 5 wisps, not a fresh texture per wisp
   for(let i=0;i<5;i++){ const a=(i/5)*Math.PI*2;
-    const wisp=new THREE.Mesh(new THREE.SphereGeometry(0.06+Math.random()*0.05,5,4), voxMat(0x4a4038,{noise:10}));
+    const wisp=new THREE.Mesh(new THREE.SphereGeometry(0.06+Math.random()*0.05,5,4), wispMat);
     wisp.position.set(Math.cos(a)*0.3, 1.45+Math.sin(a)*0.1, Math.sin(a)*0.3-0.1); g.add(wisp);
   }
 
@@ -3591,7 +3603,7 @@ function makeIfritKing(){
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 3.5, 0); marker.scale.set(1.4,1.4,1); marker.renderOrder = 9999;
+  marker.position.set(0, 3.5, 0); marker.scale.set(1.4,1.4,1.4); marker.renderOrder = 9999;
   marker.raycast = function(){};
   g.add(marker); g.userData.marker = marker;
   return g;
@@ -4735,7 +4747,12 @@ function spawnWave(n){
   // keeps every Greek wave above the pyramid era's toughest wave (compare wave3's diff below). Roman waves
   // get a smaller softening (~20% off the raw curve) since this is meant to be the hardest era so far —
   // full unscaled waveDiff(8) alone would be ~5.5x base HP, too steep for a first pass on brand new content.
-  const diff = pyramid ? waveDiff(n) : roman ? waveDiff(n)*0.8 : islamic ? waveDiff(n)*0.72 : waveDiff(n)*0.88;
+  // Islamic waves (the final era) get the deepest softening — full unscaled waveDiff(11) at wave 12 is ~8.8x
+  // base HP. Even the first-pass 0.72 multiplier still landed at ~6.34x, past the ~5.5x line the Roman era
+  // was capped at above, and diff also scales enemy speed/melee damage, so wave 12 was hitting noticeably
+  // harder than intended. Dropped to 0.63 (~5.55x at wave 12) — a conservative first pass pending real
+  // playtesting on this brand-new content, matching the Roman era's ceiling rather than exceeding it.
+  const diff = pyramid ? waveDiff(n) : roman ? waveDiff(n)*0.8 : islamic ? waveDiff(n)*0.63 : waveDiff(n)*0.88;
   for(let i=0;i<count;i++){
     const sp=SPAWN_POINTS[(i*3 + n*2 + i) % SPAWN_POINTS.length];
     const x=sp[0], z=sp[1];
@@ -4768,7 +4785,10 @@ function spawnWave(n){
     // wave) is capped at a flat value instead of letting the difficulty curve keep scaling it up
     const hp = (!pyramid && !roman && !islamic && n===5) ? 245 : roman ? [290,320,300][n-6] : islamic ? [330,360,340][n-9] : Math.round(BOT_MAX_HP*diff);
     const scale = skin==='basilisk' ? 1.35 : 1;
-    spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp, diff, speed:1+(diff-1)*0.5, scale});
+    // Ghoul is the era's fast-melee type (design spec: "tuned for speed over the era's other regular type") —
+    // give it a speed multiplier over the base formula, same precedent as the pyramid era's scarab/scorpion elites.
+    const speedMul = skin==='ghoul' ? 1.35 : 1;
+    spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp, diff, speed:(1+(diff-1)*0.5)*speedMul, scale});
   }
   if(pyramid && n===1){ // wave 2: a scarab swarm — one pack entity (5 beetles, one hitbox/HP/AI) that moves and dies together
     const sx=-10, sz=-16;
@@ -4831,6 +4851,11 @@ function startGame(){
   document.body.classList.add('playing');
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
+  // drain any leftover fire meteors from a previous run so one can't fire into the fresh game (quakeEffects,
+  // the older analogous VFX-effect array, has this same gap on restart — out of scope here, only fixing
+  // fireMeteors, this feature's own code)
+  for(const m of fireMeteors) scene.remove(m.grp);
+  fireMeteors.length = 0;
   player.score=0; player.hp=player.maxHp; player.alive=true; player.lastHit=-99;
   pyramidPhase=true; dungeonWasPyramid=true; inNileArea=false; weapons=pyramidWeapons; selectWeapon(0); // reset to the pyramid map/loadout in case this is a replay
   exitDungeon(); // ensure we start in the overworld (also positions the player)
@@ -4865,6 +4890,11 @@ function onAllDead(){
       // Ifrit King down → the campaign's final boss; victory. gameWon disables firing and turns the next
       // pointer-lock click into a fresh run (the intended "you beat it" end state).
       gameWon=true;
+      // drain any fire meteor still mid-telegraph so a killing blow landed just before impact can't fire
+      // damagePlayer() into the win screen (the !gameWon guard above covers it too, but this also stops the
+      // stray visual/audio and any respawnPlayer() fallout from a hit that lands after gameWon flips)
+      for(const m of fireMeteors) scene.remove(m.grp);
+      fireMeteors.length = 0;
       setBanner('🏆 THE IFRIT KING FALLS — you have conquered Cairo! 🕌');
       return;
     }
@@ -4881,8 +4911,9 @@ function onAllDead(){
     waveIdx++; pending='wave'; betweenTimer=2.5; setBanner('WAVE '+(waveIdx+1)+' incoming…');
     return;
   }
-  // a normal wave was cleared: a boss follows wave 3 (idx 2), wave 6 (idx 5) and wave 9 (idx 8 — the last
-  // Roman wave); the Nile Wave follows wave 2 (idx 1)
+  // a normal wave was cleared: a boss follows wave 3 (idx 2), wave 6 (idx 5), wave 9 (idx 8 — the last
+  // Roman wave) and wave 12 (idx 11 — the last Islamic wave, triggering the Ifrit King); the Nile Wave
+  // follows wave 2 (idx 1)
   if(waveIdx===2 || waveIdx===5 || waveIdx===8 || waveIdx===11){ pending='boss'; betweenTimer=2.2;
     setBanner(waveIdx===5?'The Lernaean Hydra rises from the marsh…':waveIdx===8?'The Champion of the arena strides forth…':waveIdx===11?'The Ifrit King rises from the flame…':'A boss awaits below…'); }
   else if(waveIdx===1 && pyramidPhase){ pending='nile'; betweenTimer=2.2; setBanner('The Nile stirs…'); }
@@ -5513,7 +5544,7 @@ function animate(){
       if(m.t >= m.impactAt){
         m.impacted = true;
         const distToImpact = Math.hypot(camera.position.x-m.x, camera.position.z-m.z);
-        if(distToImpact < 2.0 && player.alive) damagePlayer(Math.round(24*(1-distToImpact/2.0*0.3)));
+        if(distToImpact < 2.0 && player.alive && !gameWon) damagePlayer(Math.round(24*(1-distToImpact/2.0*0.3)));
         shakeAmt = Math.max(shakeAmt, 0.25);
         SFX.explosion();
         m.fillMat.opacity = 0.9; m.fillMat.color.set(0xffd23a);
