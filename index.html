@@ -2530,6 +2530,9 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='hydra') return makeHydra();
   if(skinName==='champion') return makeChampion();
   if(skinName==='tiger') return makeTiger();
+  if(skinName==='ifrit') return makeIfrit();
+  if(skinName==='ghoul') return makeGhoul();
+  if(skinName==='roc') return makeRocPack();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -3376,6 +3379,138 @@ function makeBasilisk(){
   return g;
 }
 
+// ---- Islamic era creatures (waves 10-12): Ifrit (ranged fire djinn) / Ghoul (fast melee) / Roc pack
+// (themed dive-bomber encounter, reusing the griffin's dive-then-claw AI) — no SKINS entry needed, same as
+// every other era's non-humanoid monsters ----
+
+// ifrit: a floating fire djinn — no legs, a torso that tapers into a licking flame-cone "tail" instead of
+// feet, glowing ember skin, small backswept horns. The Islamic era's ranged monster (weaponType 'pistol',
+// same pure-ranged AI as jackal/soldier — it holds distance rather than closing to melee like the griffin/
+// basilisk hybrid). Built facing +Z directly, same convention as every other creature (mesh.lookAt in the AI loop).
+function makeIfrit(){
+  const g = new THREE.Group();
+  const emberMat = voxMat(0xd8481c,{noise:14});
+  const emberMat2 = voxMat(0xa8280e,{noise:12});
+  const flameMat = new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false});
+  const flameMat2 = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
+  const darkMat = voxMat(0x2a140a,{noise:10});
+
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.5,0.32), emberMat); chest.position.set(0,1.3,0); g.add(chest);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.36,0.26), emberMat2); belly.position.set(0,0.98,0); g.add(belly);
+  [{y:0.62,r:0.26,h:0.5},{y:0.32,r:0.17,h:0.42},{y:0.1,r:0.09,h:0.34}].forEach((c,i)=>{
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,7), i%2? flameMat:flameMat2); cone.position.set(0,c.y,0); g.add(cone);
+  });
+  const tailLight = new THREE.PointLight(0xff8a2a,0.9,3.2); tailLight.position.set(0,0.4,0); g.add(tailLight);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.36,0.32), emberMat); head.position.set(0,1.72,0); g.add(head);
+  [-1,1].forEach(side=>{
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.07,0.04), flameMat2); eye.position.set(side*0.09,1.74,0.17); g.add(eye);
+    const horn=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.26,4), darkMat); horn.position.set(side*0.14,1.94,-0.04); horn.rotation.x=-0.5; horn.rotation.z=side*0.3; g.add(horn);
+  });
+  const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.08,0.06), darkMat); jaw.position.set(0,1.56,0.17); g.add(jaw);
+  [-1,1].forEach(side=>{
+    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.42,0.13), emberMat2); arm.position.set(side*0.38,1.18,0.08); arm.rotation.z=side*-0.5; g.add(arm);
+    const hand=new THREE.Mesh(new THREE.SphereGeometry(0.09,6,5), flameMat); hand.position.set(side*0.5,0.98,0.22); g.add(hand);
+  });
+  for(let i=0;i<5;i++){ const a=(i/5)*Math.PI*2;
+    const wisp=new THREE.Mesh(new THREE.SphereGeometry(0.06+Math.random()*0.05,5,4), voxMat(0x4a4038,{noise:10}));
+    wisp.position.set(Math.cos(a)*0.3, 1.45+Math.sin(a)*0.1, Math.sin(a)*0.3-0.1); g.add(wisp);
+  }
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 2.15, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
+// ghoul: a gaunt, hunched grave-robber creature — the Islamic era's fast melee monster (weaponType 'knife',
+// same chase AI as mummy/manticore). Built low and lean on all fours rather than upright, reading as fast
+// and animalistic rather than a shambling zombie reskin.
+function makeGhoul(){
+  const g = new THREE.Group();
+  const skinMat = voxMat(0x7a8a6a,{noise:16});
+  const skinDark = voxMat(0x566048,{noise:14});
+  const wrapMat = voxMat(0x3a3428,{noise:12});
+  const clawMat = new THREE.MeshLambertMaterial({color:0x1c1810});
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.36,0.62), skinMat); torso.position.set(0,0.58,0); torso.rotation.x=0.35; g.add(torso);
+  const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.2,0.4), wrapMat); wrap.position.set(0,0.62,0.05); wrap.rotation.x=0.35; g.add(wrap);
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.22,0.2), skinDark); neck.position.set(0,0.78,0.36); neck.rotation.x=0.5; g.add(neck);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.26,0.3), skinMat); head.position.set(0,0.9,0.5); g.add(head);
+  [-1,1].forEach(side=>{
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.05,0.03), new THREE.MeshBasicMaterial({color:0xd4e838,fog:false})); eye.position.set(side*0.08,0.92,0.64); g.add(eye);
+    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.12,0.06),skinDark); ear.position.set(side*0.15,1.0,0.44); g.add(ear);
+  });
+  const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.1,0.14), skinDark); jaw.position.set(0,0.78,0.6); g.add(jaw);
+  [-1,1].forEach(side=>{
+    const limb=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.5,0.13), skinDark); limb.position.set(side*0.2,0.32,0.38); limb.rotation.x=-0.3; g.add(limb);
+    const claw=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.16,4), clawMat); claw.position.set(side*0.2,0.08,0.52); claw.rotation.x=1.9; g.add(claw);
+  });
+  [-1,1].forEach(side=>{
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.48,0.15), skinDark); leg.position.set(side*0.16,0.28,-0.28); g.add(leg);
+    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.1,0.22), skinDark); foot.position.set(side*0.16,0.06,-0.2); g.add(foot);
+  });
+  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.3), skinDark); tail.position.set(0,0.5,-0.45); tail.rotation.x=-0.3; g.add(tail);
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 1.3, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
+function makeRocUnit(){
+  const g = new THREE.Group();
+  const body = g;
+  const featherMat = voxMat(0x4a3a2e,{noise:16});
+  const featherMat2 = voxMat(0x2e2018,{noise:14});
+  const beakMat = new THREE.MeshLambertMaterial({color:0xe0a838});
+  const talonMat = new THREE.MeshLambertMaterial({color:0x1c1810});
+  const eyeMat = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
+
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.4,0.8), featherMat); torso.position.set(0,0.9,0); body.add(torso);
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.36,0.34,0.32), featherMat2); chest.position.set(0,0.9,0.42); body.add(chest);
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.3,0.22), featherMat); neck.position.set(0,1.16,0.5); neck.rotation.x=-0.3; body.add(neck);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.22,0.26), featherMat2); head.position.set(0,1.4,0.66); body.add(head);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.08,0.32,4), beakMat); beak.rotation.x=1.5708; beak.position.set(0,1.37,0.9); body.add(beak);
+  [-1,1].forEach(side=>{ const eye=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.03), eyeMat); eye.position.set(side*0.1,1.44,0.8); body.add(eye); });
+  [-1,1].forEach(side=>{
+    const wingRoot=new THREE.Group(); wingRoot.position.set(side*0.28,1.0,-0.05); wingRoot.rotation.z=side*-0.4; body.add(wingRoot);
+    const w1=new THREE.Mesh(new THREE.BoxGeometry(0.75,0.1,0.5),featherMat); w1.position.set(side*0.4,0.05,0); wingRoot.add(w1);
+    const w2=new THREE.Mesh(new THREE.BoxGeometry(0.65,0.08,0.38),featherMat2); w2.position.set(side*0.95,-0.08,-0.05); wingRoot.add(w2);
+    const w3=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.06,0.26),featherMat); w3.position.set(side*1.4,-0.18,-0.08); wingRoot.add(w3);
+  });
+  [-1,1].forEach(side=>{
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.3,0.12), talonMat); leg.position.set(side*0.14,0.6,0.1); body.add(leg);
+    const talon=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.08,0.24), talonMat); talon.position.set(side*0.14,0.42,0.2); body.add(talon);
+  });
+  const tailFan = new THREE.Mesh(new THREE.BoxGeometry(0.36,0.06,0.4), featherMat2); tailFan.position.set(0,0.85,-0.55); tailFan.rotation.x=0.3; body.add(tailFan);
+  return g;
+}
+// roc pack: 3 giant rocs sharing one hitbox/HP/AI, same pack mechanic as the warhound/scarab packs — the
+// Islamic era's themed pack encounter, reusing the griffin's dive-then-claw AI (weaponType 'javelin') under
+// this new skin/model.
+function makeRocPack(){
+  const g = new THREE.Group();
+  const formation = [ {x:-0.6, z:0.15, ry:-0.25, s:1.0}, {x:0.55, z:0.0, ry:0.3, s:0.92}, {x:0.0, z:-0.45, ry:0.05, s:1.08} ];
+  formation.forEach(f=>{
+    const unit = makeRocUnit();
+    unit.position.set(f.x,0,f.z); unit.rotation.y=f.ry; unit.scale.setScalar(f.s);
+    g.add(unit);
+  });
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 1.7, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
 // ===== BOSS II — HYDRA: a low serpent body with a central hump and FIVE rising necks, each a chain-built
 // serpentine tower ending in a fanged head with glowing eyes. Built facing +Z (turned via mesh.lookAt() in
 // the shared AI loop). Boss-scaled up at spawn, so keep local proportions modest. =====
@@ -4177,6 +4312,25 @@ function enterRomanWorld(banner){
   selectWeapon(0);
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
+// swaps in the Islamic/Cairo map + loadout — used by both the real post-Boss-III victory transition (Task 4)
+// and by respawnPlayer() for era-3 deaths (Task 4). Modeled directly on enterRomanWorld(): an open
+// transition, not exiting a dungeon, so world+lighting+loadout all happen in one call.
+function enterIslamicWorld(banner){
+  clearWorldGroups();
+  scene.add(islamicOverworld);
+  sky.visible = true;
+  activeColliders = islamicColliders;
+  activeHeightZones = heightZonesIslamic;
+  scene.background.set(0x8fd6f2); scene.fog.color.set(0xe8dcc0); scene.fog.near=38; scene.fog.far=210; // bright, warm Cairo daylight
+  hemi.intensity=0.9; hemi.color.set(0xfff0d0); hemi.groundColor.set(0x6a5a38);
+  sun.intensity=1.0; fill.intensity=0.25; fill.color.set(0xffe6b8);
+  camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  weapons.forEach(w=>w.visible=false);
+  weapons = islamicWeapons;
+  selectWeapon(0);
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
 // Boss arenas are open-air (sky visible), unlike the pyramid/greek dungeons — the player keeps the era's
 // loadout (no weapon swap), only the world group + lighting change. Used by spawnBossFight().
 function enterHydraArena(){
@@ -4281,15 +4435,15 @@ document.addEventListener('keydown', e => {
     setBanner('↺ repositioned'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='↺ repositioned') setBanner(''); }, 900);
   }
   // ==================== DEBUG — REMOVE BEFORE SHIPPING ====================
-  // H: jumps straight to the first wave of the most recent era (Roman) for testing — same transition
-  // enterRomanWorld()+wave7 spawn already used for the real Boss II victory / era-2 respawn.
+  // H: jumps straight to the first wave of the most recent era (Islamic) for testing — same transition
+  // enterIslamicWorld()+wave10 spawn used for the real Boss III victory / era-3 respawn (Task 4).
   if (e.code==='KeyH' && player.alive){
     clearBots();
-    enterRomanWorld('🏛 Jumped to the Roman frontier');
-    // bossNum MUST match the era (era 2 is reached by beating bosses I+II) — without this the wave-9 boss
-    // trigger does bossNum++ from 0→1 and wrongly spawns Boss I (the Colossus), then its defeat path flips
-    // you into the Greek map with mismatched era/wave state (Roman enemies in the Greek map).
-    currentEra=2; bossNum=2; waveIdx=ERA_START_WAVE[2]; pending='wave'; betweenTimer=1.2;
+    enterIslamicWorld('🕌 Jumped to Mamluk Cairo');
+    // bossNum MUST match the era (era 3 is reached by beating bosses I+II+III) — without this the wave-12
+    // boss trigger does bossNum++ from 0→1 and wrongly spawns Boss I, then its defeat path sends you into
+    // the wrong map with mismatched era/wave state.
+    currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3]; pending='wave'; betweenTimer=1.2;
   }
   // L: instantly kills every living enemy on screen (wave, boss, Nile wave — whatever's active), for testing.
   if (e.code==='KeyL' && player.alive){
@@ -4461,7 +4615,7 @@ function setBanner(txt){ if(bannerEl){ bannerEl.textContent=txt||''; bannerEl.st
 // ---- wave / boss manager ----
 const ENEMY_COLORS=[0xc0392b,0x2980b9,0x27ae60,0x8e44ad,0xe67e22,0x16a085,0xd35400,0x2c3e50];
 const SPAWN_POINTS=[[-6,-6],[9,4],[-9,9],[-14,-14],[16,-6],[4,16],[-20,4],[18,14],[-2,-20],[12,-16]];
-const WAVES=[3,4,5, 6,7,9, 7,8,10]; // 9 waves; a boss after wave 3 and after wave 6 — Roman waves 7-9 have no boss yet
+const WAVES=[3,4,5, 6,7,9, 7,8,10, 9,10,12]; // 12 waves; a boss after wave 3, 6, 9, and 12
 function waveDiff(n){ return 1 + n*n*0.05 + n*0.16; } // accelerating curve: each wave is meaningfully tougher than the last
 let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWon=false, gameStarted=false;
 // era system: dying always respawns at the START of the CURRENT era, never an earlier one (e.g. dying in a
@@ -4469,21 +4623,22 @@ let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWo
 // ERA_START_WAVE; extend both when a new era arc is added later, incrementing currentEra at that era's
 // boss-defeat transition (see the pyramidPhase branch in onAllDead()).
 let currentEra=0;
-const ERA_START_WAVE=[0,3,6]; // waveIdx where each era begins — era 0 (pyramid) starts at wave 1, era 1 at wave 4, era 2 (Roman) at wave 7
+const ERA_START_WAVE=[0,3,6,9]; // waveIdx where each era begins — era 0 (pyramid) starts at wave 1, era 1 (Greek) at wave 4, era 2 (Roman) at wave 7, era 3 (Islamic) at wave 10
 function clearBots(){ bots.forEach(b=>scene.remove(b.mesh)); bots.length=0; }
 function setEnemyCount(txt){ const e=document.getElementById('enemies'); if(e) e.textContent = txt!==undefined?txt:bots.filter(b=>b.alive).length; }
 function spawnWave(n){
   clearBots();
   const count=WAVES[n];
-  const pyramid = n<3; // waves 1-3: desert/pyramid reskin, ahead of the stone-temple boss dungeon
-  const roman = n>=6;  // waves 7-9: Roman legionaries — no boss/dungeon for this era yet
+  const pyramid = n<3;        // waves 1-3: desert/pyramid reskin, ahead of the stone-temple boss dungeon
+  const roman = n>=6 && n<9;  // waves 7-9: Roman legionaries
+  const islamic = n>=9;       // waves 10-12: Islamic/Mamluk Cairo, the final regular waves before Boss IV
   // Greek waves inherit waveDiff(n)'s accelerating curve just by continuing the same wave index, which made
   // them scale up faster than intended — harder than the pyramid era (correct, it's the later era) but not
   // by this much, especially with a still-harder era planned after this one. Softened back ~12%, which still
   // keeps every Greek wave above the pyramid era's toughest wave (compare wave3's diff below). Roman waves
   // get a smaller softening (~20% off the raw curve) since this is meant to be the hardest era so far —
   // full unscaled waveDiff(8) alone would be ~5.5x base HP, too steep for a first pass on brand new content.
-  const diff = pyramid ? waveDiff(n) : roman ? waveDiff(n)*0.8 : waveDiff(n)*0.88;
+  const diff = pyramid ? waveDiff(n) : roman ? waveDiff(n)*0.8 : islamic ? waveDiff(n)*0.72 : waveDiff(n)*0.88;
   for(let i=0;i<count;i++){
     const sp=SPAWN_POINTS[(i*3 + n*2 + i) % SPAWN_POINTS.length];
     const x=sp[0], z=sp[1];
@@ -4498,6 +4653,12 @@ function spawnWave(n){
       // instead of looping hounds into this roster.
       skin = (i%2===0) ? 'manticore' : 'basilisk';
       wt = skin==='basilisk' ? 'javelin' : 'knife';
+    } else if(islamic){
+      // regular roster alternates two Islamic monsters — ifrit (ranged fire djinn, holds distance) and
+      // ghoul (fast melee grave-robber). A roc pack (3 rocs sharing one HP/AI) is added once per wave
+      // below, same convention as the Roman warhound pack.
+      skin = (i%2===0) ? 'ifrit' : 'ghoul';
+      wt = skin==='ifrit' ? 'pistol' : 'knife';
     } else {
       // Greek era (waves 4-6): Minotaur (front-immune charging brute) / Griffin (dive-then-claw hybrid) /
       // Medusa (heavy melee tank), in rotation — see the bot AI loop for their combat mechanics
@@ -4508,7 +4669,7 @@ function spawnWave(n){
     const col=ENEMY_COLORS[(i+n)%ENEMY_COLORS.length];
     // Greek grunts all share the same HP curve now (minotaur no longer weaker); wave 6 (the last regular
     // wave) is capped at a flat value instead of letting the difficulty curve keep scaling it up
-    const hp = (!pyramid && !roman && n===5) ? 245 : roman ? [290,320,300][n-6] : Math.round(BOT_MAX_HP*diff);
+    const hp = (!pyramid && !roman && !islamic && n===5) ? 245 : roman ? [290,320,300][n-6] : islamic ? [330,360,340][n-9] : Math.round(BOT_MAX_HP*diff);
     const scale = skin==='basilisk' ? 1.35 : 1;
     spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp, diff, speed:1+(diff-1)*0.5, scale});
   }
@@ -4532,7 +4693,13 @@ function spawnWave(n){
     spawnBot(sp[0],sp[1],0x201d19,[sp[0]-2,0,sp[1]],[sp[0]+2,0,sp[1]],'knife',
       {skin:'warhound', hp:Math.round(gruntHp*1.4), diff, speed:1+(diff-1)*0.5});
   }
-  document.getElementById('wave').textContent=(n+1)+'/6';
+  if(islamic){ // one roc pack per Islamic wave, same "themed pack, not regular roster" convention
+    const sp=SPAWN_POINTS[(n*5+2) % SPAWN_POINTS.length];
+    const gruntHp=[330,360,340][n-9];
+    spawnBot(sp[0],sp[1],0x4a3a2e,[sp[0]-2,0,sp[1]],[sp[0]+2,0,sp[1]],'javelin',
+      {skin:'roc', hp:Math.round(gruntHp*1.4), diff, speed:1+(diff-1)*0.5});
+  }
+  document.getElementById('wave').textContent=(n+1)+'/'+WAVES.length;
   setEnemyCount();
 }
 function spawnBossFight(){
