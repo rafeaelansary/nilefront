@@ -136,6 +136,7 @@ const greekDungeonColliders = []; // Greek boss dungeon colliders (Boss II — t
 const romanColliders = [];       // Roman overworld colliders (map built, not yet wired into wave/era progression)
 const hydraColliders = [];       // Greek boss arena colliders (Boss II — the Hydra; an open-air marsh arena, not a dungeon)
 const colosseumColliders = [];   // Roman boss arena colliders (Boss III — the Colosseum Champion; a full arena)
+const islamicColliders = [];     // Islamic/Mamluk Cairo overworld colliders (waves 10-12)
 let addTarget = colliders;       // where addBox pushes during world build
 let activeColliders = colliders; // which set physics currently uses
 function addBox(cx,cz,w,d,roofY){ addTarget.push({x1:cx-w/2, z1:cz-d/2, x2:cx+w/2, z2:cz+d/2, roofY}); }
@@ -145,6 +146,7 @@ const heightZonesOriginal = [];
 const heightZonesPyramid = [];
 const heightZonesGreek = [];
 const heightZonesRoman = [];
+const heightZonesIslamic = [];
 let heightZoneTarget = heightZonesOriginal;   // where sniperTower()/plaza() push during world build
 let activeHeightZones = heightZonesPyramid;   // which set getTerrainHeight() reads at runtime (pyramid phase starts active)
 function getTerrainHeight(x,z,curH){
@@ -375,6 +377,17 @@ function checkerTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // real ancient-theater orchestra floor pattern: a plain two-tone stone checkerboard, not a colorful mosaic
   const light='#d8cdb0', dark='#453f36';
   for(let j=0;j<P;j++)for(let i=0;i<P;i++){ x.fillStyle=((i>>2)+(j>>2))%2 ? dark : light; x.fillRect(i,j,1,1); }
+  return c; }
+function zellijeTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  // Islamic geometric star-tile (zellige) — turquoise/cream, a distinct palette from any earlier era's
+  // ground textures (Roman's warm terracotta, Greek's cool grey gravel, pyramid's tan sand)
+  x.fillStyle='#e8dcc0'; x.fillRect(0,0,P,P);
+  x.fillStyle='#1f7a72';
+  for(let j=0;j<P;j+=8)for(let i=0;i<P;i+=8){
+    x.beginPath(); x.moveTo(i+4,j); x.lineTo(i+8,j+4); x.lineTo(i+4,j+8); x.lineTo(i,j+4); x.closePath(); x.fill();
+  }
+  x.fillStyle='#c9a13a';
+  for(let j=0;j<P;j+=8)for(let i=0;i<P;i+=8){ x.fillRect(i+3,j+3,2,2); }
   return c; }
 function cobbleTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   const st=['#8f8d88','#9d9b95','#7c7a75','#a7a49d'];
@@ -2267,6 +2280,95 @@ scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld || 
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
+// ===================== ISLAMIC OVERWORLD (Mamluk Cairo) — waves 10-12, the final arc =====================
+// Same swap architecture as every prior overworld: its own collider/height-zone arrays, swept into its own
+// group below. Not yet wired into any wave/era-transition logic in this task — see Task 2/4 for that.
+addTarget = islamicColliders;
+heightZoneTarget = heightZonesIslamic;
+(function buildIslamicOverworld(){
+  const sandstone = 0xc9a876;      // warm Citadel sandstone
+  const sandstoneLight = 0xe0c89a;
+  const domeMat = voxMat(0x1f7a72,{noise:10});   // turquoise-glazed tile, ties back to zellijeTex's palette
+  const goldMat = metalMatP(0xc9a13a,80,0xffe8a0);
+  const woodMat = voxMat(0x6b4a28,{noise:16});
+  const awningMat = voxMat(0xb5342a,{noise:10}); // deep red-and-cream market awnings
+
+  // ground: zellijeTex everywhere, a cobbled crossroads through the middle (reusing cobbleTex, same as Roman's road)
+  const groundMat = new THREE.MeshLambertMaterial({map:_finish(zellijeTex(),20)});
+  const ground = new THREE.Mesh(new THREE.BoxGeometry(62,1,62), groundMat); ground.position.set(0,-0.5,0); scene.add(ground);
+  const roadMat = new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),18), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
+  function roadPath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),roadMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
+  roadPath(0,0,8,58); roadPath(0,0,58,8);
+
+  // ---- Citadel: a walled compound with crenellated (merlon) walls and two climbable corner towers ----
+  function citadel(cx,cz){
+    const w=16,d=14;
+    addBox(cx,cz,w,d);
+    const podium=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,d), voxMat(sandstone,{noise:14,pattern:'plate'})); podium.position.set(cx,1.7,cz); scene.add(podium);
+    const merlonMat = voxMat(sandstoneLight,{noise:12});
+    for(let x=-w/2;x<=w/2;x+=1.6){
+      [cz-d/2,cz+d/2].forEach(z=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), merlonMat); m.position.set(cx+x,3.8,z); scene.add(m); });
+    }
+    for(let z=-d/2;z<=d/2;z+=1.6){
+      [cx-w/2,cx+w/2].forEach(x=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), merlonMat); m.position.set(x,3.8,cz+z); scene.add(m); });
+    }
+    const gate=new THREE.Mesh(new THREE.BoxGeometry(3.2,3,0.6), voxMat(0x241c14,{noise:10})); gate.position.set(cx,1.5,cz-d/2-0.35); scene.add(gate);
+    const gateArch=new THREE.Mesh(new THREE.TorusGeometry(1.6,0.3,8,14,Math.PI), voxMat(sandstone,{noise:12})); gateArch.position.set(cx,3,cz-d/2-0.35); scene.add(gateArch);
+  }
+  citadel(-19,17);
+  sniperTower(-25,10, 4.5, 7, 0xb8a074, 'e'); // Citadel's climbable corner towers, same proven mechanic as every prior era
+  sniperTower(-13,24, 4, 6.5, 0xc0a878, 's');
+
+  // ---- Mosque: cube base, a single hemisphere dome (turquoise-glazed), and a tall minaret ----
+  function mosque(cx,cz){
+    const base=new THREE.Mesh(new THREE.BoxGeometry(9,5,9), voxMat(0xe0d6be,{noise:12,pattern:'plate'})); base.position.set(cx,2.5,cz); scene.add(base);
+    addBox(cx,cz,9,9);
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(3.4,14,8,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(cx,5,cz); scene.add(dome);
+    const finial=new THREE.Mesh(new THREE.ConeGeometry(0.15,0.6,6), goldMat); finial.position.set(cx,8.6,cz); scene.add(finial);
+    // minaret: a tall tapering tower with a small balcony ring near the top
+    const minaretX=cx+6, minaretZ=cz-4;
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.95,9,10), voxMat(0xe0d6be,{noise:12})); shaft.position.set(minaretX,4.5,minaretZ); scene.add(shaft);
+    addBox(minaretX,minaretZ,1.9,1.9);
+    const balcony=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,0.3,10), voxMat(sandstoneLight,{noise:10})); balcony.position.set(minaretX,8.6,minaretZ); scene.add(balcony);
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(0.7,1.6,10), domeMat); cap.position.set(minaretX,10.2,minaretZ); scene.add(cap);
+    const capFinial=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.5,6), goldMat); capFinial.position.set(minaretX,11.3,minaretZ); scene.add(capFinial);
+  }
+  mosque(19,-17);
+
+  // ---- Khan bazaar: a small cluster of market stalls around a cobbled square ----
+  function marketStall(x,z,rot){
+    const stall=new THREE.Group(); stall.position.set(x,0,z); stall.rotation.y=rot||0; scene.add(stall);
+    const post=(px,pz)=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.8,6), woodMat); p.position.set(px,0.9,pz); stall.add(p); };
+    post(-1,-0.7); post(1,-0.7); post(-1,0.7); post(1,0.7);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.15,1.8), awningMat); roof.position.set(0,1.85,0); stall.add(roof);
+    const table=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.6,1.4), woodMat); table.position.set(0,0.3,0); stall.add(table);
+    addBox(x,z,2.4,1.8);
+  }
+  marketStall(-3,-2,0); marketStall(3,-2,0.15); marketStall(0,3,1.5708);
+  const bazaarFloor=new THREE.Mesh(new THREE.BoxGeometry(11,0.05,10), new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),9)}));
+  bazaarFloor.position.set(0,-0.005,0.5); scene.add(bazaarFloor);
+
+  // ---- 1 more legion-tower-style lookout, reused across every era ----
+  sniperTower(23,20, 4, 5.5, 0xa89e8c, 'w');
+
+  // ---- desert palm dressing toward the open edges (local to this map, same idea as Roman's oliveTreeR) ----
+  function courtyardPalm(x,z){
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.2,2.6,6), voxMat(0x6b5230,{noise:14})); trunk.position.set(x,1.3,z); trunk.rotation.z=0.05; scene.add(trunk);
+    const leafMat=voxMat(0x4a7a3e,{noise:16});
+    for(let i=0;i<6;i++){ const a=i/6*Math.PI*2;
+      const leaf=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.08,0.28), leafMat); leaf.position.set(x+Math.cos(a)*0.5,2.7,z+Math.sin(a)*0.5); leaf.rotation.y=a; leaf.rotation.x=-0.3; scene.add(leaf); }
+    addBox(x,z,0.7,0.7);
+  }
+  courtyardPalm(-27,-20); courtyardPalm(27,22); courtyardPalm(-27,25); courtyardPalm(27,-22);
+  courtyardPalm(-24,-3); courtyardPalm(24,4);
+})();
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+const islamicOverworld = new THREE.Group();
+scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld || o===pyramidOverworld || o===greekOverworld || o===romanOverworld) return; islamicOverworld.add(o); });
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
 // ---- voxel humanoid bot (Minecraft/Pixel-Gun proportions: blocky head+helmet, layered torso armor, segmented limbs) ----
 function makeVoxelTexture(baseHex, {noise=22, size=48, pattern=null, cell=6} = {}){
   const c = document.createElement('canvas');
@@ -3945,6 +4047,65 @@ function makePugio(){
   return g;
 }
 
+// ===== ISLAMIC CAIRO LOADOUT (Mamluk-era arc) =====
+// QAWS AL-ZIYAR — a Mamluk crossbow: a wooden stock, a steel prong/bow arm mounted crosswise, and a taut
+// cord. Slower and heavier-hitting than the earlier eras' bows/javelins, with a real reload between shots.
+function makeCrossbow(){
+  const g=new THREE.Group();
+  const wood=metalMatP(0x4a3018,25,0x2a1c10), steel=metalMatP(0x8a9098,80,0xe8eef2), dark=voxMat(0x2a2420,{noise:10});
+  part(g,0.05,0.06,0.62,wood,0,0,-0.05);            // stock
+  part(g,0.045,0.16,0.16,wood,0,-0.05,0.28).rotation.x=0.1; // grip
+  const bowArm=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.025,0.025), steel); bowArm.position.set(0,0.01,-0.34); g.add(bowArm);
+  [-1,1].forEach(s=>{ const tip=new THREE.Mesh(new THREE.ConeGeometry(0.018,0.06,4), dark); tip.rotation.z=s*1.5708; tip.position.set(s*0.25,0.01,-0.34); g.add(tip); });
+  const cord=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.008,0.008), new THREE.MeshBasicMaterial({color:0xe8ded0,fog:false})); cord.position.set(0,0.01,-0.2); g.add(cord);
+  const trigger=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.08,0.03), dark); trigger.position.set(0,-0.12,0.12); g.add(trigger);
+  g.userData={muzzleZ:-0.5,muzzleY:0,pos:new THREE.Vector3(0.24,-0.24,-0.4),recoil:0.2,name:'Qaws',
+    damage:145, fireRate:1.3, auto:false, spread:0.002, tracer:0xd8d0c0,
+    magSize:4, ammo:4, reloadTime:2.0, reloading:false, reloadT:0};
+  return g;
+}
+// SAIF — a curved Mamluk scimitar: a single sweeping steel blade, a crossguard, and a wrapped grip. A
+// deliberately different silhouette (curved, not straight) and palette from the Greek Xiphos and Roman
+// Pugio so the three eras' sidearms never read as reskins of each other.
+function makeScimitar(){
+  const g=new THREE.Group();
+  const steel=metalMatP(0xb8bcc0,95,0xffffff), steelDark=metalMatP(0x7a8086,60,0xc8ccd0);
+  const gripMat=voxMat(0x1c3a2e,{noise:10}), goldMat=metalMatP(0xad8730,85,0xfff2c8);
+  const pommel=new THREE.Mesh(new THREE.SphereGeometry(0.03,8,6), goldMat); pommel.position.y=0; g.add(pommel);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.024,0.026,0.16,8), gripMat); grip.position.y=0.09; g.add(grip);
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.02,0.05), goldMat); guard.position.y=0.17; g.add(guard);
+  // curved blade: 4 short chained segments sweeping forward, each rotated a touch more than the last
+  let by=0.17, bz=0, bang=0;
+  for(let i=0;i<4;i++){
+    const segLen=0.13;
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(0.03,segLen,0.006), i===3?steelDark:steel);
+    seg.position.set(0, by+Math.cos(bang)*segLen/2, bz+Math.sin(bang)*segLen/2);
+    seg.rotation.z = bang;
+    g.add(seg);
+    by += Math.cos(bang)*segLen; bz += Math.sin(bang)*segLen; bang += 0.24;
+  }
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.1,name:'Saif',
+    melee:true, range:1.7, damage:108, fireRate:0.2};
+  return g;
+}
+// NAFT POT — a thrown ceramic pot of naphtha, the Islamic-world descendant of Greek Fire; same
+// lob-arc-and-explode grenade mechanic (userData.grenade routes through launchGrenade()/explodeAt()), a
+// distinct clay-pot silhouette instead of a bronze siphon.
+function makeNaftPot(){
+  const g=new THREE.Group();
+  const clay=voxMat(0xb5602c,{noise:14}), clayDark=voxMat(0x7a3c1c,{noise:12}), wood=metalMatP(0x4a3018,25,0x2a1c10);
+  const pot=new THREE.Mesh(new THREE.SphereGeometry(0.11,8,7), clay); pot.scale.set(1,0.9,1); pot.position.set(0,-0.02,-0.1); g.add(pot);
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.05,0.05,8), clayDark); neck.position.set(0,0.08,-0.1); g.add(neck);
+  const wick=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.06,5), voxMat(0x2a2018,{noise:8})); wick.position.set(0,0.13,-0.1); g.add(wick);
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.08,6), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false})); flame.position.set(0,0.19,-0.1); g.add(flame);
+  const L=new THREE.PointLight(0xff8a2a,0.9,1.4); L.position.set(0,0.19,-0.1); g.add(L);
+  part(g,0.08,0.2,0.28,wood,0,-0.22,0.14).rotation.x=0.16; // supporting grip/stock below the pot
+  g.userData={muzzleZ:-0.1,muzzleY:0.1,pos:new THREE.Vector3(0.25,-0.27,-0.1),recoil:0.16,name:'Naft Pot',
+    damage:0, splashDamage:205, splashRadius:4.9, fireRate:1.2, auto:false, spread:0.0, tracer:0xff8a2a, grenade:true,
+    magSize:4, ammo:4, reloadTime:2.1, reloading:false, reloadT:0};
+  return g;
+}
+
 const DEFAULT_FOV = 75;
 let scoped = false; // declared here (before selectWeapon's initial call) to avoid a temporal-dead-zone crash
 const originalWeapons = [makeSniper(), makeRifle(), makeRayGun(), makeGrenadeLauncher(), makeZahraGun()];
@@ -3953,9 +4114,10 @@ const nileWeapons = [makeHarpoon()];
 const greekWeapons = [makeSling(), makeXiphos(), makeTrident()];
 // Roman loadout — not yet wired into wave/era progression (map-only turn), but ready for when it is
 const romanWeapons = [makeJavelin(), makePugio(), makeGreekFire()];
+const islamicWeapons = [makeCrossbow(), makeScimitar(), makeNaftPot()];
 let weapons = pyramidWeapons; // waves 1-3 + Boss I start on the pyramid loadout; swapped back after Boss I
 const gunGroup = new THREE.Group();
-originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons).concat(romanWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
+originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons).concat(romanWeapons).concat(islamicWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
 gunGroup.add(muzzle);
 let currentWeapon = 0; // start on the bow
 function setAmmoHUD(){
