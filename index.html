@@ -3612,56 +3612,88 @@ function makeIfritKing(){
 // ===== BOSS II — HYDRA: a low serpent body with a central hump and FIVE rising necks, each a chain-built
 // serpentine tower ending in a fanged head with glowing eyes. Built facing +Z (turned via mesh.lookAt() in
 // the shared AI loop). Boss-scaled up at spawn, so keep local proportions modest. =====
+// Redesigned so the silhouette actually reads as "multi-headed serpent" at a glance, not a lizard with
+// lumps on its back: a long tapering serpent trunk (no separate torso/hump blocks), 5 heads fanned out
+// WIDE (not clustered forward) on thin sinuous necks, and heads shaped like an actual snake head — flat
+// wedge skull, a flared cobra-style hood, an open jaw with visible fangs top+bottom, and a forked tongue —
+// instead of the old generic boxy head+snout.
 function makeHydra(){
   const g = new THREE.Group();
   const scaleMat = voxMat(0x3a5c3e,{noise:14});
   const scaleMat2 = voxMat(0x2a4630,{noise:12});
   const bellyMat = voxMat(0x7a8a5a,{noise:10});
   const headMat = voxMat(0x35502e,{noise:12});
+  const hoodMat = voxMat(0x86a03a,{noise:12});   // sickly yellow-green cobra hood — reads clearly against the dark green scales
   const fangMat = new THREE.MeshLambertMaterial({color:0xe8e4d4});
   const eyeMat = new THREE.MeshBasicMaterial({color:0xff3a2a,fog:false});
   const crestMat = voxMat(0x1c2a18,{noise:10});
+  const tongueMat = new THREE.MeshBasicMaterial({color:0xc4283a,fog:false});
 
-  // low bulky serpent body + a raised central hump the necks sprout from
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.5,0.7,1.9), scaleMat); body.position.set(0,0.55,-0.1); g.add(body);
-  const belly = new THREE.Mesh(new THREE.BoxGeometry(1.2,0.2,1.7), bellyMat); belly.position.set(0,0.24,-0.1); g.add(belly);
-  const hump = new THREE.Mesh(new THREE.BoxGeometry(1.3,0.8,1.2), scaleMat2); hump.position.set(0,1.05,-0.3); g.add(hump);
-  // coiled tail trailing behind
-  { let ty=0.8, tz=-1.0, theta=-1.4; const overlap=0.02;
-    [{s:0.4,len:0.5},{s:0.32,len:0.45},{s:0.24,len:0.4},{s:0.16,len:0.34}].forEach(seg=>{
+  // serpent trunk: one continuous tapering run of stacked segments (no rotation math, just shrinking width
+  // + a gentle rise/fall in Y per segment) from the tail tip up to where the necks sprout — reads as one
+  // big snake body instead of a lizard torso with a hump bolted on.
+  const trunkSegs = [
+    {z: 0.55, w:1.55, h:0.85, y:0.62}, {z:-0.05, w:1.35, h:0.72, y:0.55},
+    {z:-0.65, w:1.05, h:0.6,  y:0.46}, {z:-1.2,  w:0.75, h:0.48, y:0.38},
+    {z:-1.7,  w:0.5,  h:0.36, y:0.3},
+  ];
+  trunkSegs.forEach((s,i)=>{
+    const mat = i%2 ? scaleMat2 : scaleMat;
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,0.62), mat); seg.position.set(0,s.y,s.z); g.add(seg);
+    const belly=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.62,s.h*0.28,0.6), bellyMat); belly.position.set(0,s.y-s.h*0.42,s.z); g.add(belly);
+  });
+  // coiled tail tip trailing behind the trunk's last (thinnest) segment
+  { let ty=0.3, tz=-2.0, theta=-1.4; const overlap=0.02;
+    [{s:0.34,len:0.42},{s:0.26,len:0.36},{s:0.18,len:0.3},{s:0.11,len:0.24}].forEach(seg=>{
       const dy=Math.cos(theta), dz=Math.sin(theta);
-      const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s,seg.len), scaleMat); m.position.set(0,ty+(seg.len/2)*0+0.0, tz+(seg.len/2)*dz); m.rotation.x=theta; g.add(m);
+      const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s,seg.len), scaleMat); m.position.set(0,ty+(seg.len/2)*dy, tz+(seg.len/2)*dz); m.rotation.x=theta; g.add(m);
       tz = tz + seg.len*dz - overlap*dz; ty = ty + seg.len*dy - overlap*dy; theta += 0.4;
     });
   }
-  // one serpentine neck+head, chain-built rising up and fanning forward. baseX/lean spread the 5 heads.
+  // one serpentine neck+head, chain-built rising up and fanning forward/outward. baseX/lean spread the 5
+  // heads WIDE so all 5 are visually distinct instead of clustering into one mass — this is the single
+  // biggest fix versus the old design.
   function neck(baseX, lean, height){
-    let y=1.2, z=0.2, x=baseX, theta=-1.15; // theta from near-vertical, arcing forward
-    const seg=height, dt=0.34;
+    let y=1.0, z=0.35, x=baseX, theta=-1.05; // theta from near-vertical, arcing forward
+    const seg=height, dt=0.3;
     for(let i=0;i<seg;i++){
       const dz=Math.sin(theta), dy=Math.cos(theta);
-      const len=0.42, cy=y+(len/2)*dy, cz=z+(len/2)*dz, cx=x+lean*(i/seg);
-      const m=new THREE.Mesh(new THREE.BoxGeometry(0.34,len,0.34), i%2?scaleMat2:scaleMat); m.position.set(cx,cy,cz); m.rotation.x=theta; g.add(m);
+      const len=0.4, cy=y+(len/2)*dy, cz=z+(len/2)*dz, cx=x+lean*(i/seg);
+      // taper the neck — thick where it meets the body, noticeably thinner near the head, so it reads as a
+      // sinuous snake neck rather than a stack of same-size cubes
+      const w = 0.34 - (i/seg)*0.14;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(w,len,w), i%2?scaleMat2:scaleMat); m.position.set(cx,cy,cz); m.rotation.x=theta; g.add(m);
       // a small dorsal crest fin on each neck segment
-      const fin=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.22,0.14), crestMat); fin.position.set(cx,cy+0.16,cz-0.06); fin.rotation.x=theta; g.add(fin);
+      const fin=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.2,0.12), crestMat); fin.position.set(cx,cy+0.14,cz-0.05); fin.rotation.x=theta; g.add(fin);
       y=y+len*dy; z=z+len*dz; theta+=dt;
     }
-    // head at the neck tip
-    const hx=x+lean, hy=y+0.05, hz=z+0.15;
-    const head=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.34,0.5), headMat); head.position.set(hx,hy,hz); g.add(head);
-    const snout=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.28), scaleMat2); snout.position.set(hx,hy-0.06,hz+0.32); g.add(snout);
+    // head at the neck tip — a flat wedge skull (wider than tall, tapering to a snout) instead of a
+    // generic box, an open jaw (separate upper/lower pieces) baring fangs, a forked tongue, and a flared
+    // hood behind the head — the combination is what actually reads as "snake head" from a distance.
+    const hx=x+lean, hy=y+0.02, hz=z+0.18;
+    const skull=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.22,0.3), headMat); skull.position.set(hx,hy+0.1,hz); g.add(skull);
+    const upperJaw=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.42), scaleMat2); upperJaw.position.set(hx,hy+0.06,hz+0.28); g.add(upperJaw);
+    const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.09,0.36), bellyMat); lowerJaw.position.set(hx,hy-0.1,hz+0.26); lowerJaw.rotation.x=-0.35; g.add(lowerJaw);
+    // flared hood: two angled plates behind the skull, cobra-style — the single most identifying "snake"
+    // silhouette cue, and it also helps visually separate each of the 5 heads from its neighbours
     [-1,1].forEach(s=>{
-      const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.07,0.05), eyeMat); eye.position.set(hx+s*0.12,hy+0.09,hz+0.22); g.add(eye);
-      const fang=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.12,4), fangMat); fang.position.set(hx+s*0.07,hy-0.14,hz+0.4); fang.rotation.x=Math.PI; g.add(fang);
+      const hood=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.28,0.18), hoodMat); hood.position.set(hx+s*0.18,hy+0.08,hz-0.08); hood.rotation.z=s*0.55; hood.rotation.y=s*0.3; g.add(hood);
     });
-    // horns
-    [-1,1].forEach(s=>{ const horn=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.22,4), crestMat); horn.position.set(hx+s*0.13,hy+0.22,hz-0.05); horn.rotation.z=s*0.4; g.add(horn); });
+    [-1,1].forEach(s=>{
+      const eye=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.06,0.04), eyeMat); eye.position.set(hx+s*0.11,hy+0.14,hz+0.13); g.add(eye);
+      // two visible fangs per side — one from the upper jaw pointing down, echoing a real snake bite
+      const fangA=new THREE.Mesh(new THREE.ConeGeometry(0.025,0.14,4), fangMat); fangA.position.set(hx+s*0.08,hy-0.02,hz+0.44); fangA.rotation.x=Math.PI; g.add(fangA);
+      const fangB=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.1,4), fangMat); fangB.position.set(hx+s*0.13,hy+0.0,hz+0.4); fangB.rotation.x=Math.PI; g.add(fangB);
+    });
+    // forked tongue flicking out past the jaw
+    const tongueRoot=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.03,0.22), tongueMat); tongueRoot.position.set(hx,hy-0.05,hz+0.56); g.add(tongueRoot);
+    [-1,1].forEach(s=>{ const fork=new THREE.Mesh(new THREE.BoxGeometry(0.025,0.025,0.1), tongueMat); fork.position.set(hx+s*0.035,hy-0.05,hz+0.68); fork.rotation.y=s*0.5; g.add(fork); });
   }
-  neck(0,     0.0,  5);   // centre head, tallest
-  neck(-0.5, -0.7,  4);   // left pair
-  neck( 0.5,  0.7,  4);   // right pair
-  neck(-0.85,-1.2,  3);
-  neck( 0.85, 1.2,  3);
+  neck( 0,    0.0,  7);   // centre head, tallest, straight up the middle
+  neck(-1.0, -1.6,  6);   // wide left pair
+  neck( 1.0,  1.6,  6);   // wide right pair
+  neck(-1.9, -2.6,  5);   // outermost left — splayed well clear of its neighbour
+  neck( 1.9,  2.6,  5);   // outermost right
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
