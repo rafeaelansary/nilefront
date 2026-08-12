@@ -396,6 +396,21 @@ function zellijeTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   x.fillStyle=gold;
   for(let j=4;j<P;j+=8)for(let i=4;i<P;i+=8){ x.fillRect(i+2,j+2,1,1); }
   return c; }
+function cairoDustTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  // Mid-tone warm street dust. The Cairo map used to be paved corner-to-corner in the bright zellige tile
+  // below, which — with pale sandstone walls on top of it — left every surface in the scene at nearly the
+  // same high brightness and the whole map read as washed out. This is the darker base the light landmarks
+  // and the tile plazas now sit against, so there is actually some tonal range.
+  const st=['#a58a5e','#b0946a','#9a8054','#b8a077','#8f7749'];
+  x.fillStyle='#a08659'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j+=2)for(let i=0;i<P;i+=2){
+    const n=Math.abs(Math.sin(i*5.3+j*11.7)*271%1);
+    x.fillStyle=st[(n*st.length)|0]; x.fillRect(i,j,2,2);
+  }
+  // scattered darker grit
+  for(let k=0;k<26;k++){ const n=Math.abs(Math.sin(k*17.3)*431%1), m=Math.abs(Math.cos(k*7.1)*233%1);
+    x.fillStyle='#7d673f'; x.fillRect((n*P)|0,(m*P)|0,1,1); }
+  return c; }
 function citadelStoneTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // large sandstone ashlar block coursing, same offset-brick technique romanBrickTex uses, just scaled and
   // colored for big fortress stonework. voxMat()'s plain noise texture is designed for small individual
@@ -1248,10 +1263,20 @@ addTarget = ifritColliders;
   for(let x=-R;x<=R;x+=merlonSpacing){
     [-R,R].forEach(z=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(x,4.85,z); ifritArena.add(m); });
   }
+  // Corner de-duplication has to be per-CORNER, not per-row. R*2/merlonSpacing (34/1.8) is not an integer,
+  // so the x-loop above lands on -R but never exactly on +R: skipping this loop's whole z===-R iteration
+  // removed the genuine duplicate at (-R,-R) but also deleted (+R,-R), which the x-loop never placed,
+  // leaving a visible gap in the parapet. Only the one coincident pair is skipped now.
   for(let z=-R;z<=R;z+=merlonSpacing){
-    if(z===-R || z===R) continue; // the four corners are already placed by the x-direction loop above — skip them here to avoid coincident/z-fighting cubes
-    [-R,R].forEach(x=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(x,4.85,z); ifritArena.add(m); });
+    [-R,R].forEach(x=>{
+      if(x===-R && z===-R) return; // already placed by the x-direction loop
+      const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(x,4.85,z); ifritArena.add(m);
+    });
   }
+  // Corner tally with R=17, spacing=1.8 (neither loop's step lands on +R exactly):
+  //   (-R,-R) x-loop places it, z-loop skips it   (-R,+R) x-loop places it
+  //   (+R,-R) z-loop places it                    (+R,+R) neither reaches — add it here
+  { const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(R,4.85,R); ifritArena.add(m); }
   [[-R+2,-R+2],[R-2,-R+2],[-R+2,R-2],[R-2,R-2]].forEach(([x,z])=>{
     const stand=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,1.1,8), darkMat); stand.position.set(x,0.55,z); ifritArena.add(stand);
     const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.24,0.24,8), darkMat); bowl.position.set(x,1.15,z); ifritArena.add(bowl);
@@ -2360,12 +2385,79 @@ heightZoneTarget = heightZonesIslamic;
   const woodMat = voxMat(0x6b4a28,{noise:16});
   const awningMat = voxMat(0xb5342a,{noise:10}); // deep red-and-cream market awnings
 
-  // ground: zellijeTex everywhere, a cobbled crossroads through the middle (reusing cobbleTex, same as Roman's road)
-  const groundMat = new THREE.MeshLambertMaterial({map:_finish(zellijeTex(),20)});
+  const blueTile = voxMat(0x2a4a8a,{noise:10});      // deep lapis tile panels — a cool accent in an otherwise warm map
+  const timberMat = voxMat(0x4a3018,{noise:16});     // dark mashrabiya timber, the map's darkest note
+  const awningGreen = voxMat(0x2e6b4a,{noise:10});
+  const brassMat = metalMatP(0xc9a13a,80,0xffe8a0);
+
+  // ---- ground: warm dust everywhere, tile only where it is a deliberate plaza, cobble for the streets.
+  // Paving the whole 62x62 in bright zellige tile is what made this map read as a giant loud quilt. ----
+  const groundMat = new THREE.MeshLambertMaterial({map:_finish(cairoDustTex(),42)});
   const ground = new THREE.Mesh(new THREE.BoxGeometry(62,1,62), groundMat); ground.position.set(0,-0.5,0); scene.add(ground);
   const roadMat = new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),18), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
   function roadPath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),roadMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
   roadPath(0,0,8,58); roadPath(0,0,58,8);
+  const tileMat = new THREE.MeshLambertMaterial({map:_finish(zellijeTex(),6), polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-3});
+  function tilePlaza(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.16,d),tileMat); m.position.set(x,0.08,z); m.receiveShadow=true; scene.add(m); }
+
+  // ---- perimeter city wall: encloses the map so it reads as a walled city instead of an open plain,
+  // and gives the horizon something other than empty sand ----
+  const wallMat = new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),10)});
+  [[0,-28,58,1.4],[0,28,58,1.4],[-28,0,1.4,58],[28,0,1.4,58]].forEach(([wx,wz,ww,wd])=>{
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(ww,5.2,wd), wallMat); seg.position.set(wx,2.6,wz); scene.add(seg);
+    const cornice=new THREE.Mesh(new THREE.BoxGeometry(ww+0.3,0.4,wd+0.3), voxMat(sandstoneLight,{noise:12})); cornice.position.set(wx,5.4,wz); scene.add(cornice);
+    addBox(wx,wz,ww,wd);
+  });
+  // merlons along the wall the player faces from spawn — the one that actually fills their view
+  for(let mx=-27;mx<=27;mx+=2.6){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.0,1.2), voxMat(sandstoneLight,{noise:12})); m.position.set(mx,6.1,-28); scene.add(m);
+  }
+
+  // ================= THE GREAT GATE (Bab) — the map's hero landmark =================
+  // The player enters this map at (0,10) looking down -Z, and previously every single landmark sat behind
+  // them or far off to one side, so the opening view was bare ground to the horizon. That empty sightline
+  // is the main reason the map read as unfinished. This puts a tall, colourful, unmistakably Cairene gate
+  // straight down the main street, framed by the twin towers, as the first thing they see.
+  (function greatGate(){
+    const GZ=-14, towerW=4, towerH=9.5, gap=5.5;   // gap leaves the 8-wide street fully walkable between the piers
+    [-1,1].forEach(side=>{
+      const tx=side*(gap+towerW/2);
+      const tower=new THREE.Mesh(new THREE.BoxGeometry(towerW,towerH,towerW), wallMat); tower.position.set(tx,towerH/2,GZ); scene.add(tower);
+      addBox(tx,GZ,towerW,towerW);
+      // banded stonework + a corbelled cornice
+      [3.2,6.4].forEach(by=>{ const band=new THREE.Mesh(new THREE.BoxGeometry(towerW+0.25,0.45,towerW+0.25), voxMat(sandstoneLight,{noise:12})); band.position.set(tx,by,GZ); scene.add(band); });
+      const cornice=new THREE.Mesh(new THREE.BoxGeometry(towerW+0.7,0.6,towerW+0.7), voxMat(sandstoneLight,{noise:12})); cornice.position.set(tx,towerH+0.3,GZ); scene.add(cornice);
+      for(let i=0;i<4;i++)for(let j=0;j<4;j++){
+        if(i>0&&i<3&&j>0&&j<3) continue;           // ring of merlons around the tower top
+        const m=new THREE.Mesh(new THREE.BoxGeometry(0.85,0.95,0.85), voxMat(sandstoneLight,{noise:12}));
+        m.position.set(tx-1.5+i, towerH+1.1, GZ-1.5+j); scene.add(m);
+      }
+      // deep-set arched niches with lapis tile backing, the gate's main colour accent
+      [2.4,5.6].forEach(ny=>{
+        const niche=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.0,0.16), blueTile); niche.position.set(tx,ny,GZ+towerW/2+0.02); scene.add(niche);
+        const arch=new THREE.Mesh(new THREE.TorusGeometry(0.78,0.16,6,10,Math.PI), voxMat(sandstone,{noise:12})); arch.position.set(tx,ny+1.0,GZ+towerW/2+0.04); scene.add(arch);
+      });
+      // brass lantern hanging on a bracket beside each niche
+      const bracket=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.6), brassMat); bracket.position.set(tx,7.4,GZ+towerW/2+0.3); scene.add(bracket);
+      const lantern=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.5,0.34), brassMat); lantern.position.set(tx,7.05,GZ+towerW/2+0.55); scene.add(lantern);
+      const glow=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.3,0.22), new THREE.MeshBasicMaterial({color:0xffcf6a,fog:false})); glow.position.set(tx,7.05,GZ+towerW/2+0.55); scene.add(glow);
+      const lampLight=new THREE.PointLight(0xffb84a,0.7,9); lampLight.position.set(tx,7.0,GZ+towerW/2+0.8); scene.add(lampLight);
+    });
+    // span over the street: a lintel + a pointed arch + a crenellated parapet. No collider — the whole
+    // point is to walk under it, and this collision system treats a box as full-height regardless of its
+    // mesh, so a collider here would seal the street shut (same reasoning as the Roman arch's attic).
+    const lintel=new THREE.Mesh(new THREE.BoxGeometry(gap*2+0.5,1.1,3.2), wallMat); lintel.position.set(0,7.2,GZ); scene.add(lintel);
+    const archOuter=new THREE.Mesh(new THREE.TorusGeometry(gap-0.6,0.5,8,16,Math.PI), voxMat(sandstoneLight,{noise:12})); archOuter.position.set(0,5.6,GZ+1.4); scene.add(archOuter);
+    const archInner=new THREE.Mesh(new THREE.TorusGeometry(gap-1.3,0.34,8,16,Math.PI), blueTile); archInner.position.set(0,5.6,GZ+1.5); scene.add(archInner);
+    const parapet=new THREE.Mesh(new THREE.BoxGeometry(gap*2+0.5,0.5,3.4), voxMat(sandstoneLight,{noise:12})); parapet.position.set(0,7.9,GZ); scene.add(parapet);
+    for(let i=0;i<7;i++){ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.9,0.9), voxMat(sandstoneLight,{noise:12})); m.position.set(-4.5+i*1.5,8.6,GZ); scene.add(m); }
+    // green-and-gold banners hung either side of the opening
+    [-1,1].forEach(side=>{
+      const banner=new THREE.Mesh(new THREE.BoxGeometry(1.3,3.0,0.08), awningGreen); banner.position.set(side*3.6,4.6,GZ+1.75); scene.add(banner);
+      const trim=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.3,0.1), brassMat); trim.position.set(side*3.6,3.2,GZ+1.78); scene.add(trim);
+    });
+    tilePlaza(0,GZ+5,14,8);
+  })();
 
   // ---- Citadel: a walled compound with crenellated (merlon) walls and two climbable corner towers ----
   function citadel(cx,cz){
@@ -2392,53 +2484,139 @@ heightZoneTarget = heightZonesIslamic;
   sniperTower(-25,6, 4.5, 7, 0xb8a074, 'e');   // roof x[-27.25,-22.75] z[3.75,8.25], ramp x[-22.75,-10.85] z[4.6,7.4] — z stays <10, clear of the Citadel box regardless of x
   sniperTower(-6,25, 4, 6.5, 0xc0a878, 'e');   // roof x[-8,-4] z[23,27], ramp x[-4,7.05] z[23.6,26.4] — x stays >-11, clear of the Citadel box regardless of z; ramp lands well inside z<29
 
-  // ---- Mosque: cube base, a single hemisphere dome (turquoise-glazed), and a tall minaret ----
+  // ---- Mosque: arcaded base with lapis tile panels, a drum-raised dome, and a tall minaret. Moved from
+  // the far corner (19,-22) to the left of the main street so it is actually in view from the spawn. ----
   function mosque(cx,cz){
     const base=new THREE.Mesh(new THREE.BoxGeometry(9,5,9), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),5)})); base.position.set(cx,2.5,cz); scene.add(base);
     addBox(cx,cz,9,9);
-    const dome=new THREE.Mesh(new THREE.SphereGeometry(3.4,14,8,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(cx,5,cz); scene.add(dome);
-    const finial=new THREE.Mesh(new THREE.ConeGeometry(0.15,0.6,6), goldMat); finial.position.set(cx,8.6,cz); scene.add(finial);
-    // minaret: a tall tapering tower with a small balcony ring near the top
+    // arcade of pointed arches across the street-facing side, with lapis spandrel panels between them
+    for(let i=0;i<3;i++){
+      const ax=cx-3+i*3;
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.32,3.4,8), voxMat(0xe0d6be,{noise:10})); col.position.set(ax,1.7,cz+4.6); scene.add(col);
+      const arch=new THREE.Mesh(new THREE.TorusGeometry(0.95,0.22,6,10,Math.PI), voxMat(sandstoneLight,{noise:12})); arch.position.set(ax,3.4,cz+4.6); scene.add(arch);
+      const panel=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.1,0.12), blueTile); panel.position.set(ax,4.5,cz+4.55); scene.add(panel);
+    }
+    const parapet=new THREE.Mesh(new THREE.BoxGeometry(9.4,0.5,9.4), voxMat(sandstoneLight,{noise:12})); parapet.position.set(cx,5.2,cz); scene.add(parapet);
+    // raised drum lifts the dome clear of the roofline so it reads from a distance
+    const drum=new THREE.Mesh(new THREE.CylinderGeometry(3.0,3.2,1.6,14), voxMat(sandstoneLight,{noise:12})); drum.position.set(cx,6.2,cz); scene.add(drum);
+    for(let i=0;i<8;i++){ const a=i/8*Math.PI*2;   // ring of small windows around the drum
+      const w=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.7,0.3), blueTile); w.position.set(cx+Math.cos(a)*3.05,6.3,cz+Math.sin(a)*3.05); w.rotation.y=-a; scene.add(w); }
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(3.15,14,8,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(cx,7.0,cz); scene.add(dome);
+    const finial=new THREE.Mesh(new THREE.ConeGeometry(0.18,0.8,6), goldMat); finial.position.set(cx,10.4,cz); scene.add(finial);
+    // minaret: a tall tapering tower with a balcony ring and a tiled cap
     const minaretX=cx+6, minaretZ=cz-4;
     const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.95,9,10), voxMat(0xe0d6be,{noise:12})); shaft.position.set(minaretX,4.5,minaretZ); scene.add(shaft);
     addBox(minaretX,minaretZ,1.9,1.9);
-    const balcony=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,0.3,10), voxMat(sandstoneLight,{noise:10})); balcony.position.set(minaretX,8.6,minaretZ); scene.add(balcony);
-    const cap=new THREE.Mesh(new THREE.ConeGeometry(0.7,1.6,10), domeMat); cap.position.set(minaretX,10.2,minaretZ); scene.add(cap);
-    const capFinial=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.5,6), goldMat); capFinial.position.set(minaretX,11.3,minaretZ); scene.add(capFinial);
+    [3.0,6.0].forEach(by=>{ const band=new THREE.Mesh(new THREE.CylinderGeometry(0.88,0.88,0.35,10), blueTile); band.position.set(minaretX,by,minaretZ); scene.add(band); });
+    const balcony=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,0.32,10), voxMat(sandstoneLight,{noise:10})); balcony.position.set(minaretX,8.6,minaretZ); scene.add(balcony);
+    const upper=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.62,1.5,10), voxMat(0xe0d6be,{noise:12})); upper.position.set(minaretX,9.5,minaretZ); scene.add(upper);
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(0.75,1.7,10), domeMat); cap.position.set(minaretX,11.0,minaretZ); scene.add(cap);
+    const capFinial=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.55,6), goldMat); capFinial.position.set(minaretX,12.1,minaretZ); scene.add(capFinial);
   }
-  mosque(19,-22); // shifted 5 south of the original spot (19,-17) — its 9x9 footprint was overlapping the shared PLAYER_SPAWNS entry at (20,-15)
+  mosque(-13,-6);
+  tilePlaza(-13,2,12,6);   // tiled forecourt in front of the mosque arcade
 
-  // ---- Khan bazaar: a small cluster of market stalls around a cobbled square ----
-  function marketStall(x,z,rot){
+  // ---- Khan bazaar: a covered market square — stalls with alternating red/green awnings, stacked crates,
+  // barrels and hanging carpets. This is the map's colour hotspot. ----
+  function marketStall(x,z,rot,mat){
     const stall=new THREE.Group(); stall.position.set(x,0,z); stall.rotation.y=rot||0; scene.add(stall);
     const post=(px,pz)=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.8,6), woodMat); p.position.set(px,0.9,pz); stall.add(p); };
     post(-1,-0.7); post(1,-0.7); post(-1,0.7); post(1,0.7);
-    const roof=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.15,1.8), awningMat); roof.position.set(0,1.85,0); stall.add(roof);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.15,1.8), mat||awningMat); roof.position.set(0,1.85,0); stall.add(roof);
+    // striped valance hanging off the awning's front edge
+    for(let i=0;i<5;i++){ const v=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.28,0.06), i%2?(mat||awningMat):voxMat(0xe8dcc0,{noise:8}));
+      v.position.set(-0.96+i*0.48,1.63,0.9); stall.add(v); }
     const table=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.6,1.4), woodMat); table.position.set(0,0.3,0); stall.add(table);
-    // collider in world space: compute rotated bounding box (same pattern as ruinedWall/coverWall)
+    // goods heaped on the table
+    for(let i=0;i<3;i++){ const g2=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.22,0.36), i%2?blueTile:voxMat(0xb8862a,{noise:14}));
+      g2.position.set(-0.6+i*0.6,0.71,0); stall.add(g2); }
+    // collider in world space: rotated bounding box (same pattern as ruinedWall/coverWall)
     const c=Math.cos(rot||0), s=Math.sin(rot||0);
     const w=2.4, d=1.8;
-    const new_w=Math.abs(w*c)+Math.abs(d*s), new_d=Math.abs(w*s)+Math.abs(d*c);
-    addBox(x, z, new_w, new_d);
+    addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
   }
-  // Moved to (12, 12) to clear the road intersection (x∈[-4,4], z∈[-4,4]); positioned relative to bazaar center
-  marketStall(9,10,0); marketStall(15,10,0.15); marketStall(12,15,1.5708);
-  const bazaarFloor=new THREE.Mesh(new THREE.BoxGeometry(11,0.05,10), new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),9)}));
-  bazaarFloor.position.set(12,-0.005,12); scene.add(bazaarFloor);
+  marketStall(11,7,0,awningMat); marketStall(17,7,0.15,awningGreen); marketStall(14,12,1.5708,awningMat);
+  marketStall(19,12,1.5708,awningGreen);
+  tilePlaza(14.5,9.5,13,11);
+  // crates, barrels and a rolled carpet stack filling the square
+  function crateStack(x,z){
+    const c1=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), woodMat); c1.position.set(x,0.4,z); scene.add(c1);
+    const c2=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.62,0.62), timberMat); c2.position.set(x+0.12,1.11,z-0.08); c2.rotation.y=0.4; scene.add(c2);
+    addBox(x,z,0.9,0.9);
+  }
+  crateStack(9,13); crateStack(20,8.5); crateStack(12.5,5.5);
+  function barrel(x,z){
+    const b=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.9,10), woodMat); b.position.set(x,0.45,z); scene.add(b);
+    [0.2,0.7].forEach(by=>{ const hoop=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,0.1,10), brassMat); hoop.position.set(x,by,z); scene.add(hoop); });
+    addBox(x,z,0.72,0.72);
+  }
+  barrel(17.5,13.5); barrel(10.2,9.5);
+  // carpets draped over a rail — pure colour, no collider
+  [[8.4,10.5,0xa8342a],[8.4,11.4,0x2a4a8a],[8.4,12.3,0x2e6b4a]].forEach(([cx2,cz2,col])=>{
+    const rug=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.3,0.75), voxMat(col,{noise:12})); rug.position.set(cx2,1.0,cz2); scene.add(rug);
+  });
+
+  // ---- townhouses with mashrabiya oriel windows: cheap, dense, and unmistakably Cairene. These fill the
+  // large dead expanses the map used to have between its three widely-spaced landmarks. ----
+  function townhouse(x,z,h,rot){
+    const grp=new THREE.Group(); grp.position.set(x,0,z); grp.rotation.y=rot||0; scene.add(grp);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(5,h,5), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),4)})); body.position.set(0,h/2,0); grp.add(body);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(5.4,0.45,5.4), voxMat(sandstoneLight,{noise:12})); cap.position.set(0,h+0.2,0); grp.add(cap);
+    // projecting timber oriel (mashrabiya) on the street face, with a lattice front
+    const oriel=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.5,0.7), timberMat); oriel.position.set(0,h*0.6,2.85); grp.add(oriel);
+    for(let i=0;i<5;i++){ const slat=new THREE.Mesh(new THREE.BoxGeometry(0.09,1.3,0.08), voxMat(0x6b4a28,{noise:10})); slat.position.set(-1.0+i*0.5,h*0.6,3.22); grp.add(slat); }
+    const hood=new THREE.Mesh(new THREE.BoxGeometry(2.9,0.2,0.95), timberMat); hood.position.set(0,h*0.6+0.85,2.95); grp.add(hood);
+    // doorway with a pointed arch
+    const door=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.9,0.15), timberMat); door.position.set(0,0.95,2.55); grp.add(door);
+    const dArch=new THREE.Mesh(new THREE.TorusGeometry(0.62,0.14,6,10,Math.PI), voxMat(sandstoneLight,{noise:10})); dArch.position.set(0,1.9,2.58); grp.add(dArch);
+    // small upper windows
+    [-1.4,1.4].forEach(wx=>{ const w=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.12), blueTile); w.position.set(wx,h*0.82,2.55); grp.add(w); });
+    const c=Math.cos(rot||0), s=Math.sin(rot||0);
+    addBox(x,z, Math.abs(5*c)+Math.abs(5*s), Math.abs(5*s)+Math.abs(5*c));
+  }
+  // (24,14) rather than (20,8): at (20,8) this house's 5x5 footprint swallowed both a bazaar stall and a
+  // crate stack, and pushing it only as far as (22,14) still clipped the stall at (19,12).
+  townhouse(-8,14,6.5,0); townhouse(8,-19,7.5,Math.PI); townhouse(24,14,6,-1.5708); townhouse(-22,-8,7,1.5708);
+  townhouse(-8,-20,6,Math.PI); townhouse(21,-8,6.5,-1.5708);
+
+  // ---- sabil (public fountain house): a small domed kiosk with a water basin, a classic Cairo street fixture ----
+  (function sabil(x,z){
+    const podium=new THREE.Mesh(new THREE.BoxGeometry(3.4,0.5,3.4), voxMat(sandstoneLight,{noise:12})); podium.position.set(x,0.25,z); scene.add(podium);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(2.8,2.4,2.8), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),3)})); body.position.set(x,1.7,z); scene.add(body);
+    [-1,1].forEach(s=>{ const grille=new THREE.Mesh(new THREE.BoxGeometry(0.12,1.2,1.6), timberMat); grille.position.set(x+s*1.42,1.7,z); scene.add(grille); });
+    const front=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.2,0.12), blueTile); front.position.set(x,1.7,z+1.42); scene.add(front);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(3.2,0.35,3.2), voxMat(sandstoneLight,{noise:12})); cap.position.set(x,3.05,z); scene.add(cap);
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(1.5,12,7,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(x,3.2,z); scene.add(dome);
+    const fin=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.5,6), goldMat); fin.position.set(x,4.9,z); scene.add(fin);
+    // basin pushed to +3.0 with a 2.0 collider so it clears the kiosk's own 3.4 box instead of overlapping it
+    const basin=new THREE.Mesh(new THREE.CylinderGeometry(1.05,1.15,0.42,12), voxMat(sandstoneLight,{noise:10})); basin.position.set(x,0.65,z+3.0); scene.add(basin);
+    const water=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.1,12), new THREE.MeshPhongMaterial({color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52}));
+    water.position.set(x,0.88,z+3.0); scene.add(water);
+    addBox(x,z,3.4,3.4); addBox(x,z+3.0,2.0,2.0);
+  })(7,-9);
 
   // ---- 1 more legion-tower-style lookout, reused across every era ----
   sniperTower(23,20, 4, 5.5, 0xa89e8c, 'w');
 
-  // ---- desert palm dressing toward the open edges (local to this map, same idea as Roman's oliveTreeR) ----
-  function courtyardPalm(x,z){
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.2,2.6,6), voxMat(0x6b5230,{noise:14})); trunk.position.set(x,1.3,z); trunk.rotation.z=0.05; scene.add(trunk);
-    const leafMat=voxMat(0x4a7a3e,{noise:16});
-    for(let i=0;i<6;i++){ const a=i/6*Math.PI*2;
-      const leaf=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.08,0.28), leafMat); leaf.position.set(x+Math.cos(a)*0.5,2.7,z+Math.sin(a)*0.5); leaf.rotation.y=a; leaf.rotation.x=-0.3; scene.add(leaf); }
+  // ---- date palms, clustered rather than evenly sprinkled so they read as planted groves ----
+  function courtyardPalm(x,z,h){
+    const th=h||2.6;
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.22,th,6), voxMat(0x6b5230,{noise:14})); trunk.position.set(x,th/2,z); trunk.rotation.z=0.05; scene.add(trunk);
+    for(let i=0;i<4;i++){ const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.12,6), voxMat(0x5a462a,{noise:12})); ring.position.set(x,0.5+i*0.55,z); scene.add(ring); }
+    const leafMat=voxMat(0x4a7a3e,{noise:16}), leafMat2=voxMat(0x386030,{noise:14});
+    for(let i=0;i<7;i++){ const a=i/7*Math.PI*2;
+      const leaf=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.09,0.3), i%2?leafMat:leafMat2);
+      leaf.position.set(x+Math.cos(a)*0.55,th+0.12,z+Math.sin(a)*0.55); leaf.rotation.y=a; leaf.rotation.x=-0.32; scene.add(leaf); }
+    const dates=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.2,0.28), voxMat(0x8a5a20,{noise:12})); dates.position.set(x,th-0.15,z); scene.add(dates);
     addBox(x,z,0.7,0.7);
   }
-  courtyardPalm(-27,-20); courtyardPalm(27,22); courtyardPalm(-27,25); courtyardPalm(27,-22);
-  courtyardPalm(-24,-6); courtyardPalm(24,6);  // moved z out of road band (z∈[-4,4])
+  // placements verified against the collider audit: (6,25) sat squarely in the north tower's ramp corridor
+  // (x[-4,7.05] z[23.6,26.4]) and would have walled the climb off; (-26,24) was inside the Citadel's
+  // footprint; (-24,-6) was inside the townhouse at (-22,-8).
+  courtyardPalm(-26,-21,3.0); courtyardPalm(-24,-24,2.4); courtyardPalm(-21,-22,2.7);
+  courtyardPalm(25,23,2.8); courtyardPalm(22,25,2.3); courtyardPalm(25,-24,3.0);
+  courtyardPalm(-26,26,2.6); courtyardPalm(-26,-11,2.5); courtyardPalm(24,6,2.9);
+  courtyardPalm(-6,-25,2.6); courtyardPalm(10,25,2.4);
 })();
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
@@ -4745,9 +4923,13 @@ function enterIslamicWorld(banner){
   sky.visible = true;
   activeColliders = islamicColliders;
   activeHeightZones = heightZonesIslamic;
-  scene.background.set(0x8fd6f2); scene.fog.color.set(0xe8dcc0); scene.fog.near=38; scene.fog.far=210; // bright, warm Cairo daylight
-  hemi.intensity=0.9; hemi.color.set(0xfff0d0); hemi.groundColor.set(0x6a5a38);
-  sun.intensity=1.0; fill.intensity=0.25; fill.color.set(0xffe6b8);
+  // Warm Cairo daylight, pulled back from the original settings: hemi 0.9 + a near-white 0xfff0d0 sky tint
+  // + a very pale 0xe8dcc0 fog was lifting every surface toward white, which was a real part of why this
+  // map looked washed out. Slightly lower ambient and a deeper amber fog let the new darker ground and the
+  // lapis/green accents hold their colour.
+  scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8c39a); scene.fog.near=34; scene.fog.far=180;
+  hemi.intensity=0.72; hemi.color.set(0xffe4b0); hemi.groundColor.set(0x5a4a2c);
+  sun.intensity=1.0; fill.intensity=0.22; fill.color.set(0xffdca0);
   camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
