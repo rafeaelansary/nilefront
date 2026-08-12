@@ -4612,6 +4612,12 @@ document.addEventListener('keydown', e => {
   if (e.code==='KeyL' && player.alive){
     bots.forEach(b=>{ if(b.alive) damageBot(b, 99999, b.mesh.position); });
   }
+  // G: toggles infinite health — damagePlayer() no-ops while godMode is true. For testing/exploring maps
+  // without dying, not meant to persist across a real playthrough.
+  if (e.code==='KeyG'){
+    godMode = !godMode;
+    setBanner(godMode ? '🛡 GOD MODE ON' : '🛡 god mode off'); setTimeout(()=>{ if(bannerEl && (bannerEl.textContent.includes('GOD MODE') || bannerEl.textContent.includes('god mode'))) setBanner(''); },1200);
+  }
   // ==========================================================================
 });
 document.addEventListener('keyup', e => {
@@ -5363,8 +5369,9 @@ function damageBot(bd, dmg, point){
     setHUD(); setEnemyCount(bossActive?'☠':undefined); SFX.death();
   }
 }
+let godMode = false; // debug: toggled by KeyG, see the DEBUG block near the keydown listener
 function damagePlayer(dmg){
-  if(!player.alive) return;
+  if(!player.alive || godMode) return;
   player.hp -= dmg; player.lastHit = performance.now()*0.001; showDamage(); setHUD(); SFX.hurt();
   if(player.hp <= 0){
     player.alive = false; player.respawn = 2.5;
