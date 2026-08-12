@@ -380,15 +380,37 @@ function checkerTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   for(let j=0;j<P;j++)for(let i=0;i<P;i++){ x.fillStyle=((i>>2)+(j>>2))%2 ? dark : light; x.fillRect(i,j,1,1); }
   return c; }
 function zellijeTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
-  // Islamic geometric star-tile (zellige) — turquoise/cream, a distinct palette from any earlier era's
-  // ground textures (Roman's warm terracotta, Greek's cool grey gravel, pyramid's tan sand)
-  x.fillStyle='#e8dcc0'; x.fillRect(0,0,P,P);
-  x.fillStyle='#1f7a72';
+  // Islamic geometric zellige tile floor. First version had only a single 2x2 diamond motif across the
+  // whole 16px canvas in solid, highly-saturated teal — at ground scale that read as a giant loud quilt
+  // pattern, not a stone floor, and clashed with every other era's muted ground textures. Redesigned with
+  // checkerTex's finer 4x4 grid (a real tile-grout scale), a much softer sand base, and the teal/gold
+  // accent demoted to a small inset on only 1-in-4 tiles instead of covering the whole floor.
+  const sand='#d9c9a0', grout='#b7a67c', teal='#2f7268', gold='#b8863a';
+  x.fillStyle=sand; x.fillRect(0,0,P,P);
+  x.fillStyle=grout;
+  for(let i=0;i<P;i+=4){ x.fillRect(i,0,1,P); x.fillRect(0,i,P,1); }
+  x.fillStyle=teal;
   for(let j=0;j<P;j+=8)for(let i=0;i<P;i+=8){
-    x.beginPath(); x.moveTo(i+4,j); x.lineTo(i+8,j+4); x.lineTo(i+4,j+8); x.lineTo(i,j+4); x.closePath(); x.fill();
+    x.beginPath(); x.moveTo(i+2,j+1); x.lineTo(i+3,j+2); x.lineTo(i+2,j+3); x.lineTo(i+1,j+2); x.closePath(); x.fill();
   }
-  x.fillStyle='#c9a13a';
-  for(let j=0;j<P;j+=8)for(let i=0;i<P;i+=8){ x.fillRect(i+3,j+3,2,2); }
+  x.fillStyle=gold;
+  for(let j=4;j<P;j+=8)for(let i=4;i<P;i+=8){ x.fillRect(i+2,j+2,1,1); }
+  return c; }
+function citadelStoneTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  // large sandstone ashlar block coursing, same offset-brick technique romanBrickTex uses, just scaled and
+  // colored for big fortress stonework. voxMat()'s plain noise texture is designed for small individual
+  // elements (columns, merlons) — stretched unrepeated across a 16-unit-wide wall face it reads as a
+  // near-invisible blur, which is why the Citadel's podium wall looked like a giant flat blank slab.
+  const base='#c9a876', mortar='#a8875c', hi='#ddc294';
+  x.fillStyle=mortar; x.fillRect(0,0,P,P);
+  for(let by=0;by<P;by+=4){
+    const off = ((by/4)|0)%2 ? 4 : 0;
+    for(let bx=-4;bx<P;bx+=8){
+      const n=Math.abs(Math.sin(bx*4.1+by*9.3)*137%1);
+      x.fillStyle = n>0.5?hi:base;
+      x.fillRect(bx+off+1,by+1,6,2);
+    }
+  }
   return c; }
 function cobbleTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   const st=['#8f8d88','#9d9b95','#7c7a75','#a7a49d'];
@@ -2349,7 +2371,7 @@ heightZoneTarget = heightZonesIslamic;
   function citadel(cx,cz){
     const w=16,d=14;
     addBox(cx,cz,w,d);
-    const podium=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,d), voxMat(sandstone,{noise:14,pattern:'plate'})); podium.position.set(cx,1.7,cz); scene.add(podium);
+    const podium=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,d), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),8)})); podium.position.set(cx,1.7,cz); scene.add(podium);
     const merlonMat = voxMat(sandstoneLight,{noise:12});
     for(let x=-w/2;x<=w/2;x+=1.6){
       [cz-d/2,cz+d/2].forEach(z=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), merlonMat); m.position.set(cx+x,3.8,z); scene.add(m); });
@@ -2372,7 +2394,7 @@ heightZoneTarget = heightZonesIslamic;
 
   // ---- Mosque: cube base, a single hemisphere dome (turquoise-glazed), and a tall minaret ----
   function mosque(cx,cz){
-    const base=new THREE.Mesh(new THREE.BoxGeometry(9,5,9), voxMat(0xe0d6be,{noise:12,pattern:'plate'})); base.position.set(cx,2.5,cz); scene.add(base);
+    const base=new THREE.Mesh(new THREE.BoxGeometry(9,5,9), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),5)})); base.position.set(cx,2.5,cz); scene.add(base);
     addBox(cx,cz,9,9);
     const dome=new THREE.Mesh(new THREE.SphereGeometry(3.4,14,8,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(cx,5,cz); scene.add(dome);
     const finial=new THREE.Mesh(new THREE.ConeGeometry(0.15,0.6,6), goldMat); finial.position.set(cx,8.6,cz); scene.add(finial);
