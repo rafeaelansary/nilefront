@@ -2605,7 +2605,7 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='tiger') return makeTiger();
   if(skinName==='ifrit') return makeIfrit();
   if(skinName==='ghoul') return makeGhoul();
-  if(skinName==='roc') return makeRocPack();
+  if(skinName==='roc') return makeRoc();
   if(skinName==='ifritking') return makeIfritKing();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
@@ -3461,40 +3461,75 @@ function makeBasilisk(){
 // feet, glowing ember skin, small backswept horns. The Islamic era's ranged monster (weaponType 'pistol',
 // same pure-ranged AI as jackal/soldier — it holds distance rather than closing to melee like the griffin/
 // basilisk hybrid). Built facing +Z directly, same convention as every other creature (mesh.lookAt in the AI loop).
+// Reworked. Problems the offline render exposed in the previous version: the flame "tail" was three big
+// opaque cones with the PALEST one on top, so it read as a yellow skirt rather than fire (real flame is
+// brightest at its base); the five smoke wisps were detached cubes hovering in a ring around the torso like
+// stray geometry; and the hands floated free of the arms. Now: a broad-shouldered tapering torso, arms that
+// actually connect through to clawed fists, and a flame column that runs deep-red at the waist down to
+// white-hot at the tip, with embers attached along it instead of orbiting the chest.
 function makeIfrit(){
   const g = new THREE.Group();
   const emberMat = voxMat(0xd8481c,{noise:14});
   const emberMat2 = voxMat(0xa8280e,{noise:12});
-  const flameMat = new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false});
-  const flameMat2 = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
+  const charMat = voxMat(0x5a1e0a,{noise:12});
+  const flameOuter = new THREE.MeshBasicMaterial({color:0xe8461a,fog:false});
+  const flameMid   = new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false});
+  const flameHot   = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
+  const flameCore  = new THREE.MeshBasicMaterial({color:0xfff2c0,fog:false});
   const darkMat = voxMat(0x2a140a,{noise:10});
 
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.5,0.32), emberMat); chest.position.set(0,1.3,0); g.add(chest);
-  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.36,0.26), emberMat2); belly.position.set(0,0.98,0); g.add(belly);
-  [{y:0.62,r:0.26,h:0.5},{y:0.32,r:0.17,h:0.42},{y:0.1,r:0.09,h:0.34}].forEach((c,i)=>{
-    const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,7), i%2? flameMat:flameMat2); cone.position.set(0,c.y,0); g.add(cone);
+  // ---- torso: wide shoulders tapering to a narrow waist, so it reads as a looming upper body ----
+  const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.78,0.26,0.36), emberMat); shoulders.position.set(0,1.5,0); g.add(shoulders);
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.44,0.34), emberMat); chest.position.set(0,1.24,0); g.add(chest);
+  const ribs = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.3,0.3), emberMat2); ribs.position.set(0,0.94,0); g.add(ribs);
+  const waist = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.22,0.24), charMat); waist.position.set(0,0.72,0); g.add(waist);
+  // glowing molten cracks down the chest
+  const crackV = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.42,0.03), flameHot); crackV.position.set(0,1.24,0.18); g.add(crackV);
+  [-1,1].forEach(s=>{ const cr=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.04,0.03), flameHot); cr.position.set(s*0.13,1.34,0.18); cr.rotation.z=s*0.5; g.add(cr); });
+
+  // ---- flame column: widest and darkest where it meets the waist, narrowing to a white-hot tip ----
+  [{y:0.56,r:0.3,h:0.42,m:flameOuter},{y:0.3,r:0.23,h:0.36,m:flameMid},
+   {y:0.11,r:0.15,h:0.3,m:flameHot},{y:-0.03,r:0.08,h:0.22,m:flameCore}].forEach(c=>{
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,7), c.m); cone.position.set(0,c.y,0); g.add(cone);
   });
-  const tailLight = new THREE.PointLight(0xff8a2a,0.9,3.2); tailLight.position.set(0,0.4,0); g.add(tailLight);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.36,0.32), emberMat); head.position.set(0,1.72,0); g.add(head);
-  [-1,1].forEach(side=>{
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.07,0.04), flameMat2); eye.position.set(side*0.09,1.74,0.17); g.add(eye);
-    const horn=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.26,4), darkMat); horn.position.set(side*0.14,1.94,-0.04); horn.rotation.x=-0.5; horn.rotation.z=side*0.3; g.add(horn);
-  });
-  const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.08,0.06), darkMat); jaw.position.set(0,1.56,0.17); g.add(jaw);
-  [-1,1].forEach(side=>{
-    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.42,0.13), emberMat2); arm.position.set(side*0.38,1.18,0.08); arm.rotation.z=side*-0.5; g.add(arm);
-    const hand=new THREE.Mesh(new THREE.SphereGeometry(0.09,6,5), flameMat); hand.position.set(side*0.5,0.98,0.22); g.add(hand);
-  });
-  const wispMat = voxMat(0x4a4038,{noise:10}); // hoisted out of the loop below — one shared material for all 5 wisps, not a fresh texture per wisp
-  for(let i=0;i<5;i++){ const a=(i/5)*Math.PI*2;
-    const wisp=new THREE.Mesh(new THREE.SphereGeometry(0.06+Math.random()*0.05,5,4), wispMat);
-    wisp.position.set(Math.cos(a)*0.3, 1.45+Math.sin(a)*0.1, Math.sin(a)*0.3-0.1); g.add(wisp);
+  // embers riding the column, attached along it rather than orbiting the chest as loose cubes
+  for(let i=0;i<6;i++){
+    const a=(i/6)*Math.PI*2, r=0.16+((i%3)*0.05);
+    const em=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05), i%2?flameHot:flameMid);
+    em.position.set(Math.cos(a)*r, 0.2+ (i*0.09), Math.sin(a)*r); g.add(em);
   }
+  const tailLight = new THREE.PointLight(0xff8a2a,1.1,3.6); tailLight.position.set(0,0.35,0); g.add(tailLight);
+
+  // ---- head: brow ridge, sunken glowing eyes, open jaw, backswept horns ----
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.38,0.34,0.34), emberMat); head.position.set(0,1.82,0.02); g.add(head);
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.08,0.1), charMat); brow.position.set(0,1.94,0.16); g.add(brow);
+  [-1,1].forEach(side=>{
+    const socket=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.09,0.05), darkMat); socket.position.set(side*0.1,1.84,0.18); g.add(socket);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.06,0.04), flameCore); eye.position.set(side*0.1,1.84,0.2); g.add(eye);
+    // horns sweeping up and back
+    const horn=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.34,4), darkMat); horn.position.set(side*0.17,2.08,-0.06); horn.rotation.x=-0.6; horn.rotation.z=side*0.4; g.add(horn);
+  });
+  const jawUpper=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.07,0.12), charMat); jawUpper.position.set(0,1.72,0.16); g.add(jawUpper);
+  const jawLower=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.12), charMat); jawLower.position.set(0,1.62,0.15); jawLower.rotation.x=-0.25; g.add(jawLower);
+  const maw=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.05,0.04), flameHot); maw.position.set(0,1.67,0.19); g.add(maw); // fire glowing in the throat
+
+  // ---- arms: shoulder -> upper -> forearm -> fist, each piece meeting the next (the old version's hands
+  // floated a clear gap away from the arm) ----
+  [-1,1].forEach(side=>{
+    const pad=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.28), emberMat2); pad.position.set(side*0.42,1.5,0); g.add(pad);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.4,0.15), emberMat2); upper.position.set(side*0.5,1.28,0.04); upper.rotation.z=side*-0.28; g.add(upper);
+    const fore=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.38,0.14), emberMat2); fore.position.set(side*0.6,0.96,0.12); fore.rotation.z=side*-0.16; fore.rotation.x=-0.3; g.add(fore);
+    const fist=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.18,0.19), charMat); fist.position.set(side*0.64,0.78,0.2); g.add(fist);
+    // fire wreathing the fist
+    const wreath=new THREE.Mesh(new THREE.ConeGeometry(0.13,0.24,6), flameMid); wreath.position.set(side*0.64,0.92,0.2); g.add(wreath);
+    for(let c=0;c<3;c++){ const claw=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.13,4), darkMat);
+      claw.position.set(side*0.64+(c-1)*0.06,0.68,0.26); claw.rotation.x=2.6; g.add(claw); }
+  });
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 2.15, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
+  marker.position.set(0, 2.4, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
   marker.raycast = function(){};
   g.add(marker); g.userData.marker = marker;
   return g;
@@ -3503,41 +3538,77 @@ function makeIfrit(){
 // ghoul: a gaunt, hunched grave-robber creature — the Islamic era's fast melee monster (weaponType 'knife',
 // same chase AI as mummy/manticore). Built low and lean on all fours rather than upright, reading as fast
 // and animalistic rather than a shambling zombie reskin.
+// Rebuilt around the FRONT view specifically. The previous two versions hid everything that mattered: the
+// torso was a broad slab tilted up into a wall, and because the hunch pitched the head UP and BACK behind
+// that slab, a player being charged saw a featureless green box with ears — no face, no claws, no menace.
+// Now the skull LEADS the silhouette (lowest, furthest forward point), the arms bracket it wide and reach
+// forward, and the ribcage is narrow so the limbs read instead of being swallowed by the body.
 function makeGhoul(){
   const g = new THREE.Group();
-  // redesigned: playtest feedback was that this read as a generic dark humanoid blob (closer to a robot
-  // than a ghoul) standing upright, not a hunched fast crawler. Deeper hunch, visible ribs, bigger claws,
-  // trailing tattered cloth, and a sicklier corpse-pale color instead of drab olive.
-  const skinMat = voxMat(0x8a9686,{noise:16});
-  const skinDark = voxMat(0x4a5648,{noise:14});
+  const skinMat = voxMat(0x93a08c,{noise:16});   // corpse-pale grey-green
+  const skinDark = voxMat(0x5a6654,{noise:14});
   const wrapMat = voxMat(0x2e2a20,{noise:12});
-  const ribMat = voxMat(0x3a4438,{noise:8});
-  const clawMat = new THREE.MeshLambertMaterial({color:0xd8d4c4});
+  const ribMat = voxMat(0xb8c0ac,{noise:8});     // bone-pale ribs, light against the body so they actually show
+  const boneMat = voxMat(0xd2d6bc,{noise:8});    // pale skull — deliberately much lighter than the body
+  const clawMat = new THREE.MeshLambertMaterial({color:0xe0dcc8});
+  const toothMat = new THREE.MeshLambertMaterial({color:0xf0ecd8});
+  const eyeMat = new THREE.MeshBasicMaterial({color:0xc8f02a,fog:false});
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.38,0.34,0.6), skinMat); torso.position.set(0,0.5,0); torso.rotation.x=0.65; g.add(torso);
-  // visible ribs across the torso — the single biggest "gaunt/skeletal" cue the old flat box torso lacked
-  for(let i=0;i<4;i++){ const rib=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.035,0.06), ribMat); rib.position.set(0,0.58-i*0.09,0.1-i*0.05); rib.rotation.x=0.65; g.add(rib); }
-  const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.16,0.34), wrapMat); wrap.position.set(0,0.4,-0.12); wrap.rotation.x=0.65; g.add(wrap);
-  // tattered cloth strips trailing off the wrap — grave-robber flavour, also breaks up the torso's silhouette
-  for(let i=0;i<3;i++){ const strip=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.2,0.03), wrapMat); strip.position.set(-0.1+i*0.1,0.28,-0.32); strip.rotation.x=0.85+i*0.08; g.add(strip); }
-  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.16,0.2,0.18), skinDark); neck.position.set(0,0.72,0.3); neck.rotation.x=0.55; g.add(neck);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.24,0.28), skinMat); head.position.set(0,0.84,0.44); g.add(head);
+  // ---- narrow ribcage torso, sloping down and back from the shoulders ----
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.32,0.66), skinMat); torso.position.set(0,0.62,-0.14); torso.rotation.x=0.3; g.add(torso);
+  const hips = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.28,0.3), skinDark); hips.position.set(0,0.5,-0.5); g.add(hips);
+  // ribs wrapping the SIDES (not buried on the front face) so they read from any angle
   [-1,1].forEach(side=>{
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.05,0.03), new THREE.MeshBasicMaterial({color:0xd4e838,fog:false})); eye.position.set(side*0.08,0.86,0.58); g.add(eye);
-    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.12,0.06),skinDark); ear.position.set(side*0.15,0.94,0.38); g.add(ear);
+    for(let i=0;i<4;i++){ const rib=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.19), ribMat);
+      rib.position.set(side*0.17,0.7-i*0.075,-0.02-i*0.09); rib.rotation.x=0.3; g.add(rib); }
   });
-  const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.1,0.14), skinDark); jaw.position.set(0,0.72,0.54); g.add(jaw);
-  // front limbs: longer, more sharply forward-planted, with bigger visible claws — the "crawling on all
-  // fours" pose's main silhouette cue, which the old shallow 0.35rad hunch didn't sell
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.1,0.62), ribMat); spine.position.set(0,0.79,-0.16); spine.rotation.x=0.3; g.add(spine);
+  // ---- hunched shoulders ride HIGH and wide, with the head slung low and forward between them: the
+  // classic knuckle-walker read, and it stops the head and torso from stacking into one blob head-on ----
+  [-1,1].forEach(side=>{ const sh=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.22,0.22), skinMat); sh.position.set(side*0.24,0.88,0.12); g.add(sh); });
+  const hump = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.18,0.26), skinDark); hump.position.set(0,0.9,0.02); g.add(hump);
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.16,0.32), skinDark); neck.position.set(0,0.72,0.34); neck.rotation.x=-0.6; g.add(neck);
+  // ---- skull: big, PALE bone against the darker body, and the lowest/most forward element. The body was
+  // previously the same tone and nearly the same width as the head directly behind it, so head-on the two
+  // merged into a single featureless lump — the contrast is doing the real work here. ----
+  const skull = new THREE.Mesh(new THREE.BoxGeometry(0.38,0.3,0.36), boneMat); skull.position.set(0,0.5,0.62); g.add(skull);
+  const browRidge = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.09,0.16), boneMat); browRidge.position.set(0,0.63,0.72); g.add(browRidge);
+  const crest = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.3), boneMat); crest.position.set(0,0.66,0.56); g.add(crest);
+  // deep sunken sockets with glowing eyes set INTO them, facing straight down +Z at the player
   [-1,1].forEach(side=>{
-    const limb=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.52,0.12), skinDark); limb.position.set(side*0.22,0.28,0.32); limb.rotation.x=-0.55; g.add(limb);
-    const claw=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.22,4), clawMat); claw.position.set(side*0.22,0.02,0.5); claw.rotation.x=1.9; g.add(claw);
+    const socket=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.07), new THREE.MeshLambertMaterial({color:0x14180f}));
+    socket.position.set(side*0.1,0.52,0.79); g.add(socket);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.07,0.04), eyeMat); eye.position.set(side*0.1,0.52,0.82); g.add(eye);
   });
+  // gaping jaw with a full row of teeth top and bottom — reads as a snarl head-on
+  const upperJaw = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.1,0.22), boneMat); upperJaw.position.set(0,0.4,0.74); g.add(upperJaw);
+  const lowerJaw = new THREE.Mesh(new THREE.BoxGeometry(0.27,0.09,0.2), skinDark); lowerJaw.position.set(0,0.26,0.74); lowerJaw.rotation.x=-0.35; g.add(lowerJaw);
+  for(let i=0;i<6;i++){
+    const tx=-0.115+i*0.046;
+    const tU=new THREE.Mesh(new THREE.ConeGeometry(0.022,0.075,4), toothMat); tU.position.set(tx,0.34,0.82); tU.rotation.x=Math.PI; g.add(tU);
+    const tL=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.06,4), toothMat); tL.position.set(tx,0.29,0.81); g.add(tL);
+  }
+  [-1,1].forEach(side=>{ const ear=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.2,0.08),skinDark); ear.position.set(side*0.2,0.66,0.54); ear.rotation.z=side*0.35; g.add(ear); });
+  // ---- long forelimbs sweeping OUT and FORWARD, bracketing the head so the front silhouette is
+  // claw / snarling-skull / claw rather than one solid block ----
   [-1,1].forEach(side=>{
-    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.42,0.14), skinDark); leg.position.set(side*0.15,0.24,-0.24); g.add(leg);
-    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.09,0.2), skinDark); foot.position.set(side*0.15,0.04,-0.16); g.add(foot);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.4,0.13), skinMat); upper.position.set(side*0.3,0.6,0.2); upper.rotation.x=-0.45; upper.rotation.z=side*0.35; g.add(upper);
+    const fore=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.42,0.11), skinDark); fore.position.set(side*0.42,0.3,0.46); fore.rotation.x=-0.9; fore.rotation.z=side*0.2; g.add(fore);
+    const hand=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.1,0.14), skinDark); hand.position.set(side*0.46,0.12,0.66); g.add(hand);
+    for(let c=0;c<3;c++){
+      const claw=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.19,4), clawMat);
+      claw.position.set(side*0.46+(c-1)*0.05,0.06,0.79); claw.rotation.x=2.35; g.add(claw);
+    }
   });
-  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.26), skinDark); tail.position.set(0,0.44,-0.4); tail.rotation.x=-0.4; g.add(tail);
+  // ---- crouched hind legs, coiled to spring ----
+  [-1,1].forEach(side=>{
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.34,0.16), skinMat); thigh.position.set(side*0.18,0.44,-0.56); thigh.rotation.x=0.5; g.add(thigh);
+    const shin=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.34,0.12), skinDark); shin.position.set(side*0.18,0.2,-0.4); shin.rotation.x=-0.5; g.add(shin);
+    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.08,0.24), skinDark); foot.position.set(side*0.18,0.04,-0.28); g.add(foot);
+  });
+  // ---- tattered grave wrappings trailing off the hips ----
+  const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.2,0.22), wrapMat); wrap.position.set(0,0.5,-0.44); g.add(wrap);
+  for(let i=0;i<3;i++){ const strip=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.26,0.03), wrapMat); strip.position.set(-0.11+i*0.11,0.34,-0.62); strip.rotation.x=0.3+i*0.1; g.add(strip); }
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
@@ -3548,95 +3619,170 @@ function makeGhoul(){
   return g;
 }
 
-// redesigned: playtest feedback was that a 3-unit pack read as a tangle of spider legs, not giant birds —
-// the old wings swept DOWN and back (rotation.z=side*-0.4), so from anywhere near a front angle they were
-// nearly invisible against the torso, leaving the long dangling stork-style legs as the only thing that
-// actually registered. Wings now sweep dramatically UP and out (the dominant silhouette cue for "bird"),
-// legs are shorter/thicker and tucked close like a raptor mid-dive instead of long and spindly.
-function makeRocUnit(){
+// ROC — ONE enormous bird, not a 3-unit pack. Two earlier passes tried to make a formation of three small
+// rocs work and both read in-game as a tangle of spider legs: three overlapping bodies × two wings × three
+// chained wing segments put ~18 disjoint bars on screen at once, and no individual bird was ever legible.
+// A roc is a single colossal bird in the myth anyway, so this is one large creature with a clearly readable
+// body/head between two continuous V-swept wings. The offline render is the check that matters here: the
+// FRONT view is what the player sees as it closes in.
+function makeRoc(){
   const g = new THREE.Group();
-  const body = g;
-  const featherMat = voxMat(0x4a3a2e,{noise:16});
-  const featherMat2 = voxMat(0x2e2018,{noise:14});
-  const beakMat = new THREE.MeshLambertMaterial({color:0xe0a838});
+  const featherMat = voxMat(0x4a3a2e,{noise:16});     // dark brown mantle
+  const featherDark = voxMat(0x2a1e16,{noise:14});    // near-black primaries/tail
+  const featherLight = voxMat(0x9a7c58,{noise:14});   // pale underside — the contrast the old all-brown bird lacked
+  const beakMat = new THREE.MeshLambertMaterial({color:0xe8b038});
   const talonMat = new THREE.MeshLambertMaterial({color:0x1c1810});
   const eyeMat = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
 
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.4,0.8), featherMat); torso.position.set(0,0.9,0); body.add(torso);
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.36,0.34,0.32), featherMat2); chest.position.set(0,0.9,0.42); body.add(chest);
-  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.3,0.22), featherMat); neck.position.set(0,1.16,0.5); neck.rotation.x=-0.3; body.add(neck);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.24,0.22,0.26), featherMat2); head.position.set(0,1.4,0.66); body.add(head);
-  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.08,0.32,4), beakMat); beak.rotation.x=1.5708; beak.position.set(0,1.37,0.9); body.add(beak);
-  [-1,1].forEach(side=>{ const eye=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.03), eyeMat); eye.position.set(side*0.1,1.44,0.8); body.add(eye); });
+  // ---- body: big enough to actually anchor the silhouette between the wings ----
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.6,1.25), featherMat); torso.position.set(0,1.15,-0.05); g.add(torso);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.26,1.0), featherLight); belly.position.set(0,0.86,-0.02); g.add(belly);
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.54,0.5,0.4), featherLight); chest.position.set(0,1.16,0.62); g.add(chest);
+  // ---- neck + raptor head, carried forward and high so it leads the shape ----
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.42,0.3), featherMat); neck.position.set(0,1.5,0.72); neck.rotation.x=-0.35; g.add(neck);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.38,0.34,0.4), featherDark); head.position.set(0,1.82,0.92); g.add(head);
+  const crown = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.12,0.3), featherMat); crown.position.set(0,2.0,0.88); g.add(crown);
+  // heavy hooked beak: a straight upper mandible plus a down-curved hook — the strongest "big raptor" cue
+  const beakUpper = new THREE.Mesh(new THREE.BoxGeometry(0.17,0.14,0.34), beakMat); beakUpper.position.set(0,1.82,1.24); g.add(beakUpper);
+  const beakHook = new THREE.Mesh(new THREE.ConeGeometry(0.085,0.24,4), beakMat); beakHook.position.set(0,1.68,1.36); beakHook.rotation.x=Math.PI; g.add(beakHook);
+  const beakLower = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.08,0.24), new THREE.MeshLambertMaterial({color:0xb8862a})); beakLower.position.set(0,1.71,1.2); g.add(beakLower);
   [-1,1].forEach(side=>{
-    const wingRoot=new THREE.Group(); wingRoot.position.set(side*0.3,1.15,-0.05); wingRoot.rotation.z=side*0.85; body.add(wingRoot);
-    const w1=new THREE.Mesh(new THREE.BoxGeometry(0.85,0.12,0.55),featherMat); w1.position.set(side*0.46,0.06,0); wingRoot.add(w1);
-    const w2=new THREE.Mesh(new THREE.BoxGeometry(0.75,0.09,0.42),featherMat2); w2.position.set(side*1.08,-0.06,-0.06); wingRoot.add(w2);
-    const w3=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.07,0.3),featherMat); w3.position.set(side*1.58,-0.16,-0.1); wingRoot.add(w3);
+    const brow=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.07,0.16), featherLight); brow.position.set(side*0.15,1.94,1.05); g.add(brow);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.05), eyeMat); eye.position.set(side*0.14,1.85,1.12); g.add(eye);
   });
-  // legs tucked short and close (a diving raptor pulls its legs up, not dangles them) — thicker, and only
-  // 2 per unit, so a 3-unit pack doesn't read as a spider tangle
+  // ---- wings: each is a chain of BROAD overlapping panels sweeping up and out in a strong dihedral V.
+  // Panels are wide in span and deep in chord and overlap their neighbour, so the wing is one continuous
+  // surface rather than the separated bars the previous version produced. ----
   [-1,1].forEach(side=>{
-    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.18,0.16), talonMat); leg.position.set(side*0.16,0.72,0.18); body.add(leg);
-    const talon=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.09,0.28), talonMat); talon.position.set(side*0.16,0.62,0.3); body.add(talon);
+    let wx=side*0.32, wy=1.42, ang=0.55;                 // ang = dihedral, grows toward the tip
+    [{span:0.95,chord:1.1,th:0.17,mat:featherMat},
+     {span:0.9,chord:0.92,th:0.14,mat:featherMat},
+     {span:0.85,chord:0.72,th:0.12,mat:featherLight},
+     {span:0.75,chord:0.52,th:0.1,mat:featherDark}].forEach((p,i)=>{
+      const dx=Math.cos(ang), dy=Math.sin(ang);
+      const cx=wx+side*dx*p.span/2, cy=wy+dy*p.span/2;
+      const panel=new THREE.Mesh(new THREE.BoxGeometry(p.span,p.th,p.chord), p.mat);
+      panel.position.set(cx,cy,-0.08-i*0.05);
+      panel.rotation.z = side>0 ? ang : -ang;
+      g.add(panel);
+      wx += side*dx*p.span*0.92; wy += dy*p.span*0.92;   // 0.92 = overlap, so panels never separate
+      ang += 0.16;
+    });
+    // splayed primary feathers off the wing tip — adds real width and a ragged, unmistakably avian edge
+    for(let f=0;f<4;f++){
+      const fang = ang + (f-1.5)*0.2;
+      const feat=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.07,0.14), featherDark);
+      feat.position.set(wx+side*Math.cos(fang)*0.3, wy+Math.sin(fang)*0.3, -0.28+f*0.16);
+      feat.rotation.z = side>0 ? fang : -fang;
+      g.add(feat);
+    }
   });
-  const tailFan = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.07,0.44), featherMat2); tailFan.position.set(0,0.9,-0.58); tailFan.rotation.x=0.3; body.add(tailFan);
-  return g;
-}
-// roc pack: 3 giant rocs sharing one hitbox/HP/AI, same pack mechanic as the warhound/scarab packs — the
-// Islamic era's themed pack encounter, reusing the griffin's dive-then-claw AI (weaponType 'javelin') under
-// this new skin/model.
-function makeRocPack(){
-  const g = new THREE.Group();
-  const formation = [ {x:-1.0, z:0.2, ry:-0.3, s:1.0}, {x:0.9, z:-0.05, ry:0.35, s:0.92}, {x:0.0, z:-0.7, ry:0.05, s:1.05} ];
-  formation.forEach(f=>{
-    const unit = makeRocUnit();
-    unit.position.set(f.x,0,f.z); unit.rotation.y=f.ry; unit.scale.setScalar(f.s);
-    g.add(unit);
+  // ---- tail fan: several splayed rectrices, not one slab ----
+  for(let i=0;i<5;i++){
+    const a=(i-2)*0.16;
+    const t=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.07,0.75), i%2?featherDark:featherMat);
+    t.position.set(Math.sin(a)*0.34,1.06,-0.95); t.rotation.y=a; t.rotation.x=0.22; g.add(t);
+  }
+  // ---- legs tucked up under the body with big talons forward, like a raptor about to strike ----
+  [-1,1].forEach(side=>{
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.26,0.24), featherLight); thigh.position.set(side*0.22,0.82,0.3); g.add(thigh);
+    const shank=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.2,0.16), talonMat); shank.position.set(side*0.22,0.64,0.42); g.add(shank);
+    for(let c=0;c<3;c++){
+      const claw=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.22,4), talonMat);
+      claw.position.set(side*0.22+(c-1)*0.09,0.5,0.56); claw.rotation.x=2.5; g.add(claw);
+    }
   });
+
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.7, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
+  marker.position.set(0, 2.5, 0); marker.scale.set(1.2,1.2,1.2); marker.renderOrder = 9999;
   marker.raycast = function(){};
   g.add(marker); g.userData.marker = marker;
   return g;
 }
 
-// ifrit king: a towering fire djinn lord — Boss IV, the Islamic era's boss and (per the current roadmap)
-// the campaign's final boss. Built like a scaled-up, more ornamented ifrit: a wider ember-glass chest
-// plate, a crown of curved horns, a raging multi-cone flame column instead of the regular ifrit's slim
-// flame tail, and twin burning braziers floating at its shoulders.
+// IFRIT KING — Boss IV, the campaign's final boss. The previous version was described as "a scaled-up,
+// more ornamented ifrit" and that is exactly how it rendered: near-identical silhouette and palette to the
+// regular grunt with two black boxes floating at the shoulders, which is fatal for a final boss. It is now
+// a deliberately DIFFERENT creature: a cooled black-basalt body shot through with molten cracks (instead of
+// the grunt's bright ember red), enormous slab pauldrons, a burning mantle, a real multi-spire crown, and a
+// flame base wide enough to look like it is standing in a bonfire rather than wearing a skirt.
 function makeIfritKing(){
   const g = new THREE.Group();
-  const emberMat = voxMat(0xc93a14,{noise:14});
-  const emberMat2 = voxMat(0x8a2008,{noise:12});
+  const basalt = voxMat(0x2e2422,{noise:14});      // cooled black rock — the key separation from the red grunt
+  const basaltDark = voxMat(0x191312,{noise:12});
+  const moltenMat = new THREE.MeshBasicMaterial({color:0xff5a12,fog:false});   // glowing cracks
   const goldMat = metalMatP(0xe0a830,85,0xfff2c8);
-  const flameMat = new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false});
-  const flameMat2 = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
-  const darkMat = voxMat(0x201008,{noise:10});
+  const flameOuter = new THREE.MeshBasicMaterial({color:0xe8461a,fog:false});
+  const flameMid   = new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false});
+  const flameHot   = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
+  const flameCore  = new THREE.MeshBasicMaterial({color:0xfff2c0,fog:false});
 
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.85,0.55), emberMat); chest.position.set(0,2.1,0); g.add(chest);
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.55,0.05), goldMat); plate.position.set(0,2.15,0.29); g.add(plate);
-  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.55,0.42), emberMat2); belly.position.set(0,1.55,0); g.add(belly);
-  [{y:1.0,r:0.44,h:0.85},{y:0.5,r:0.3,h:0.7},{y:0.14,r:0.18,h:0.55},{y:-0.1,r:0.08,h:0.4}].forEach((c,i)=>{
-    const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,8), i%2? flameMat:flameMat2); cone.position.set(0,c.y,0); g.add(cone);
+  // ---- massive torso ----
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(1.12,0.9,0.62), basalt); chest.position.set(0,2.15,0); g.add(chest);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.6,0.5), basaltDark); belly.position.set(0,1.55,0); g.add(belly);
+  const waist = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.3,0.36), basaltDark); waist.position.set(0,1.18,0); g.add(waist);
+  // molten core burning through the chest, plus cracks radiating from it
+  const core = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.06), flameCore); core.position.set(0,2.2,0.32); g.add(core);
+  const coreGlow = new THREE.PointLight(0xff7a1a,1.5,6); coreGlow.position.set(0,2.2,0.5); g.add(coreGlow);
+  [[0,0.55,0.06,0],[0,-0.5,0.06,0],[0.42,0.2,0.05,-0.7],[-0.42,0.2,0.05,0.7],[0.4,-0.25,0.05,0.8],[-0.4,-0.25,0.05,-0.8]].forEach(([dx,dy,w,rz])=>{
+    const cr=new THREE.Mesh(new THREE.BoxGeometry(w,0.42,0.04), moltenMat); cr.position.set(dx,2.2+dy,0.32); cr.rotation.z=rz; g.add(cr);
   });
-  const flameLight = new THREE.PointLight(0xff8a2a,1.6,7); flameLight.position.set(0,0.6,0); g.add(flameLight);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.52,0.46), emberMat); head.position.set(0,2.75,0); g.add(head);
+  // ---- huge slab pauldrons: the boss's widest, most imposing feature ----
   [-1,1].forEach(side=>{
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.1,0.05), flameMat2); eye.position.set(side*0.13,2.78,0.25); g.add(eye);
-    for(let i=0;i<2;i++){ const horn=new THREE.Mesh(new THREE.ConeGeometry(0.07-i*0.02,0.4-i*0.12,4), darkMat);
-      horn.position.set(side*(0.2+i*0.1),3.05+i*0.1,-0.05-i*0.08); horn.rotation.x=-0.6; horn.rotation.z=side*(0.35+i*0.15); g.add(horn); }
+    const pad=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.34,0.66), basalt); pad.position.set(side*0.74,2.42,0); pad.rotation.z=side*-0.22; g.add(pad);
+    const trim=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.07,0.68), goldMat); trim.position.set(side*0.75,2.6,0); trim.rotation.z=side*-0.22; g.add(trim);
+    for(let i=0;i<3;i++){ const spike=new THREE.Mesh(new THREE.ConeGeometry(0.07,0.28,4), basaltDark);
+      spike.position.set(side*0.76,2.7,-0.22+i*0.22); spike.rotation.z=side*-0.3; g.add(spike); }
   });
-  const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.1,0.08), darkMat); jaw.position.set(0,2.5,0.25); g.add(jaw);
-  const crownBand=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.3,0.1,8), goldMat); crownBand.position.set(0,3.0,0); g.add(crownBand);
+  // ---- burning mantle hanging off the shoulders ----
+  for(let i=0;i<5;i++){
+    const mx=-0.5+i*0.25;
+    const cape=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.7-Math.abs(i-2)*0.1,0.08), i%2?flameOuter:flameMid);
+    cape.position.set(mx,1.95,-0.36); g.add(cape);
+  }
+  // ---- wide raging flame base (standing IN fire, not wearing a cone skirt) ----
+  [{y:0.9,r:0.66,h:0.9,m:flameOuter},{y:0.5,r:0.48,h:0.75,m:flameMid},
+   {y:0.2,r:0.3,h:0.6,m:flameHot},{y:-0.02,r:0.15,h:0.4,m:flameCore}].forEach(c=>{
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,8), c.m); cone.position.set(0,c.y,0); g.add(cone);
+  });
+  // licking side flames, so the base is ragged rather than a clean cone stack
+  for(let i=0;i<8;i++){
+    const a=(i/8)*Math.PI*2, r=0.42;
+    const lick=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.44+((i%3)*0.16),5), i%2?flameMid:flameHot);
+    lick.position.set(Math.cos(a)*r,0.5+((i%3)*0.1),Math.sin(a)*r); lick.rotation.z=Math.cos(a)*0.3; lick.rotation.x=-Math.sin(a)*0.3; g.add(lick);
+  }
+  const flameLight = new THREE.PointLight(0xff8a2a,2.0,9); flameLight.position.set(0,0.7,0); g.add(flameLight);
+
+  // ---- head: heavy brow, burning eyes and maw ----
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.58,0.56,0.52), basalt); head.position.set(0,2.92,0.02); g.add(head);
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.12,0.16), basaltDark); brow.position.set(0,3.1,0.24); g.add(brow);
   [-1,1].forEach(side=>{
-    const arm=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.7,0.24), emberMat2); arm.position.set(side*0.62,2.0,0.12); arm.rotation.z=side*-0.4; g.add(arm);
-    const hand=new THREE.Mesh(new THREE.SphereGeometry(0.16,7,6), flameMat); hand.position.set(side*0.85,1.55,0.36); g.add(hand);
-    const brazier=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.2,0.16,8), darkMat); brazier.position.set(side*1.0,2.6,-0.1); g.add(brazier);
-    const brazierFlame=new THREE.Mesh(new THREE.ConeGeometry(0.13,0.3,6), flameMat2); brazierFlame.position.set(side*1.0,2.78,-0.1); g.add(brazierFlame);
-    const brazierLight = new THREE.PointLight(0xffb84a,0.8,3); brazierLight.position.set(side*1.0,2.7,-0.1); g.add(brazierLight);
+    const socket=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.13,0.06), basaltDark); socket.position.set(side*0.15,2.94,0.27); g.add(socket);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.09,0.05), flameCore); eye.position.set(side*0.15,2.94,0.3); g.add(eye);
+  });
+  const jawU=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.09,0.16), basaltDark); jawU.position.set(0,2.76,0.24); g.add(jawU);
+  const jawL=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.1,0.16), basaltDark); jawL.position.set(0,2.62,0.22); jawL.rotation.x=-0.3; g.add(jawL);
+  const maw=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.08,0.05), flameHot); maw.position.set(0,2.69,0.28); g.add(maw);
+  // ---- crown: a gold band carrying five rising spires, so it reads as a CROWN, not just horns ----
+  const crownBand=new THREE.Mesh(new THREE.CylinderGeometry(0.33,0.35,0.13,8), goldMat); crownBand.position.set(0,3.24,0.02); g.add(crownBand);
+  [-2,-1,0,1,2].forEach(i=>{
+    const h=0.5-Math.abs(i)*0.11;
+    const spire=new THREE.Mesh(new THREE.ConeGeometry(0.065,h,4), goldMat);
+    spire.position.set(i*0.15,3.32+h/2,0.02-Math.abs(i)*0.03); spire.rotation.z=i*0.16; g.add(spire);
+    const tipFlame=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.16,5), flameHot);
+    tipFlame.position.set(i*0.15,3.34+h,0.02-Math.abs(i)*0.03); g.add(tipFlame);
+  });
+  // ---- arms: shoulder -> upper -> forearm -> fist, connected, with fire-wreathed fists ----
+  [-1,1].forEach(side=>{
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.6,0.26), basalt); upper.position.set(side*0.86,2.06,0.06); upper.rotation.z=side*-0.24; g.add(upper);
+    const elbow=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.2,0.28), basaltDark); elbow.position.set(side*0.96,1.74,0.1); g.add(elbow);
+    const fore=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.56,0.24), basalt); fore.position.set(side*1.0,1.42,0.2); fore.rotation.x=-0.28; g.add(fore);
+    const crack=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.4,0.03), moltenMat); crack.position.set(side*1.0,1.42,0.33); crack.rotation.x=-0.28; g.add(crack);
+    const fist=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.3,0.32), basaltDark); fist.position.set(side*1.02,1.12,0.3); g.add(fist);
+    const wreath=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.4,6), flameMid); wreath.position.set(side*1.02,1.34,0.3); g.add(wreath);
+    const fistLight=new THREE.PointLight(0xffb84a,0.7,3); fistLight.position.set(side*1.02,1.12,0.3); g.add(fistLight);
   });
 
   g.userData.bodyMeshes = [];
@@ -3681,35 +3827,53 @@ function makeHydra(){
     const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,0.62), mat); seg.position.set(0,s.y,s.z); g.add(seg);
     const belly=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.62,s.h*0.28,0.6), bellyMat); belly.position.set(0,s.y-s.h*0.42,s.z); g.add(belly);
   });
-  // coiled tail tip trailing behind the trunk's last (thinnest) segment
+  // coiled tail tip trailing behind the trunk's last (thinnest) segment. NOTE the axis pairing: these boxes
+  // carry their LENGTH on local Z, and a box rotated by rotation.x=t points its local +Z along
+  // (0,-sin t, cos t) — so the walk must step along that, not along (0, cos t, sin t). Pairing an X
+  // rotation with the wrong sin/cos order is what left the old tail as a row of floating blocks.
   { let ty=0.3, tz=-2.0, theta=-1.4; const overlap=0.02;
     [{s:0.34,len:0.42},{s:0.26,len:0.36},{s:0.18,len:0.3},{s:0.11,len:0.24}].forEach(seg=>{
-      const dy=Math.cos(theta), dz=Math.sin(theta);
-      const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s,seg.len), scaleMat); m.position.set(0,ty+(seg.len/2)*dy, tz+(seg.len/2)*dz); m.rotation.x=theta; g.add(m);
-      tz = tz + seg.len*dz - overlap*dz; ty = ty + seg.len*dy - overlap*dy; theta += 0.4;
+      const dy=-Math.sin(theta), dz=Math.cos(theta);
+      const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s,seg.len), scaleMat);
+      m.position.set(0, ty+(seg.len/2)*dy, tz+(seg.len/2)*dz); m.rotation.x=theta; g.add(m);
+      ty += seg.len*dy - overlap*dy; tz += seg.len*dz - overlap*dz; theta += 0.4;
     });
   }
-  // one serpentine neck+head, chain-built rising up and fanning forward/outward. baseX/lean spread the 5
-  // heads WIDE so all 5 are visually distinct instead of clustering into one mass — this is the single
-  // biggest fix versus the old design.
-  function neck(baseX, lean, height){
-    let y=1.0, z=0.35, x=baseX, theta=-1.05; // theta from near-vertical, arcing forward
-    const seg=height, dt=0.3;
-    for(let i=0;i<seg;i++){
-      const dz=Math.sin(theta), dy=Math.cos(theta);
-      const len=0.4, cy=y+(len/2)*dy, cz=z+(len/2)*dz, cx=x+lean*(i/seg);
-      // taper the neck — thick where it meets the body, noticeably thinner near the head, so it reads as a
-      // sinuous snake neck rather than a stack of same-size cubes
-      const w = 0.34 - (i/seg)*0.14;
-      const m=new THREE.Mesh(new THREE.BoxGeometry(w,len,w), i%2?scaleMat2:scaleMat); m.position.set(cx,cy,cz); m.rotation.x=theta; g.add(m);
-      // a small dorsal crest fin on each neck segment
-      const fin=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.2,0.12), crestMat); fin.position.set(cx,cy+0.14,cz-0.05); fin.rotation.x=theta; g.add(fin);
-      y=y+len*dy; z=z+len*dz; theta+=dt;
+  // One serpentine neck + head, chain-built rising up while fanning forward AND outward, so the 5 heads
+  // spread wide instead of clustering into a single mass.
+  //
+  // The outward fan is the subtle part. The previous version slid each segment sideways with a bare
+  // `cx = x + lean*(i/seg)` while only ever rotating about X — so segments marched laterally with no
+  // rotation accounting for that drift and separated into a dotted line of floating cubes (the outermost
+  // necks stepped 0.52 sideways per 0.34-wide segment, so the gaps were bigger than the parts). Here the
+  // lateral spread is a real rotation instead: with three.js' XYZ Euler order a box's local +Y ends up
+  // along (-sin phi, cos theta*cos phi, sin theta*cos phi), so the walk steps along exactly that vector
+  // and consecutive segments always meet.
+  function neck(baseX, spread, height){
+    let x=baseX, y=1.0, z=0.35;
+    let theta=-1.05, phi=0;                       // theta = forward arc, phi = outward fan
+    // negated so a NEGATIVE `spread` argument fans the neck to the player's left (-X), matching how the
+    // call sites below read: with rotation.z=phi a box's top tilts toward -X for positive phi.
+    const len=0.4, dt=0.3, dphi=-spread/height;
+    for(let i=0;i<height;i++){
+      const dx=-Math.sin(phi), dy=Math.cos(theta)*Math.cos(phi), dz=Math.sin(theta)*Math.cos(phi);
+      // taper the neck — thick where it meets the body, thinner near the head
+      const w = 0.34 - (i/height)*0.14;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(w,len,w), i%2?scaleMat2:scaleMat);
+      m.position.set(x+dx*len/2, y+dy*len/2, z+dz*len/2);
+      m.rotation.x=theta; m.rotation.z=phi; g.add(m);
+      // dorsal crest fin, parented to the segment so it inherits both rotations and can't drift off
+      const fin=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.2,0.12), crestMat);
+      fin.position.set(0,0,-0.09); m.add(fin);
+      x+=dx*len; y+=dy*len; z+=dz*len; theta+=dt; phi+=dphi;
     }
     // head at the neck tip — a flat wedge skull (wider than tall, tapering to a snout) instead of a
     // generic box, an open jaw (separate upper/lower pieces) baring fangs, a forked tongue, and a flared
     // hood behind the head — the combination is what actually reads as "snake head" from a distance.
-    const hx=x+lean, hy=y+0.02, hz=z+0.18;
+    // x/y/z already hold the neck's accumulated tip, so the head just sits there (the old code added a
+    // `lean` variable that no longer exists after the fan became a real rotation — a ReferenceError that
+    // would have thrown the moment a Hydra spawned)
+    const hx=x, hy=y+0.02, hz=z+0.18;
     const skull=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.22,0.3), headMat); skull.position.set(hx,hy+0.1,hz); g.add(skull);
     const upperJaw=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.42), scaleMat2); upperJaw.position.set(hx,hy+0.06,hz+0.28); g.add(upperJaw);
     const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.09,0.36), bellyMat); lowerJaw.position.set(hx,hy-0.1,hz+0.26); lowerJaw.rotation.x=-0.35; g.add(lowerJaw);
@@ -4359,16 +4523,65 @@ function makePugio(){
 // ===== ISLAMIC CAIRO LOADOUT (Mamluk-era arc) =====
 // QAWS AL-ZIYAR — a Mamluk crossbow: a wooden stock, a steel prong/bow arm mounted crosswise, and a taut
 // cord. Slower and heavier-hitting than the earlier eras' bows/javelins, with a real reload between shots.
+// Rebuilt from a plain plank (a single thin box stock + one straight crossbar, which read in-game as a
+// featureless brown board) into real crossbow anatomy: a shaped tiller with a raised rear comb, a cut rail
+// groove with a bolt actually loaded in it, a RECURVED lath chained segment-by-segment, a proper V-shaped
+// string running from each lath tip back to the nut, a trigger inside a guard, an iron stirrup at the nose,
+// and bone inlay panels (Mamluk crossbows were decorated) for a light/dark break along the stock.
 function makeCrossbow(){
   const g=new THREE.Group();
-  const wood=metalMatP(0x4a3018,25,0x2a1c10), steel=metalMatP(0x8a9098,80,0xe8eef2), dark=voxMat(0x2a2420,{noise:10});
-  part(g,0.05,0.06,0.62,wood,0,0,-0.05);            // stock
-  part(g,0.045,0.16,0.16,wood,0,-0.05,0.28).rotation.x=0.1; // grip
-  const bowArm=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.025,0.025), steel); bowArm.position.set(0,0.01,-0.34); g.add(bowArm);
-  [-1,1].forEach(s=>{ const tip=new THREE.Mesh(new THREE.ConeGeometry(0.018,0.06,4), dark); tip.rotation.z=s*1.5708; tip.position.set(s*0.25,0.01,-0.34); g.add(tip); });
-  const cord=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.008,0.008), new THREE.MeshBasicMaterial({color:0xe8ded0,fog:false})); cord.position.set(0,0.01,-0.2); g.add(cord);
-  const trigger=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.08,0.03), dark); trigger.position.set(0,-0.12,0.12); g.add(trigger);
-  g.userData={muzzleZ:-0.5,muzzleY:0,pos:new THREE.Vector3(0.24,-0.24,-0.4),recoil:0.2,name:'Qaws',
+  const wood=metalMatP(0x5a3a1c,30,0x2a1c10), woodDark=metalMatP(0x3a2410,25,0x1a1108);
+  const steel=metalMatP(0x9aa2aa,85,0xe8eef2), dark=voxMat(0x241e1a,{noise:10});
+  const bone=metalMatP(0xd8cfb4,40,0xfff6e0), iron=metalMatP(0x6a7076,60,0xb8c0c8);
+  const cordMat=new THREE.MeshBasicMaterial({color:0xe8ded0,fog:false});
+
+  // ---- tiller: butt comb -> main body -> tapered nose, so the profile isn't one uniform stick ----
+  part(g,0.07,0.12,0.24,wood,0,-0.015,0.26);         // rear comb (thicker where it meets the shoulder)
+  part(g,0.06,0.085,0.74,wood,0,0.005,-0.06);        // main tiller
+  part(g,0.05,0.06,0.14,woodDark,0,0.005,-0.47);     // tapered nose block
+  [-1,1].forEach(s=>{ part(g,0.006,0.05,0.34,bone,s*0.031,0.01,-0.02); }); // bone inlay panels down both sides
+  // ---- rail groove + a bolt sitting in it ----
+  part(g,0.026,0.022,0.7,dark,0,0.052,-0.08);        // cut groove
+  part(g,0.016,0.016,0.4,woodDark,0,0.068,-0.26);    // bolt shaft
+  const bhead=new THREE.Mesh(new THREE.ConeGeometry(0.019,0.075,4), iron); bhead.rotation.x=-1.5708; bhead.position.set(0,0.068,-0.5); g.add(bhead);
+  [-1,1].forEach(s=>{ const fl=new THREE.Mesh(new THREE.BoxGeometry(0.005,0.038,0.07), bone); fl.position.set(s*0.012,0.078,-0.09); fl.rotation.z=s*0.25; g.add(fl); }); // fletching
+  // ---- nut / lock housing ----
+  part(g,0.075,0.055,0.09,iron,0,0.045,-0.02);
+  // ---- recurved lath: each arm is 3 chained segments walking outward while angling forward, positioned
+  // along the PREVIOUS segment's own rotated direction (a naive linear x-step with a separate rotation
+  // renders as disconnected shards — the exact bug this file has hit before on curved weapon parts) ----
+  const LZ=-0.4;
+  [-1,1].forEach(side=>{
+    let lx=0, lz=LZ, phi=0.12;
+    [{len:0.15,t:0.032},{len:0.14,t:0.026},{len:0.12,t:0.02}].forEach((s,i)=>{
+      const dx=Math.cos(phi), dz=-Math.sin(phi);
+      const cx=lx+side*dx*s.len/2, cz=lz+dz*s.len/2;
+      const seg=new THREE.Mesh(new THREE.BoxGeometry(s.len,s.t,s.t), i===2?dark:steel);
+      seg.position.set(cx,0.012,cz);
+      seg.rotation.y = side>0 ? phi : (Math.PI - phi);
+      g.add(seg);
+      lx += side*dx*s.len; lz += dz*s.len; phi += 0.30; // recurve: each segment sweeps further forward
+    });
+    // string: lath tip back to the nut, one angled run per side, forming a real V. lx/lz already carry
+    // this arm's sign, so the endpoint is used as-is — re-applying `side` here put both halves of the
+    // string on the same side of the stock, overlapping into what looked like a single stray wire.
+    const tipX=lx, tipZ=lz, nutZ=-0.06;
+    const len=Math.hypot(tipX, nutZ-tipZ);
+    const str=new THREE.Mesh(new THREE.BoxGeometry(len,0.009,0.009), cordMat);
+    str.position.set(tipX/2, 0.012, (tipZ+nutZ)/2);
+    str.rotation.y = Math.atan2(tipZ-nutZ, -tipX);
+    g.add(str);
+  });
+  // ---- trigger + guard loop ----
+  part(g,0.028,0.09,0.03,iron,0,-0.09,0.1).rotation.x=-0.18;
+  part(g,0.018,0.015,0.17,iron,0,-0.135,0.13);
+  part(g,0.018,0.055,0.016,iron,0,-0.1,0.205);
+  // ---- iron stirrup at the nose (foot goes through it to span the bow) — a very identifying crossbow cue ----
+  part(g,0.016,0.11,0.016,iron,-0.05,-0.06,-0.5);
+  part(g,0.016,0.11,0.016,iron, 0.05,-0.06,-0.5);
+  part(g,0.116,0.016,0.016,iron,0,-0.115,-0.5);
+
+  g.userData={muzzleZ:-0.56,muzzleY:0.068,pos:new THREE.Vector3(0.24,-0.24,-0.4),recoil:0.2,name:'Qaws',
     damage:145, fireRate:1.3, auto:false, spread:0.002, tracer:0xd8d0c0,
     magSize:4, ammo:4, reloadTime:2.0, reloading:false, reloadT:0};
   return g;
@@ -4376,23 +4589,43 @@ function makeCrossbow(){
 // SAIF — a curved Mamluk scimitar: a single sweeping steel blade, a crossguard, and a wrapped grip. A
 // deliberately different silhouette (curved, not straight) and palette from the Greek Xiphos and Roman
 // Pugio so the three eras' sidearms never read as reskins of each other.
+// BUG FIX: the blade used to render as a row of DISCONNECTED FLOATING SHARDS. Each segment was rotated
+// about Z (which swings a part through the X/Y plane) while the position walk advanced along Y and Z — two
+// different planes — so the segments rotated one way and marched another, touching at best on a corner.
+// The curve now lives entirely in the YZ plane: direction is (0, cos t, -sin t), the matching orientation
+// for a box whose length is its local +Y is rotation.x = -t, and each segment starts exactly where the
+// previous one ended. Also widened considerably (it was a 0.03 x 0.006 wire) and given a kilij-style
+// yelman — the flared false edge near the tip that makes a Mamluk sabre instantly recognizable.
 function makeScimitar(){
   const g=new THREE.Group();
-  const steel=metalMatP(0xb8bcc0,95,0xffffff), steelDark=metalMatP(0x7a8086,60,0xc8ccd0);
-  const gripMat=voxMat(0x1c3a2e,{noise:10}), goldMat=metalMatP(0xad8730,85,0xfff2c8);
-  const pommel=new THREE.Mesh(new THREE.SphereGeometry(0.03,8,6), goldMat); pommel.position.y=0; g.add(pommel);
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.024,0.026,0.16,8), gripMat); grip.position.y=0.09; g.add(grip);
-  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.02,0.05), goldMat); guard.position.y=0.17; g.add(guard);
-  // curved blade: 4 short chained segments sweeping forward, each rotated a touch more than the last
-  let by=0.17, bz=0, bang=0;
-  for(let i=0;i<4;i++){
-    const segLen=0.13;
-    const seg=new THREE.Mesh(new THREE.BoxGeometry(0.03,segLen,0.006), i===3?steelDark:steel);
-    seg.position.set(0, by+Math.cos(bang)*segLen/2, bz+Math.sin(bang)*segLen/2);
-    seg.rotation.z = bang;
+  const steel=metalMatP(0xc2c8cd,100,0xffffff), steelDark=metalMatP(0x848b92,65,0xc8ccd0);
+  const gripMat=voxMat(0x1c3a2e,{noise:10}), goldMat=metalMatP(0xc09433,90,0xfff2c8);
+  const pommel=new THREE.Mesh(new THREE.CylinderGeometry(0.036,0.028,0.045,8), goldMat); pommel.position.y=0.01; g.add(pommel);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.026,0.028,0.17,8), gripMat); grip.position.y=0.115; g.add(grip);
+  for(let i=0;i<3;i++){ const wrap=new THREE.Mesh(new THREE.CylinderGeometry(0.029,0.029,0.014,8), goldMat); wrap.position.y=0.06+i*0.05; g.add(wrap); } // grip wrap bands
+  // crossguard with drooping quillons
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.026,0.055), goldMat); guard.position.y=0.213; g.add(guard);
+  [-1,1].forEach(s=>{ const q=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.022,0.05), goldMat); q.position.set(s*0.095,0.198,0); q.rotation.z=s*0.5; g.add(q); });
+  // curved blade — 7 chained segments, each starting where the last ended (see the note above)
+  let by=0.235, bz=0, t=0;
+  const segs=[{w:0.052,len:0.088},{w:0.05,len:0.088},{w:0.047,len:0.088},{w:0.045,len:0.088},
+              {w:0.062,len:0.086},{w:0.07,len:0.084},{w:0.05,len:0.08}]; // 5th/6th flare = the yelman
+  segs.forEach((s,i)=>{
+    const dy=Math.cos(t), dz=-Math.sin(t);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.len,0.014), i>=4?steelDark:steel);
+    seg.position.set(0, by+dy*s.len/2, bz+dz*s.len/2);
+    seg.rotation.x = -t;
     g.add(seg);
-    by += Math.cos(bang)*segLen; bz += Math.sin(bang)*segLen; bang += 0.24;
-  }
+    // bright edge strip along the cutting side, mounted just proud of the blade face
+    const edge=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.22,s.len,0.017), steel);
+    edge.position.set(s.w*0.36, by+dy*s.len/2, bz+dz*s.len/2);
+    edge.rotation.x = -t; g.add(edge);
+    by += dy*s.len; bz += dz*s.len; t += 0.155;
+  });
+  // tip, continuing along the final segment's own direction so it stays attached
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.075,4), steelDark);
+  tip.position.set(0, by+Math.cos(t)*0.037, bz-Math.sin(t)*0.037); tip.rotation.x=-t; g.add(tip);
+
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.1,name:'Saif',
     melee:true, range:1.7, damage:108, fireRate:0.2};
   return g;
@@ -4400,16 +4633,38 @@ function makeScimitar(){
 // NAFT POT — a thrown ceramic pot of naphtha, the Islamic-world descendant of Greek Fire; same
 // lob-arc-and-explode grenade mechanic (userData.grenade routes through launchGrenade()/explodeAt()), a
 // distinct clay-pot silhouette instead of a bronze siphon.
+// Reworked: the old version was a bare sphere with a big wooden slab floating detached below and behind it,
+// which read as "a ball next to a plank". The pot is now a banded, rope-bound vessel with a corded sling the
+// hand actually holds — every piece physically connected — plus a rag wick burning at the mouth.
 function makeNaftPot(){
   const g=new THREE.Group();
-  const clay=voxMat(0xb5602c,{noise:14}), clayDark=voxMat(0x7a3c1c,{noise:12}), wood=metalMatP(0x4a3018,25,0x2a1c10);
-  const pot=new THREE.Mesh(new THREE.SphereGeometry(0.11,8,7), clay); pot.scale.set(1,0.9,1); pot.position.set(0,-0.02,-0.1); g.add(pot);
-  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.05,0.05,8), clayDark); neck.position.set(0,0.08,-0.1); g.add(neck);
-  const wick=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.06,5), voxMat(0x2a2018,{noise:8})); wick.position.set(0,0.13,-0.1); g.add(wick);
-  const flame=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.08,6), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false})); flame.position.set(0,0.19,-0.1); g.add(flame);
-  const L=new THREE.PointLight(0xff8a2a,0.9,1.4); L.position.set(0,0.19,-0.1); g.add(L);
-  part(g,0.08,0.2,0.28,wood,0,-0.22,0.14).rotation.x=0.16; // supporting grip/stock below the pot
-  g.userData={muzzleZ:-0.1,muzzleY:0.1,pos:new THREE.Vector3(0.25,-0.27,-0.1),recoil:0.16,name:'Naft Pot',
+  const clay=voxMat(0xc06a30,{noise:14}), clayDark=voxMat(0x7a3c1c,{noise:12});
+  const rope=voxMat(0xb09a68,{noise:16}), leather=voxMat(0x4a3320,{noise:14});
+  const PZ=-0.12, PY=-0.03;
+  const pot=new THREE.Mesh(new THREE.SphereGeometry(0.125,10,8), clay); pot.scale.set(1,0.92,1); pot.position.set(0,PY,PZ); g.add(pot);
+  // three rope bands cinched around the belly — breaks up the plain sphere and reads as a bound firepot
+  [[-0.05,0.118],[0.0,0.126],[0.05,0.118]].forEach(([dy,r])=>{
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(r,r,0.018,10), rope); band.position.set(0,PY+dy,PZ); g.add(band);
+  });
+  // vertical rope ribs over the shoulder of the pot, tying the bands together
+  [-1,1].forEach(s=>{ const rib=new THREE.Mesh(new THREE.BoxGeometry(0.016,0.2,0.016), rope); rib.position.set(s*0.105,PY+0.02,PZ); rib.rotation.z=s*0.22; g.add(rib); });
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.042,0.058,0.06,8), clayDark); neck.position.set(0,PY+0.13,PZ); g.add(neck);
+  const lip=new THREE.Mesh(new THREE.CylinderGeometry(0.052,0.046,0.018,8), clayDark); lip.position.set(0,PY+0.168,PZ); g.add(lip);
+  // soaked rag wick + flame
+  const wick=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.06,0.03), voxMat(0x3a3026,{noise:10})); wick.position.set(0,PY+0.2,PZ); g.add(wick);
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(0.038,0.1,6), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false})); flame.position.set(0,PY+0.28,PZ); g.add(flame);
+  const flameCore=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.055,6), new THREE.MeshBasicMaterial({color:0xffe07a,fog:false})); flameCore.position.set(0,PY+0.265,PZ); g.add(flameCore);
+  const L=new THREE.PointLight(0xff8a2a,1.0,1.6); L.position.set(0,PY+0.28,PZ); g.add(L);
+  // corded sling running from the pot's bands up into the fist — this is what the hand is holding, and it
+  // physically connects to the pot instead of hovering beside it
+  [-1,1].forEach(s=>{
+    const cord=new THREE.Mesh(new THREE.BoxGeometry(0.014,0.2,0.014), rope);
+    cord.position.set(s*0.075,PY-0.13,PZ+0.06); cord.rotation.x=-0.3; cord.rotation.z=s*-0.35; g.add(cord);
+  });
+  const knot=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05), rope); knot.position.set(0,PY-0.22,PZ+0.12); g.add(knot);
+  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.028,0.16,8), leather); handle.position.set(0,PY-0.3,PZ+0.15); handle.rotation.x=0.35; g.add(handle);
+
+  g.userData={muzzleZ:-0.12,muzzleY:0.1,pos:new THREE.Vector3(0.25,-0.24,-0.1),recoil:0.16,name:'Naft Pot',
     damage:0, splashDamage:205, splashRadius:4.9, fireRate:1.2, auto:false, spread:0.0, tracer:0xff8a2a, grenade:true,
     magSize:4, ammo:4, reloadTime:2.1, reloading:false, reloadT:0};
   return g;
@@ -4887,11 +5142,13 @@ function spawnWave(n){
     spawnBot(sp[0],sp[1],0x201d19,[sp[0]-2,0,sp[1]],[sp[0]+2,0,sp[1]],'knife',
       {skin:'warhound', hp:Math.round(gruntHp*1.4), diff, speed:1+(diff-1)*0.5});
   }
-  if(islamic){ // one roc pack per Islamic wave, same "themed pack, not regular roster" convention
+  if(islamic){ // one roc per Islamic wave — a single giant bird elite rather than a 3-unit pack (three
+    // overlapping small birds read as a spider tangle in playtest), keeping the same "one themed encounter
+    // per wave, not looped into the regular roster" convention the warhound pack established
     const sp=SPAWN_POINTS[(n*5+2) % SPAWN_POINTS.length];
     const gruntHp=[330,360,340][n-9];
     spawnBot(sp[0],sp[1],0x4a3a2e,[sp[0]-2,0,sp[1]],[sp[0]+2,0,sp[1]],'javelin',
-      {skin:'roc', hp:Math.round(gruntHp*1.4), diff, speed:1+(diff-1)*0.5});
+      {skin:'roc', hp:Math.round(gruntHp*1.4), diff, speed:1+(diff-1)*0.5, scale:1.25});
   }
   document.getElementById('wave').textContent=(n+1)+'/'+WAVES.length;
   setEnemyCount();
