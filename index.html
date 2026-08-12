@@ -3851,11 +3851,14 @@ function makeRoc(){
       wx += side*dx*p.span*0.92; wy += dy*p.span*0.92;   // 0.92 = overlap, so panels never separate
       ang += 0.16;
     });
-    // splayed primary feathers off the wing tip — adds real width and a ragged, unmistakably avian edge
+    // splayed primary feathers off the wing tip — adds real width and a ragged, unmistakably avian edge.
+    // Their z fan is kept inside the final panel's chord (which spans about -0.49..0.03); the previous
+    // -0.28+f*0.16 walked the outermost feather out to z=0.20, past the wing's trailing edge, leaving it
+    // floating free of the bird.
     for(let f=0;f<4;f++){
       const fang = ang + (f-1.5)*0.2;
       const feat=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.07,0.14), featherDark);
-      feat.position.set(wx+side*Math.cos(fang)*0.3, wy+Math.sin(fang)*0.3, -0.28+f*0.16);
+      feat.position.set(wx+side*Math.cos(fang)*0.3, wy+Math.sin(fang)*0.3, -0.42+f*0.14);
       feat.rotation.z = side>0 ? fang : -fang;
       g.add(feat);
     }
@@ -3919,11 +3922,12 @@ function makeIfritKing(){
     for(let i=0;i<3;i++){ const spike=new THREE.Mesh(new THREE.ConeGeometry(0.07,0.28,4), basaltDark);
       spike.position.set(side*0.76,2.7,-0.22+i*0.22); spike.rotation.z=side*-0.3; g.add(spike); }
   });
-  // ---- burning mantle hanging off the shoulders ----
+  // ---- burning mantle hanging off the shoulders. At z=-0.36 it sat 0.01 clear of the chest's back face
+  // (which reaches z=-0.31) and hung in the air behind him; -0.33 tucks it into the chest. ----
   for(let i=0;i<5;i++){
     const mx=-0.5+i*0.25;
     const cape=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.7-Math.abs(i-2)*0.1,0.08), i%2?flameOuter:flameMid);
-    cape.position.set(mx,1.95,-0.36); g.add(cape);
+    cape.position.set(mx,1.95,-0.33); g.add(cape);
   }
   // ---- wide raging flame base (standing IN fire, not wearing a cone skirt) ----
   [{y:0.9,r:0.66,h:0.9,m:flameOuter},{y:0.5,r:0.48,h:0.75,m:flameMid},
@@ -3950,12 +3954,14 @@ function makeIfritKing(){
   const maw=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.08,0.05), flameHot); maw.position.set(0,2.69,0.28); g.add(maw);
   // ---- crown: a gold band carrying five rising spires, so it reads as a CROWN, not just horns ----
   const crownBand=new THREE.Mesh(new THREE.CylinderGeometry(0.33,0.35,0.13,8), goldMat); crownBand.position.set(0,3.24,0.02); g.add(crownBand);
+  // spire bases seated INTO the band (the band's top face is at y=3.305; starting them at 3.32 left every
+  // spire, and the flame on top of it, hanging 0.015 clear of the crown)
   [-2,-1,0,1,2].forEach(i=>{
     const h=0.5-Math.abs(i)*0.11;
     const spire=new THREE.Mesh(new THREE.ConeGeometry(0.065,h,4), goldMat);
-    spire.position.set(i*0.15,3.32+h/2,0.02-Math.abs(i)*0.03); spire.rotation.z=i*0.16; g.add(spire);
+    spire.position.set(i*0.15,3.26+h/2,0.02-Math.abs(i)*0.03); spire.rotation.z=i*0.16; g.add(spire);
     const tipFlame=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.16,5), flameHot);
-    tipFlame.position.set(i*0.15,3.34+h,0.02-Math.abs(i)*0.03); g.add(tipFlame);
+    tipFlame.position.set(i*0.15,3.26+h*0.9,0.02-Math.abs(i)*0.03); g.add(tipFlame);
   });
   // ---- arms: shoulder -> upper -> forearm -> fist, connected, with fire-wreathed fists ----
   [-1,1].forEach(side=>{
@@ -4016,6 +4022,10 @@ function makeHydra(){
     // dorsal scute ridge along the spine, so the top edge isn't a flat run
     const scute=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.3,s.h*0.22,0.34), crestMat); scute.position.set(0,s.y+s.h*0.5,s.z); g.add(scute);
   });
+  // Shoulder mound the necks physically grow out of. Without this the necks simply began at their baseX
+  // in open air above/beside the trunk; this is the mass that ties all five roots into the body.
+  const shoulder=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.95,1.15), scaleMat); shoulder.position.set(0,0.95,0.5); g.add(shoulder);
+  const shoulderTop=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.4,0.9), scaleMat2); shoulderTop.position.set(0,1.42,0.45); g.add(shoulderTop);
   // coiled tail tip trailing behind the trunk's last (thinnest) segment. NOTE the axis pairing: these boxes
   // carry their LENGTH on local Z, and a box rotated by rotation.x=t points its local +Z along
   // (0,-sin t, cos t) — so the walk must step along that, not along (0, cos t, sin t). Pairing an X
@@ -4095,13 +4105,17 @@ function makeHydra(){
   }
   // `spread` is a TOTAL FAN ANGLE IN RADIANS, not a lateral distance. It previously carried the old
   // lean-offset values (1.6 and 2.6) straight over when the fan became a rotation — and 2.6 rad is 149
-  // degrees, so the outer necks rotated well past horizontal, corkscrewed over and drove their heads down
-  // toward the floor. Kept to a sane 20-40 degree fan now; baseX still does the lateral spreading.
+  // degrees, so the outer necks rotated well past horizontal and corkscrewed over.
+  //
+  // baseX must stay INSIDE the shoulder mound (half-width 0.85). The previous values (+/-1.0, +/-1.9) put
+  // four of the five necks well outside the body, so they rose out of thin air beside it with a visible
+  // gap. All five now root in the mound and the FAN does the spreading as they rise, which is also how a
+  // hydra's necks actually converge.
   neck( 0,    0.00, 7);   // centre head, tallest, straight up the middle
-  neck(-1.0, -0.38, 6);   // inner left / right pair
-  neck( 1.0,  0.38, 6);
-  neck(-1.9, -0.68, 5);   // outermost pair, splayed clear of their neighbours
-  neck( 1.9,  0.68, 5);
+  neck(-0.32,-0.75, 6);   // inner left / right pair
+  neck( 0.32, 0.75, 6);
+  neck(-0.56,-1.15, 5);   // outermost pair, splayed clear of their neighbours
+  neck( 0.56, 1.15, 5);
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
@@ -4743,12 +4757,12 @@ function makeCrossbow(){
   // ---- tiller: butt comb -> main body -> tapered nose, so the profile isn't one uniform stick ----
   part(g,0.07,0.12,0.24,wood,0,-0.015,0.26);         // rear comb (thicker where it meets the shoulder)
   part(g,0.06,0.085,0.74,wood,0,0.005,-0.06);        // main tiller
-  part(g,0.05,0.06,0.14,woodDark,0,0.005,-0.47);     // tapered nose block
+  part(g,0.12,0.06,0.14,woodDark,0,0.005,-0.47);     // nose block — wide enough for the stirrup legs to actually meet it
   [-1,1].forEach(s=>{ part(g,0.006,0.05,0.34,bone,s*0.031,0.01,-0.02); }); // bone inlay panels down both sides
   // ---- rail groove + a bolt sitting in it ----
   part(g,0.026,0.022,0.7,dark,0,0.052,-0.08);        // cut groove
   part(g,0.016,0.016,0.4,woodDark,0,0.068,-0.26);    // bolt shaft
-  const bhead=new THREE.Mesh(new THREE.ConeGeometry(0.019,0.075,4), iron); bhead.rotation.x=-1.5708; bhead.position.set(0,0.068,-0.5); g.add(bhead);
+  const bhead=new THREE.Mesh(new THREE.ConeGeometry(0.019,0.075,4), iron); bhead.rotation.x=-1.5708; bhead.position.set(0,0.068,-0.48); g.add(bhead); // -0.48 so it meets the shaft, which ends at -0.46
   [-1,1].forEach(s=>{ const fl=new THREE.Mesh(new THREE.BoxGeometry(0.005,0.038,0.07), bone); fl.position.set(s*0.012,0.078,-0.09); fl.rotation.z=s*0.25; g.add(fl); }); // fletching
   // ---- nut / lock housing ----
   part(g,0.075,0.055,0.09,iron,0,0.045,-0.02);
@@ -4812,7 +4826,9 @@ function makeScimitar(){
   const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.026,0.055), goldMat); guard.position.y=0.213; g.add(guard);
   [-1,1].forEach(s=>{ const q=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.022,0.05), goldMat); q.position.set(s*0.095,0.198,0); q.rotation.z=s*0.5; g.add(q); });
   // curved blade — 7 chained segments, each starting where the last ended (see the note above)
-  let by=0.235, bz=0, t=0;
+  // blade starts at 0.21, inside the guard (which spans y 0.200..0.226) — starting it at 0.235 left the
+  // entire hilt as a separate floating piece with the blade hovering 0.009 above the crossguard
+  let by=0.21, bz=0, t=0;
   const segs=[{w:0.052,len:0.088},{w:0.05,len:0.088},{w:0.047,len:0.088},{w:0.045,len:0.088},
               {w:0.062,len:0.086},{w:0.07,len:0.084},{w:0.05,len:0.08}]; // 5th/6th flare = the yelman
   segs.forEach((s,i)=>{
@@ -4866,7 +4882,9 @@ function makeNaftPot(){
     const cord=new THREE.Mesh(new THREE.BoxGeometry(0.014,0.2,0.014), rope);
     cord.position.set(s*0.075,PY-0.13,PZ+0.06); cord.rotation.x=-0.3; cord.rotation.z=s*-0.35; g.add(cord);
   });
-  const knot=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05), rope); knot.position.set(0,PY-0.22,PZ+0.12); g.add(knot);
+  // knot spans wide enough to actually catch BOTH cords (they sit at x=+/-0.075); at 0.05 across it hung
+  // between them touching neither, taking the handle below it along for the ride
+  const knot=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.09,0.15), rope); knot.position.set(0,PY-0.22,PZ+0.12); g.add(knot);
   const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.028,0.16,8), leather); handle.position.set(0,PY-0.3,PZ+0.15); handle.rotation.x=0.35; g.add(handle);
 
   g.userData={muzzleZ:-0.12,muzzleY:0.1,pos:new THREE.Vector3(0.25,-0.24,-0.1),recoil:0.16,name:'Naft Pot',
