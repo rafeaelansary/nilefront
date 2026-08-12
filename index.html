@@ -2396,7 +2396,12 @@ heightZoneTarget = heightZonesIslamic;
   const ground = new THREE.Mesh(new THREE.BoxGeometry(62,1,62), groundMat); ground.position.set(0,-0.5,0); scene.add(ground);
   const roadMat = new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),18), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
   function roadPath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),roadMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
-  roadPath(0,0,8,58); roadPath(0,0,58,8);
+  // The cross street is drawn as the full N-S run plus two E-W ARMS that stop at the N-S road's edge
+  // (x=+/-4), instead of two full-length slabs. Two full slabs both sat at y=0.07 with identical geometry
+  // height and the same polygon offset, so they were exactly coplanar across the central 8x8 square — a
+  // guaranteed z-fight, which is the flickering patch that showed up in the middle of the crossroads.
+  roadPath(0,0,8,58);
+  roadPath(-16.5,0,25,8); roadPath(16.5,0,25,8);
   const tileMat = new THREE.MeshLambertMaterial({map:_finish(zellijeTex(),6), polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-3});
   function tilePlaza(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.16,d),tileMat); m.position.set(x,0.08,z); m.receiveShadow=true; scene.add(m); }
 
@@ -3992,18 +3997,24 @@ function makeHydra(){
   const crestMat = voxMat(0x1c2a18,{noise:10});
   const tongueMat = new THREE.MeshBasicMaterial({color:0xc4283a,fog:false});
 
-  // serpent trunk: one continuous tapering run of stacked segments (no rotation math, just shrinking width
-  // + a gentle rise/fall in Y per segment) from the tail tip up to where the necks sprout — reads as one
-  // big snake body instead of a lizard torso with a hump bolted on.
+  // Serpent trunk: a continuous run of stacked segments from a bulky shoulder mass (where the necks
+  // sprout) tapering back to the tail. The previous proportions made every segment far WIDER than it was
+  // deep (1.55 across, 0.62 front-to-back), so at boss scale the body rendered as one huge flat green wall
+  // filling the screen. Segments are now roughly as deep and tall as they are wide, and the run is longer,
+  // so it reads as a thick coiled serpent body instead of a slab.
   const trunkSegs = [
-    {z: 0.55, w:1.55, h:0.85, y:0.62}, {z:-0.05, w:1.35, h:0.72, y:0.55},
-    {z:-0.65, w:1.05, h:0.6,  y:0.46}, {z:-1.2,  w:0.75, h:0.48, y:0.38},
-    {z:-1.7,  w:0.5,  h:0.36, y:0.3},
+    {z: 0.85, w:1.18, h:1.02, y:0.62}, {z: 0.25, w:1.3,  h:1.14, y:0.66},
+    {z:-0.35, w:1.2,  h:1.04, y:0.62}, {z:-0.95, w:1.0,  h:0.9,  y:0.54},
+    {z:-1.5,  w:0.8,  h:0.72, y:0.44}, {z:-2.0,  w:0.6,  h:0.55, y:0.35},
+    {z:-2.45, w:0.42, h:0.4,  y:0.26},
   ];
   trunkSegs.forEach((s,i)=>{
     const mat = i%2 ? scaleMat2 : scaleMat;
-    const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,0.62), mat); seg.position.set(0,s.y,s.z); g.add(seg);
-    const belly=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.62,s.h*0.28,0.6), bellyMat); belly.position.set(0,s.y-s.h*0.42,s.z); g.add(belly);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,0.66), mat); seg.position.set(0,s.y,s.z); g.add(seg);
+    // pale belly plates along the underside
+    const belly=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.6,s.h*0.26,0.62), bellyMat); belly.position.set(0,s.y-s.h*0.42,s.z); g.add(belly);
+    // dorsal scute ridge along the spine, so the top edge isn't a flat run
+    const scute=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.3,s.h*0.22,0.34), crestMat); scute.position.set(0,s.y+s.h*0.5,s.z); g.add(scute);
   });
   // coiled tail tip trailing behind the trunk's last (thinnest) segment. NOTE the axis pairing: these boxes
   // carry their LENGTH on local Z, and a box rotated by rotation.x=t points its local +Z along
@@ -4028,11 +4039,14 @@ function makeHydra(){
   // along (-sin phi, cos theta*cos phi, sin theta*cos phi), so the walk steps along exactly that vector
   // and consecutive segments always meet.
   function neck(baseX, spread, height){
-    let x=baseX, y=1.0, z=0.35;
-    let theta=-1.05, phi=0;                       // theta = forward arc, phi = outward fan
+    let x=baseX, y=1.05, z=0.4;
+    // theta = forward arc, phi = outward fan. theta used to start at -1.05, which meant each neck first
+    // leaned BACKWARD before curving over, so the heads finished low and drooping. Starting much closer to
+    // vertical makes the necks rear up and then strike forward.
+    let theta=-0.4, phi=0;
     // negated so a NEGATIVE `spread` argument fans the neck to the player's left (-X), matching how the
     // call sites below read: with rotation.z=phi a box's top tilts toward -X for positive phi.
-    const len=0.4, dt=0.3, dphi=-spread/height;
+    const len=0.4, dt=0.25, dphi=-spread/height;
     for(let i=0;i<height;i++){
       const dx=-Math.sin(phi), dy=Math.cos(theta)*Math.cos(phi), dz=Math.sin(theta)*Math.cos(phi);
       // taper the neck — thick where it meets the body, thinner near the head
@@ -4045,30 +4059,33 @@ function makeHydra(){
       fin.position.set(0,0,-0.09); m.add(fin);
       x+=dx*len; y+=dy*len; z+=dz*len; theta+=dt; phi+=dphi;
     }
-    // head at the neck tip — a flat wedge skull (wider than tall, tapering to a snout) instead of a
-    // generic box, an open jaw (separate upper/lower pieces) baring fangs, a forked tongue, and a flared
-    // hood behind the head — the combination is what actually reads as "snake head" from a distance.
-    // x/y/z already hold the neck's accumulated tip, so the head just sits there (the old code added a
-    // `lean` variable that no longer exists after the fan became a real rotation — a ReferenceError that
-    // would have thrown the moment a Hydra spawned)
-    const hx=x, hy=y+0.02, hz=z+0.18;
-    const skull=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.22,0.3), headMat); skull.position.set(hx,hy+0.1,hz); g.add(skull);
-    const upperJaw=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.42), scaleMat2); upperJaw.position.set(hx,hy+0.06,hz+0.28); g.add(upperJaw);
-    const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.09,0.36), bellyMat); lowerJaw.position.set(hx,hy-0.1,hz+0.26); lowerJaw.rotation.x=-0.35; g.add(lowerJaw);
+    // Head, seated ON the neck tip. x/y/z hold the neck's accumulated end point, but the old code offset
+    // the skull a flat +0.12 in Y and +0.18 in Z from there — a fixed world-space nudge that only lines up
+    // if the neck happens to end pointing straight up and forward. The outer necks end angled well out to
+    // the side, so their heads floated off the end of the neck with a visible gap. The offset now runs
+    // along the neck's OWN final direction, so every head meets its neck regardless of how far it fanned.
+    const edx=-Math.sin(phi), edy=Math.cos(theta)*Math.cos(phi), edz=Math.sin(theta)*Math.cos(phi);
+    const hx=x+edx*0.17, hy=y+edy*0.17, hz=z+edz*0.17;
+    // a short collar bridging neck into skull, killing any residual seam
+    const collar=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.2,0.26), scaleMat2); collar.position.set(x+edx*0.05,y+edy*0.05,z+edz*0.05); g.add(collar);
+    const skull=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.28,0.36), headMat); skull.position.set(hx,hy,hz); g.add(skull);
+    const upperJaw=new THREE.Mesh(new THREE.BoxGeometry(0.31,0.14,0.46), scaleMat2); upperJaw.position.set(hx,hy-0.04,hz+0.3); g.add(upperJaw);
+    const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.1,0.38), bellyMat); lowerJaw.position.set(hx,hy-0.19,hz+0.28); lowerJaw.rotation.x=-0.35; g.add(lowerJaw);
     // flared hood: two angled plates behind the skull, cobra-style — the single most identifying "snake"
     // silhouette cue, and it also helps visually separate each of the 5 heads from its neighbours
     [-1,1].forEach(s=>{
-      const hood=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.28,0.18), hoodMat); hood.position.set(hx+s*0.18,hy+0.08,hz-0.08); hood.rotation.z=s*0.55; hood.rotation.y=s*0.3; g.add(hood);
+      const hood=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.32,0.2), hoodMat); hood.position.set(hx+s*0.22,hy+0.02,hz-0.1); hood.rotation.z=s*0.55; hood.rotation.y=s*0.3; g.add(hood);
     });
+    const browRidge=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.08,0.16), crestMat); browRidge.position.set(hx,hy+0.15,hz+0.1); g.add(browRidge);
     [-1,1].forEach(s=>{
-      const eye=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.06,0.04), eyeMat); eye.position.set(hx+s*0.11,hy+0.14,hz+0.13); g.add(eye);
-      // two visible fangs per side — one from the upper jaw pointing down, echoing a real snake bite
-      const fangA=new THREE.Mesh(new THREE.ConeGeometry(0.025,0.14,4), fangMat); fangA.position.set(hx+s*0.08,hy-0.02,hz+0.44); fangA.rotation.x=Math.PI; g.add(fangA);
-      const fangB=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.1,4), fangMat); fangB.position.set(hx+s*0.13,hy+0.0,hz+0.4); fangB.rotation.x=Math.PI; g.add(fangB);
+      const eye=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.08,0.05), eyeMat); eye.position.set(hx+s*0.13,hy+0.05,hz+0.17); g.add(eye);
+      // two visible fangs per side — from the upper jaw pointing down, echoing a real snake bite
+      const fangA=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.16,4), fangMat); fangA.position.set(hx+s*0.09,hy-0.12,hz+0.46); fangA.rotation.x=Math.PI; g.add(fangA);
+      const fangB=new THREE.Mesh(new THREE.ConeGeometry(0.022,0.11,4), fangMat); fangB.position.set(hx+s*0.15,hy-0.1,hz+0.42); fangB.rotation.x=Math.PI; g.add(fangB);
     });
     // forked tongue flicking out past the jaw
-    const tongueRoot=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.03,0.22), tongueMat); tongueRoot.position.set(hx,hy-0.05,hz+0.56); g.add(tongueRoot);
-    [-1,1].forEach(s=>{ const fork=new THREE.Mesh(new THREE.BoxGeometry(0.025,0.025,0.1), tongueMat); fork.position.set(hx+s*0.035,hy-0.05,hz+0.68); fork.rotation.y=s*0.5; g.add(fork); });
+    const tongueRoot=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.035,0.24), tongueMat); tongueRoot.position.set(hx,hy-0.15,hz+0.58); g.add(tongueRoot);
+    [-1,1].forEach(s=>{ const fork=new THREE.Mesh(new THREE.BoxGeometry(0.028,0.028,0.11), tongueMat); fork.position.set(hx+s*0.04,hy-0.15,hz+0.71); fork.rotation.y=s*0.5; g.add(fork); });
   }
   neck( 0,    0.0,  7);   // centre head, tallest, straight up the middle
   neck(-1.0, -1.6,  6);   // wide left pair
