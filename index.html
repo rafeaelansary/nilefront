@@ -253,6 +253,35 @@ function skylineTower(x,z,w,h,color){
   }
 })();
 
+// ---- distant ground backing: every map's real ground is a finite slab (~60 wide), way smaller than the
+// fog draw distance (up to 220), so standing at its edge exposed the slab's bare side face against open sky
+// — read as "standing on a floating island". This huge, cheap plane sits tucked just under every map's real
+// ground (all of them top out at y=0), invisible under the detailed geometry, and only shows past its edges,
+// giving the horizon something to fade into instead of nothing. Tinted to match each era's fog color (see
+// era-switch functions below) so the seam where the real ground stops is as close to invisible as possible.
+function distantGroundTexture(size=256){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#a8a296'; ctx.fillRect(0,0,size,size);
+  for(let i=0;i<700;i++){
+    const x=Math.random()*size, y=Math.random()*size, r=6+Math.random()*14;
+    const shade=140+((Math.random()-0.5)*36)|0;
+    ctx.fillStyle=`rgba(${shade},${shade},${shade-8},0.5)`;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  }
+  const tex=new THREE.CanvasTexture(c);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  tex.repeat.set(70,70);
+  return tex;
+}
+const distantGround = new THREE.Mesh(
+  new THREE.PlaneGeometry(1400,1400),
+  new THREE.MeshLambertMaterial({map:distantGroundTexture()})
+);
+distantGround.rotation.x = -Math.PI/2;
+distantGround.position.y = -0.05;
+scene.add(distantGround);
+
 // ---- textured ground (patchwork of grass/dirt/path voxel tiles) ----
 function tileTexture(size=512, cell=8){
   const c = document.createElement('canvas');
@@ -901,6 +930,9 @@ function marbleFloorTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // the perimeter walls above only ever had visual meshes — no collider, so the player could walk straight
   // through them into the empty void beyond (only the pillars got addBox() calls). Fixed.
   addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
+  // solid ceiling backing flush under the beam strips below — the strips alone left wide gaps that showed
+  // the raw scene background (near-black) above the room, reading as an open void instead of an indoor ceiling
+  dblock(R*2,0.6,R*2,stoneMat,0,10.6,0);
   // vaulted ceiling strips so the room doesn't feel like an open dark void
   for(let k=-2;k<=2;k++) dblock(2,1,R*2,stoneMat,k*8,11.4,0);
   // pillars for cover, capped with alternating blue/orange glow + a strong point light
@@ -944,6 +976,8 @@ addTarget = pyramidDungeonColliders;
   pblock(1,12,R*2,sandBrickMat,-R,6,0); pblock(1,12,R*2,sandBrickMat,R,6,0);
   // same missing-collider bug as the original dungeon — the perimeter walls were purely visual
   addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
+  // solid ceiling backing flush under the beam strips — see the matching comment in buildDungeon for why
+  pblock(R*2,0.6,R*2,sandBrickMat,0,10.6,0);
   for(let k=-2;k<=2;k++) pblock(2,1,R*2,sandBrickMat,k*8,11.4,0);
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     pblock(2,10,2,sandBrickMat,x,5,z); addBox(x,z,2.3,2.3);
@@ -1021,6 +1055,8 @@ addTarget = greekDungeonColliders;
   gblock(1,12,R*2,marbleWallMat,-R,6,0); gblock(1,12,R*2,marbleWallMat,R,6,0);
   // same missing-collider bug as the original dungeon — the perimeter walls were purely visual
   addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
+  // solid ceiling backing flush under the beam strips — see the matching comment in buildDungeon for why
+  gblock(R*2,0.6,R*2,marbleWallMat,0,10.6,0);
   for(let k=-2;k<=2;k++) gblock(2,1,R*2,marbleWallMat,k*8,11.4,0);
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     gblock(2,10,2,marbleWallMat,x,5,z); addBox(x,z,2.3,2.3);
@@ -1321,6 +1357,7 @@ function enterDungeon(){
   activeColliders = dungeonWasPyramid ? pyramidDungeonColliders : greekDungeonColliders;
   activeHeightZones = heightZonesOriginal; // neither dungeon has climbable rooftops; keep this deterministic regardless of era
   scene.background.set(0x141726); scene.fog.color.set(0x141726); scene.fog.near=14; scene.fog.far=58;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.35; hemi.color.set(0x4a6fbf); hemi.groundColor.set(0x1a1e26);
   sun.intensity=0.0; fill.intensity=0.18; fill.color.set(0x6f8fdd);
   camera.position.set(0,1.7,18); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -1332,6 +1369,7 @@ function exitDungeon(){
   activeColliders = dungeonWasPyramid ? pyramidColliders : greekColliders;
   activeHeightZones = dungeonWasPyramid ? heightZonesPyramid : heightZonesGreek;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
   camera.position.copy(spawnPoint); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -1555,6 +1593,7 @@ function enterNileWave(){
   clearWorldGroups(); scene.add(nileWorld); sky.visible=true;
   activeColliders = nileColliders; activeHeightZones = heightZonesOriginal;
   scene.background.set(0x4a90b8); scene.fog.color.set(0x4a90b8); scene.fog.near=30; scene.fog.far=140;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.9; hemi.color.set(0xcfe8f5); hemi.groundColor.set(0x1a4a5f);
   sun.intensity=1.0; fill.intensity=0.3; fill.color.set(0xaecbe0);
   camera.position.set(0,1.7,0); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -1570,6 +1609,7 @@ function exitNileWave(){
   clearWorldGroups(); scene.add(pyramidOverworld); sky.visible=true;
   activeColliders = pyramidColliders; activeHeightZones = heightZonesPyramid;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
   camera.position.copy(spawnPoint); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -4950,6 +4990,7 @@ function enterRomanWorld(banner){
   activeColliders = romanColliders;
   activeHeightZones = heightZonesRoman;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
   camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -4973,6 +5014,7 @@ function enterIslamicWorld(banner){
   // map looked washed out. Slightly lower ambient and a deeper amber fog let the new darker ground and the
   // lapis/green accents hold their colour.
   scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8c39a); scene.fog.near=34; scene.fog.far=180;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.72; hemi.color.set(0xffe4b0); hemi.groundColor.set(0x5a4a2c);
   sun.intensity=1.0; fill.intensity=0.22; fill.color.set(0xffdca0);
   camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -4991,6 +5033,7 @@ function enterHydraArena(){
   activeColliders = hydraColliders;
   activeHeightZones = heightZonesOriginal;   // flat platform, no climbable zones
   scene.background.set(0x8a9c86); scene.fog.color.set(0x7f947c); scene.fog.near=26; scene.fog.far=110; // overcast marsh
+  distantGround.visible=false; // the arena's own 320x320 marsh water sits lower than this plane and would be hidden under it
   hemi.intensity=0.7; hemi.color.set(0xc3d3b4); hemi.groundColor.set(0x384a2e);
   sun.intensity=0.55; fill.intensity=0.2; fill.color.set(0xb0c8a4);
   camera.position.set(0,1.7,17); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -5002,6 +5045,7 @@ function enterColosseumArena(){
   activeColliders = colosseumColliders;
   activeHeightZones = heightZonesOriginal;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8c4a0); scene.fog.near=45; scene.fog.far=200; // warm daylit arena
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.9; hemi.color.set(0xffe6c0); hemi.groundColor.set(0x6a5030);
   sun.intensity=1.0; fill.intensity=0.25; fill.color.set(0xffd8a0);
   camera.position.set(0,1.7,17); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -5013,6 +5057,7 @@ function enterIfritArena(){
   activeColliders = ifritColliders;
   activeHeightZones = heightZonesOriginal;
   scene.background.set(0x8a4a2e); scene.fog.color.set(0xa85a34); scene.fog.near=22; scene.fog.far=90; // warm dusk, fire-lit
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.55; hemi.color.set(0xffb87a); hemi.groundColor.set(0x3a2414);
   sun.intensity=0.5; fill.intensity=0.3; fill.color.set(0xff8a4a);
   camera.position.set(0,1.7,14); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -5097,14 +5142,13 @@ document.addEventListener('keydown', e => {
     setBanner('↺ repositioned'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='↺ repositioned') setBanner(''); }, 900);
   }
   // ==================== DEBUG — REMOVE BEFORE SHIPPING ====================
-  // H: jumps straight to the first wave of the most recent era (Islamic) for testing — same transition
-  // enterIslamicWorld()+wave10 spawn used for the real Boss III victory / era-3 respawn (Task 4).
+  // H: jumps straight to Cairo for testing. Cairo is enemy-free by design (spawnWave() early-returns for
+  // n>=9), so this is just a map preview — pending='wave' resolves to a no-op spawn, no combat starts.
   if (e.code==='KeyH' && player.alive){
     clearBots();
     enterIslamicWorld('🕌 Jumped to Mamluk Cairo');
-    // bossNum MUST match the era (era 3 is reached by beating bosses I+II+III) — without this the wave-12
-    // boss trigger does bossNum++ from 0→1 and wrongly spawns Boss I, then its defeat path sends you into
-    // the wrong map with mismatched era/wave state.
+    // bossNum MUST match the era (era 3 is reached by beating bosses I+II+III) — without this a stray
+    // future boss trigger would do bossNum++ from 0→1 and wrongly spawn Boss I with mismatched era/wave state.
     currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3]; pending='wave'; betweenTimer=1.2;
   }
   // L: instantly kills every living enemy on screen (wave, boss, Nile wave — whatever's active), for testing.
@@ -5296,22 +5340,22 @@ function clearBots(){ bots.forEach(b=>scene.remove(b.mesh)); bots.length=0; }
 function setEnemyCount(txt){ const e=document.getElementById('enemies'); if(e) e.textContent = txt!==undefined?txt:bots.filter(b=>b.alive).length; }
 function spawnWave(n){
   clearBots();
+  if(n>=9){ // waves 10-12 (Islamic/Mamluk Cairo): enemy-free by design — see onAllDead()'s bossNum===3
+    // branch, which now sends the win straight through instead of spawning waves or the Ifrit King boss
+    document.getElementById('wave').textContent=(n+1)+'/'+WAVES.length;
+    setEnemyCount();
+    return;
+  }
   const count=WAVES[n];
   const pyramid = n<3;        // waves 1-3: desert/pyramid reskin, ahead of the stone-temple boss dungeon
   const roman = n>=6 && n<9;  // waves 7-9: Roman legionaries
-  const islamic = n>=9;       // waves 10-12: Islamic/Mamluk Cairo, the final regular waves before Boss IV
   // Greek waves inherit waveDiff(n)'s accelerating curve just by continuing the same wave index, which made
   // them scale up faster than intended — harder than the pyramid era (correct, it's the later era) but not
   // by this much, especially with a still-harder era planned after this one. Softened back ~12%, which still
   // keeps every Greek wave above the pyramid era's toughest wave (compare wave3's diff below). Roman waves
   // get a smaller softening (~20% off the raw curve) since this is meant to be the hardest era so far —
   // full unscaled waveDiff(8) alone would be ~5.5x base HP, too steep for a first pass on brand new content.
-  // Islamic waves (the final era) get the deepest softening — full unscaled waveDiff(11) at wave 12 is ~8.8x
-  // base HP. Even the first-pass 0.72 multiplier still landed at ~6.34x, past the ~5.5x line the Roman era
-  // was capped at above, and diff also scales enemy speed/melee damage, so wave 12 was hitting noticeably
-  // harder than intended. Dropped to 0.63 (~5.55x at wave 12) — a conservative first pass pending real
-  // playtesting on this brand-new content, matching the Roman era's ceiling rather than exceeding it.
-  const diff = pyramid ? waveDiff(n) : roman ? waveDiff(n)*0.8 : islamic ? waveDiff(n)*0.63 : waveDiff(n)*0.88;
+  const diff = pyramid ? waveDiff(n) : roman ? waveDiff(n)*0.8 : waveDiff(n)*0.88;
   for(let i=0;i<count;i++){
     const sp=SPAWN_POINTS[(i*3 + n*2 + i) % SPAWN_POINTS.length];
     const x=sp[0], z=sp[1];
@@ -5326,12 +5370,6 @@ function spawnWave(n){
       // instead of looping hounds into this roster.
       skin = (i%2===0) ? 'manticore' : 'basilisk';
       wt = skin==='basilisk' ? 'javelin' : 'knife';
-    } else if(islamic){
-      // regular roster alternates two Islamic monsters — ifrit (ranged fire djinn, holds distance) and
-      // ghoul (fast melee grave-robber). A roc pack (3 rocs sharing one HP/AI) is added once per wave
-      // below, same convention as the Roman warhound pack.
-      skin = (i%2===0) ? 'ifrit' : 'ghoul';
-      wt = skin==='ifrit' ? 'pistol' : 'knife';
     } else {
       // Greek era (waves 4-6): Minotaur (front-immune charging brute) / Griffin (dive-then-claw hybrid) /
       // Medusa (heavy melee tank), in rotation — see the bot AI loop for their combat mechanics
@@ -5342,12 +5380,9 @@ function spawnWave(n){
     const col=ENEMY_COLORS[(i+n)%ENEMY_COLORS.length];
     // Greek grunts all share the same HP curve now (minotaur no longer weaker); wave 6 (the last regular
     // wave) is capped at a flat value instead of letting the difficulty curve keep scaling it up
-    const hp = (!pyramid && !roman && !islamic && n===5) ? 245 : roman ? [290,320,300][n-6] : islamic ? [330,360,340][n-9] : Math.round(BOT_MAX_HP*diff);
+    const hp = (!pyramid && !roman && n===5) ? 245 : roman ? [290,320,300][n-6] : Math.round(BOT_MAX_HP*diff);
     const scale = skin==='basilisk' ? 1.35 : 1;
-    // Ghoul is the era's fast-melee type (design spec: "tuned for speed over the era's other regular type") —
-    // give it a speed multiplier over the base formula, same precedent as the pyramid era's scarab/scorpion elites.
-    const speedMul = skin==='ghoul' ? 1.35 : 1;
-    spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp, diff, speed:(1+(diff-1)*0.5)*speedMul, scale});
+    spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp, diff, speed:1+(diff-1)*0.5, scale});
   }
   if(pyramid && n===1){ // wave 2: a scarab swarm — one pack entity (5 beetles, one hitbox/HP/AI) that moves and dies together
     const sx=-10, sz=-16;
@@ -5368,14 +5403,6 @@ function spawnWave(n){
     const gruntHp=[290,320,300][n-6];
     spawnBot(sp[0],sp[1],0x201d19,[sp[0]-2,0,sp[1]],[sp[0]+2,0,sp[1]],'knife',
       {skin:'warhound', hp:Math.round(gruntHp*1.4), diff, speed:1+(diff-1)*0.5});
-  }
-  if(islamic){ // one roc per Islamic wave — a single giant bird elite rather than a 3-unit pack (three
-    // overlapping small birds read as a spider tangle in playtest), keeping the same "one themed encounter
-    // per wave, not looped into the regular roster" convention the warhound pack established
-    const sp=SPAWN_POINTS[(n*5+2) % SPAWN_POINTS.length];
-    const gruntHp=[330,360,340][n-9];
-    spawnBot(sp[0],sp[1],0x4a3a2e,[sp[0]-2,0,sp[1]],[sp[0]+2,0,sp[1]],'javelin',
-      {skin:'roc', hp:Math.round(gruntHp*1.4), diff, speed:1+(diff-1)*0.5, scale:1.25});
   }
   document.getElementById('wave').textContent=(n+1)+'/'+WAVES.length;
   setEnemyCount();
@@ -5433,7 +5460,9 @@ function onAllDead(){
     // used to set gameWon=true + exitDungeon() here and just show "YOU WIN" — but gameWon disables firing
     // entirely and turns the next pointer-lock click into a full restart, so there was nowhere to actually
     // go afterward. Each mid-campaign boss falling leads into the next era's map instead (playable, not
-    // "game over"); only the actual final boss (currently the Ifrit King) ends the run.
+    // "game over"); the Colosseum Champion (bossNum 3) is the actual end of the run now that Cairo has no
+    // enemies of its own — see the bossNum===3 branch below. The Ifrit King branch is kept for a possible
+    // future restore of Cairo's combat but is unreachable in normal play now.
     if(bossNum===2){
       // Hydra down → cross into the Roman frontier (wave 7)
       enterRomanWorld('🏆 The Hydra falls! The Roman frontier awaits…');
@@ -5443,8 +5472,11 @@ function onAllDead(){
     if(bossNum===3){
       // Colosseum Champion down → cross into Mamluk Cairo (wave 10) — this used to just set gameWon and
       // strand the player in the empty Colosseum arena with nowhere to go; that was the reported bug.
-      enterIslamicWorld('🏆 The Champion falls! The gates of Cairo open…');
-      currentEra=3; waveIdx=ERA_START_WAVE[3]; pending='wave'; betweenTimer=2.4;
+      // Cairo itself is enemy-free by design (no wave spawns, no Ifrit King fight — see spawnWave()'s
+      // early return for n>=9) so the Champion's defeat is the actual end of the run: walk into a quiet
+      // Cairo as the win state, rather than queuing up combat that will never come.
+      currentEra=3; gameWon=true;
+      enterIslamicWorld('🏆 The Champion falls! Cairo opens its gates in peace — you have conquered Egypt! 🕌');
       return;
     }
     if(bossNum>=4){
@@ -5472,11 +5504,12 @@ function onAllDead(){
     waveIdx++; pending='wave'; betweenTimer=2.5; setBanner('WAVE '+(waveIdx+1)+' incoming…');
     return;
   }
-  // a normal wave was cleared: a boss follows wave 3 (idx 2), wave 6 (idx 5), wave 9 (idx 8 — the last
-  // Roman wave) and wave 12 (idx 11 — the last Islamic wave, triggering the Ifrit King); the Nile Wave
-  // follows wave 2 (idx 1)
-  if(waveIdx===2 || waveIdx===5 || waveIdx===8 || waveIdx===11){ pending='boss'; betweenTimer=2.2;
-    setBanner(waveIdx===5?'The Lernaean Hydra rises from the marsh…':waveIdx===8?'The Champion of the arena strides forth…':waveIdx===11?'The Ifrit King rises from the flame…':'A boss awaits below…'); }
+  // a normal wave was cleared: a boss follows wave 3 (idx 2), wave 6 (idx 5), and wave 9 (idx 8 — the
+  // last Roman wave, triggering the Colosseum Champion, now the run's actual final boss — see onAllDead()'s
+  // bossNum===3 branch). Waves 10-12 (Islamic/Cairo) never spawn enemies, so waveIdx never reaches 11 in
+  // normal play. The Nile Wave follows wave 2 (idx 1)
+  if(waveIdx===2 || waveIdx===5 || waveIdx===8){ pending='boss'; betweenTimer=2.2;
+    setBanner(waveIdx===5?'The Lernaean Hydra rises from the marsh…':waveIdx===8?'The Champion of the arena strides forth…':'A boss awaits below…'); }
   else if(waveIdx===1 && pyramidPhase){ pending='nile'; betweenTimer=2.2; setBanner('The Nile stirs…'); }
   else { waveIdx++; pending='wave'; betweenTimer=2.5; setBanner('WAVE '+(waveIdx+1)+' incoming…'); }
 }
