@@ -136,6 +136,8 @@ const greekDungeonColliders = []; // Greek boss dungeon colliders (Boss II — t
 const romanColliders = [];       // Roman overworld colliders (map built, not yet wired into wave/era progression)
 const hydraColliders = [];       // Greek boss arena colliders (Boss II — the Hydra; an open-air marsh arena, not a dungeon)
 const colosseumColliders = [];   // Roman boss arena colliders (Boss III — the Colosseum Champion; a full arena)
+const ifritColliders = [];       // Islamic boss arena colliders (Boss IV — the Ifrit King; the Citadel courtyard)
+const islamicColliders = [];     // Islamic/Mamluk Cairo overworld colliders (waves 10-12)
 let addTarget = colliders;       // where addBox pushes during world build
 let activeColliders = colliders; // which set physics currently uses
 function addBox(cx,cz,w,d,roofY){ addTarget.push({x1:cx-w/2, z1:cz-d/2, x2:cx+w/2, z2:cz+d/2, roofY}); }
@@ -145,6 +147,7 @@ const heightZonesOriginal = [];
 const heightZonesPyramid = [];
 const heightZonesGreek = [];
 const heightZonesRoman = [];
+const heightZonesIslamic = [];
 let heightZoneTarget = heightZonesOriginal;   // where sniperTower()/plaza() push during world build
 let activeHeightZones = heightZonesPyramid;   // which set getTerrainHeight() reads at runtime (pyramid phase starts active)
 function getTerrainHeight(x,z,curH){
@@ -249,6 +252,35 @@ function skylineTower(x,z,w,h,color){
     skylineTower(x,z,w,h,colors[i%colors.length]);
   }
 })();
+
+// ---- distant ground backing: every map's real ground is a finite slab (~60 wide), way smaller than the
+// fog draw distance (up to 220), so standing at its edge exposed the slab's bare side face against open sky
+// — read as "standing on a floating island". This huge, cheap plane sits tucked just under every map's real
+// ground (all of them top out at y=0), invisible under the detailed geometry, and only shows past its edges,
+// giving the horizon something to fade into instead of nothing. Tinted to match each era's fog color (see
+// era-switch functions below) so the seam where the real ground stops is as close to invisible as possible.
+function distantGroundTexture(size=256){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#a8a296'; ctx.fillRect(0,0,size,size);
+  for(let i=0;i<700;i++){
+    const x=Math.random()*size, y=Math.random()*size, r=6+Math.random()*14;
+    const shade=140+((Math.random()-0.5)*36)|0;
+    ctx.fillStyle=`rgba(${shade},${shade},${shade-8},0.5)`;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  }
+  const tex=new THREE.CanvasTexture(c);
+  tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  tex.repeat.set(70,70);
+  return tex;
+}
+const distantGround = new THREE.Mesh(
+  new THREE.PlaneGeometry(1400,1400),
+  new THREE.MeshLambertMaterial({map:distantGroundTexture()})
+);
+distantGround.rotation.x = -Math.PI/2;
+distantGround.position.y = -0.05;
+scene.add(distantGround);
 
 // ---- textured ground (patchwork of grass/dirt/path voxel tiles) ----
 function tileTexture(size=512, cell=8){
@@ -375,6 +407,54 @@ function checkerTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // real ancient-theater orchestra floor pattern: a plain two-tone stone checkerboard, not a colorful mosaic
   const light='#d8cdb0', dark='#453f36';
   for(let j=0;j<P;j++)for(let i=0;i<P;i++){ x.fillStyle=((i>>2)+(j>>2))%2 ? dark : light; x.fillRect(i,j,1,1); }
+  return c; }
+function zellijeTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  // Islamic geometric zellige tile floor. First version had only a single 2x2 diamond motif across the
+  // whole 16px canvas in solid, highly-saturated teal — at ground scale that read as a giant loud quilt
+  // pattern, not a stone floor, and clashed with every other era's muted ground textures. Redesigned with
+  // checkerTex's finer 4x4 grid (a real tile-grout scale), a much softer sand base, and the teal/gold
+  // accent demoted to a small inset on only 1-in-4 tiles instead of covering the whole floor.
+  const sand='#d9c9a0', grout='#b7a67c', teal='#2f7268', gold='#b8863a';
+  x.fillStyle=sand; x.fillRect(0,0,P,P);
+  x.fillStyle=grout;
+  for(let i=0;i<P;i+=4){ x.fillRect(i,0,1,P); x.fillRect(0,i,P,1); }
+  x.fillStyle=teal;
+  for(let j=0;j<P;j+=8)for(let i=0;i<P;i+=8){
+    x.beginPath(); x.moveTo(i+2,j+1); x.lineTo(i+3,j+2); x.lineTo(i+2,j+3); x.lineTo(i+1,j+2); x.closePath(); x.fill();
+  }
+  x.fillStyle=gold;
+  for(let j=4;j<P;j+=8)for(let i=4;i<P;i+=8){ x.fillRect(i+2,j+2,1,1); }
+  return c; }
+function cairoDustTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  // Mid-tone warm street dust. The Cairo map used to be paved corner-to-corner in the bright zellige tile
+  // below, which — with pale sandstone walls on top of it — left every surface in the scene at nearly the
+  // same high brightness and the whole map read as washed out. This is the darker base the light landmarks
+  // and the tile plazas now sit against, so there is actually some tonal range.
+  const st=['#a58a5e','#b0946a','#9a8054','#b8a077','#8f7749'];
+  x.fillStyle='#a08659'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j+=2)for(let i=0;i<P;i+=2){
+    const n=Math.abs(Math.sin(i*5.3+j*11.7)*271%1);
+    x.fillStyle=st[(n*st.length)|0]; x.fillRect(i,j,2,2);
+  }
+  // scattered darker grit
+  for(let k=0;k<26;k++){ const n=Math.abs(Math.sin(k*17.3)*431%1), m=Math.abs(Math.cos(k*7.1)*233%1);
+    x.fillStyle='#7d673f'; x.fillRect((n*P)|0,(m*P)|0,1,1); }
+  return c; }
+function citadelStoneTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  // large sandstone ashlar block coursing, same offset-brick technique romanBrickTex uses, just scaled and
+  // colored for big fortress stonework. voxMat()'s plain noise texture is designed for small individual
+  // elements (columns, merlons) — stretched unrepeated across a 16-unit-wide wall face it reads as a
+  // near-invisible blur, which is why the Citadel's podium wall looked like a giant flat blank slab.
+  const base='#c9a876', mortar='#a8875c', hi='#ddc294';
+  x.fillStyle=mortar; x.fillRect(0,0,P,P);
+  for(let by=0;by<P;by+=4){
+    const off = ((by/4)|0)%2 ? 4 : 0;
+    for(let bx=-4;bx<P;bx+=8){
+      const n=Math.abs(Math.sin(bx*4.1+by*9.3)*137%1);
+      x.fillStyle = n>0.5?hi:base;
+      x.fillRect(bx+off+1,by+1,6,2);
+    }
+  }
   return c; }
 function cobbleTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   const st=['#8f8d88','#9d9b95','#7c7a75','#a7a49d'];
@@ -850,6 +930,9 @@ function marbleFloorTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // the perimeter walls above only ever had visual meshes — no collider, so the player could walk straight
   // through them into the empty void beyond (only the pillars got addBox() calls). Fixed.
   addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
+  // solid ceiling backing flush under the beam strips below — the strips alone left wide gaps that showed
+  // the raw scene background (near-black) above the room, reading as an open void instead of an indoor ceiling
+  dblock(R*2,0.6,R*2,stoneMat,0,10.6,0);
   // vaulted ceiling strips so the room doesn't feel like an open dark void
   for(let k=-2;k<=2;k++) dblock(2,1,R*2,stoneMat,k*8,11.4,0);
   // pillars for cover, capped with alternating blue/orange glow + a strong point light
@@ -893,6 +976,8 @@ addTarget = pyramidDungeonColliders;
   pblock(1,12,R*2,sandBrickMat,-R,6,0); pblock(1,12,R*2,sandBrickMat,R,6,0);
   // same missing-collider bug as the original dungeon — the perimeter walls were purely visual
   addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
+  // solid ceiling backing flush under the beam strips — see the matching comment in buildDungeon for why
+  pblock(R*2,0.6,R*2,sandBrickMat,0,10.6,0);
   for(let k=-2;k<=2;k++) pblock(2,1,R*2,sandBrickMat,k*8,11.4,0);
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     pblock(2,10,2,sandBrickMat,x,5,z); addBox(x,z,2.3,2.3);
@@ -970,6 +1055,8 @@ addTarget = greekDungeonColliders;
   gblock(1,12,R*2,marbleWallMat,-R,6,0); gblock(1,12,R*2,marbleWallMat,R,6,0);
   // same missing-collider bug as the original dungeon — the perimeter walls were purely visual
   addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
+  // solid ceiling backing flush under the beam strips — see the matching comment in buildDungeon for why
+  gblock(R*2,0.6,R*2,marbleWallMat,0,10.6,0);
   for(let k=-2;k<=2;k++) gblock(2,1,R*2,marbleWallMat,k*8,11.4,0);
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     gblock(2,10,2,marbleWallMat,x,5,z); addBox(x,z,2.3,2.3);
@@ -1193,6 +1280,60 @@ addTarget = colosseumColliders;
   colosseumArena.add(new THREE.AmbientLight(0xffe6c0, 0.5));
 })();
 
+// ===== IFRIT ARENA (Boss IV) — the Citadel's inner courtyard: a walled, crenellated square, open sky,
+// fire braziers lighting a warm dusk fight. Open-air like the Hydra marsh/Colosseum pit, not a dungeon. =====
+const ifritArena = new THREE.Group();
+addTarget = ifritColliders;
+(function buildIfritArena(){
+  const wallMat = voxMat(0xb89468,{noise:14,pattern:'plate'});
+  const merlonMat = voxMat(0xa07f52,{noise:12});
+  const darkMat = voxMat(0x241c14,{noise:10});
+  const floorMat = new THREE.MeshLambertMaterial({map:_finish(zellijeTex(),16)});
+  function iblock(w,h,d,mat,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; ifritArena.add(m); return m; }
+  const R=17;
+  const floor=new THREE.Mesh(new THREE.BoxGeometry(R*2,0.4,R*2), floorMat); floor.position.set(0,-0.2,0); ifritArena.add(floor);
+  [[0,-R,R*2+2,1.4],[0,R,R*2+2,1.4],[-R,0,1.4,R*2+2],[R,0,1.4,R*2+2]].forEach(([x,z,w,d])=>{
+    iblock(w,4.4,d, wallMat, x,2.2,z); addBox(x,z,w,d);
+  });
+  const merlonSpacing=1.8;
+  for(let x=-R;x<=R;x+=merlonSpacing){
+    [-R,R].forEach(z=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(x,4.85,z); ifritArena.add(m); });
+  }
+  // Corner de-duplication has to be per-CORNER, not per-row. R*2/merlonSpacing (34/1.8) is not an integer,
+  // so the x-loop above lands on -R but never exactly on +R: skipping this loop's whole z===-R iteration
+  // removed the genuine duplicate at (-R,-R) but also deleted (+R,-R), which the x-loop never placed,
+  // leaving a visible gap in the parapet. Only the one coincident pair is skipped now.
+  for(let z=-R;z<=R;z+=merlonSpacing){
+    [-R,R].forEach(x=>{
+      if(x===-R && z===-R) return; // already placed by the x-direction loop
+      const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(x,4.85,z); ifritArena.add(m);
+    });
+  }
+  // Corner tally with R=17, spacing=1.8 (neither loop's step lands on +R exactly):
+  //   (-R,-R) x-loop places it, z-loop skips it   (-R,+R) x-loop places it
+  //   (+R,-R) z-loop places it                    (+R,+R) neither reaches — add it here
+  { const m=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.9,0.9), merlonMat); m.position.set(R,4.85,R); ifritArena.add(m); }
+  [[-R+2,-R+2],[R-2,-R+2],[-R+2,R-2],[R-2,R-2]].forEach(([x,z])=>{
+    const stand=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,1.1,8), darkMat); stand.position.set(x,0.55,z); ifritArena.add(stand);
+    const bowl=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.24,0.24,8), darkMat); bowl.position.set(x,1.15,z); ifritArena.add(bowl);
+    const flame=new THREE.Mesh(new THREE.ConeGeometry(0.24,0.5,7), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false})); flame.position.set(x,1.5,z); ifritArena.add(flame);
+    const light=new THREE.PointLight(0xff8a2a,1.1,9); light.position.set(x,1.6,z); ifritArena.add(light);
+  });
+  // cover in the courtyard, same broad/tall logic as the Colosseum's coverWall (the boss fires fast at
+  // chest height) — just two, so the fire-meteor telegraph (the boss's other tool) still has room to punish camping
+  function courtyardCover(x,z,w,rot){
+    const wall=new THREE.Group(); wall.position.set(x,0,z); wall.rotation.y=rot||0; ifritArena.add(wall);
+    const main=new THREE.Mesh(new THREE.BoxGeometry(w,3.2,0.7), wallMat); main.position.set(0,1.6,0); wall.add(main);
+    // rotated bounding box (same formula as marketStall's collider, rather than the Colosseum coverWall's
+    // axis-aligned approximation) — cheap to compute exactly, so no reason to carry the overhang here
+    const c=Math.cos(rot||0), s=Math.sin(rot||0), d=0.7;
+    const new_w=Math.abs(w*c)+Math.abs(d*s), new_d=Math.abs(w*s)+Math.abs(d*c);
+    addBox(x,z,new_w,new_d);
+  }
+  courtyardCover(-5,9,4.6,0.25); courtyardCover(5,9,4.6,-0.25);
+  ifritArena.add(new THREE.AmbientLight(0xffb87a, 0.5));
+})();
+
 addTarget = colliders;   // back to overworld for anything built later
 // all three dungeons begin detached from the scene (pyramid overworld is active)
 
@@ -1206,7 +1347,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 // can happen in). clearWorldGroups() sweeps every possible world group unconditionally before any add, so
 // the invariant "at most one world group in the scene" holds no matter what state the flags are in.
 function clearWorldGroups(){
-  [pyramidOverworld, greekOverworld, romanOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
 }
 function enterDungeon(){
   dungeonWasPyramid = pyramidPhase; // false during era 1 (Greek) — the only other era currently reachable
@@ -1216,6 +1357,7 @@ function enterDungeon(){
   activeColliders = dungeonWasPyramid ? pyramidDungeonColliders : greekDungeonColliders;
   activeHeightZones = heightZonesOriginal; // neither dungeon has climbable rooftops; keep this deterministic regardless of era
   scene.background.set(0x141726); scene.fog.color.set(0x141726); scene.fog.near=14; scene.fog.far=58;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.35; hemi.color.set(0x4a6fbf); hemi.groundColor.set(0x1a1e26);
   sun.intensity=0.0; fill.intensity=0.18; fill.color.set(0x6f8fdd);
   camera.position.set(0,1.7,18); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -1227,6 +1369,7 @@ function exitDungeon(){
   activeColliders = dungeonWasPyramid ? pyramidColliders : greekColliders;
   activeHeightZones = dungeonWasPyramid ? heightZonesPyramid : heightZonesGreek;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
   camera.position.copy(spawnPoint); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -1450,6 +1593,7 @@ function enterNileWave(){
   clearWorldGroups(); scene.add(nileWorld); sky.visible=true;
   activeColliders = nileColliders; activeHeightZones = heightZonesOriginal;
   scene.background.set(0x4a90b8); scene.fog.color.set(0x4a90b8); scene.fog.near=30; scene.fog.far=140;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.9; hemi.color.set(0xcfe8f5); hemi.groundColor.set(0x1a4a5f);
   sun.intensity=1.0; fill.intensity=0.3; fill.color.set(0xaecbe0);
   camera.position.set(0,1.7,0); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -1465,6 +1609,7 @@ function exitNileWave(){
   clearWorldGroups(); scene.add(pyramidOverworld); sky.visible=true;
   activeColliders = pyramidColliders; activeHeightZones = heightZonesPyramid;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
   camera.position.copy(spawnPoint); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -2267,6 +2412,264 @@ scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld || 
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
+// ===================== ISLAMIC OVERWORLD (Mamluk Cairo) — waves 10-12, the final arc =====================
+// Same swap architecture as every prior overworld: its own collider/height-zone arrays, swept into its own
+// group below. Not yet wired into any wave/era-transition logic in this task — see Task 2/4 for that.
+addTarget = islamicColliders;
+heightZoneTarget = heightZonesIslamic;
+(function buildIslamicOverworld(){
+  const sandstone = 0xc9a876;      // warm Citadel sandstone
+  const sandstoneLight = 0xe0c89a;
+  const domeMat = voxMat(0x1f7a72,{noise:10});   // turquoise-glazed tile, ties back to zellijeTex's palette
+  const goldMat = metalMatP(0xc9a13a,80,0xffe8a0);
+  const woodMat = voxMat(0x6b4a28,{noise:16});
+  const awningMat = voxMat(0xb5342a,{noise:10}); // deep red-and-cream market awnings
+
+  const blueTile = voxMat(0x2a4a8a,{noise:10});      // deep lapis tile panels — a cool accent in an otherwise warm map
+  const timberMat = voxMat(0x4a3018,{noise:16});     // dark mashrabiya timber, the map's darkest note
+  const awningGreen = voxMat(0x2e6b4a,{noise:10});
+  const brassMat = metalMatP(0xc9a13a,80,0xffe8a0);
+
+  // ---- ground: warm dust everywhere, tile only where it is a deliberate plaza, cobble for the streets.
+  // Paving the whole 62x62 in bright zellige tile is what made this map read as a giant loud quilt. ----
+  const groundMat = new THREE.MeshLambertMaterial({map:_finish(cairoDustTex(),42)});
+  const ground = new THREE.Mesh(new THREE.BoxGeometry(62,1,62), groundMat); ground.position.set(0,-0.5,0); scene.add(ground);
+  const roadMat = new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),18), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
+  function roadPath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),roadMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
+  // The cross street is drawn as the full N-S run plus two E-W ARMS that stop at the N-S road's edge
+  // (x=+/-4), instead of two full-length slabs. Two full slabs both sat at y=0.07 with identical geometry
+  // height and the same polygon offset, so they were exactly coplanar across the central 8x8 square — a
+  // guaranteed z-fight, which is the flickering patch that showed up in the middle of the crossroads.
+  roadPath(0,0,8,58);
+  roadPath(-16.5,0,25,8); roadPath(16.5,0,25,8);
+  const tileMat = new THREE.MeshLambertMaterial({map:_finish(zellijeTex(),6), polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-3});
+  function tilePlaza(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.16,d),tileMat); m.position.set(x,0.08,z); m.receiveShadow=true; scene.add(m); }
+
+  // ---- perimeter city wall: encloses the map so it reads as a walled city instead of an open plain,
+  // and gives the horizon something other than empty sand ----
+  const wallMat = new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),10)});
+  [[0,-28,58,1.4],[0,28,58,1.4],[-28,0,1.4,58],[28,0,1.4,58]].forEach(([wx,wz,ww,wd])=>{
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(ww,5.2,wd), wallMat); seg.position.set(wx,2.6,wz); scene.add(seg);
+    const cornice=new THREE.Mesh(new THREE.BoxGeometry(ww+0.3,0.4,wd+0.3), voxMat(sandstoneLight,{noise:12})); cornice.position.set(wx,5.4,wz); scene.add(cornice);
+    addBox(wx,wz,ww,wd);
+  });
+  // merlons along the wall the player faces from spawn — the one that actually fills their view
+  for(let mx=-27;mx<=27;mx+=2.6){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.0,1.2), voxMat(sandstoneLight,{noise:12})); m.position.set(mx,6.1,-28); scene.add(m);
+  }
+
+  // ================= THE GREAT GATE (Bab) — the map's hero landmark =================
+  // The player enters this map at (0,10) looking down -Z, and previously every single landmark sat behind
+  // them or far off to one side, so the opening view was bare ground to the horizon. That empty sightline
+  // is the main reason the map read as unfinished. This puts a tall, colourful, unmistakably Cairene gate
+  // straight down the main street, framed by the twin towers, as the first thing they see.
+  (function greatGate(){
+    const GZ=-14, towerW=4, towerH=9.5, gap=5.5;   // gap leaves the 8-wide street fully walkable between the piers
+    [-1,1].forEach(side=>{
+      const tx=side*(gap+towerW/2);
+      const tower=new THREE.Mesh(new THREE.BoxGeometry(towerW,towerH,towerW), wallMat); tower.position.set(tx,towerH/2,GZ); scene.add(tower);
+      addBox(tx,GZ,towerW,towerW);
+      // banded stonework + a corbelled cornice
+      [3.2,6.4].forEach(by=>{ const band=new THREE.Mesh(new THREE.BoxGeometry(towerW+0.25,0.45,towerW+0.25), voxMat(sandstoneLight,{noise:12})); band.position.set(tx,by,GZ); scene.add(band); });
+      const cornice=new THREE.Mesh(new THREE.BoxGeometry(towerW+0.7,0.6,towerW+0.7), voxMat(sandstoneLight,{noise:12})); cornice.position.set(tx,towerH+0.3,GZ); scene.add(cornice);
+      for(let i=0;i<4;i++)for(let j=0;j<4;j++){
+        if(i>0&&i<3&&j>0&&j<3) continue;           // ring of merlons around the tower top
+        const m=new THREE.Mesh(new THREE.BoxGeometry(0.85,0.95,0.85), voxMat(sandstoneLight,{noise:12}));
+        m.position.set(tx-1.5+i, towerH+1.1, GZ-1.5+j); scene.add(m);
+      }
+      // deep-set arched niches with lapis tile backing, the gate's main colour accent
+      [2.4,5.6].forEach(ny=>{
+        const niche=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.0,0.16), blueTile); niche.position.set(tx,ny,GZ+towerW/2+0.02); scene.add(niche);
+        const arch=new THREE.Mesh(new THREE.TorusGeometry(0.78,0.16,6,10,Math.PI), voxMat(sandstone,{noise:12})); arch.position.set(tx,ny+1.0,GZ+towerW/2+0.04); scene.add(arch);
+      });
+      // brass lantern hanging on a bracket beside each niche
+      const bracket=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.6), brassMat); bracket.position.set(tx,7.4,GZ+towerW/2+0.3); scene.add(bracket);
+      const lantern=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.5,0.34), brassMat); lantern.position.set(tx,7.05,GZ+towerW/2+0.55); scene.add(lantern);
+      const glow=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.3,0.22), new THREE.MeshBasicMaterial({color:0xffcf6a,fog:false})); glow.position.set(tx,7.05,GZ+towerW/2+0.55); scene.add(glow);
+      const lampLight=new THREE.PointLight(0xffb84a,0.7,9); lampLight.position.set(tx,7.0,GZ+towerW/2+0.8); scene.add(lampLight);
+    });
+    // span over the street: a lintel + a pointed arch + a crenellated parapet. No collider — the whole
+    // point is to walk under it, and this collision system treats a box as full-height regardless of its
+    // mesh, so a collider here would seal the street shut (same reasoning as the Roman arch's attic).
+    const lintel=new THREE.Mesh(new THREE.BoxGeometry(gap*2+0.5,1.1,3.2), wallMat); lintel.position.set(0,7.2,GZ); scene.add(lintel);
+    const archOuter=new THREE.Mesh(new THREE.TorusGeometry(gap-0.6,0.5,8,16,Math.PI), voxMat(sandstoneLight,{noise:12})); archOuter.position.set(0,5.6,GZ+1.4); scene.add(archOuter);
+    const archInner=new THREE.Mesh(new THREE.TorusGeometry(gap-1.3,0.34,8,16,Math.PI), blueTile); archInner.position.set(0,5.6,GZ+1.5); scene.add(archInner);
+    const parapet=new THREE.Mesh(new THREE.BoxGeometry(gap*2+0.5,0.5,3.4), voxMat(sandstoneLight,{noise:12})); parapet.position.set(0,7.9,GZ); scene.add(parapet);
+    for(let i=0;i<7;i++){ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.9,0.9), voxMat(sandstoneLight,{noise:12})); m.position.set(-4.5+i*1.5,8.6,GZ); scene.add(m); }
+    // green-and-gold banners hung either side of the opening
+    [-1,1].forEach(side=>{
+      const banner=new THREE.Mesh(new THREE.BoxGeometry(1.3,3.0,0.08), awningGreen); banner.position.set(side*3.6,4.6,GZ+1.75); scene.add(banner);
+      const trim=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.3,0.1), brassMat); trim.position.set(side*3.6,3.2,GZ+1.78); scene.add(trim);
+    });
+    tilePlaza(0,GZ+5,14,8);
+  })();
+
+  // ---- Citadel: a walled compound with crenellated (merlon) walls and two climbable corner towers ----
+  function citadel(cx,cz){
+    const w=16,d=14;
+    addBox(cx,cz,w,d);
+    const podium=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,d), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),8)})); podium.position.set(cx,1.7,cz); scene.add(podium);
+    const merlonMat = voxMat(sandstoneLight,{noise:12});
+    for(let x=-w/2;x<=w/2;x+=1.6){
+      [cz-d/2,cz+d/2].forEach(z=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), merlonMat); m.position.set(cx+x,3.8,z); scene.add(m); });
+    }
+    for(let z=-d/2;z<=d/2;z+=1.6){
+      if(z===-d/2 || z===d/2) continue; // the four corners are already placed by the x-direction loop above — skip them here to avoid coincident/z-fighting cubes
+      [cx-w/2,cx+w/2].forEach(x=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), merlonMat); m.position.set(x,3.8,cz+z); scene.add(m); });
+    }
+    const gate=new THREE.Mesh(new THREE.BoxGeometry(3.2,3,0.6), voxMat(0x241c14,{noise:10})); gate.position.set(cx,1.5,cz-d/2-0.35); scene.add(gate);
+    const gateArch=new THREE.Mesh(new THREE.TorusGeometry(1.6,0.3,8,14,Math.PI), voxMat(sandstone,{noise:12})); gateArch.position.set(cx,3,cz-d/2-0.35); scene.add(gateArch);
+  }
+  citadel(-19,17);
+  // Citadel's climbable corner towers, same proven mechanic as every prior era. Both moved off their original
+  // spots (-25,10) and (-13,24): the Citadel's own addBox(-19,17,16,14) footprint (x∈[-27,-11], z∈[10,24]) is
+  // a full-height collider with no roofY, so it was silently swallowing roughly half of each tower's roof
+  // plateau/ramp corridor as an invisible wall — and the second tower's 's' ramp used to run off the far edge
+  // of the reachable map entirely (z up to 37, past the z∈[-29,29] movement clamp). Verified by hand below.
+  sniperTower(-25,6, 4.5, 7, 0xb8a074, 'e');   // roof x[-27.25,-22.75] z[3.75,8.25], ramp x[-22.75,-10.85] z[4.6,7.4] — z stays <10, clear of the Citadel box regardless of x
+  sniperTower(-6,25, 4, 6.5, 0xc0a878, 'e');   // roof x[-8,-4] z[23,27], ramp x[-4,7.05] z[23.6,26.4] — x stays >-11, clear of the Citadel box regardless of z; ramp lands well inside z<29
+
+  // ---- Mosque: arcaded base with lapis tile panels, a drum-raised dome, and a tall minaret. Moved from
+  // the far corner (19,-22) to the left of the main street so it is actually in view from the spawn. ----
+  function mosque(cx,cz){
+    const base=new THREE.Mesh(new THREE.BoxGeometry(9,5,9), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),5)})); base.position.set(cx,2.5,cz); scene.add(base);
+    addBox(cx,cz,9,9);
+    // arcade of pointed arches across the street-facing side, with lapis spandrel panels between them
+    for(let i=0;i<3;i++){
+      const ax=cx-3+i*3;
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.32,3.4,8), voxMat(0xe0d6be,{noise:10})); col.position.set(ax,1.7,cz+4.6); scene.add(col);
+      const arch=new THREE.Mesh(new THREE.TorusGeometry(0.95,0.22,6,10,Math.PI), voxMat(sandstoneLight,{noise:12})); arch.position.set(ax,3.4,cz+4.6); scene.add(arch);
+      const panel=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.1,0.12), blueTile); panel.position.set(ax,4.5,cz+4.55); scene.add(panel);
+    }
+    const parapet=new THREE.Mesh(new THREE.BoxGeometry(9.4,0.5,9.4), voxMat(sandstoneLight,{noise:12})); parapet.position.set(cx,5.2,cz); scene.add(parapet);
+    // raised drum lifts the dome clear of the roofline so it reads from a distance
+    const drum=new THREE.Mesh(new THREE.CylinderGeometry(3.0,3.2,1.6,14), voxMat(sandstoneLight,{noise:12})); drum.position.set(cx,6.2,cz); scene.add(drum);
+    for(let i=0;i<8;i++){ const a=i/8*Math.PI*2;   // ring of small windows around the drum
+      const w=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.7,0.3), blueTile); w.position.set(cx+Math.cos(a)*3.05,6.3,cz+Math.sin(a)*3.05); w.rotation.y=-a; scene.add(w); }
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(3.15,14,8,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(cx,7.0,cz); scene.add(dome);
+    const finial=new THREE.Mesh(new THREE.ConeGeometry(0.18,0.8,6), goldMat); finial.position.set(cx,10.4,cz); scene.add(finial);
+    // minaret: a tall tapering tower with a balcony ring and a tiled cap
+    const minaretX=cx+6, minaretZ=cz-4;
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.95,9,10), voxMat(0xe0d6be,{noise:12})); shaft.position.set(minaretX,4.5,minaretZ); scene.add(shaft);
+    addBox(minaretX,minaretZ,1.9,1.9);
+    [3.0,6.0].forEach(by=>{ const band=new THREE.Mesh(new THREE.CylinderGeometry(0.88,0.88,0.35,10), blueTile); band.position.set(minaretX,by,minaretZ); scene.add(band); });
+    const balcony=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,0.32,10), voxMat(sandstoneLight,{noise:10})); balcony.position.set(minaretX,8.6,minaretZ); scene.add(balcony);
+    const upper=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.62,1.5,10), voxMat(0xe0d6be,{noise:12})); upper.position.set(minaretX,9.5,minaretZ); scene.add(upper);
+    const cap=new THREE.Mesh(new THREE.ConeGeometry(0.75,1.7,10), domeMat); cap.position.set(minaretX,11.0,minaretZ); scene.add(cap);
+    const capFinial=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.55,6), goldMat); capFinial.position.set(minaretX,12.1,minaretZ); scene.add(capFinial);
+  }
+  mosque(-13,-6);
+  tilePlaza(-13,2,12,6);   // tiled forecourt in front of the mosque arcade
+
+  // ---- Khan bazaar: a covered market square — stalls with alternating red/green awnings, stacked crates,
+  // barrels and hanging carpets. This is the map's colour hotspot. ----
+  function marketStall(x,z,rot,mat){
+    const stall=new THREE.Group(); stall.position.set(x,0,z); stall.rotation.y=rot||0; scene.add(stall);
+    const post=(px,pz)=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.8,6), woodMat); p.position.set(px,0.9,pz); stall.add(p); };
+    post(-1,-0.7); post(1,-0.7); post(-1,0.7); post(1,0.7);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.15,1.8), mat||awningMat); roof.position.set(0,1.85,0); stall.add(roof);
+    // striped valance hanging off the awning's front edge
+    for(let i=0;i<5;i++){ const v=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.28,0.06), i%2?(mat||awningMat):voxMat(0xe8dcc0,{noise:8}));
+      v.position.set(-0.96+i*0.48,1.63,0.9); stall.add(v); }
+    const table=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.6,1.4), woodMat); table.position.set(0,0.3,0); stall.add(table);
+    // goods heaped on the table
+    for(let i=0;i<3;i++){ const g2=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.22,0.36), i%2?blueTile:voxMat(0xb8862a,{noise:14}));
+      g2.position.set(-0.6+i*0.6,0.71,0); stall.add(g2); }
+    // collider in world space: rotated bounding box (same pattern as ruinedWall/coverWall)
+    const c=Math.cos(rot||0), s=Math.sin(rot||0);
+    const w=2.4, d=1.8;
+    addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
+  }
+  marketStall(11,7,0,awningMat); marketStall(17,7,0.15,awningGreen); marketStall(14,12,1.5708,awningMat);
+  marketStall(19,12,1.5708,awningGreen);
+  tilePlaza(14.5,9.5,13,11);
+  // crates, barrels and a rolled carpet stack filling the square
+  function crateStack(x,z){
+    const c1=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), woodMat); c1.position.set(x,0.4,z); scene.add(c1);
+    const c2=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.62,0.62), timberMat); c2.position.set(x+0.12,1.11,z-0.08); c2.rotation.y=0.4; scene.add(c2);
+    addBox(x,z,0.9,0.9);
+  }
+  crateStack(9,13); crateStack(20,8.5); crateStack(12.5,5.5);
+  function barrel(x,z){
+    const b=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.9,10), woodMat); b.position.set(x,0.45,z); scene.add(b);
+    [0.2,0.7].forEach(by=>{ const hoop=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,0.1,10), brassMat); hoop.position.set(x,by,z); scene.add(hoop); });
+    addBox(x,z,0.72,0.72);
+  }
+  barrel(17.5,13.5); barrel(10.2,9.5);
+  // carpets draped over a rail — pure colour, no collider
+  [[8.4,10.5,0xa8342a],[8.4,11.4,0x2a4a8a],[8.4,12.3,0x2e6b4a]].forEach(([cx2,cz2,col])=>{
+    const rug=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.3,0.75), voxMat(col,{noise:12})); rug.position.set(cx2,1.0,cz2); scene.add(rug);
+  });
+
+  // ---- townhouses with mashrabiya oriel windows: cheap, dense, and unmistakably Cairene. These fill the
+  // large dead expanses the map used to have between its three widely-spaced landmarks. ----
+  function townhouse(x,z,h,rot){
+    const grp=new THREE.Group(); grp.position.set(x,0,z); grp.rotation.y=rot||0; scene.add(grp);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(5,h,5), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),4)})); body.position.set(0,h/2,0); grp.add(body);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(5.4,0.45,5.4), voxMat(sandstoneLight,{noise:12})); cap.position.set(0,h+0.2,0); grp.add(cap);
+    // projecting timber oriel (mashrabiya) on the street face, with a lattice front
+    const oriel=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.5,0.7), timberMat); oriel.position.set(0,h*0.6,2.85); grp.add(oriel);
+    for(let i=0;i<5;i++){ const slat=new THREE.Mesh(new THREE.BoxGeometry(0.09,1.3,0.08), voxMat(0x6b4a28,{noise:10})); slat.position.set(-1.0+i*0.5,h*0.6,3.22); grp.add(slat); }
+    const hood=new THREE.Mesh(new THREE.BoxGeometry(2.9,0.2,0.95), timberMat); hood.position.set(0,h*0.6+0.85,2.95); grp.add(hood);
+    // doorway with a pointed arch
+    const door=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.9,0.15), timberMat); door.position.set(0,0.95,2.55); grp.add(door);
+    const dArch=new THREE.Mesh(new THREE.TorusGeometry(0.62,0.14,6,10,Math.PI), voxMat(sandstoneLight,{noise:10})); dArch.position.set(0,1.9,2.58); grp.add(dArch);
+    // small upper windows
+    [-1.4,1.4].forEach(wx=>{ const w=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.12), blueTile); w.position.set(wx,h*0.82,2.55); grp.add(w); });
+    const c=Math.cos(rot||0), s=Math.sin(rot||0);
+    addBox(x,z, Math.abs(5*c)+Math.abs(5*s), Math.abs(5*s)+Math.abs(5*c));
+  }
+  // (24,14) rather than (20,8): at (20,8) this house's 5x5 footprint swallowed both a bazaar stall and a
+  // crate stack, and pushing it only as far as (22,14) still clipped the stall at (19,12).
+  townhouse(-8,14,6.5,0); townhouse(8,-19,7.5,Math.PI); townhouse(24,14,6,-1.5708); townhouse(-22,-8,7,1.5708);
+  townhouse(-8,-20,6,Math.PI); townhouse(21,-8,6.5,-1.5708);
+
+  // ---- sabil (public fountain house): a small domed kiosk with a water basin, a classic Cairo street fixture ----
+  (function sabil(x,z){
+    const podium=new THREE.Mesh(new THREE.BoxGeometry(3.4,0.5,3.4), voxMat(sandstoneLight,{noise:12})); podium.position.set(x,0.25,z); scene.add(podium);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(2.8,2.4,2.8), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),3)})); body.position.set(x,1.7,z); scene.add(body);
+    [-1,1].forEach(s=>{ const grille=new THREE.Mesh(new THREE.BoxGeometry(0.12,1.2,1.6), timberMat); grille.position.set(x+s*1.42,1.7,z); scene.add(grille); });
+    const front=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.2,0.12), blueTile); front.position.set(x,1.7,z+1.42); scene.add(front);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(3.2,0.35,3.2), voxMat(sandstoneLight,{noise:12})); cap.position.set(x,3.05,z); scene.add(cap);
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(1.5,12,7,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(x,3.2,z); scene.add(dome);
+    const fin=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.5,6), goldMat); fin.position.set(x,4.9,z); scene.add(fin);
+    // basin pushed to +3.0 with a 2.0 collider so it clears the kiosk's own 3.4 box instead of overlapping it
+    const basin=new THREE.Mesh(new THREE.CylinderGeometry(1.05,1.15,0.42,12), voxMat(sandstoneLight,{noise:10})); basin.position.set(x,0.65,z+3.0); scene.add(basin);
+    const water=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.1,12), new THREE.MeshPhongMaterial({color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52}));
+    water.position.set(x,0.88,z+3.0); scene.add(water);
+    addBox(x,z,3.4,3.4); addBox(x,z+3.0,2.0,2.0);
+  })(7,-9);
+
+  // ---- 1 more legion-tower-style lookout, reused across every era ----
+  sniperTower(23,20, 4, 5.5, 0xa89e8c, 'w');
+
+  // ---- date palms, clustered rather than evenly sprinkled so they read as planted groves ----
+  function courtyardPalm(x,z,h){
+    const th=h||2.6;
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.22,th,6), voxMat(0x6b5230,{noise:14})); trunk.position.set(x,th/2,z); trunk.rotation.z=0.05; scene.add(trunk);
+    for(let i=0;i<4;i++){ const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.12,6), voxMat(0x5a462a,{noise:12})); ring.position.set(x,0.5+i*0.55,z); scene.add(ring); }
+    const leafMat=voxMat(0x4a7a3e,{noise:16}), leafMat2=voxMat(0x386030,{noise:14});
+    for(let i=0;i<7;i++){ const a=i/7*Math.PI*2;
+      const leaf=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.09,0.3), i%2?leafMat:leafMat2);
+      leaf.position.set(x+Math.cos(a)*0.55,th+0.12,z+Math.sin(a)*0.55); leaf.rotation.y=a; leaf.rotation.x=-0.32; scene.add(leaf); }
+    const dates=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.2,0.28), voxMat(0x8a5a20,{noise:12})); dates.position.set(x,th-0.15,z); scene.add(dates);
+    addBox(x,z,0.7,0.7);
+  }
+  // placements verified against the collider audit: (6,25) sat squarely in the north tower's ramp corridor
+  // (x[-4,7.05] z[23.6,26.4]) and would have walled the climb off; (-26,24) was inside the Citadel's
+  // footprint; (-24,-6) was inside the townhouse at (-22,-8).
+  courtyardPalm(-26,-21,3.0); courtyardPalm(-24,-24,2.4); courtyardPalm(-21,-22,2.7);
+  courtyardPalm(25,23,2.8); courtyardPalm(22,25,2.3); courtyardPalm(25,-24,3.0);
+  courtyardPalm(-26,26,2.6); courtyardPalm(-26,-11,2.5); courtyardPalm(24,6,2.9);
+  courtyardPalm(-6,-25,2.6); courtyardPalm(10,25,2.4);
+})();
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+const islamicOverworld = new THREE.Group();
+scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld || o===pyramidOverworld || o===greekOverworld || o===romanOverworld) return; islamicOverworld.add(o); });
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
 // ---- voxel humanoid bot (Minecraft/Pixel-Gun proportions: blocky head+helmet, layered torso armor, segmented limbs) ----
 function makeVoxelTexture(baseHex, {noise=22, size=48, pattern=null, cell=6} = {}){
   const c = document.createElement('canvas');
@@ -2423,6 +2826,10 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='hydra') return makeHydra();
   if(skinName==='champion') return makeChampion();
   if(skinName==='tiger') return makeTiger();
+  if(skinName==='ifrit') return makeIfrit();
+  if(skinName==='ghoul') return makeGhoul();
+  if(skinName==='roc') return makeRoc();
+  if(skinName==='ifritking') return makeIfritKing();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -3269,59 +3676,486 @@ function makeBasilisk(){
   return g;
 }
 
+// ---- Islamic era creatures (waves 10-12): Ifrit (ranged fire djinn) / Ghoul (fast melee) / Roc pack
+// (themed dive-bomber encounter, reusing the griffin's dive-then-claw AI) — no SKINS entry needed, same as
+// every other era's non-humanoid monsters ----
+
+// ifrit: a floating fire djinn — no legs, a torso that tapers into a licking flame-cone "tail" instead of
+// feet, glowing ember skin, small backswept horns. The Islamic era's ranged monster (weaponType 'pistol',
+// same pure-ranged AI as jackal/soldier — it holds distance rather than closing to melee like the griffin/
+// basilisk hybrid). Built facing +Z directly, same convention as every other creature (mesh.lookAt in the AI loop).
+// Reworked. Problems the offline render exposed in the previous version: the flame "tail" was three big
+// opaque cones with the PALEST one on top, so it read as a yellow skirt rather than fire (real flame is
+// brightest at its base); the five smoke wisps were detached cubes hovering in a ring around the torso like
+// stray geometry; and the hands floated free of the arms. Now: a broad-shouldered tapering torso, arms that
+// actually connect through to clawed fists, and a flame column that runs deep-red at the waist down to
+// white-hot at the tip, with embers attached along it instead of orbiting the chest.
+function makeIfrit(){
+  const g = new THREE.Group();
+  const emberMat = voxMat(0xd8481c,{noise:14});
+  const emberMat2 = voxMat(0xa8280e,{noise:12});
+  const charMat = voxMat(0x5a1e0a,{noise:12});
+  const flameOuter = new THREE.MeshBasicMaterial({color:0xe8461a,fog:false});
+  const flameMid   = new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false});
+  const flameHot   = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
+  const flameCore  = new THREE.MeshBasicMaterial({color:0xfff2c0,fog:false});
+  const darkMat = voxMat(0x2a140a,{noise:10});
+
+  // ---- torso: wide shoulders tapering to a narrow waist, so it reads as a looming upper body ----
+  const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.78,0.26,0.36), emberMat); shoulders.position.set(0,1.5,0); g.add(shoulders);
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.44,0.34), emberMat); chest.position.set(0,1.24,0); g.add(chest);
+  const ribs = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.3,0.3), emberMat2); ribs.position.set(0,0.94,0); g.add(ribs);
+  const waist = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.22,0.24), charMat); waist.position.set(0,0.72,0); g.add(waist);
+  // glowing molten cracks down the chest
+  const crackV = new THREE.Mesh(new THREE.BoxGeometry(0.05,0.42,0.03), flameHot); crackV.position.set(0,1.24,0.18); g.add(crackV);
+  [-1,1].forEach(s=>{ const cr=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.04,0.03), flameHot); cr.position.set(s*0.13,1.34,0.18); cr.rotation.z=s*0.5; g.add(cr); });
+
+  // ---- flame column: widest and darkest where it meets the waist, narrowing to a white-hot tip ----
+  [{y:0.56,r:0.3,h:0.42,m:flameOuter},{y:0.3,r:0.23,h:0.36,m:flameMid},
+   {y:0.11,r:0.15,h:0.3,m:flameHot},{y:-0.03,r:0.08,h:0.22,m:flameCore}].forEach(c=>{
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,7), c.m); cone.position.set(0,c.y,0); g.add(cone);
+  });
+  // embers riding the column, attached along it rather than orbiting the chest as loose cubes
+  for(let i=0;i<6;i++){
+    const a=(i/6)*Math.PI*2, r=0.16+((i%3)*0.05);
+    const em=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05), i%2?flameHot:flameMid);
+    em.position.set(Math.cos(a)*r, 0.2+ (i*0.09), Math.sin(a)*r); g.add(em);
+  }
+  const tailLight = new THREE.PointLight(0xff8a2a,1.1,3.6); tailLight.position.set(0,0.35,0); g.add(tailLight);
+
+  // ---- head: brow ridge, sunken glowing eyes, open jaw, backswept horns ----
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.38,0.34,0.34), emberMat); head.position.set(0,1.82,0.02); g.add(head);
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.08,0.1), charMat); brow.position.set(0,1.94,0.16); g.add(brow);
+  [-1,1].forEach(side=>{
+    const socket=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.09,0.05), darkMat); socket.position.set(side*0.1,1.84,0.18); g.add(socket);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.06,0.04), flameCore); eye.position.set(side*0.1,1.84,0.2); g.add(eye);
+    // horns sweeping up and back
+    const horn=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.34,4), darkMat); horn.position.set(side*0.17,2.08,-0.06); horn.rotation.x=-0.6; horn.rotation.z=side*0.4; g.add(horn);
+  });
+  const jawUpper=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.07,0.12), charMat); jawUpper.position.set(0,1.72,0.16); g.add(jawUpper);
+  const jawLower=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.08,0.12), charMat); jawLower.position.set(0,1.62,0.15); jawLower.rotation.x=-0.25; g.add(jawLower);
+  const maw=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.05,0.04), flameHot); maw.position.set(0,1.67,0.19); g.add(maw); // fire glowing in the throat
+
+  // ---- arms: shoulder -> upper -> forearm -> fist, each piece meeting the next (the old version's hands
+  // floated a clear gap away from the arm) ----
+  [-1,1].forEach(side=>{
+    const pad=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.28), emberMat2); pad.position.set(side*0.42,1.5,0); g.add(pad);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.4,0.15), emberMat2); upper.position.set(side*0.5,1.28,0.04); upper.rotation.z=side*-0.28; g.add(upper);
+    const fore=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.38,0.14), emberMat2); fore.position.set(side*0.6,0.96,0.12); fore.rotation.z=side*-0.16; fore.rotation.x=-0.3; g.add(fore);
+    const fist=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.18,0.19), charMat); fist.position.set(side*0.64,0.78,0.2); g.add(fist);
+    // fire wreathing the fist
+    const wreath=new THREE.Mesh(new THREE.ConeGeometry(0.13,0.24,6), flameMid); wreath.position.set(side*0.64,0.92,0.2); g.add(wreath);
+    for(let c=0;c<3;c++){ const claw=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.13,4), darkMat);
+      claw.position.set(side*0.64+(c-1)*0.06,0.68,0.26); claw.rotation.x=2.6; g.add(claw); }
+  });
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 2.4, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
+// ghoul: a gaunt, hunched grave-robber creature — the Islamic era's fast melee monster (weaponType 'knife',
+// same chase AI as mummy/manticore). Built low and lean on all fours rather than upright, reading as fast
+// and animalistic rather than a shambling zombie reskin.
+// Rebuilt around the FRONT view specifically. The previous two versions hid everything that mattered: the
+// torso was a broad slab tilted up into a wall, and because the hunch pitched the head UP and BACK behind
+// that slab, a player being charged saw a featureless green box with ears — no face, no claws, no menace.
+// Now the skull LEADS the silhouette (lowest, furthest forward point), the arms bracket it wide and reach
+// forward, and the ribcage is narrow so the limbs read instead of being swallowed by the body.
+function makeGhoul(){
+  const g = new THREE.Group();
+  const skinMat = voxMat(0x93a08c,{noise:16});   // corpse-pale grey-green
+  const skinDark = voxMat(0x5a6654,{noise:14});
+  const wrapMat = voxMat(0x2e2a20,{noise:12});
+  const ribMat = voxMat(0xb8c0ac,{noise:8});     // bone-pale ribs, light against the body so they actually show
+  const boneMat = voxMat(0xd2d6bc,{noise:8});    // pale skull — deliberately much lighter than the body
+  const clawMat = new THREE.MeshLambertMaterial({color:0xe0dcc8});
+  const toothMat = new THREE.MeshLambertMaterial({color:0xf0ecd8});
+  const eyeMat = new THREE.MeshBasicMaterial({color:0xc8f02a,fog:false});
+
+  // ---- narrow ribcage torso, sloping down and back from the shoulders ----
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.32,0.66), skinMat); torso.position.set(0,0.62,-0.14); torso.rotation.x=0.3; g.add(torso);
+  const hips = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.28,0.3), skinDark); hips.position.set(0,0.5,-0.5); g.add(hips);
+  // ribs wrapping the SIDES (not buried on the front face) so they read from any angle
+  [-1,1].forEach(side=>{
+    for(let i=0;i<4;i++){ const rib=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.19), ribMat);
+      rib.position.set(side*0.17,0.7-i*0.075,-0.02-i*0.09); rib.rotation.x=0.3; g.add(rib); }
+  });
+  const spine = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.1,0.62), ribMat); spine.position.set(0,0.79,-0.16); spine.rotation.x=0.3; g.add(spine);
+  // ---- hunched shoulders ride HIGH and wide, with the head slung low and forward between them: the
+  // classic knuckle-walker read, and it stops the head and torso from stacking into one blob head-on ----
+  [-1,1].forEach(side=>{ const sh=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.22,0.22), skinMat); sh.position.set(side*0.24,0.88,0.12); g.add(sh); });
+  const hump = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.18,0.26), skinDark); hump.position.set(0,0.9,0.02); g.add(hump);
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.16,0.32), skinDark); neck.position.set(0,0.72,0.34); neck.rotation.x=-0.6; g.add(neck);
+  // ---- skull: big, PALE bone against the darker body, and the lowest/most forward element. The body was
+  // previously the same tone and nearly the same width as the head directly behind it, so head-on the two
+  // merged into a single featureless lump — the contrast is doing the real work here. ----
+  const skull = new THREE.Mesh(new THREE.BoxGeometry(0.38,0.3,0.36), boneMat); skull.position.set(0,0.5,0.62); g.add(skull);
+  const browRidge = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.09,0.16), boneMat); browRidge.position.set(0,0.63,0.72); g.add(browRidge);
+  const crest = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.3), boneMat); crest.position.set(0,0.66,0.56); g.add(crest);
+  // deep sunken sockets with glowing eyes set INTO them, facing straight down +Z at the player
+  [-1,1].forEach(side=>{
+    const socket=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.07), new THREE.MeshLambertMaterial({color:0x14180f}));
+    socket.position.set(side*0.1,0.52,0.79); g.add(socket);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.07,0.04), eyeMat); eye.position.set(side*0.1,0.52,0.82); g.add(eye);
+  });
+  // gaping jaw with a full row of teeth top and bottom — reads as a snarl head-on
+  const upperJaw = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.1,0.22), boneMat); upperJaw.position.set(0,0.4,0.74); g.add(upperJaw);
+  const lowerJaw = new THREE.Mesh(new THREE.BoxGeometry(0.27,0.09,0.2), skinDark); lowerJaw.position.set(0,0.26,0.74); lowerJaw.rotation.x=-0.35; g.add(lowerJaw);
+  for(let i=0;i<6;i++){
+    const tx=-0.115+i*0.046;
+    const tU=new THREE.Mesh(new THREE.ConeGeometry(0.022,0.075,4), toothMat); tU.position.set(tx,0.34,0.82); tU.rotation.x=Math.PI; g.add(tU);
+    const tL=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.06,4), toothMat); tL.position.set(tx,0.29,0.81); g.add(tL);
+  }
+  [-1,1].forEach(side=>{ const ear=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.2,0.08),skinDark); ear.position.set(side*0.2,0.66,0.54); ear.rotation.z=side*0.35; g.add(ear); });
+  // ---- long forelimbs sweeping OUT and FORWARD, bracketing the head so the front silhouette is
+  // claw / snarling-skull / claw rather than one solid block ----
+  [-1,1].forEach(side=>{
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.4,0.13), skinMat); upper.position.set(side*0.3,0.6,0.2); upper.rotation.x=-0.45; upper.rotation.z=side*0.35; g.add(upper);
+    const fore=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.42,0.11), skinDark); fore.position.set(side*0.42,0.3,0.46); fore.rotation.x=-0.9; fore.rotation.z=side*0.2; g.add(fore);
+    const hand=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.1,0.14), skinDark); hand.position.set(side*0.46,0.12,0.66); g.add(hand);
+    for(let c=0;c<3;c++){
+      const claw=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.19,4), clawMat);
+      claw.position.set(side*0.46+(c-1)*0.05,0.06,0.79); claw.rotation.x=2.35; g.add(claw);
+    }
+  });
+  // ---- crouched hind legs, coiled to spring ----
+  [-1,1].forEach(side=>{
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.34,0.16), skinMat); thigh.position.set(side*0.18,0.44,-0.56); thigh.rotation.x=0.5; g.add(thigh);
+    const shin=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.34,0.12), skinDark); shin.position.set(side*0.18,0.2,-0.4); shin.rotation.x=-0.5; g.add(shin);
+    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.08,0.24), skinDark); foot.position.set(side*0.18,0.04,-0.28); g.add(foot);
+  });
+  // ---- tattered grave wrappings trailing off the hips ----
+  const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.2,0.22), wrapMat); wrap.position.set(0,0.5,-0.44); g.add(wrap);
+  for(let i=0;i<3;i++){ const strip=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.26,0.03), wrapMat); strip.position.set(-0.11+i*0.11,0.34,-0.62); strip.rotation.x=0.3+i*0.1; g.add(strip); }
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 1.15, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
+// ROC — ONE enormous bird, not a 3-unit pack. Two earlier passes tried to make a formation of three small
+// rocs work and both read in-game as a tangle of spider legs: three overlapping bodies × two wings × three
+// chained wing segments put ~18 disjoint bars on screen at once, and no individual bird was ever legible.
+// A roc is a single colossal bird in the myth anyway, so this is one large creature with a clearly readable
+// body/head between two continuous V-swept wings. The offline render is the check that matters here: the
+// FRONT view is what the player sees as it closes in.
+function makeRoc(){
+  const g = new THREE.Group();
+  const featherMat = voxMat(0x4a3a2e,{noise:16});     // dark brown mantle
+  const featherDark = voxMat(0x2a1e16,{noise:14});    // near-black primaries/tail
+  const featherLight = voxMat(0x9a7c58,{noise:14});   // pale underside — the contrast the old all-brown bird lacked
+  const beakMat = new THREE.MeshLambertMaterial({color:0xe8b038});
+  const talonMat = new THREE.MeshLambertMaterial({color:0x1c1810});
+  const eyeMat = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
+
+  // ---- body: big enough to actually anchor the silhouette between the wings ----
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.6,1.25), featherMat); torso.position.set(0,1.15,-0.05); g.add(torso);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.26,1.0), featherLight); belly.position.set(0,0.86,-0.02); g.add(belly);
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.54,0.5,0.4), featherLight); chest.position.set(0,1.16,0.62); g.add(chest);
+  // ---- neck + raptor head, carried forward and high so it leads the shape ----
+  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.42,0.3), featherMat); neck.position.set(0,1.5,0.72); neck.rotation.x=-0.35; g.add(neck);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.38,0.34,0.4), featherDark); head.position.set(0,1.82,0.92); g.add(head);
+  const crown = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.12,0.3), featherMat); crown.position.set(0,2.0,0.88); g.add(crown);
+  // heavy hooked beak: a straight upper mandible plus a down-curved hook — the strongest "big raptor" cue
+  const beakUpper = new THREE.Mesh(new THREE.BoxGeometry(0.17,0.14,0.34), beakMat); beakUpper.position.set(0,1.82,1.24); g.add(beakUpper);
+  const beakHook = new THREE.Mesh(new THREE.ConeGeometry(0.085,0.24,4), beakMat); beakHook.position.set(0,1.68,1.36); beakHook.rotation.x=Math.PI; g.add(beakHook);
+  const beakLower = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.08,0.24), new THREE.MeshLambertMaterial({color:0xb8862a})); beakLower.position.set(0,1.71,1.2); g.add(beakLower);
+  [-1,1].forEach(side=>{
+    const brow=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.07,0.16), featherLight); brow.position.set(side*0.15,1.94,1.05); g.add(brow);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.05), eyeMat); eye.position.set(side*0.14,1.85,1.12); g.add(eye);
+  });
+  // ---- wings: each is a chain of BROAD overlapping panels sweeping up and out in a strong dihedral V.
+  // Panels are wide in span and deep in chord and overlap their neighbour, so the wing is one continuous
+  // surface rather than the separated bars the previous version produced. ----
+  [-1,1].forEach(side=>{
+    let wx=side*0.32, wy=1.42, ang=0.55;                 // ang = dihedral, grows toward the tip
+    [{span:0.95,chord:1.1,th:0.17,mat:featherMat},
+     {span:0.9,chord:0.92,th:0.14,mat:featherMat},
+     {span:0.85,chord:0.72,th:0.12,mat:featherLight},
+     {span:0.75,chord:0.52,th:0.1,mat:featherDark}].forEach((p,i)=>{
+      const dx=Math.cos(ang), dy=Math.sin(ang);
+      const cx=wx+side*dx*p.span/2, cy=wy+dy*p.span/2;
+      const panel=new THREE.Mesh(new THREE.BoxGeometry(p.span,p.th,p.chord), p.mat);
+      panel.position.set(cx,cy,-0.08-i*0.05);
+      panel.rotation.z = side>0 ? ang : -ang;
+      g.add(panel);
+      wx += side*dx*p.span*0.92; wy += dy*p.span*0.92;   // 0.92 = overlap, so panels never separate
+      ang += 0.16;
+    });
+    // splayed primary feathers off the wing tip — adds real width and a ragged, unmistakably avian edge.
+    // Their z fan is kept inside the final panel's chord (which spans about -0.49..0.03); the previous
+    // -0.28+f*0.16 walked the outermost feather out to z=0.20, past the wing's trailing edge, leaving it
+    // floating free of the bird.
+    for(let f=0;f<4;f++){
+      const fang = ang + (f-1.5)*0.2;
+      const feat=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.07,0.14), featherDark);
+      feat.position.set(wx+side*Math.cos(fang)*0.3, wy+Math.sin(fang)*0.3, -0.42+f*0.14);
+      feat.rotation.z = side>0 ? fang : -fang;
+      g.add(feat);
+    }
+  });
+  // ---- tail fan: several splayed rectrices, not one slab ----
+  for(let i=0;i<5;i++){
+    const a=(i-2)*0.16;
+    const t=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.07,0.75), i%2?featherDark:featherMat);
+    t.position.set(Math.sin(a)*0.34,1.06,-0.95); t.rotation.y=a; t.rotation.x=0.22; g.add(t);
+  }
+  // ---- legs tucked up under the body with big talons forward, like a raptor about to strike ----
+  [-1,1].forEach(side=>{
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.26,0.24), featherLight); thigh.position.set(side*0.22,0.82,0.3); g.add(thigh);
+    const shank=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.2,0.16), talonMat); shank.position.set(side*0.22,0.64,0.42); g.add(shank);
+    for(let c=0;c<3;c++){
+      const claw=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.22,4), talonMat);
+      claw.position.set(side*0.22+(c-1)*0.09,0.5,0.56); claw.rotation.x=2.5; g.add(claw);
+    }
+  });
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 2.5, 0); marker.scale.set(1.2,1.2,1.2); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
+// IFRIT KING — Boss IV, the campaign's final boss. The previous version was described as "a scaled-up,
+// more ornamented ifrit" and that is exactly how it rendered: near-identical silhouette and palette to the
+// regular grunt with two black boxes floating at the shoulders, which is fatal for a final boss. It is now
+// a deliberately DIFFERENT creature: a cooled black-basalt body shot through with molten cracks (instead of
+// the grunt's bright ember red), enormous slab pauldrons, a burning mantle, a real multi-spire crown, and a
+// flame base wide enough to look like it is standing in a bonfire rather than wearing a skirt.
+function makeIfritKing(){
+  const g = new THREE.Group();
+  const basalt = voxMat(0x2e2422,{noise:14});      // cooled black rock — the key separation from the red grunt
+  const basaltDark = voxMat(0x191312,{noise:12});
+  const moltenMat = new THREE.MeshBasicMaterial({color:0xff5a12,fog:false});   // glowing cracks
+  const goldMat = metalMatP(0xe0a830,85,0xfff2c8);
+  const flameOuter = new THREE.MeshBasicMaterial({color:0xe8461a,fog:false});
+  const flameMid   = new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false});
+  const flameHot   = new THREE.MeshBasicMaterial({color:0xffd23a,fog:false});
+  const flameCore  = new THREE.MeshBasicMaterial({color:0xfff2c0,fog:false});
+
+  // ---- massive torso ----
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(1.12,0.9,0.62), basalt); chest.position.set(0,2.15,0); g.add(chest);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.8,0.6,0.5), basaltDark); belly.position.set(0,1.55,0); g.add(belly);
+  const waist = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.3,0.36), basaltDark); waist.position.set(0,1.18,0); g.add(waist);
+  // molten core burning through the chest, plus cracks radiating from it
+  const core = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.06), flameCore); core.position.set(0,2.2,0.32); g.add(core);
+  const coreGlow = new THREE.PointLight(0xff7a1a,1.5,6); coreGlow.position.set(0,2.2,0.5); g.add(coreGlow);
+  [[0,0.55,0.06,0],[0,-0.5,0.06,0],[0.42,0.2,0.05,-0.7],[-0.42,0.2,0.05,0.7],[0.4,-0.25,0.05,0.8],[-0.4,-0.25,0.05,-0.8]].forEach(([dx,dy,w,rz])=>{
+    const cr=new THREE.Mesh(new THREE.BoxGeometry(w,0.42,0.04), moltenMat); cr.position.set(dx,2.2+dy,0.32); cr.rotation.z=rz; g.add(cr);
+  });
+  // ---- huge slab pauldrons: the boss's widest, most imposing feature ----
+  [-1,1].forEach(side=>{
+    const pad=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.34,0.66), basalt); pad.position.set(side*0.74,2.42,0); pad.rotation.z=side*-0.22; g.add(pad);
+    const trim=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.07,0.68), goldMat); trim.position.set(side*0.75,2.6,0); trim.rotation.z=side*-0.22; g.add(trim);
+    for(let i=0;i<3;i++){ const spike=new THREE.Mesh(new THREE.ConeGeometry(0.07,0.28,4), basaltDark);
+      spike.position.set(side*0.76,2.7,-0.22+i*0.22); spike.rotation.z=side*-0.3; g.add(spike); }
+  });
+  // ---- burning mantle hanging off the shoulders. At z=-0.36 it sat 0.01 clear of the chest's back face
+  // (which reaches z=-0.31) and hung in the air behind him; -0.33 tucks it into the chest. ----
+  for(let i=0;i<5;i++){
+    const mx=-0.5+i*0.25;
+    const cape=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.7-Math.abs(i-2)*0.1,0.08), i%2?flameOuter:flameMid);
+    cape.position.set(mx,1.95,-0.33); g.add(cape);
+  }
+  // ---- wide raging flame base (standing IN fire, not wearing a cone skirt) ----
+  [{y:0.9,r:0.66,h:0.9,m:flameOuter},{y:0.5,r:0.48,h:0.75,m:flameMid},
+   {y:0.2,r:0.3,h:0.6,m:flameHot},{y:-0.02,r:0.15,h:0.4,m:flameCore}].forEach(c=>{
+    const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,8), c.m); cone.position.set(0,c.y,0); g.add(cone);
+  });
+  // licking side flames, so the base is ragged rather than a clean cone stack
+  for(let i=0;i<8;i++){
+    const a=(i/8)*Math.PI*2, r=0.42;
+    const lick=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.44+((i%3)*0.16),5), i%2?flameMid:flameHot);
+    lick.position.set(Math.cos(a)*r,0.5+((i%3)*0.1),Math.sin(a)*r); lick.rotation.z=Math.cos(a)*0.3; lick.rotation.x=-Math.sin(a)*0.3; g.add(lick);
+  }
+  const flameLight = new THREE.PointLight(0xff8a2a,2.0,9); flameLight.position.set(0,0.7,0); g.add(flameLight);
+
+  // ---- head: heavy brow, burning eyes and maw ----
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.58,0.56,0.52), basalt); head.position.set(0,2.92,0.02); g.add(head);
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.12,0.16), basaltDark); brow.position.set(0,3.1,0.24); g.add(brow);
+  [-1,1].forEach(side=>{
+    const socket=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.13,0.06), basaltDark); socket.position.set(side*0.15,2.94,0.27); g.add(socket);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.09,0.05), flameCore); eye.position.set(side*0.15,2.94,0.3); g.add(eye);
+  });
+  const jawU=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.09,0.16), basaltDark); jawU.position.set(0,2.76,0.24); g.add(jawU);
+  const jawL=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.1,0.16), basaltDark); jawL.position.set(0,2.62,0.22); jawL.rotation.x=-0.3; g.add(jawL);
+  const maw=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.08,0.05), flameHot); maw.position.set(0,2.69,0.28); g.add(maw);
+  // ---- crown: a gold band carrying five rising spires, so it reads as a CROWN, not just horns ----
+  const crownBand=new THREE.Mesh(new THREE.CylinderGeometry(0.33,0.35,0.13,8), goldMat); crownBand.position.set(0,3.24,0.02); g.add(crownBand);
+  // spire bases seated INTO the band (the band's top face is at y=3.305; starting them at 3.32 left every
+  // spire, and the flame on top of it, hanging 0.015 clear of the crown)
+  [-2,-1,0,1,2].forEach(i=>{
+    const h=0.5-Math.abs(i)*0.11;
+    const spire=new THREE.Mesh(new THREE.ConeGeometry(0.065,h,4), goldMat);
+    spire.position.set(i*0.15,3.26+h/2,0.02-Math.abs(i)*0.03); spire.rotation.z=i*0.16; g.add(spire);
+    const tipFlame=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.16,5), flameHot);
+    tipFlame.position.set(i*0.15,3.26+h*0.9,0.02-Math.abs(i)*0.03); g.add(tipFlame);
+  });
+  // ---- arms: shoulder -> upper -> forearm -> fist, connected, with fire-wreathed fists ----
+  [-1,1].forEach(side=>{
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.6,0.26), basalt); upper.position.set(side*0.86,2.06,0.06); upper.rotation.z=side*-0.24; g.add(upper);
+    const elbow=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.2,0.28), basaltDark); elbow.position.set(side*0.96,1.74,0.1); g.add(elbow);
+    const fore=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.56,0.24), basalt); fore.position.set(side*1.0,1.42,0.2); fore.rotation.x=-0.28; g.add(fore);
+    const crack=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.4,0.03), moltenMat); crack.position.set(side*1.0,1.42,0.33); crack.rotation.x=-0.28; g.add(crack);
+    const fist=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.3,0.32), basaltDark); fist.position.set(side*1.02,1.12,0.3); g.add(fist);
+    const wreath=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.4,6), flameMid); wreath.position.set(side*1.02,1.34,0.3); g.add(wreath);
+    const fistLight=new THREE.PointLight(0xffb84a,0.7,3); fistLight.position.set(side*1.02,1.12,0.3); g.add(fistLight);
+  });
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0, 3.5, 0); marker.scale.set(1.4,1.4,1.4); marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  return g;
+}
+
 // ===== BOSS II — HYDRA: a low serpent body with a central hump and FIVE rising necks, each a chain-built
 // serpentine tower ending in a fanged head with glowing eyes. Built facing +Z (turned via mesh.lookAt() in
 // the shared AI loop). Boss-scaled up at spawn, so keep local proportions modest. =====
+// Redesigned so the silhouette actually reads as "multi-headed serpent" at a glance, not a lizard with
+// lumps on its back: a long tapering serpent trunk (no separate torso/hump blocks), 5 heads fanned out
+// WIDE (not clustered forward) on thin sinuous necks, and heads shaped like an actual snake head — flat
+// wedge skull, a flared cobra-style hood, an open jaw with visible fangs top+bottom, and a forked tongue —
+// instead of the old generic boxy head+snout.
 function makeHydra(){
   const g = new THREE.Group();
   const scaleMat = voxMat(0x3a5c3e,{noise:14});
   const scaleMat2 = voxMat(0x2a4630,{noise:12});
   const bellyMat = voxMat(0x7a8a5a,{noise:10});
   const headMat = voxMat(0x35502e,{noise:12});
+  const hoodMat = voxMat(0x86a03a,{noise:12});   // sickly yellow-green cobra hood — reads clearly against the dark green scales
   const fangMat = new THREE.MeshLambertMaterial({color:0xe8e4d4});
   const eyeMat = new THREE.MeshBasicMaterial({color:0xff3a2a,fog:false});
   const crestMat = voxMat(0x1c2a18,{noise:10});
+  const tongueMat = new THREE.MeshBasicMaterial({color:0xc4283a,fog:false});
 
-  // low bulky serpent body + a raised central hump the necks sprout from
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.5,0.7,1.9), scaleMat); body.position.set(0,0.55,-0.1); g.add(body);
-  const belly = new THREE.Mesh(new THREE.BoxGeometry(1.2,0.2,1.7), bellyMat); belly.position.set(0,0.24,-0.1); g.add(belly);
-  const hump = new THREE.Mesh(new THREE.BoxGeometry(1.3,0.8,1.2), scaleMat2); hump.position.set(0,1.05,-0.3); g.add(hump);
-  // coiled tail trailing behind
-  { let ty=0.8, tz=-1.0, theta=-1.4; const overlap=0.02;
-    [{s:0.4,len:0.5},{s:0.32,len:0.45},{s:0.24,len:0.4},{s:0.16,len:0.34}].forEach(seg=>{
-      const dy=Math.cos(theta), dz=Math.sin(theta);
-      const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s,seg.len), scaleMat); m.position.set(0,ty+(seg.len/2)*0+0.0, tz+(seg.len/2)*dz); m.rotation.x=theta; g.add(m);
-      tz = tz + seg.len*dz - overlap*dz; ty = ty + seg.len*dy - overlap*dy; theta += 0.4;
+  // Serpent trunk: a continuous run of stacked segments from a bulky shoulder mass (where the necks
+  // sprout) tapering back to the tail. The previous proportions made every segment far WIDER than it was
+  // deep (1.55 across, 0.62 front-to-back), so at boss scale the body rendered as one huge flat green wall
+  // filling the screen. Segments are now roughly as deep and tall as they are wide, and the run is longer,
+  // so it reads as a thick coiled serpent body instead of a slab.
+  const trunkSegs = [
+    {z: 0.85, w:1.18, h:1.02, y:0.62}, {z: 0.25, w:1.3,  h:1.14, y:0.66},
+    {z:-0.35, w:1.2,  h:1.04, y:0.62}, {z:-0.95, w:1.0,  h:0.9,  y:0.54},
+    {z:-1.5,  w:0.8,  h:0.72, y:0.44}, {z:-2.0,  w:0.6,  h:0.55, y:0.35},
+    {z:-2.45, w:0.42, h:0.4,  y:0.26},
+  ];
+  trunkSegs.forEach((s,i)=>{
+    const mat = i%2 ? scaleMat2 : scaleMat;
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,0.66), mat); seg.position.set(0,s.y,s.z); g.add(seg);
+    // pale belly plates along the underside
+    const belly=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.6,s.h*0.26,0.62), bellyMat); belly.position.set(0,s.y-s.h*0.42,s.z); g.add(belly);
+    // dorsal scute ridge along the spine, so the top edge isn't a flat run
+    const scute=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.3,s.h*0.22,0.34), crestMat); scute.position.set(0,s.y+s.h*0.5,s.z); g.add(scute);
+  });
+  // Shoulder mound the necks physically grow out of. Without this the necks simply began at their baseX
+  // in open air above/beside the trunk; this is the mass that ties all five roots into the body.
+  const shoulder=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.95,1.15), scaleMat); shoulder.position.set(0,0.95,0.5); g.add(shoulder);
+  const shoulderTop=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.4,0.9), scaleMat2); shoulderTop.position.set(0,1.42,0.45); g.add(shoulderTop);
+  // coiled tail tip trailing behind the trunk's last (thinnest) segment. NOTE the axis pairing: these boxes
+  // carry their LENGTH on local Z, and a box rotated by rotation.x=t points its local +Z along
+  // (0,-sin t, cos t) — so the walk must step along that, not along (0, cos t, sin t). Pairing an X
+  // rotation with the wrong sin/cos order is what left the old tail as a row of floating blocks.
+  { let ty=0.3, tz=-2.0, theta=-1.4; const overlap=0.02;
+    [{s:0.34,len:0.42},{s:0.26,len:0.36},{s:0.18,len:0.3},{s:0.11,len:0.24}].forEach(seg=>{
+      const dy=-Math.sin(theta), dz=Math.cos(theta);
+      const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s,seg.len), scaleMat);
+      m.position.set(0, ty+(seg.len/2)*dy, tz+(seg.len/2)*dz); m.rotation.x=theta; g.add(m);
+      ty += seg.len*dy - overlap*dy; tz += seg.len*dz - overlap*dz; theta += 0.4;
     });
   }
-  // one serpentine neck+head, chain-built rising up and fanning forward. baseX/lean spread the 5 heads.
-  function neck(baseX, lean, height){
-    let y=1.2, z=0.2, x=baseX, theta=-1.15; // theta from near-vertical, arcing forward
-    const seg=height, dt=0.34;
-    for(let i=0;i<seg;i++){
-      const dz=Math.sin(theta), dy=Math.cos(theta);
-      const len=0.42, cy=y+(len/2)*dy, cz=z+(len/2)*dz, cx=x+lean*(i/seg);
-      const m=new THREE.Mesh(new THREE.BoxGeometry(0.34,len,0.34), i%2?scaleMat2:scaleMat); m.position.set(cx,cy,cz); m.rotation.x=theta; g.add(m);
-      // a small dorsal crest fin on each neck segment
-      const fin=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.22,0.14), crestMat); fin.position.set(cx,cy+0.16,cz-0.06); fin.rotation.x=theta; g.add(fin);
-      y=y+len*dy; z=z+len*dz; theta+=dt;
+  // One serpentine neck + head, chain-built rising up while fanning forward AND outward, so the 5 heads
+  // spread wide instead of clustering into a single mass.
+  //
+  // The outward fan is the subtle part. The previous version slid each segment sideways with a bare
+  // `cx = x + lean*(i/seg)` while only ever rotating about X — so segments marched laterally with no
+  // rotation accounting for that drift and separated into a dotted line of floating cubes (the outermost
+  // necks stepped 0.52 sideways per 0.34-wide segment, so the gaps were bigger than the parts). Here the
+  // lateral spread is a real rotation instead: with three.js' XYZ Euler order a box's local +Y ends up
+  // along (-sin phi, cos theta*cos phi, sin theta*cos phi), so the walk steps along exactly that vector
+  // and consecutive segments always meet.
+  function neck(baseX, spread, height){
+    let x=baseX, y=1.05, z=0.4;
+    // theta = forward arc, phi = outward fan. theta used to start at -1.05, which meant each neck first
+    // leaned BACKWARD before curving over, so the heads finished low and drooping. Starting much closer to
+    // vertical makes the necks rear up and then strike forward.
+    let theta=-0.4, phi=0;
+    // negated so a NEGATIVE `spread` argument fans the neck to the player's left (-X), matching how the
+    // call sites below read: with rotation.z=phi a box's top tilts toward -X for positive phi.
+    const len=0.4, dt=0.25, dphi=-spread/height;
+    // direction of the LAST DRAWN segment. The loop increments theta/phi on its way out, so reading them
+    // after it ends gives the angles of a segment that was never built — placing the head along that
+    // over-stepped direction is part of why the heads sat off the ends of the necks.
+    let lastDx=0, lastDy=1, lastDz=0;
+    for(let i=0;i<height;i++){
+      const dx=-Math.sin(phi), dy=Math.cos(theta)*Math.cos(phi), dz=Math.sin(theta)*Math.cos(phi);
+      lastDx=dx; lastDy=dy; lastDz=dz;
+      // taper the neck — thick where it meets the body, thinner near the head
+      const w = 0.34 - (i/height)*0.14;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(w,len,w), i%2?scaleMat2:scaleMat);
+      m.position.set(x+dx*len/2, y+dy*len/2, z+dz*len/2);
+      m.rotation.x=theta; m.rotation.z=phi; g.add(m);
+      // dorsal crest fin, parented to the segment so it inherits both rotations and can't drift off
+      const fin=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.2,0.12), crestMat);
+      fin.position.set(0,0,-0.09); m.add(fin);
+      x+=dx*len; y+=dy*len; z+=dz*len; theta+=dt; phi+=dphi;
     }
-    // head at the neck tip
-    const hx=x+lean, hy=y+0.05, hz=z+0.15;
-    const head=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.34,0.5), headMat); head.position.set(hx,hy,hz); g.add(head);
-    const snout=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.2,0.28), scaleMat2); snout.position.set(hx,hy-0.06,hz+0.32); g.add(snout);
+    // Head, seated ON the neck tip. x/y/z hold the neck's accumulated end point, but the old code offset
+    // the skull a flat +0.12 in Y and +0.18 in Z from there — a fixed world-space nudge that only lines up
+    // if the neck happens to end pointing straight up and forward. The outer necks end angled well out to
+    // the side, so their heads floated off the end of the neck with a visible gap. The offset now runs
+    // along the neck's OWN final direction, so every head meets its neck regardless of how far it fanned.
+    const edx=lastDx, edy=lastDy, edz=lastDz;
+    const hx=x+edx*0.12, hy=y+edy*0.12, hz=z+edz*0.12;
+    // a chunky collar straddling the joint (half behind the tip, half ahead of it) so neck and skull
+    // physically overlap no matter which way the neck ended up pointing
+    const collar=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3), scaleMat2); collar.position.set(x,y,z); g.add(collar);
+    const skull=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.28,0.36), headMat); skull.position.set(hx,hy,hz); g.add(skull);
+    const upperJaw=new THREE.Mesh(new THREE.BoxGeometry(0.31,0.14,0.46), scaleMat2); upperJaw.position.set(hx,hy-0.04,hz+0.3); g.add(upperJaw);
+    const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.1,0.38), bellyMat); lowerJaw.position.set(hx,hy-0.19,hz+0.28); lowerJaw.rotation.x=-0.35; g.add(lowerJaw);
+    // flared hood: two angled plates behind the skull, cobra-style — the single most identifying "snake"
+    // silhouette cue, and it also helps visually separate each of the 5 heads from its neighbours
     [-1,1].forEach(s=>{
-      const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.07,0.05), eyeMat); eye.position.set(hx+s*0.12,hy+0.09,hz+0.22); g.add(eye);
-      const fang=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.12,4), fangMat); fang.position.set(hx+s*0.07,hy-0.14,hz+0.4); fang.rotation.x=Math.PI; g.add(fang);
+      const hood=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.32,0.2), hoodMat); hood.position.set(hx+s*0.22,hy+0.02,hz-0.1); hood.rotation.z=s*0.55; hood.rotation.y=s*0.3; g.add(hood);
     });
-    // horns
-    [-1,1].forEach(s=>{ const horn=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.22,4), crestMat); horn.position.set(hx+s*0.13,hy+0.22,hz-0.05); horn.rotation.z=s*0.4; g.add(horn); });
+    const browRidge=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.08,0.16), crestMat); browRidge.position.set(hx,hy+0.15,hz+0.1); g.add(browRidge);
+    [-1,1].forEach(s=>{
+      const eye=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.08,0.05), eyeMat); eye.position.set(hx+s*0.13,hy+0.05,hz+0.17); g.add(eye);
+      // two visible fangs per side — from the upper jaw pointing down, echoing a real snake bite
+      const fangA=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.16,4), fangMat); fangA.position.set(hx+s*0.09,hy-0.12,hz+0.46); fangA.rotation.x=Math.PI; g.add(fangA);
+      const fangB=new THREE.Mesh(new THREE.ConeGeometry(0.022,0.11,4), fangMat); fangB.position.set(hx+s*0.15,hy-0.1,hz+0.42); fangB.rotation.x=Math.PI; g.add(fangB);
+    });
+    // forked tongue flicking out past the jaw
+    const tongueRoot=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.035,0.24), tongueMat); tongueRoot.position.set(hx,hy-0.15,hz+0.58); g.add(tongueRoot);
+    [-1,1].forEach(s=>{ const fork=new THREE.Mesh(new THREE.BoxGeometry(0.028,0.028,0.11), tongueMat); fork.position.set(hx+s*0.04,hy-0.15,hz+0.71); fork.rotation.y=s*0.5; g.add(fork); });
   }
-  neck(0,     0.0,  5);   // centre head, tallest
-  neck(-0.5, -0.7,  4);   // left pair
-  neck( 0.5,  0.7,  4);   // right pair
-  neck(-0.85,-1.2,  3);
-  neck( 0.85, 1.2,  3);
+  // `spread` is a TOTAL FAN ANGLE IN RADIANS, not a lateral distance. It previously carried the old
+  // lean-offset values (1.6 and 2.6) straight over when the fan became a rotation — and 2.6 rad is 149
+  // degrees, so the outer necks rotated well past horizontal and corkscrewed over.
+  //
+  // baseX must stay INSIDE the shoulder mound (half-width 0.85). The previous values (+/-1.0, +/-1.9) put
+  // four of the five necks well outside the body, so they rose out of thin air beside it with a visible
+  // gap. All five now root in the mound and the FAN does the spreading as they rise, which is also how a
+  // hydra's necks actually converge.
+  neck( 0,    0.00, 7);   // centre head, tallest, straight up the middle
+  neck(-0.32,-0.75, 6);   // inner left / right pair
+  neck( 0.32, 0.75, 6);
+  neck(-0.56,-1.15, 5);   // outermost pair, splayed clear of their neighbours
+  neck( 0.56, 1.15, 5);
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
@@ -3945,6 +4779,160 @@ function makePugio(){
   return g;
 }
 
+// ===== ISLAMIC CAIRO LOADOUT (Mamluk-era arc) =====
+// QAWS AL-ZIYAR — a Mamluk crossbow: a wooden stock, a steel prong/bow arm mounted crosswise, and a taut
+// cord. Slower and heavier-hitting than the earlier eras' bows/javelins, with a real reload between shots.
+// Rebuilt from a plain plank (a single thin box stock + one straight crossbar, which read in-game as a
+// featureless brown board) into real crossbow anatomy: a shaped tiller with a raised rear comb, a cut rail
+// groove with a bolt actually loaded in it, a RECURVED lath chained segment-by-segment, a proper V-shaped
+// string running from each lath tip back to the nut, a trigger inside a guard, an iron stirrup at the nose,
+// and bone inlay panels (Mamluk crossbows were decorated) for a light/dark break along the stock.
+function makeCrossbow(){
+  const g=new THREE.Group();
+  const wood=metalMatP(0x5a3a1c,30,0x2a1c10), woodDark=metalMatP(0x3a2410,25,0x1a1108);
+  const steel=metalMatP(0x9aa2aa,85,0xe8eef2), dark=voxMat(0x241e1a,{noise:10});
+  const bone=metalMatP(0xd8cfb4,40,0xfff6e0), iron=metalMatP(0x6a7076,60,0xb8c0c8);
+  const cordMat=new THREE.MeshBasicMaterial({color:0xe8ded0,fog:false});
+
+  // ---- tiller: butt comb -> main body -> tapered nose, so the profile isn't one uniform stick ----
+  part(g,0.07,0.12,0.24,wood,0,-0.015,0.26);         // rear comb (thicker where it meets the shoulder)
+  part(g,0.06,0.085,0.74,wood,0,0.005,-0.06);        // main tiller
+  part(g,0.12,0.06,0.14,woodDark,0,0.005,-0.47);     // nose block — wide enough for the stirrup legs to actually meet it
+  [-1,1].forEach(s=>{ part(g,0.006,0.05,0.34,bone,s*0.031,0.01,-0.02); }); // bone inlay panels down both sides
+  // ---- rail groove + a bolt sitting in it ----
+  part(g,0.026,0.022,0.7,dark,0,0.052,-0.08);        // cut groove
+  part(g,0.016,0.016,0.4,woodDark,0,0.068,-0.26);    // bolt shaft
+  const bhead=new THREE.Mesh(new THREE.ConeGeometry(0.019,0.075,4), iron); bhead.rotation.x=-1.5708; bhead.position.set(0,0.068,-0.48); g.add(bhead); // -0.48 so it meets the shaft, which ends at -0.46
+  [-1,1].forEach(s=>{ const fl=new THREE.Mesh(new THREE.BoxGeometry(0.005,0.038,0.07), bone); fl.position.set(s*0.012,0.078,-0.09); fl.rotation.z=s*0.25; g.add(fl); }); // fletching
+  // ---- nut / lock housing ----
+  part(g,0.075,0.055,0.09,iron,0,0.045,-0.02);
+  // ---- recurved lath: each arm is 3 chained segments walking outward while angling forward, positioned
+  // along the PREVIOUS segment's own rotated direction (a naive linear x-step with a separate rotation
+  // renders as disconnected shards — the exact bug this file has hit before on curved weapon parts) ----
+  const LZ=-0.4;
+  [-1,1].forEach(side=>{
+    let lx=0, lz=LZ, phi=0.12;
+    [{len:0.15,t:0.032},{len:0.14,t:0.026},{len:0.12,t:0.02}].forEach((s,i)=>{
+      const dx=Math.cos(phi), dz=-Math.sin(phi);
+      const cx=lx+side*dx*s.len/2, cz=lz+dz*s.len/2;
+      const seg=new THREE.Mesh(new THREE.BoxGeometry(s.len,s.t,s.t), i===2?dark:steel);
+      seg.position.set(cx,0.012,cz);
+      seg.rotation.y = side>0 ? phi : (Math.PI - phi);
+      g.add(seg);
+      lx += side*dx*s.len; lz += dz*s.len; phi += 0.30; // recurve: each segment sweeps further forward
+    });
+    // string: lath tip back to the nut, one angled run per side, forming a real V. lx/lz already carry
+    // this arm's sign, so the endpoint is used as-is — re-applying `side` here put both halves of the
+    // string on the same side of the stock, overlapping into what looked like a single stray wire.
+    const tipX=lx, tipZ=lz, nutZ=-0.06;
+    const len=Math.hypot(tipX, nutZ-tipZ);
+    const str=new THREE.Mesh(new THREE.BoxGeometry(len,0.009,0.009), cordMat);
+    str.position.set(tipX/2, 0.012, (tipZ+nutZ)/2);
+    str.rotation.y = Math.atan2(tipZ-nutZ, -tipX);
+    g.add(str);
+  });
+  // ---- trigger + guard loop ----
+  part(g,0.028,0.09,0.03,iron,0,-0.09,0.1).rotation.x=-0.18;
+  part(g,0.018,0.015,0.17,iron,0,-0.135,0.13);
+  part(g,0.018,0.055,0.016,iron,0,-0.1,0.205);
+  // ---- iron stirrup at the nose (foot goes through it to span the bow) — a very identifying crossbow cue ----
+  part(g,0.016,0.11,0.016,iron,-0.05,-0.06,-0.5);
+  part(g,0.016,0.11,0.016,iron, 0.05,-0.06,-0.5);
+  part(g,0.116,0.016,0.016,iron,0,-0.115,-0.5);
+
+  g.userData={muzzleZ:-0.56,muzzleY:0.068,pos:new THREE.Vector3(0.24,-0.24,-0.4),recoil:0.2,name:'Qaws',
+    damage:156, fireRate:1.3, auto:false, spread:0.002, tracer:0xd8d0c0,
+    magSize:4, ammo:4, reloadTime:2.0, reloading:false, reloadT:0};
+  return g;
+}
+// SAIF — a curved Mamluk scimitar: a single sweeping steel blade, a crossguard, and a wrapped grip. A
+// deliberately different silhouette (curved, not straight) and palette from the Greek Xiphos and Roman
+// Pugio so the three eras' sidearms never read as reskins of each other.
+// BUG FIX: the blade used to render as a row of DISCONNECTED FLOATING SHARDS. Each segment was rotated
+// about Z (which swings a part through the X/Y plane) while the position walk advanced along Y and Z — two
+// different planes — so the segments rotated one way and marched another, touching at best on a corner.
+// The curve now lives entirely in the YZ plane: direction is (0, cos t, -sin t), the matching orientation
+// for a box whose length is its local +Y is rotation.x = -t, and each segment starts exactly where the
+// previous one ended. Also widened considerably (it was a 0.03 x 0.006 wire) and given a kilij-style
+// yelman — the flared false edge near the tip that makes a Mamluk sabre instantly recognizable.
+function makeScimitar(){
+  const g=new THREE.Group();
+  const steel=metalMatP(0xc2c8cd,100,0xffffff), steelDark=metalMatP(0x848b92,65,0xc8ccd0);
+  const gripMat=voxMat(0x1c3a2e,{noise:10}), goldMat=metalMatP(0xc09433,90,0xfff2c8);
+  const pommel=new THREE.Mesh(new THREE.CylinderGeometry(0.036,0.028,0.045,8), goldMat); pommel.position.y=0.01; g.add(pommel);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.026,0.028,0.17,8), gripMat); grip.position.y=0.115; g.add(grip);
+  for(let i=0;i<3;i++){ const wrap=new THREE.Mesh(new THREE.CylinderGeometry(0.029,0.029,0.014,8), goldMat); wrap.position.y=0.06+i*0.05; g.add(wrap); } // grip wrap bands
+  // crossguard with drooping quillons
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.026,0.055), goldMat); guard.position.y=0.213; g.add(guard);
+  [-1,1].forEach(s=>{ const q=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.022,0.05), goldMat); q.position.set(s*0.095,0.198,0); q.rotation.z=s*0.5; g.add(q); });
+  // curved blade — 7 chained segments, each starting where the last ended (see the note above)
+  // blade starts at 0.21, inside the guard (which spans y 0.200..0.226) — starting it at 0.235 left the
+  // entire hilt as a separate floating piece with the blade hovering 0.009 above the crossguard
+  let by=0.21, bz=0, t=0;
+  const segs=[{w:0.052,len:0.088},{w:0.05,len:0.088},{w:0.047,len:0.088},{w:0.045,len:0.088},
+              {w:0.062,len:0.086},{w:0.07,len:0.084},{w:0.05,len:0.08}]; // 5th/6th flare = the yelman
+  segs.forEach((s,i)=>{
+    const dy=Math.cos(t), dz=-Math.sin(t);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.len,0.014), i>=4?steelDark:steel);
+    seg.position.set(0, by+dy*s.len/2, bz+dz*s.len/2);
+    seg.rotation.x = -t;
+    g.add(seg);
+    // bright edge strip along the cutting side, mounted just proud of the blade face
+    const edge=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.22,s.len,0.017), steel);
+    edge.position.set(s.w*0.36, by+dy*s.len/2, bz+dz*s.len/2);
+    edge.rotation.x = -t; g.add(edge);
+    by += dy*s.len; bz += dz*s.len; t += 0.155;
+  });
+  // tip, continuing along the final segment's own direction so it stays attached
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.075,4), steelDark);
+  tip.position.set(0, by+Math.cos(t)*0.037, bz-Math.sin(t)*0.037); tip.rotation.x=-t; g.add(tip);
+
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.1,name:'Saif',
+    melee:true, range:1.7, damage:160, fireRate:0.2};
+  return g;
+}
+// NAFT POT — a thrown ceramic pot of naphtha, the Islamic-world descendant of Greek Fire; same
+// lob-arc-and-explode grenade mechanic (userData.grenade routes through launchGrenade()/explodeAt()), a
+// distinct clay-pot silhouette instead of a bronze siphon.
+// Reworked: the old version was a bare sphere with a big wooden slab floating detached below and behind it,
+// which read as "a ball next to a plank". The pot is now a banded, rope-bound vessel with a corded sling the
+// hand actually holds — every piece physically connected — plus a rag wick burning at the mouth.
+function makeNaftPot(){
+  const g=new THREE.Group();
+  const clay=voxMat(0xc06a30,{noise:14}), clayDark=voxMat(0x7a3c1c,{noise:12});
+  const rope=voxMat(0xb09a68,{noise:16}), leather=voxMat(0x4a3320,{noise:14});
+  const PZ=-0.12, PY=-0.03;
+  const pot=new THREE.Mesh(new THREE.SphereGeometry(0.125,10,8), clay); pot.scale.set(1,0.92,1); pot.position.set(0,PY,PZ); g.add(pot);
+  // three rope bands cinched around the belly — breaks up the plain sphere and reads as a bound firepot
+  [[-0.05,0.118],[0.0,0.126],[0.05,0.118]].forEach(([dy,r])=>{
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(r,r,0.018,10), rope); band.position.set(0,PY+dy,PZ); g.add(band);
+  });
+  // vertical rope ribs over the shoulder of the pot, tying the bands together
+  [-1,1].forEach(s=>{ const rib=new THREE.Mesh(new THREE.BoxGeometry(0.016,0.2,0.016), rope); rib.position.set(s*0.105,PY+0.02,PZ); rib.rotation.z=s*0.22; g.add(rib); });
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.042,0.058,0.06,8), clayDark); neck.position.set(0,PY+0.13,PZ); g.add(neck);
+  const lip=new THREE.Mesh(new THREE.CylinderGeometry(0.052,0.046,0.018,8), clayDark); lip.position.set(0,PY+0.168,PZ); g.add(lip);
+  // soaked rag wick + flame
+  const wick=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.06,0.03), voxMat(0x3a3026,{noise:10})); wick.position.set(0,PY+0.2,PZ); g.add(wick);
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(0.038,0.1,6), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false})); flame.position.set(0,PY+0.28,PZ); g.add(flame);
+  const flameCore=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.055,6), new THREE.MeshBasicMaterial({color:0xffe07a,fog:false})); flameCore.position.set(0,PY+0.265,PZ); g.add(flameCore);
+  const L=new THREE.PointLight(0xff8a2a,1.0,1.6); L.position.set(0,PY+0.28,PZ); g.add(L);
+  // corded sling running from the pot's bands up into the fist — this is what the hand is holding, and it
+  // physically connects to the pot instead of hovering beside it
+  [-1,1].forEach(s=>{
+    const cord=new THREE.Mesh(new THREE.BoxGeometry(0.014,0.2,0.014), rope);
+    cord.position.set(s*0.075,PY-0.13,PZ+0.06); cord.rotation.x=-0.3; cord.rotation.z=s*-0.35; g.add(cord);
+  });
+  // knot spans wide enough to actually catch BOTH cords (they sit at x=+/-0.075); at 0.05 across it hung
+  // between them touching neither, taking the handle below it along for the ride
+  const knot=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.09,0.15), rope); knot.position.set(0,PY-0.22,PZ+0.12); g.add(knot);
+  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.028,0.16,8), leather); handle.position.set(0,PY-0.3,PZ+0.15); handle.rotation.x=0.35; g.add(handle);
+
+  g.userData={muzzleZ:-0.12,muzzleY:0.1,pos:new THREE.Vector3(0.25,-0.24,-0.1),recoil:0.16,name:'Naft Pot',
+    damage:0, splashDamage:205, splashRadius:4.9, fireRate:1.2, auto:false, spread:0.0, tracer:0xff8a2a, grenade:true,
+    magSize:4, ammo:4, reloadTime:2.1, reloading:false, reloadT:0};
+  return g;
+}
+
 const DEFAULT_FOV = 75;
 let scoped = false; // declared here (before selectWeapon's initial call) to avoid a temporal-dead-zone crash
 const originalWeapons = [makeSniper(), makeRifle(), makeRayGun(), makeGrenadeLauncher(), makeZahraGun()];
@@ -3953,9 +4941,10 @@ const nileWeapons = [makeHarpoon()];
 const greekWeapons = [makeSling(), makeXiphos(), makeTrident()];
 // Roman loadout — not yet wired into wave/era progression (map-only turn), but ready for when it is
 const romanWeapons = [makeJavelin(), makePugio(), makeGreekFire()];
+const islamicWeapons = [makeCrossbow(), makeScimitar(), makeNaftPot()];
 let weapons = pyramidWeapons; // waves 1-3 + Boss I start on the pyramid loadout; swapped back after Boss I
 const gunGroup = new THREE.Group();
-originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons).concat(romanWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
+originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons).concat(romanWeapons).concat(islamicWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
 gunGroup.add(muzzle);
 let currentWeapon = 0; // start on the bow
 function setAmmoHUD(){
@@ -4001,12 +4990,37 @@ function enterRomanWorld(banner){
   activeColliders = romanColliders;
   activeHeightZones = heightZonesRoman;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
   camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   weapons = romanWeapons;
+  selectWeapon(0);
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
+// swaps in the Islamic/Cairo map + loadout — used by both the real post-Boss-III victory transition (Task 4)
+// and by respawnPlayer() for era-3 deaths (Task 4). Modeled directly on enterRomanWorld(): an open
+// transition, not exiting a dungeon, so world+lighting+loadout all happen in one call.
+function enterIslamicWorld(banner){
+  clearWorldGroups();
+  scene.add(islamicOverworld);
+  sky.visible = true;
+  activeColliders = islamicColliders;
+  activeHeightZones = heightZonesIslamic;
+  // Warm Cairo daylight, pulled back from the original settings: hemi 0.9 + a near-white 0xfff0d0 sky tint
+  // + a very pale 0xe8dcc0 fog was lifting every surface toward white, which was a real part of why this
+  // map looked washed out. Slightly lower ambient and a deeper amber fog let the new darker ground and the
+  // lapis/green accents hold their colour.
+  scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8c39a); scene.fog.near=34; scene.fog.far=180;
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
+  hemi.intensity=0.72; hemi.color.set(0xffe4b0); hemi.groundColor.set(0x5a4a2c);
+  sun.intensity=1.0; fill.intensity=0.22; fill.color.set(0xffdca0);
+  camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  weapons.forEach(w=>w.visible=false);
+  weapons = islamicWeapons;
   selectWeapon(0);
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
@@ -4019,6 +5033,7 @@ function enterHydraArena(){
   activeColliders = hydraColliders;
   activeHeightZones = heightZonesOriginal;   // flat platform, no climbable zones
   scene.background.set(0x8a9c86); scene.fog.color.set(0x7f947c); scene.fog.near=26; scene.fog.far=110; // overcast marsh
+  distantGround.visible=false; // the arena's own 320x320 marsh water sits lower than this plane and would be hidden under it
   hemi.intensity=0.7; hemi.color.set(0xc3d3b4); hemi.groundColor.set(0x384a2e);
   sun.intensity=0.55; fill.intensity=0.2; fill.color.set(0xb0c8a4);
   camera.position.set(0,1.7,17); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -4030,9 +5045,22 @@ function enterColosseumArena(){
   activeColliders = colosseumColliders;
   activeHeightZones = heightZonesOriginal;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8c4a0); scene.fog.near=45; scene.fog.far=200; // warm daylit arena
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
   hemi.intensity=0.9; hemi.color.set(0xffe6c0); hemi.groundColor.set(0x6a5030);
   sun.intensity=1.0; fill.intensity=0.25; fill.color.set(0xffd8a0);
   camera.position.set(0,1.7,17); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+}
+function enterIfritArena(){
+  clearWorldGroups();
+  scene.add(ifritArena);
+  sky.visible = true;
+  activeColliders = ifritColliders;
+  activeHeightZones = heightZonesOriginal;
+  scene.background.set(0x8a4a2e); scene.fog.color.set(0xa85a34); scene.fog.near=22; scene.fog.far=90; // warm dusk, fire-lit
+  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
+  hemi.intensity=0.55; hemi.color.set(0xffb87a); hemi.groundColor.set(0x3a2414);
+  sun.intensity=0.5; fill.intensity=0.3; fill.color.set(0xff8a4a);
+  camera.position.set(0,1.7,14); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
 // ==========================================================================
 let gunBaseZ = -0.5;
@@ -4114,19 +5142,24 @@ document.addEventListener('keydown', e => {
     setBanner('↺ repositioned'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='↺ repositioned') setBanner(''); }, 900);
   }
   // ==================== DEBUG — REMOVE BEFORE SHIPPING ====================
-  // H: jumps straight to the first wave of the most recent era (Roman) for testing — same transition
-  // enterRomanWorld()+wave7 spawn already used for the real Boss II victory / era-2 respawn.
+  // H: jumps straight to Cairo for testing. Cairo is enemy-free by design (spawnWave() early-returns for
+  // n>=9), so this is just a map preview — pending='wave' resolves to a no-op spawn, no combat starts.
   if (e.code==='KeyH' && player.alive){
     clearBots();
-    enterRomanWorld('🏛 Jumped to the Roman frontier');
-    // bossNum MUST match the era (era 2 is reached by beating bosses I+II) — without this the wave-9 boss
-    // trigger does bossNum++ from 0→1 and wrongly spawns Boss I (the Colossus), then its defeat path flips
-    // you into the Greek map with mismatched era/wave state (Roman enemies in the Greek map).
-    currentEra=2; bossNum=2; waveIdx=ERA_START_WAVE[2]; pending='wave'; betweenTimer=1.2;
+    enterIslamicWorld('🕌 Jumped to Mamluk Cairo');
+    // bossNum MUST match the era (era 3 is reached by beating bosses I+II+III) — without this a stray
+    // future boss trigger would do bossNum++ from 0→1 and wrongly spawn Boss I with mismatched era/wave state.
+    currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3]; pending='wave'; betweenTimer=1.2;
   }
   // L: instantly kills every living enemy on screen (wave, boss, Nile wave — whatever's active), for testing.
   if (e.code==='KeyL' && player.alive){
     bots.forEach(b=>{ if(b.alive) damageBot(b, 99999, b.mesh.position); });
+  }
+  // G: toggles infinite health — damagePlayer() no-ops while godMode is true. For testing/exploring maps
+  // without dying, not meant to persist across a real playthrough.
+  if (e.code==='KeyG'){
+    godMode = !godMode;
+    setBanner(godMode ? '🛡 GOD MODE ON' : '🛡 god mode off'); setTimeout(()=>{ if(bannerEl && (bannerEl.textContent.includes('GOD MODE') || bannerEl.textContent.includes('god mode'))) setBanner(''); },1200);
   }
   // ==========================================================================
 });
@@ -4294,7 +5327,7 @@ function setBanner(txt){ if(bannerEl){ bannerEl.textContent=txt||''; bannerEl.st
 // ---- wave / boss manager ----
 const ENEMY_COLORS=[0xc0392b,0x2980b9,0x27ae60,0x8e44ad,0xe67e22,0x16a085,0xd35400,0x2c3e50];
 const SPAWN_POINTS=[[-6,-6],[9,4],[-9,9],[-14,-14],[16,-6],[4,16],[-20,4],[18,14],[-2,-20],[12,-16]];
-const WAVES=[3,4,5, 6,7,9, 7,8,10]; // 9 waves; a boss after wave 3 and after wave 6 — Roman waves 7-9 have no boss yet
+const WAVES=[3,4,5, 6,7,9, 7,8,10, 9,10,12]; // 12 waves; a boss after wave 3, 6, 9, and 12
 function waveDiff(n){ return 1 + n*n*0.05 + n*0.16; } // accelerating curve: each wave is meaningfully tougher than the last
 let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWon=false, gameStarted=false;
 // era system: dying always respawns at the START of the CURRENT era, never an earlier one (e.g. dying in a
@@ -4302,14 +5335,20 @@ let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWo
 // ERA_START_WAVE; extend both when a new era arc is added later, incrementing currentEra at that era's
 // boss-defeat transition (see the pyramidPhase branch in onAllDead()).
 let currentEra=0;
-const ERA_START_WAVE=[0,3,6]; // waveIdx where each era begins — era 0 (pyramid) starts at wave 1, era 1 at wave 4, era 2 (Roman) at wave 7
+const ERA_START_WAVE=[0,3,6,9]; // waveIdx where each era begins — era 0 (pyramid) starts at wave 1, era 1 (Greek) at wave 4, era 2 (Roman) at wave 7, era 3 (Islamic) at wave 10
 function clearBots(){ bots.forEach(b=>scene.remove(b.mesh)); bots.length=0; }
 function setEnemyCount(txt){ const e=document.getElementById('enemies'); if(e) e.textContent = txt!==undefined?txt:bots.filter(b=>b.alive).length; }
 function spawnWave(n){
   clearBots();
+  if(n>=9){ // waves 10-12 (Islamic/Mamluk Cairo): enemy-free by design — see onAllDead()'s bossNum===3
+    // branch, which now sends the win straight through instead of spawning waves or the Ifrit King boss
+    document.getElementById('wave').textContent=(n+1)+'/'+WAVES.length;
+    setEnemyCount();
+    return;
+  }
   const count=WAVES[n];
-  const pyramid = n<3; // waves 1-3: desert/pyramid reskin, ahead of the stone-temple boss dungeon
-  const roman = n>=6;  // waves 7-9: Roman legionaries — no boss/dungeon for this era yet
+  const pyramid = n<3;        // waves 1-3: desert/pyramid reskin, ahead of the stone-temple boss dungeon
+  const roman = n>=6 && n<9;  // waves 7-9: Roman legionaries
   // Greek waves inherit waveDiff(n)'s accelerating curve just by continuing the same wave index, which made
   // them scale up faster than intended — harder than the pyramid era (correct, it's the later era) but not
   // by this much, especially with a still-harder era planned after this one. Softened back ~12%, which still
@@ -4365,7 +5404,7 @@ function spawnWave(n){
     spawnBot(sp[0],sp[1],0x201d19,[sp[0]-2,0,sp[1]],[sp[0]+2,0,sp[1]],'knife',
       {skin:'warhound', hp:Math.round(gruntHp*1.4), diff, speed:1+(diff-1)*0.5});
   }
-  document.getElementById('wave').textContent=(n+1)+'/6';
+  document.getElementById('wave').textContent=(n+1)+'/'+WAVES.length;
   setEnemyCount();
 }
 function spawnBossFight(){
@@ -4373,7 +5412,8 @@ function spawnBossFight(){
   bossNum++;
   bossActive=true;
   // Boss I = Sandstone Colossus (pyramid dungeon); Boss II = Lernaean Hydra (open-air marsh arena);
-  // Boss III = Colosseum Champion (amphitheatre arena). Each swaps in its own arena world.
+  // Boss III = Colosseum Champion (amphitheatre arena); Boss IV = Ifrit King (Citadel courtyard, the
+  // current final boss). Each swaps in its own arena world.
   let skin, col, hp, scale, speed, label;
   if(bossNum===1){
     enterDungeon();
@@ -4381,9 +5421,12 @@ function spawnBossFight(){
   } else if(bossNum===2){
     enterHydraArena();
     skin='hydra'; col=0x35502e; hp=1750; scale=2.4; speed=1.7; label='BOSS II';
-  } else {
+  } else if(bossNum===3){
     enterColosseumArena();
     skin='champion'; col=0x8a9299; hp=2100; scale=2.3; speed=2.1; label='BOSS III';
+  } else {
+    enterIfritArena();
+    skin='ifritking'; col=0xc93a14; hp=2450; scale=2.0; speed=1.8; label='BOSS IV';
   }
   const bmesh=spawnBot(0,-8,col,[-7,0,-8],[7,0,-8],'pistol',{hp, scale, boss:true, speed, skin, diff:1});
   showBossBar(true); setBossBar(bmesh.userData.data);
@@ -4396,6 +5439,11 @@ function startGame(){
   document.body.classList.add('playing');
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
+  // drain any leftover fire meteors from a previous run so one can't fire into the fresh game (quakeEffects,
+  // the older analogous VFX-effect array, has this same gap on restart — out of scope here, only fixing
+  // fireMeteors, this feature's own code)
+  for(const m of fireMeteors) scene.remove(m.grp);
+  fireMeteors.length = 0;
   player.score=0; player.hp=player.maxHp; player.alive=true; player.lastHit=-99;
   pyramidPhase=true; dungeonWasPyramid=true; inNileArea=false; weapons=pyramidWeapons; selectWeapon(0); // reset to the pyramid map/loadout in case this is a replay
   exitDungeon(); // ensure we start in the overworld (also positions the player)
@@ -4411,19 +5459,36 @@ function onAllDead(){
     bossActive=false; showBossBar(false);
     // used to set gameWon=true + exitDungeon() here and just show "YOU WIN" — but gameWon disables firing
     // entirely and turns the next pointer-lock click into a full restart, so there was nowhere to actually
-    // go afterward. Ammit falling now leads into the Roman map instead (playable, not "game over") — wave 7
-    // (the first Roman wave) spawns after the usual between-wave pause, same as any other era transition.
+    // go afterward. Each mid-campaign boss falling leads into the next era's map instead (playable, not
+    // "game over"); the Colosseum Champion (bossNum 3) is the actual end of the run now that Cairo has no
+    // enemies of its own — see the bossNum===3 branch below. The Ifrit King branch is kept for a possible
+    // future restore of Cairo's combat but is unreachable in normal play now.
     if(bossNum===2){
       // Hydra down → cross into the Roman frontier (wave 7)
       enterRomanWorld('🏆 The Hydra falls! The Roman frontier awaits…');
       currentEra=2; waveIdx=ERA_START_WAVE[2]; pending='wave'; betweenTimer=2.4;
       return;
     }
-    if(bossNum>=3){
-      // Colosseum Champion down → the campaign's final boss; victory. gameWon disables firing and turns the
-      // next pointer-lock click into a fresh run (the intended "you beat it" end state).
+    if(bossNum===3){
+      // Colosseum Champion down → cross into Mamluk Cairo (wave 10) — this used to just set gameWon and
+      // strand the player in the empty Colosseum arena with nowhere to go; that was the reported bug.
+      // Cairo itself is enemy-free by design (no wave spawns, no Ifrit King fight — see spawnWave()'s
+      // early return for n>=9) so the Champion's defeat is the actual end of the run: walk into a quiet
+      // Cairo as the win state, rather than queuing up combat that will never come.
+      currentEra=3; gameWon=true;
+      enterIslamicWorld('🏆 The Champion falls! Cairo opens its gates in peace — you have conquered Egypt! 🕌');
+      return;
+    }
+    if(bossNum>=4){
+      // Ifrit King down → the campaign's final boss; victory. gameWon disables firing and turns the next
+      // pointer-lock click into a fresh run (the intended "you beat it" end state).
       gameWon=true;
-      setBanner('🏆 THE CHAMPION FALLS — you have conquered the arena! 🏛');
+      // drain any fire meteor still mid-telegraph so a killing blow landed just before impact can't fire
+      // damagePlayer() into the win screen (the !gameWon guard above covers it too, but this also stops the
+      // stray visual/audio and any respawnPlayer() fallout from a hit that lands after gameWon flips)
+      for(const m of fireMeteors) scene.remove(m.grp);
+      fireMeteors.length = 0;
+      setBanner('🏆 THE IFRIT KING FALLS — you have conquered Cairo! 🕌');
       return;
     }
     exitDungeon();
@@ -4439,8 +5504,10 @@ function onAllDead(){
     waveIdx++; pending='wave'; betweenTimer=2.5; setBanner('WAVE '+(waveIdx+1)+' incoming…');
     return;
   }
-  // a normal wave was cleared: a boss follows wave 3 (idx 2), wave 6 (idx 5) and wave 9 (idx 8 — the last
-  // Roman wave); the Nile Wave follows wave 2 (idx 1)
+  // a normal wave was cleared: a boss follows wave 3 (idx 2), wave 6 (idx 5), and wave 9 (idx 8 — the
+  // last Roman wave, triggering the Colosseum Champion, now the run's actual final boss — see onAllDead()'s
+  // bossNum===3 branch). Waves 10-12 (Islamic/Cairo) never spawn enemies, so waveIdx never reaches 11 in
+  // normal play. The Nile Wave follows wave 2 (idx 1)
   if(waveIdx===2 || waveIdx===5 || waveIdx===8){ pending='boss'; betweenTimer=2.2;
     setBanner(waveIdx===5?'The Lernaean Hydra rises from the marsh…':waveIdx===8?'The Champion of the arena strides forth…':'A boss awaits below…'); }
   else if(waveIdx===1 && pyramidPhase){ pending='nile'; betweenTimer=2.2; setBanner('The Nile stirs…'); }
@@ -4805,6 +5872,18 @@ function spawnQuakeEffect(x,z){
   const light = new THREE.PointLight(0xd8b982, 2.4, 14); light.position.y = 1; grp.add(light);
   quakeEffects.push({grp, cracks, debris, dustMat, dust, light, t:0, dur:1.1});
 }
+// Ifrit King fire meteor: a telegraph ring grows/pulses at the target point for `impactAt` seconds (the
+// player's real dodge window), then a burst deals AOE damage if they're still standing in it. Modeled on
+// spawnQuakeEffect()'s timed-array-of-effects pattern.
+const fireMeteors = [];
+function spawnFireMeteor(x,z){
+  const grp = new THREE.Group(); grp.position.set(x,0.05,z); scene.add(grp);
+  const ringMat = new THREE.MeshBasicMaterial({color:0xff4a1a, transparent:true, opacity:0.85, fog:false, side:THREE.DoubleSide});
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.6,2.0,20), ringMat); ring.rotation.x=-Math.PI/2; grp.add(ring);
+  const fillMat = new THREE.MeshBasicMaterial({color:0xff8a2a, transparent:true, opacity:0.3, fog:false, side:THREE.DoubleSide});
+  const fill = new THREE.Mesh(new THREE.CircleGeometry(2.0,20), fillMat); fill.rotation.x=-Math.PI/2; fill.position.y=0.01; grp.add(fill);
+  fireMeteors.push({grp, ring, ringMat, fillMat, x, z, t:0, impactAt:0.9, dur:1.5, impacted:false});
+}
 function damageBot(bd, dmg, point){
   if(!bd.alive) return;
   if(bd.skin==='minotaur'){
@@ -4824,8 +5903,9 @@ function damageBot(bd, dmg, point){
     setHUD(); setEnemyCount(bossActive?'☠':undefined); SFX.death();
   }
 }
+let godMode = false; // debug: toggled by KeyG, see the DEBUG block near the keydown listener
 function damagePlayer(dmg){
-  if(!player.alive) return;
+  if(!player.alive || godMode) return;
   player.hp -= dmg; player.lastHit = performance.now()*0.001; showDamage(); setHUD(); SFX.hurt();
   if(player.hp <= 0){
     player.alive = false; player.respawn = 2.5;
@@ -4843,9 +5923,10 @@ function respawnPlayer(){
     weapons.forEach(w=>w.visible=false); weapons=weaponsBeforeNile||weapons; selectWeapon(currentWeaponBeforeNile||0);
   }
   bossNum = currentEra; // keep credit for any boss(es) already defeated in earlier eras
-  // exitDungeon() only knows the pyramid/greek pairing (dungeonWasPyramid) — there's no Roman dungeon yet,
-  // so era 2 gets its own reset here instead of routing through that
-  if(currentEra >= 2) enterRomanWorld('💀 back to Wave 7');
+  // exitDungeon() only knows the pyramid/greek pairing (dungeonWasPyramid) — there's no Roman/Islamic
+  // dungeon, so eras 2 and 3 each get their own reset here instead of routing through that
+  if(currentEra >= 3) enterIslamicWorld('💀 back to Wave 10');
+  else if(currentEra >= 2) enterRomanWorld('💀 back to Wave 7');
   else exitDungeon();
   waveIdx = ERA_START_WAVE[currentEra];
   clearBots(); spawnWave(waveIdx);
@@ -5045,6 +6126,31 @@ function animate(){
       d.mesh.rotation.x += d.rx*dt; d.mesh.rotation.z += d.rz*dt;
     });
     if(s>=1){ scene.remove(q.grp); quakeEffects.splice(i,1); }
+  }
+
+  // ----- fire meteors (Ifrit King): telegraph ring grows/pulses, then a burst deals AOE damage if the
+  // player is still standing in it — the dodge window IS the telegraph duration -----
+  for(let i=fireMeteors.length-1;i>=0;i--){
+    const m=fireMeteors[i]; m.t+=dt;
+    if(!m.impacted){
+      const growT = Math.min(1, m.t/m.impactAt);
+      m.ring.scale.setScalar(0.3+growT*0.7);
+      m.ringMat.opacity = 0.5 + Math.sin(m.t*18)*0.35; // fast pulse reads as urgent, not just growing
+      if(m.t >= m.impactAt){
+        m.impacted = true;
+        const distToImpact = Math.hypot(camera.position.x-m.x, camera.position.z-m.z);
+        if(distToImpact < 2.0 && player.alive && !gameWon) damagePlayer(Math.round(24*(1-distToImpact/2.0*0.3)));
+        shakeAmt = Math.max(shakeAmt, 0.25);
+        SFX.explosion();
+        m.fillMat.opacity = 0.9; m.fillMat.color.set(0xffd23a);
+      }
+    } else {
+      const fadeT = Math.min(1, (m.t-m.impactAt)/(m.dur-m.impactAt));
+      m.ringMat.opacity = 0.6*(1-fadeT);
+      m.fillMat.opacity = 0.9*(1-fadeT);
+      m.grp.scale.setScalar(1+fadeT*1.5);
+    }
+    if(m.t >= m.dur){ scene.remove(m.grp); fireMeteors.splice(i,1); }
   }
 
   // recoil recovery toward the active weapon's base position + idle sway
@@ -5260,6 +6366,17 @@ function animate(){
       });
       SFX.boss();
       setBanner('⚠ The Champion looses two tigers!'); setTimeout(()=>{ if(bossActive) setBanner(''); },1800);
+    }
+
+    // Ifrit King (Boss IV): periodically calls down a telegraphed fire meteor at the player's CURRENT
+    // position — a ranged, dodge-driven hazard, distinct from the Colossus's proximity quake (no telegraph,
+    // can't be dodged by movement alone) and the Champion's one-time add-summon above.
+    if(b.boss && b.skin==='ifritking' && player.alive){
+      b.meteorCd = b.meteorCd===undefined ? 4 : b.meteorCd - dt;
+      if(b.meteorCd <= 0 && distToPlayer < 26){
+        b.meteorCd = 7 + Math.random()*2;
+        spawnFireMeteor(camera.position.x, camera.position.z);
+      }
     }
 
     // ---- animation: legs/arms swing only while actually moving (skipped by non-humanoid rigs, e.g. scarabs) ----
