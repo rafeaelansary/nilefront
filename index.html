@@ -210,15 +210,21 @@ function cloudSkyTexture(size=512){
   c.width = size; c.height = size/2;
   const ctx = c.getContext('2d');
   const grad = ctx.createLinearGradient(0,0,0,c.height);
-  grad.addColorStop(0, '#4fb3e6');
-  grad.addColorStop(0.55, '#8fd6f2');
-  grad.addColorStop(1, '#d7f3fa');
+  grad.addColorStop(0, '#3f9fd8');
+  grad.addColorStop(0.55, '#7cc9ee');
+  // The horizon stop used to be #d7f3fa, i.e. very nearly white. Anything pale and distant — the limestone
+  // pyramids, the far skyline towers — sat against it with almost no contrast and simply disappeared.
+  // Holding a real blue at the horizon line gives distant geometry something to read against.
+  grad.addColorStop(0.88, '#aadcf0');
+  grad.addColorStop(1, '#c8e4ee');
   ctx.fillStyle = grad;
   ctx.fillRect(0,0,c.width,c.height);
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
   for (let i=0;i<70;i++){
-    const cx = Math.random()*c.width, cy = Math.random()*c.height*0.65;
+    const cx = Math.random()*c.width, cy = Math.random()*c.height*0.6;
     const cw = 30+Math.random()*70, ch = 10+Math.random()*16;
+    // fade clouds out toward the horizon rather than stamping them at full white all the way down —
+    // solid white blobs sitting on the skyline were a big part of what flattened the far distance
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.9 - 0.55*(cy/(c.height*0.6))).toFixed(3) + ')';
     for (let b=0;b<5;b++){
       ctx.fillRect(cx + Math.random()*cw - cw/2, cy + Math.random()*ch - ch/2, 18+Math.random()*22, 10+Math.random()*10);
     }
@@ -232,6 +238,11 @@ const sky = new THREE.Mesh(
   new THREE.MeshBasicMaterial({map: cloudSkyTexture(), side: THREE.BackSide, fog:false})
 );
 scene.add(sky);
+// One shared skydome serves every outdoor area, and a MeshBasicMaterial multiplies its `color` into the
+// map — so tinting it is how an era gets its own sky without a second texture. Before this, the Hydra's
+// overcast marsh and the Ifrit's fire-lit dusk both set a moody scene.fog/background and were then
+// completely overruled by this dome rendering cheerful midday blue over the top of them.
+function skyTint(hex){ sky.material.color.set(hex); }
 
 // ---- distant blocky skyline silhouette beyond the walls, fades into fog for depth ----
 function skylineTower(x,z,w,h,color){
@@ -257,30 +268,107 @@ function skylineTower(x,z,w,h,color){
 // fog draw distance (up to 220), so standing at its edge exposed the slab's bare side face against open sky
 // — read as "standing on a floating island". This huge, cheap plane sits tucked just under every map's real
 // ground (all of them top out at y=0), invisible under the detailed geometry, and only shows past its edges,
-// giving the horizon something to fade into instead of nothing. Tinted to match each era's fog color (see
-// era-switch functions below) so the seam where the real ground stops is as close to invisible as possible.
+// giving the horizon something to fade into instead of nothing.
+//
+// It is tinted to match each era's GROUND, not its fog — see setDistantGround(). Colouring it fog-blue (what
+// it did at first) meant the plane read as another band of sky sitting at ground level, so the map's finite
+// slab still looked like it was floating; and because fog doesn't start until ~40 units, the stretch of plane
+// nearest the player got no atmospheric blending either and rendered as a flat sheet butted against textured
+// ground. Painted as terrain and left to the scene fog, it reads as the ground simply running to the horizon.
 function distantGroundTexture(size=256){
   const c=document.createElement('canvas'); c.width=c.height=size;
   const ctx=c.getContext('2d');
-  ctx.fillStyle='#a8a296'; ctx.fillRect(0,0,size,size);
+  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,size,size);
+  // near-white base with only light/dark mottling, so the per-era tint below sets the actual hue rather
+  // than fighting a baked-in grey
   for(let i=0;i<700;i++){
     const x=Math.random()*size, y=Math.random()*size, r=6+Math.random()*14;
-    const shade=140+((Math.random()-0.5)*36)|0;
-    ctx.fillStyle=`rgba(${shade},${shade},${shade-8},0.5)`;
+    const shade=228+((Math.random()-0.5)*46)|0;
+    ctx.fillStyle=`rgba(${shade},${shade},${shade-6},0.55)`;
     ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
   }
   const tex=new THREE.CanvasTexture(c);
   tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
-  tex.repeat.set(70,70);
+  // ~7 units per tile (1400/200), close to the real ground textures' scale. At 70 it was 20 units a tile,
+  // visibly coarser than the ground it was supposed to be continuing.
+  tex.repeat.set(200,200);
   return tex;
 }
+const distantGroundDefaultTex = distantGroundTexture();
 const distantGround = new THREE.Mesh(
   new THREE.PlaneGeometry(1400,1400),
-  new THREE.MeshLambertMaterial({map:distantGroundTexture()})
+  new THREE.MeshLambertMaterial({map:distantGroundDefaultTex})
 );
 distantGround.rotation.x = -Math.PI/2;
-distantGround.position.y = -0.05;
-scene.add(distantGround);
+// Just under every map's ground top (y=0) — close enough that the step is invisible at eye level, far enough
+// that the two surfaces don't z-fight across the whole overlap.
+distantGround.position.y = -0.04;
+// NOT scene.add()ed here on purpose. Each map group is built by sweeping everything currently parented to the
+// scene into a new Group (six such sweeps below), so anything added at this point gets swallowed by the first
+// one — `overworld` — which is removed from the scene and never re-added. That silently detached this plane
+// from the graph on every map. It is added to the scene after the last sweep instead.
+
+// ---- horizon haze band. Even with the backing plane carrying the ground out to 700 units, the plane's far
+// edge and the sky still meet on a hard line, because the fully-fogged ground and the sky's horizon colour
+// are never exactly equal. This is an open-ended cylinder standing around the world with a soft vertical
+// gradient — densest right at eye level, fading out above and below — so the two dissolve into each other.
+// Tinted per era alongside the ground plane. depthWrite off and fog off: it IS the atmosphere, it must not
+// be fogged by it, and it must never occlude anything in the depth buffer.
+function horizonHazeTexture(){
+  const c=document.createElement('canvas'); c.width=4; c.height=128;
+  const ctx=c.getContext('2d');
+  const g=ctx.createLinearGradient(0,0,0,128);
+  g.addColorStop(0.00,'rgba(255,255,255,0)');
+  g.addColorStop(0.30,'rgba(255,255,255,0.55)');
+  g.addColorStop(0.50,'rgba(255,255,255,0.88)');
+  g.addColorStop(0.70,'rgba(255,255,255,0.55)');
+  g.addColorStop(1.00,'rgba(255,255,255,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,4,128);
+  const t=new THREE.CanvasTexture(c); t.wrapS=THREE.RepeatWrapping; return t;
+}
+// Radius 82, not the 280 it started at. At 280 the band sat further out than the player could ever see
+// detail at, so from ground level there was no visible haze at all — it only did anything on the far
+// skyline. At 82 it stands just past the play area and reads as real atmosphere closing the world off.
+// It also tracks the camera in X/Z every frame (see animate), so it stays the same distance away in every
+// direction instead of being near on one side of the map and far on the other.
+const horizonHaze = new THREE.Mesh(
+  new THREE.CylinderGeometry(82,82,70,40,1,true),
+  new THREE.MeshBasicMaterial({map:horizonHazeTexture(), transparent:true, depthWrite:false,
+                               side:THREE.BackSide, fog:false})
+);
+horizonHaze.position.y = 7;
+// added to the scene after the map sweeps, same as distantGround — see below
+
+// Show the backing plane, dressed as the era's own terrain. Pass the ground colour, never the fog colour.
+// `tex` is optional: give it the map's real ground texture and the terrain genuinely continues past the
+// slab edge rather than merely being the right colour out there.
+function setDistantGround(hex, tex){
+  distantGround.visible=true;
+  distantGround.material.color.set(hex);
+  // the haze is the era's own atmosphere, so it takes the fog colour — this is the one thing out here that
+  // genuinely should match fog rather than ground
+  horizonHaze.visible=true;
+  horizonHaze.material.color.copy(scene.fog.color);
+  const want = tex || distantGroundDefaultTex;
+  if(distantGround.material.map !== want){ distantGround.material.map = want; distantGround.material.needsUpdate = true; }
+}
+// Repeating, mipmapped version of a ground canvas for use way out on the backing plane. _finish() can't be
+// used here: it sets NearestFilter with no mipmaps, which shimmers violently across a 1400-unit plane.
+// magFilter stays Nearest so the texels near the seam still match the crisp voxel ground they join onto.
+function distantTex(canvas, repeat){
+  const t=new THREE.CanvasTexture(canvas);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(repeat,repeat);
+  t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.NearestFilter; t.generateMipmaps=true;
+  return t;
+}
+// Repeat 450 over the 1400-unit plane is ~3.1 units a tile, the same on-screen texel size the maps' own
+// ground boxes use, so the texture carries straight across the seam at the map edge without changing scale.
+// (These call hoisted function declarations defined further down the file.)
+// Repeat per texture = 1400 / (that map's own units-per-tile), so the tile lands at exactly the on-screen
+// size it has on the real ground it joins. A flat 450 for all three only happened to be right for gravel.
+const dgGravelTex = distantTex(gravelTex(),    452);   // Alexandria: 62-wide ground at repeat 20 -> 3.10 u/tile
+const dgSandTex   = distantTex(gizaSandTex(),  607);   // Giza:       60-wide ground at repeat 26 -> 2.31 u/tile
+const dgDustTex   = distantTex(cairoDustTex(), 948);   // Cairo:      62-wide ground at repeat 42 -> 1.48 u/tile
 
 // ---- textured ground (patchwork of grass/dirt/path voxel tiles) ----
 function tileTexture(size=512, cell=8){
@@ -439,6 +527,86 @@ function cairoDustTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // scattered darker grit
   for(let k=0;k<26;k++){ const n=Math.abs(Math.sin(k*17.3)*431%1), m=Math.abs(Math.cos(k*7.1)*233%1);
     x.fillStyle='#7d673f'; x.fillRect((n*P)|0,(m*P)|0,1,1); }
+  return c; }
+// ---- Giza palette. Same reasoning as cairoDustTex above: the pyramid map was paved and built almost
+// entirely in the 0xa4854f-0xc9a671 tan band, so ground, walls, obelisks, rubble and the pyramid itself
+// all sat at nearly the same value and nothing separated. These four give it a real tonal range: a darker
+// desert floor to sit everything on, near-black basalt for the processional way, red Aswan granite as the
+// warm accent, and pale limestone casing reserved for the pyramids so they finally read as the bright thing.
+function gizaSandTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  const st=['#9c8153','#a88c5e','#917a4c','#b09468','#877040'];
+  x.fillStyle='#967c4e'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j+=2)for(let i=0;i<P;i+=2){
+    const n=Math.abs(Math.sin(i*6.1+j*13.3)*317%1);
+    x.fillStyle=st[(n*st.length)|0]; x.fillRect(i,j,2,2);
+  }
+  // wind-blown grit streaks, slightly darker, to keep the big flat expanse from looking like flat paint
+  for(let k=0;k<30;k++){ const n=Math.abs(Math.sin(k*19.7)*467%1), m=Math.abs(Math.cos(k*8.3)*251%1);
+    x.fillStyle='#75603a'; x.fillRect((n*P)|0,(m*P)|0,2,1); }
+  return c; }
+function graniteTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  // speckled red Aswan granite — the stone the valley temple and the royal stelae were actually faced in
+  x.fillStyle='#8a4234'; x.fillRect(0,0,P,P);
+  const st=['#9c5040','#7a382c','#a85c48','#6e3026'];
+  for(let j=0;j<P;j+=2)for(let i=0;i<P;i+=2){
+    const n=Math.abs(Math.sin(i*7.7+j*5.9)*193%1);
+    x.fillStyle=st[(n*st.length)|0]; x.fillRect(i,j,2,2);
+  }
+  // the characteristic pale feldspar / dark hornblende flecks
+  for(let k=0;k<22;k++){ const n=Math.abs(Math.sin(k*13.1)*389%1), m=Math.abs(Math.cos(k*11.9)*277%1);
+    x.fillStyle=(k%2)?'#d8b8a0':'#3a1c16'; x.fillRect((n*P)|0,(m*P)|0,1,1); }
+  return c; }
+function basaltTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  // near-black basalt paving slabs — the darkest surface on the map, which is what makes the processional
+  // way read as a deliberate route across the sand instead of just another tan strip
+  x.fillStyle='#33343a'; x.fillRect(0,0,P,P);
+  const st=['#3b3c43','#2c2d32','#44454d','#26272b'];
+  for(let by=0;by<P;by+=8)for(let bx=0;bx<P;bx+=8){
+    const n=Math.abs(Math.sin(bx*3.7+by*8.9)*151%1);
+    x.fillStyle=st[(n*st.length)|0]; x.fillRect(bx,by,7,7);
+  }
+  return c; }
+function limestoneCasingTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  // Polished Tura limestone casing — the brightest material in the map, used on nothing but the pyramids.
+  // Pale, but NOT the near-flat #e6ddc2/#eee5cb it was: at close range a pyramid face is tens of units of
+  // unbroken surface, and at that contrast it rendered as a blank white slab with no readable form at all.
+  // Wider tonal spread plus a drawn joint line between courses gives the face something to catch light on.
+  x.fillStyle='#ddd1ae'; x.fillRect(0,0,P,P);
+  const st=['#e9dfc0','#d4c7a2','#e2d7b5','#cbbe97'];
+  for(let j=0;j<P;j+=4){
+    const off=(j/4)%2?2:0;
+    for(let i=0;i<P;i+=8){
+      const n=Math.abs(Math.sin(i*2.3+j*4.7)*97%1);
+      x.fillStyle=st[(n*st.length)|0]; x.fillRect(i+off,j,7,3);
+    }
+  }
+  x.strokeStyle='rgba(150,138,108,0.5)'; x.lineWidth=1;
+  for(let j=0;j<=P;j+=4){ x.beginPath(); x.moveTo(0,j+0.5); x.lineTo(P,j+0.5); x.stroke(); }
+  return c; }
+// Mipmapped variant of the casing texture, for the pyramid cones specifically. A NearestFilter/no-mipmap
+// texture shimmers badly at a cone's apex, where every side face's UVs converge on a degenerate point.
+function limestoneCasingTex_mip(){
+  const t=new THREE.CanvasTexture(limestoneCasingTex());
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(22,22); // ~1.7 units a course on a 38-wide face
+  t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; t.generateMipmaps=true;
+  return t;
+}
+// Pale Mediterranean beach sand for the Alexandria shoreline. sandFloorTex was tried here first and tinted
+// down, but tinting only multiplies — its own swatches are strongly warm (#c9a671 … #e0c48f), so the band
+// still read as orange floor tiles between the grey streets and the blue sea. This is desaturated at source.
+function beachSandTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
+  // Warm enough to read as sand against the grey gravel it borders, but well short of sandFloorTex's
+  // saturation — under Alexandria's bright Mediterranean light anything paler than this washes to white
+  // and the gravel-to-sand transition disappears entirely.
+  const st=['#dccaa0','#e6d6b1','#cfbc8e','#ece0c2','#c2ae80'];
+  x.fillStyle='#d6c49a'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j+=2)for(let i=0;i<P;i+=2){
+    const n=Math.abs(Math.sin(i*7.3+j*4.9)*211%1);
+    x.fillStyle=st[(n*st.length)|0]; x.fillRect(i,j,2,2);
+  }
+  // scattered coarse grains and shell grit
+  for(let k=0;k<20;k++){ const n=Math.abs(Math.sin(k*15.7)*373%1), m=Math.abs(Math.cos(k*9.3)*281%1);
+    x.fillStyle=(k%3)?'#b3a074':'#f4ecd8'; x.fillRect((n*P)|0,(m*P)|0,1,1); }
   return c; }
 function citadelStoneTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // large sandstone ashlar block coursing, same offset-brick technique romanBrickTex uses, just scaled and
@@ -1024,7 +1192,7 @@ addTarget = pyramidDungeonColliders;
     const dark = voxMat(0x1c1712,{noise:16});
     const base=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.5,1.6),goldMat); base.position.set(x,0.25,z); pyramidDungeon.add(base);
     const body=new THREE.Mesh(new THREE.BoxGeometry(1.1,2.6,0.9),dark); body.position.set(x,1.8,z); pyramidDungeon.add(body);
-    const collar=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.3,0.95),goldMat); collar.position.set(x,2.9,z); pyramidDungeon.add(collar);
+    const collar=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.3,0.95),goldMat); collar.position.set(x,2.78,z); pyramidDungeon.add(collar); // sits clear BELOW the frame's own top face (3.10); level with it the two fought across the whole collar // clears the body's own top (3.10) instead of sitting 0.05 under it
     const g=new THREE.Group(); g.position.set(x,3.35,z); g.rotation.y=facing; pyramidDungeon.add(g);
     const head=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.6,0.7),dark); g.add(head);
     const earL=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.5,4),dark); earL.position.set(-0.24,0.45,0); earL.rotation.z=0.3; g.add(earL);
@@ -1098,7 +1266,7 @@ addTarget = greekDungeonColliders;
     const dark = voxMat(0x1c2618,{noise:16});
     const base=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.5,1.6),bronzeMat); base.position.set(x,0.25,z); greekDungeon.add(base);
     const body=new THREE.Mesh(new THREE.BoxGeometry(1.1,2.6,0.9),dark); body.position.set(x,1.8,z); greekDungeon.add(body);
-    const collar=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.3,0.95),bronzeMat); collar.position.set(x,2.9,z); greekDungeon.add(collar);
+    const collar=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.3,0.95),bronzeMat); collar.position.set(x,2.78,z); greekDungeon.add(collar); // sits clear BELOW the frame's own top face (3.10); level with it the two fought across the whole collar // as above
     const g=new THREE.Group(); g.position.set(x,3.35,z); g.rotation.y=facing; greekDungeon.add(g);
     const head=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.5,0.7),dark); g.add(head);
     const snout=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.22,0.55),dark); snout.position.set(0,-0.2,0.5); g.add(snout);
@@ -1292,7 +1460,9 @@ addTarget = ifritColliders;
   function iblock(w,h,d,mat,x,y,z){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; ifritArena.add(m); return m; }
   const R=17;
   const floor=new THREE.Mesh(new THREE.BoxGeometry(R*2,0.4,R*2), floorMat); floor.position.set(0,-0.2,0); ifritArena.add(floor);
-  [[0,-R,R*2+2,1.4],[0,R,R*2+2,1.4],[-R,0,1.4,R*2+2],[R,0,1.4,R*2+2]].forEach(([x,z,w,d])=>{
+  // The two Z runs are shortened by the wall thickness at each end so they BUTT against the X runs instead
+  // of overlapping them: at equal lengths all four met in a 1.4x1.4 doubled block at each corner.
+  [[0,-R,R*2+2,1.4],[0,R,R*2+2,1.4],[-R,0,1.4,R*2+2-2.8],[R,0,1.4,R*2+2-2.8]].forEach(([x,z,w,d])=>{
     iblock(w,4.4,d, wallMat, x,2.2,z); addBox(x,z,w,d);
   });
   const merlonSpacing=1.8;
@@ -1347,6 +1517,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 // can happen in). clearWorldGroups() sweeps every possible world group unconditionally before any add, so
 // the invariant "at most one world group in the scene" holds no matter what state the flags are in.
 function clearWorldGroups(){
+  playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
 }
 function enterDungeon(){
@@ -1357,10 +1528,38 @@ function enterDungeon(){
   activeColliders = dungeonWasPyramid ? pyramidDungeonColliders : greekDungeonColliders;
   activeHeightZones = heightZonesOriginal; // neither dungeon has climbable rooftops; keep this deterministic regardless of era
   scene.background.set(0x141726); scene.fog.color.set(0x141726); scene.fog.near=14; scene.fog.far=58;
-  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
+  setDistantGround(0x1b1f30); // interior: an unlit void floor under the room, so this one really is fog-toned
+  horizonHaze.visible=false;  // no horizon inside a sealed room
   hemi.intensity=0.35; hemi.color.set(0x4a6fbf); hemi.groundColor.set(0x1a1e26);
   sun.intensity=0.0; fill.intensity=0.18; fill.color.set(0x6f8fdd);
   camera.position.set(0,1.7,18); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+}
+// The two era daylight setups live here rather than inline, because more than one transition restores each
+// map — exitDungeon(), switchToGreekWorld() and exitNileWave() all do — and when they each carried their own
+// copy they drifted: switchToGreekWorld() set no lighting at all and handed Alexandria Giza's desert sky,
+// and exitNileWave() handed Giza back Alexandria's.
+function applyGizaDaylight(){
+  // Hot, low-ambient desert light. The original hemi 0.85 + near-white 0xbfe3ff tint lifted the sand and the
+  // limestone toward the same white, which was a real part of why the map read as washed out.
+  scene.background.set(0x8fd6f2); scene.fog.color.set(0xcbb388); scene.fog.near=48; scene.fog.far=210;
+  skyTint(0xffeed2); // sun-bleached desert sky
+  hemi.intensity=0.62; hemi.color.set(0xffe0aa); hemi.groundColor.set(0x6b5730);
+  sun.intensity=1.15; fill.intensity=0.2; fill.color.set(0xffd9a0);
+  setDistantGround(0xffffff, dgSandTex); // untinted: the map's own ground uses this texture unmodified
+}
+function applyGreekDaylight(){
+  // Cooler, brighter Mediterranean light — suits the marble and the open waterfront.
+  // Fog is deliberately short here. With far=265 you could see clean ground running a couple of hundred
+  // units past the map in every direction, which is what made the place feel enormous and empty — and made
+  // the invisible clamp at +/-29 feel arbitrary, since there was obviously walkable ground beyond it.
+  // Ending the visible world ~90 units out closes it off instead, and the distant scenery was moved in to
+  // match so it still sits inside the draw distance.
+  scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=18; scene.fog.far=96;
+  skyTint(0xffffff); // clear neutral daylight
+  hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
+  sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
+  setDistantGround(0xffffff, dgGravelTex); // untinted: matches the streets' own gravelMat exactly
+  playClamp = 32;                          // wider map: see the boundary wall / Pharos note on playClamp
 }
 function exitDungeon(){
   clearWorldGroups();
@@ -1368,10 +1567,8 @@ function exitDungeon(){
   sky.visible=true;
   activeColliders = dungeonWasPyramid ? pyramidColliders : greekColliders;
   activeHeightZones = dungeonWasPyramid ? heightZonesPyramid : heightZonesGreek;
-  scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
-  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
-  hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
-  sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
+  // This one function restores two very different places, so it can't use a single shared lighting setup.
+  (dungeonWasPyramid ? applyGizaDaylight : applyGreekDaylight)();
   camera.position.copy(spawnPoint); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
 // called once, right after Boss I's exitDungeon() has restored the pyramid overworld — swaps it for the Greek era for the rest of the game
@@ -1380,6 +1577,11 @@ function switchToGreekWorld(){
   scene.add(greekOverworld);
   activeColliders = greekColliders;
   activeHeightZones = heightZonesGreek;
+  // This swaps the world but used to leave the *lighting* alone, which was harmless only while every outdoor
+  // map shared one setting. Now that Giza has its own warm desert light and its own sand-tinted horizon, not
+  // re-lighting here meant Alexandria inherited them the moment Boss I fell: grey gravel streets under an
+  // orange desert sky with a tan horizon plane. Keep this in step with exitDungeon()'s Greek branch.
+  applyGreekDaylight();
   // without this, dying in a normal Greek-era wave (before ever entering the Greek dungeon for Boss II)
   // would call exitDungeon() with a stale dungeonWasPyramid=true and wrongly restore the pyramid map
   dungeonWasPyramid = false;
@@ -1486,15 +1688,21 @@ function waterRippleTex(){
   const rope = new THREE.Mesh(new THREE.TorusGeometry(0.35,0.05,5,10), voxMat(0xd9c9a0,{noise:10}));
   rope.rotation.x=Math.PI/2; rope.position.set(1.7,0.25,3.4); nileWorld.add(rope);
   // distant desert shoreline all around the horizon — low, wide, rounded dune mounds (not tall thin "buildings")
-  function duneMound(x,z){
+  function duneMound(x,z,i){
     const w=16+Math.random()*20, d=w*0.75;
-    nblock(w,3+Math.random()*2,d,0xd8b982,x,1.5,z,{noise:18});
-    nblock(w*0.6,2.5+Math.random()*2,d*0.6,0xe0c48f,x,3.4,z,{noise:16});
-    nblock(w*0.3,1.8,d*0.35,0xcfa96a,x,4.6,z,{noise:14});
+    // Heights are stepped deterministically per mound rather than purely random. Two things were fighting
+    // here: within a mound the cap sat at a FIXED top of 5.5 while the layer beneath it varied across
+    // 4.65-5.65, so they regularly coincided; and neighbouring mounds on this ring overlap each other, so
+    // random base heights collided too. Each layer's top is now derived from the one below it.
+    const h1=2.6+((i*0.83)%3.2), h2=2.2+((i*0.53)%2.4), h3=1.5+((i*0.31)%1.1);
+    const t1=h1, t2=t1+0.9, t3=t2+0.8;
+    nblock(w,      h1, d,       0xd8b982, x, t1-h1/2, z, {noise:18});
+    nblock(w*0.6,  h2, d*0.6,   0xe0c48f, x, t2-h2/2, z, {noise:16});
+    nblock(w*0.3,  h3, d*0.35,  0xcfa96a, x, t3-h3/2, z, {noise:14});
   }
   for(let i=0;i<26;i++){
     const a=(i/26)*Math.PI*2 + Math.random()*0.15, dist=100+Math.random()*50;
-    duneMound(Math.sin(a)*dist, Math.cos(a)*dist);
+    duneMound(Math.sin(a)*dist, Math.cos(a)*dist, i);
   }
   // the old shoreline dunes sit at 100-150 units out, but the Nile Wave's fog is near:30/far:140 (set in
   // enterNileWave()) — so that shoreline was already fading into fog or invisible, leaving nothing but open
@@ -1532,7 +1740,9 @@ function waterRippleTex(){
     nblock(backSpan, 3, 260, 0xb9a978, nearX+dir*(backSpan/2), 0.5, 0, {noise:16});
     for(let i=0;i<6;i++){
       const z=-50+i*20, xj=(Math.random()-0.5)*3;
-      nblock(14+Math.random()*4, 0.6, 26, 0xcbb27a, nearX+dir*7+xj, -0.05, z, {noise:16}); // low mud-flat at the waterline
+      // depth 20, matching the 20-unit step below — at 26 each slab overlapped both neighbours by 6 units
+      // at an identical top height, and the whole bank shimmered along those seams
+      nblock(14+Math.random()*4, 0.6, 20, 0xcbb27a, nearX+dir*7+xj, -0.05, z, {noise:16}); // low mud-flat at the waterline
       nblock(8+Math.random()*3, 0.9, 15, 0xd8c088, nearX+dir*4+xj, 0.25, z, {noise:14}); // drier raised hump, closer to the water than before
     }
   }
@@ -1593,7 +1803,8 @@ function enterNileWave(){
   clearWorldGroups(); scene.add(nileWorld); sky.visible=true;
   activeColliders = nileColliders; activeHeightZones = heightZonesOriginal;
   scene.background.set(0x4a90b8); scene.fog.color.set(0x4a90b8); scene.fog.near=30; scene.fog.far=140;
-  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
+  setDistantGround(0x2f7fae); // open river running to the horizon
+  skyTint(0xd6ecf7); // bright river haze
   hemi.intensity=0.9; hemi.color.set(0xcfe8f5); hemi.groundColor.set(0x1a4a5f);
   sun.intensity=1.0; fill.intensity=0.3; fill.color.set(0xaecbe0);
   camera.position.set(0,1.7,0); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -1608,10 +1819,9 @@ function exitNileWave(){
   inNileArea = false;
   clearWorldGroups(); scene.add(pyramidOverworld); sky.visible=true;
   activeColliders = pyramidColliders; activeHeightZones = heightZonesPyramid;
-  scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
-  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
-  hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
-  sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
+  // this returns you to Giza, so it needs Giza's desert lighting; it used to apply the cool Mediterranean
+  // setting and hand the map back washed out after the Nile wave
+  applyGizaDaylight();
   camera.position.copy(spawnPoint); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   // restore whatever loadout was active before the Nile wave
   weapons.forEach(w=>w.visible=false);
@@ -1724,32 +1934,57 @@ scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld) re
 addTarget = pyramidColliders;
 heightZoneTarget = heightZonesPyramid;
 (function buildPyramidOverworld(){
-  // sand ground
-  const pground = new THREE.Mesh(new THREE.BoxGeometry(60,1,60), voxMat(0xb89860,{noise:18}));
-  pground.position.y=-0.5; scene.add(pground);
+  const graniteMat  = new THREE.MeshLambertMaterial({map:_finish(graniteTex(),3)});
+  const casingMat   = new THREE.MeshLambertMaterial({map:_finish(limestoneCasingTex(),4)});
+  const mudbrickMat = voxMat(0x7c5f3e,{noise:20,pattern:'plate'});
+  const goldMat     = metalMatP(0xe0b040,85,0xfff2c8);
 
-  // sandstone perimeter walls with gold-capped corner obelisk posts
-  block(60,8,1,0xc9a671,0,4,-30,{noise:24});
+  // desert floor — the darker gizaSandTex base, not the old near-white 0xb89860 flat fill
+  const pground = new THREE.Mesh(new THREE.BoxGeometry(60,1,60), new THREE.MeshLambertMaterial({map:_finish(gizaSandTex(),26)}));
+  pground.position.y=-0.5; pground.receiveShadow=true; scene.add(pground);
+
+  // ---- perimeter temenos wall. The north run is deliberately BROKEN at the centre (x=-5..5) instead of
+  // being one solid 60-wide slab: that gap is what lets the player see the pyramid field standing beyond
+  // the compound from the spawn point. Same trick as the Cairo gate — the opening is the composition. ----
+  block(25,8,1,0xc9a671,-17.5,4,-30,{noise:24});
+  block(25,8,1,0xc9a671, 17.5,4,-30,{noise:24});
+  // granite gate jambs framing the 10-wide opening, with a lintel high enough to clear the sightline
+  [-5.6,5.6].forEach(jx=>{
+    const jamb=new THREE.Mesh(new THREE.BoxGeometry(2.2,9,2.2), graniteMat); jamb.position.set(jx,4.5,-30); jamb.castShadow=true; scene.add(jamb);
+    addBox(jx,-30,2.2,2.2);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.5,2.6), goldMat); cap.position.set(jx,9.25,-30); scene.add(cap);
+  });
+  // lintel only — no collider, so the gap stays walkable (same reasoning as the Cairo gate's span)
+  // y 8.1, not 8.3: at 8.3 the lintel's top face landed on exactly y=9.0, the same height as the jamb tops
+  // it rests between, and the two fought across the whole 2.2x2.2 jamb footprint at each end
+  const gateLintel=new THREE.Mesh(new THREE.BoxGeometry(13.4,1.4,2.2), graniteMat); gateLintel.position.set(0,8.1,-30); scene.add(gateLintel);
   block(60,8,1,0xc9a671,0,4,30,{noise:24});
   block(1,8,60,0xc9a671,-30,4,0,{noise:24});
   block(1,8,60,0xc9a671,30,4,0,{noise:24});
   function obeliskPost(x,z){
     block(1.6,10,1.6,0xb99a63,x,5,z,{noise:22});
-    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.9,1.6,0.9), metalMatP(0xe0b040,85,0xfff2c8)); // shiny gold cap
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.9,1.6,0.9), goldMat); // shiny gold cap
     cap.position.set(x,10.6,z); scene.add(cap);
   }
   obeliskPost(-29,-29); obeliskPost(29,-29); obeliskPost(-29,29); obeliskPost(29,29);
 
-  // sandstone flagstone crossroads (own texture — warm tan, not the grey overworld cobblestone)
+  // basalt processional way (the real mortuary-court paving stone) — the darkest surface here, so the route
+  // reads against the sand instead of being another tan strip like the old sandFloorTex crossroads
+  const basaltMat = new THREE.MeshLambertMaterial({map:_finish(basaltTex(),10), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
   const sandPathMat = new THREE.MeshLambertMaterial({map:_finish(sandFloorTex(),8), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
+  function basaltPath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),basaltMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
   function sandPath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),sandPathMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
-  sandPath(0,0,9,60);
+  basaltPath(0,0,9,60);
   sandPath(-17.25,0,25.5,9);
   sandPath(17.25,0,25.5,9);
 
-  // central stepped pyramid landmark (solid monument, not climbable — the 3 towers below cover that role)
-  function stepPyramid(x,z,baseSize){
-    addBox(x,z,baseSize,baseSize);
+  // ---- pyramid landmark. `solid` false = it stands out beyond the temenos wall on the distant-ground plane,
+  // where the player can never reach it (they're clamped to +/-29), so it takes no collider and can be built
+  // at something like real scale. That's the fix for the old map's core failure: a single 10-wide pyramid
+  // parked off-axis at (10,-8) meant the opening view down the avenue was bare sand to the horizon, and the
+  // one pyramid you did have was the same tan value as the ground it stood on. ----
+  function stepPyramid(x,z,baseSize,solid){
+    if(solid!==false) addBox(x,z,baseSize,baseSize);
     const half=baseSize/2;
     // real Giza slope (~51.8°): height ≈ 1.27x the half-base — one smooth 4-sided body, not stacked tiers,
     // for an actual triangular silhouette instead of a ziggurat
@@ -1757,30 +1992,35 @@ heightZoneTarget = heightZonesPyramid;
     // a plain voxMat (NearestFilter, no mipmaps, hard-edged 'plate' pattern) causes bad shimmer/flicker at a
     // cone's apex, where every side face's UVs converge to a single degenerate point — use a mipmapped,
     // pattern-free texture instead, which is what a cone actually needs
-    const bodyTex = makeVoxelTexture(0xb0a355, {noise:22});
-    bodyTex.minFilter = THREE.LinearMipmapLinearFilter; bodyTex.magFilter = THREE.LinearFilter; bodyTex.generateMipmaps = true;
+    const bodyTex = limestoneCasingTex_mip();
     const body=new THREE.Mesh(new THREE.ConeGeometry(half*Math.SQRT2,bodyH,4), new THREE.MeshLambertMaterial({map:bodyTex}));
     body.rotation.y=Math.PI/4; body.position.set(x,bodyH/2,z); scene.add(body);
     // small gilded pyramidion capping the tip (electrum-clad capstones are historically attested)
     const capH=bodyH*0.07;
     const cap=new THREE.Mesh(new THREE.ConeGeometry(half*Math.SQRT2*0.05,capH,4), metalMatP(0xe0b040,85,0xfff2c8));
     cap.rotation.y=Math.PI/4; cap.position.set(x,bodyH-capH*0.25,z); scene.add(cap);
-    // dark recessed entrance archway low on the south face
-    block(baseSize*0.14, bodyH*0.12, 0.25, 0x241c10, x, bodyH*0.06, z+half-0.05, {noise:8});
-    // a grand staircase climbing up to the entrance (decorative)
-    const stairSteps=10, stairRun=baseSize*0.55;
-    for(let s=0;s<stairSteps;s++){
-      const t=s/stairSteps;
-      // low steps start far out from the pyramid; high steps end right at the entrance (z increases toward the base face)
-      const stairZ = z+half-0.15+(1-t)*stairRun;
-      block(baseSize*0.2, 0.22, 0.4, 0xb99a63, x, t*bodyH*0.12+0.11, stairZ, {noise:16});
-    }
-    // no collider on the staircase itself: it's purely decorative (not climbable — the sniper towers cover
-    // that role), and a full-run blocking collider turned the whole approach to the pyramid into a wall
-    // neither the player nor bots could walk through or under. The pyramid body's own addBox() above is
-    // the only real obstacle here.
+    // dark recessed entrance archway low on the north face (the real Giza entrances face north)
+    block(baseSize*0.1, bodyH*0.1, 0.25, 0x241c10, x, bodyH*0.16, z+half*0.72, {noise:8});
+    // a low dark bedrock apron the cone sits on, so it meets the sand on a shadow line instead of a hard
+    // seam. Kept deliberately thin and dark — an earlier stepped-casing skirt here caught full sun on its
+    // top faces and read as pale plates floating across the pyramid's base.
+    block(baseSize*1.02, 0.7, baseSize*1.02, 0x7d6942, x, 0.35, z, {noise:18,pattern:'plate'});
   }
-  stepPyramid(10,-8, 10);
+  // The classic Giza diagonal, standing out on the desert plain beyond the temenos gate. Khafre sits dead
+  // centre on the spawn sightline (it's the one that still wears its casing cap), Khufu larger off to the
+  // east, little Menkaure west — so looking down the avenue from spawn you get the actual postcard.
+  // Placement is constrained by the temenos wall at z=-30: a cone of side S centred at z has an axis-aligned
+  // footprint reaching z+S/2, so each of these needs z + S/2 < -31 to stay outside the compound. They were at
+  // (0,-40,S34) and (31,-47,S40), which reach z=-23 and z=-27 — both punched through the wall and stood
+  // inside the play area, filling the screen with a wall of limestone from anywhere near the gate. Sizes are
+  // up a little to keep them reading as large from the spawn sightline now that they sit further back.
+  // Sized up as well as pushed back. The temenos wall is 8 tall and only 40 units from the spawn point, so
+  // it occludes everything below ~9 degrees; a pyramid that clears the wall by only a little reads as a small
+  // triangle poking over it. These are scaled so a good half of each still stands above the wall line from
+  // spawn, while their footprints stay well clear of it (nearest reach is -45, the wall is at -30).
+  stepPyramid(-40,-48, 22, false); // Menkaure -> x -51..-29, z -59..-37
+  stepPyramid( -2,-60, 46, false); // Khafre   -> x -25..21,  z -83..-37, centred on the spawn sightline
+  stepPyramid( 52,-68, 54, false); // Khufu    -> x  25..79,  z -95..-41, largest, off to the east
 
   // 3 climbable pyramid-tier towers — same proven positions/mechanic as the original sniper towers, sandstone-reskinned.
   // Ramps used to have flanking colliders walling off sideways entry (to stop a jarring height-zone "fling" —
@@ -1797,7 +2037,9 @@ heightZoneTarget = heightZonesPyramid;
     cap.position.set(x,h+0.5,z); scene.add(cap);
     addBox(x,z,1.3,1.3);
   }
-  obelisk(10,4,7); obelisk(-16,-4,6); obelisk(6,-16,6.5);
+  // paired obelisks flanking the head of the processional way, well clear of the Sphinx enclosure — the
+  // third used to stand at (6,-16), right alongside the statue, where it cut straight through its profile
+  obelisk(-7.5,6,7); obelisk(7.5,6,7); obelisk(-16,-4,6);
 
   // pottery jars + rubble piles (cover, standing in for the original's crates/barrels)
   function potteryJar(x,z){
@@ -1805,7 +2047,9 @@ heightZoneTarget = heightZonesPyramid;
     m.position.set(x,0.45,z); scene.add(m); addBox(x,z,0.8,0.8);
   }
   function rubble(x,z){
-    for(let i=0;i<4;i++){ const s=0.3+Math.random()*0.3;
+    // stepped sizes, not four independent random draws: these overlap each other, and each block's height
+    // comes from its own size, so two similar draws put two top faces on the same plane
+    for(let i=0;i<4;i++){ const s=0.30+i*0.09;
       block(s,s,s,0xa4854f,x+(Math.random()-0.5)*0.8,s/2,z+(Math.random()-0.5)*0.8,{noise:20}); }
     addBox(x,z,1.3,1.3);
   }
@@ -1818,7 +2062,7 @@ heightZoneTarget = heightZonesPyramid;
     addBox(x,z,w+0.8,d+0.8);
     const waterMat = new THREE.MeshPhongMaterial({color:0x2f9fd6, shininess:120, specular:0xbfefff, transparent:true, opacity:0.85, emissive:0x0a3a52});
     const water = new THREE.Mesh(new THREE.BoxGeometry(w,0.35,d), waterMat);
-    water.position.set(x,0.22,z); water.userData.isWater=true; scene.add(water);
+    water.position.set(x,0.22,z); water.userData.isWater=true; water.userData.baseY=0.22; scene.add(water);
     waterSurfaces.push(water);
   }
   oasisPool(-2,16, 5, 4);
@@ -1829,7 +2073,9 @@ heightZoneTarget = heightZonesPyramid;
       const leaf=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.12,0.4),leafMat); leaf.position.set(x+Math.cos(a)*0.5,3.3,z+Math.sin(a)*0.5); leaf.rotation.y=a; leaf.rotation.z=0.25; scene.add(leaf); }
     addBox(x,z,0.6,0.6);
   }
-  palm(-4,17); palm(0,18.5); palm(-3,14.5);
+  // fringed around the pool's kerb, not standing in the water: the collider audit caught two of these
+  // (-4,17) and (-3,14.5) sitting inside the pool's own 5.8x4.8 collider box
+  palm(-5.6,18.4); palm(1.9,18.6); palm(-5.4,13.6); palm(2.2,13.8);
 
   // ---- more hiding spots: taller, more enclosing cover than the jars/rubble/obelisks above ----
   // a broken L-shaped temple wall, tall enough to fully break line of sight
@@ -1841,17 +2087,130 @@ heightZoneTarget = heightZonesPyramid;
     addBox(x,z,3.2,0.4); addBox(x+1.4,z+1.3,0.4,2.6);
   }
   ruinedWall(-21,-19);
-  // a crouching sphinx statue — a big solid landmark you can duck behind on any side
-  function sphinxStatue(x,z){
-    const stoneMat=0xc9a671;
-    block(2.2,1.1,3.6,stoneMat,x,0.7,z,{noise:18});
-    block(1.4,0.9,1.0,stoneMat,x,1.3,z+1.3,{noise:18});
-    block(0.9,1.0,0.9,stoneMat,x,2.2,z+1.6,{noise:18});
-    const headdress=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.3,1.0), metalMatP(0xe0b040,85,0xfff2c8)); headdress.position.set(x,2.65,z+1.6); scene.add(headdress);
-    [-1,1].forEach(side=>{ block(0.5,0.5,1.3,stoneMat,x+side*0.6,0.25,z+2.3,{noise:18}); });
-    addBox(x,z,2.2,3.6); addBox(x,z+2.3,1.6,1.5);
+  // ---- THE GREAT SPHINX — the map's hero landmark. It used to be a 2.2-wide prop dumped at (-23,17),
+  // i.e. behind the player's left shoulder at spawn, where it was never once seen. It's now ~5x the size
+  // and sits dead on the spawn sightline at (0,-15) facing the player, with Khafre's pyramid rising
+  // straight behind it through the gate. That pairing is the single most recognisable view in Egypt and
+  // it's what you now open the game looking at. ----
+  function greatSphinx(x,z){
+    // Scale over the old (far too small) 2.2-wide prop. Held at 1.9 rather than pushed higher: the whole
+    // compound is only 60x60, and at 2.6 the outstretched paws reached most of the way back to the spawn
+    // point and the statue stopped reading as a landmark you approach.
+    const S=1.9;
+    // plain noise, NOT pattern:'plate' — the plate pattern draws panel seams that made the body and paws
+    // read as a stack of wooden crates rather than one mass carved out of the bedrock
+    const bodyMat  = voxMat(0xbf9a62,{noise:15});
+    const faceMat  = voxMat(0xcaa771,{noise:12});
+    const nemesMat = voxMat(0x2f5f8a,{noise:14,pattern:'plate'});   // painted blue-and-gold headcloth
+    const mB=(w,h,d,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(px,py,pz); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+    // bedrock enclosure the statue is carved down into, so it sits in a hollow rather than on the sand
+    mB(9.5*S/2.6, 0.5, 13*S/2.6, voxMat(0xa88f5e,{noise:18,pattern:'plate'}), x, 0.25, z);
+    // Recumbent body. Read from head-on this whole mass hides behind the chest, so the silhouette has to be
+    // carried by the parts that project forward — the flanks step outward as they come toward the viewer and
+    // the paws run a long way out in front, which is what makes it a crouching lion rather than a bust.
+    mB(2.6*S,1.25*S,4.4*S, bodyMat, x, 0.62*S+0.4, z-0.4*S);
+    mB(2.9*S,0.95*S,1.6*S, bodyMat, x, 0.42*S+0.4, z-2.2*S);       // rear haunch, widest point
+    mB(0.5*S,0.4*S,1.5*S, bodyMat, x+1.3*S, 0.3*S+0.4, z-2.6*S);   // tail curling along the right flank
+    // outstretched forepaws — long, and set wide enough apart that the gap between them is a walkable
+    // corridor leading to the stele, the way the real enclosure reads
+    [-1,1].forEach(side=>{
+      mB(0.7*S,0.62*S,3.4*S, bodyMat, x+side*0.85*S, 0.31*S+0.4, z+2.6*S);
+      mB(0.8*S,0.34*S,0.7*S, bodyMat, x+side*0.85*S, 0.17*S+0.4, z+4.5*S); // paw knuckle
+      // toes, so the paw ends in something articulated instead of a blunt box
+      [-0.22,0,0.22].forEach(t=>{ mB(0.2*S,0.2*S,0.34*S, bodyMat, x+side*0.85*S+t*S, 0.1*S+0.4, z+4.8*S); });
+    });
+    // chest rising between the paws, then neck and head
+    mB(1.7*S,1.5*S,1.3*S, bodyMat, x, 1.35*S+0.4, z+1.5*S);
+    mB(0.8*S,0.85*S,0.75*S, bodyMat, x, 2.25*S+0.4, z+1.65*S);
+    const head = mB(0.95*S,0.95*S,0.9*S, faceMat, x, 2.95*S+0.4, z+1.8*S);
+    // nemes headcloth: crown slab + the two lappets falling either side of the face onto the chest. The
+    // lappets are what give the head its distinctive flared trapezoid outline at a distance.
+    mB(1.3*S,0.38*S,1.2*S, nemesMat, x, 3.58*S+0.4, z+1.75*S);
+    [-1,1].forEach(side=>{ mB(0.3*S,1.25*S,0.85*S, nemesMat, x+side*0.62*S, 2.8*S+0.4, z+1.85*S); });
+    // banded gold trim across the brow, the way the nemes is always painted
+    // sunk to sit clear of the head's own top face — at 3.36*S its top landed within 0.03 of it
+    mB(1.32*S,0.16*S,1.22*S, goldMat, x, 3.22*S+0.4, z+1.75*S);
+    // uraeus (rearing cobra) on the brow — the one gold glint at eye level
+    const ur=new THREE.Mesh(new THREE.BoxGeometry(0.2*S,0.34*S,0.2*S), goldMat); ur.position.set(x,3.55*S+0.4,z+2.26*S); scene.add(ur);
+    // eyes + the broken-off ceremonial beard, so the face actually reads at distance
+    [-1,1].forEach(side=>{ mB(0.17*S,0.14*S,0.06*S, voxMat(0x2a2118,{noise:6}), x+side*0.25*S, 3.05*S+0.4, z+2.26*S); });
+    mB(0.34*S,0.44*S,0.22*S, voxMat(0xb08d58,{noise:12}), x, 2.42*S+0.4, z+2.2*S);
+    // granite dream stele set between the paws (Thutmose IV's, historically) — a red accent at the focal
+    // point, kept low and pushed well forward so it never sits in front of the chest and flattens the pose
+    const stele=new THREE.Mesh(new THREE.BoxGeometry(1.5,1.7,0.4), graniteMat); stele.position.set(x,1.25,z+5.2*S); scene.add(stele);
+    const stTop=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.26,0.4), goldMat); stTop.position.set(x,2.22,z+5.2*S); scene.add(stTop);
+    // colliders: body mass + chest, then each paw separately so the corridor between them stays walkable
+    addBox(x,z-0.4*S,2.7*S,4.6*S); addBox(x,z-2.2*S,3.0*S,1.7*S); addBox(x,z+1.5*S,1.8*S,1.4*S);
+    [-1,1].forEach(side=>{ addBox(x+side*0.85*S, z+2.6*S, 0.8*S, 3.6*S); });
+    addBox(x,z+5.2*S,1.6,0.6);
   }
-  sphinxStatue(-23,17);
+  greatSphinx(0,-17);
+
+  // ---- density pass. The old map had ~20 objects on a 60x60 plain and read mostly as empty sand between
+  // landmarks. These four groups fill the mid-field, and each one brings a colour the map didn't have:
+  // red granite, dark mudbrick, timber, and unfinished pale core stone. ----
+
+  // Khafre's valley temple — the granite hall the causeway ran from. Solid, walkable around, and the single
+  // biggest block of red on the map, sat where the old off-axis pyramid used to be.
+  function valleyTemple(x,z){
+    const w=9,d=7;
+    addBox(x,z,w,d);
+    block(w+1.4,0.5,d+1.4,0x8c765a,x,0.25,z,{noise:16,pattern:'plate'});
+    const hall=new THREE.Mesh(new THREE.BoxGeometry(w,4.6,d), graniteMat); hall.position.set(x,2.5,z); hall.castShadow=true; hall.receiveShadow=true; scene.add(hall);
+    // battered (sloping) parapet course, the giveaway silhouette of an Old Kingdom temple
+    const par=new THREE.Mesh(new THREE.BoxGeometry(w+0.7,0.6,d+0.7), voxMat(0x6e5a3c,{noise:14,pattern:'plate'})); par.position.set(x,5.1,z); scene.add(par);
+    // deep recessed doorway facing the avenue, flanked by square granite piers
+    block(2.0,3.0,0.4,0x241c10,x,1.5,z+d/2+0.05,{noise:8});
+    [-1.6,1.6].forEach(o=>{ const pier=new THREE.Mesh(new THREE.BoxGeometry(0.9,4.2,0.9), graniteMat); pier.position.set(x+o,2.1,z+d/2+0.5); scene.add(pier); addBox(x+o,z+d/2+0.5,0.9,0.9); });
+    // roof-line cavetto with a painted blue band — the accent colour the Sphinx's nemes also uses
+    const band=new THREE.Mesh(new THREE.BoxGeometry(w+0.75,0.28,d+0.75), voxMat(0x2f5f8a,{noise:12})); band.position.set(x,5.5,z); scene.add(band);
+  }
+  valleyTemple(12,-9);
+
+  // mastaba tomb field — low flat-topped tombs with battered sides, the private cemetery that fills the
+  // ground west of the causeway. Waist-to-chest height, so they double as real cover.
+  function mastaba(x,z,w,d,h){
+    block(w,h,d,0x9a8256,x,h/2,z,{noise:18,pattern:'plate'});
+    block(w*0.86,0.3,d*0.86,0x8a7449,x,h+0.15,z,{noise:14});
+    block(w*0.22,h*0.55,0.3,0x241c10,x,h*0.27,z+d/2+0.02,{noise:8}); // false door, south face
+    addBox(x,z,w,d);
+  }
+  mastaba(-12.5,-9, 4.2,3.0, 2.0);
+  mastaba(-12.5,-2, 3.6,2.6, 1.7);
+  mastaba(-12.5, 5, 4.6,3.2, 2.2);
+  mastaba(-20, 1,  3.4,2.4, 1.6);
+
+  // workers' village — mudbrick huts and a domed bread oven. The darkest built colour on the map and the
+  // only lived-in corner of it; everything else here is monumental.
+  function hut(x,z,w,d,h){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mudbrickMat); m.position.set(x,h/2,z); m.castShadow=true; m.receiveShadow=true; scene.add(m);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(w+0.3,0.25,d+0.3), voxMat(0x6a5030,{noise:16})); roof.position.set(x,h+0.12,z); scene.add(roof);
+    block(w*0.3,h*0.6,0.25,0x241c10,x,h*0.3,z+d/2+0.02,{noise:8});
+    addBox(x,z,w,d);
+  }
+  hut(11.5,8, 3.2,2.8, 2.2); hut(15.5,9.5, 2.8,2.6, 2.0); hut(12.5,12.5, 3.0,2.4, 2.1);
+  (function breadOven(x,z){
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(0.9,10,6,0,Math.PI*2,0,Math.PI/2), voxMat(0x8a6a44,{noise:18}));
+    dome.position.set(x,0,z); scene.add(dome);
+    block(0.5,0.5,0.3,0x241c10,x,0.25,z+0.85,{noise:8});
+    addBox(x,z,1.8,1.8);
+  })(16.5,12.8);
+
+  // mason's yard — half-dressed core blocks, a timber sledge and a mudbrick haul ramp. Pale unfinished
+  // stone plus raw timber, and it explains how everything else here got built.
+  (function masonsYard(x,z){
+    const coreMat = voxMat(0xcbbd96,{noise:16,pattern:'plate'});
+    [[0,0,1.6,1.2,1.1],[2.2,0.6,1.3,1.1,0.9],[0.7,2.4,1.5,1.3,1.0],[3.0,2.8,1.2,1.0,0.8]].forEach(([ox,oz,w,d,h])=>{
+      const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), coreMat); m.position.set(x+ox,h/2,z+oz); m.castShadow=true; scene.add(m);
+      addBox(x+ox,z+oz,w,d);
+    });
+    const timber = voxMat(0x6b4a2a,{noise:16});
+    [-0.55,0.55].forEach(o=>{ const rail=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,3.4), timber); rail.position.set(x-2.4+o,0.11,z+1.2); scene.add(rail); });
+    for(let i=0;i<4;i++){ const tie=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.16,0.22), timber); tie.position.set(x-2.4,0.3,z-0.1+i*0.9); scene.add(tie); }
+    addBox(x-2.4,z+1.2,1.6,3.4);
+    // haul ramp of mudbrick, rising toward the yard
+    for(let s=0;s<5;s++){ block(2.6,0.35,0.8, 0x7c5f3e, x+1.2, 0.17+s*0.35, z-1.6-s*0.8, {noise:20,pattern:'plate'}); }
+  })(-11,12);
   // toppled/half-buried columns, sandstone-toned
   function buriedColumns(x,z){
     const colMat=voxMat(0xb99a63,{noise:18});
@@ -1864,7 +2223,7 @@ heightZoneTarget = heightZonesPyramid;
   buriedColumns(15,-21);
   // a bigger boulder cluster than the small rubble piles elsewhere
   function boulderCluster(x,z){
-    for(let i=0;i<4;i++){ const s=0.7+Math.random()*0.6;
+    for(let i=0;i<4;i++){ const s=0.70+i*0.18;   // stepped for the same reason as rubble() above
       block(s,s*0.85,s,0x9a8560,x+(Math.random()-0.5)*1.6,s*0.42,z+(Math.random()-0.5)*1.6,{noise:20}); }
     addBox(x,z,2.6,2.6);
   }
@@ -1902,7 +2261,10 @@ heightZoneTarget = heightZonesGreek;
   // natural loose grey gravel ground (not smooth marble) — one consistent surface, the same texture the
   // pathway below now uses too, so the whole map reads as one real gravelled place instead of a patchwork
   const gravelMat = new THREE.MeshLambertMaterial({map:_finish(gravelTex(),20)});
-  const ground=new THREE.Mesh(new THREE.BoxGeometry(62,1,50), gravelMat); ground.position.set(0,-0.5,-6); scene.add(ground);
+  // 70x54 rather than 62x50: the map had to grow so the boundary wall could stand outside the waterfront
+  // landmarks instead of cutting through them. North edge moves out to z=-35; the +Z edge stays at 19 where
+  // the beach begins.
+  const ground=new THREE.Mesh(new THREE.BoxGeometry(70,1,54), gravelMat); ground.position.set(0,-0.5,-8); scene.add(ground);
 
   // no perimeter wall this time — an open waterfront, not a walled compound. The player is already hard-clamped
   // to [-29,29] in animate() regardless of colliders, so nothing here is needed to keep them in bounds; the open
@@ -2041,13 +2403,55 @@ heightZoneTarget = heightZonesGreek;
   seaCave(-6,16);
 
   // ---- the open Mediterranean Sea along the north edge: a sandy beach slope into real open water, no quay wall ----
-  const beachZ0=19, harborZ0=24, harborZ1=42; // water pushed well past the play boundary for a horizon feel
-  block(70,0.4,harborZ0-beachZ0, 0xd8c49a, 0, -0.05, (beachZ0+harborZ0)/2, {noise:18}); // sandy beach slope, no hard edge
-  // same rippled water look as the Nile — one consistent "this is Egypt's water" material across both eras
-  const harborWaterMat = new THREE.MeshPhongMaterial({map:_finish(waterRippleTex(),24), color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52});
-  const harborWater = new THREE.Mesh(new THREE.BoxGeometry(70,0.35,harborZ1-harborZ0), harborWaterMat);
-  harborWater.position.set(0,0.22,(harborZ0+harborZ1)/2); harborWater.userData.isWater=true; scene.add(harborWater);
+  // The shore reads as three bands running out from the streets: the same gravel, then sand, then open sea.
+  // Everything here used to be 70 wide and stop dead at z=42, so from the waterfront you saw the beach and
+  // the sea both end in mid-air as rectangles with the empty horizon behind them. Each band is now far wider
+  // than the 62-wide map and runs out past the fog, so all you can see is one band giving way to the next.
+  const beachZ0=19, harborZ0=24, harborZ1=520;
+  const SHORE_W = 900;
+  // A band has to tile by world size, not by BoxGeometry's 0..1 UVs — those stretch one copy of the texture
+  // across the full 900 units and smear it into horizontal stripes. Repeat is set per axis from the band's
+  // real dimensions so every surface out here keeps the same texel scale as the streets behind it.
+  function shoreBand(w,d,canvas,tile,tint,y,z,extra){
+    const t=new THREE.CanvasTexture(canvas);
+    t.wrapS=t.wrapT=THREE.RepeatWrapping;
+    t.magFilter=THREE.NearestFilter; t.minFilter=THREE.LinearMipmapLinearFilter; t.generateMipmaps=true;
+    t.repeat.set(Math.max(1,Math.round(w/tile)), Math.max(1,Math.round(d/tile)));
+    const mat = extra ? new THREE.MeshPhongMaterial(Object.assign({map:t,color:tint},extra))
+                      : new THREE.MeshLambertMaterial({map:t,color:tint});
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.4,d), mat);
+    m.position.set(0,y,z); m.receiveShadow=true; scene.add(m); return m;
+  }
+  // 1. gravel — handled by the shared distant-ground plane, which now carries this map's own gravelTex out
+  //    to the horizon (see applyGreekDaylight). A band here would just be buried under it and the map slab.
+  // 2. sand — a broad beach, then a damp darker strip at the tideline so sand doesn't meet sea on one
+  //    hard colour change either. Small tile and a desaturating tint: sandFloorTex at its native warmth and
+  //    a 3-unit tile read as orange floor tiles rather than as beach.
+  // y is set so each band's TOP lands at 0, flush with the street slab, rather than 0.15 proud of it — at
+  // the old 70-wide scale that lip was easy to miss; across a 900-wide shore it was a step running the
+  // entire length of the waterfront. The damp strip rides 0.01 higher because it overlaps the beach in z.
+  shoreBand(SHORE_W, harborZ0-beachZ0, beachSandTex(), 1.25, 0xffffff, -0.2, (beachZ0+harborZ0)/2);
+  // The damp strip lies ON the beach band, only 0.01 proud of it and overlapping it for 1.5 units across the
+  // entire 900-unit shoreline — by area the single worst z-fight in the game. A depth bias settles it, the
+  // same way the crossroads paths sit on the streets.
+  const wetSand = shoreBand(SHORE_W, 1.8, beachSandTex(), 1.25, 0x8f8878, -0.19, harborZ0-0.6);
+  wetSand.material.polygonOffset=true; wetSand.material.polygonOffsetFactor=-2; wetSand.material.polygonOffsetUnits=-2;
+  // 3. sea — shallows first, then open water out past the fog. Both were 70 wide and stopped dead at z=42,
+  //    so the beach and the sea each ended in mid-air as a rectangle with bare horizon behind them.
+  // Deep water is OPAQUE. At 0.9 it was effectively solid anyway, and being in the transparent pass meant it
+  // had to be depth-sorted against the shallows band lying just above it — two large transparent surfaces
+  // overlapping is exactly the case that sorts unstably. Opaque, it writes depth and the translucent
+  // shallows simply draw on top of it.
+  const harborWater = shoreBand(SHORE_W, harborZ1-harborZ0, waterRippleTex(), 2.6, 0x3a8fc0, 0.22, (harborZ0+harborZ1)/2,
+                                {shininess:110, specular:0xbfefff, emissive:0x0a3a52});
+  harborWater.userData.isWater=true; harborWater.userData.baseY=0.22; harborWater.userData.wavePhase=0;
   waterSurfaces.push(harborWater);
+  // Shallows ride a fixed 0.05 above the deep water on the SAME wave phase, so the gap between them never
+  // closes as they bob and they can't trade places.
+  const shallows = shoreBand(SHORE_W, 7, waterRippleTex(), 2.2, 0x7fc6dd, 0.27, harborZ0+3.2,
+                             {shininess:110, specular:0xbfefff, transparent:true, opacity:0.72, emissive:0x0d4155});
+  shallows.userData.baseY=0.27; shallows.userData.wavePhase=0;
+  waterSurfaces.push(shallows);
   addBox(0,harborZ0+0.5,70,1); // invisible shoreline — keeps the player from wading in, not a built wall
   // an ancient Mediterranean merchant vessel, not just a plank box: tapered pointed bow with a painted eye
   // (real ancient ships were given eyes so the vessel could "see" its way), a curved raised stern with the
@@ -2156,9 +2560,13 @@ heightZoneTarget = heightZonesGreek;
   function oliveTree(x,z){
     const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,2.2,6), voxMat(0x6b6048,{noise:14})); trunk.position.set(x,1.1,z); trunk.rotation.z=0.06; scene.add(trunk);
     const leafMat=voxMat(0x7a8a5a,{noise:16});
+    // Each blob gets its own radius and height. All four used to be radius 0.7 at y=2.5, so their four
+    // squashed tops landed on exactly the same plane and fought across the whole canopy — on every olive
+    // tree in the map. Varying both also makes the canopy look less like a mechanical rosette.
     for(let i=0;i<4;i++){ const a=i/4*Math.PI*2;
-      const leaf=new THREE.Mesh(new THREE.SphereGeometry(0.7,7,5),leafMat); leaf.scale.set(1,0.7,1);
-      leaf.position.set(x+Math.cos(a)*0.5,2.5,z+Math.sin(a)*0.5); scene.add(leaf); }
+      const r=0.62+((i*0.17)%0.22);
+      const leaf=new THREE.Mesh(new THREE.SphereGeometry(r,7,5),leafMat); leaf.scale.set(1,0.7,1);
+      leaf.position.set(x+Math.cos(a)*0.5, 2.36+i*0.12, z+Math.sin(a)*0.5); scene.add(leaf); }
     addBox(x,z,0.7,0.7);
   }
   function cypressTree(x,z){
@@ -2190,7 +2598,9 @@ heightZoneTarget = heightZonesGreek;
     }
   }
   function rockOutcrop(x,z,s){
-    for(let i=0;i<3;i++){ const r=s*(0.4+Math.random()*0.3);
+    // Sizes are stepped per boulder rather than drawn independently at random: these three overlap each
+    // other by design, so two that happened to roll a similar radius sat at the same top height and fought.
+    for(let i=0;i<3;i++){ const r=s*(0.40+i*0.13);
       block(r,r*0.8,r,0x9a9284,x+(Math.random()-0.5)*s,r*0.4,z+(Math.random()-0.5)*s,{noise:18}); }
     addBox(x,z,s*1.3,s*1.3);
   }
@@ -2208,6 +2618,201 @@ heightZoneTarget = heightZonesGreek;
   // and not out in the deep open water either) — the player can't wade out to them anyway (invisible shoreline
   // wall stops at the water's edge), so this reads correctly from the beach without needing to be reachable
   papyrusCluster(-20,25); papyrusCluster(-2,25.5); papyrusCluster(13,25.5); papyrusCluster(20,25.8);
+
+  // ================= DISTANT SCENERY =================
+  // Out past the play area, on the backing-ground plane. Deliberately none of the building types the map
+  // itself uses — no marble colonnades, no watchtowers, no second lighthouse — because repeating those out
+  // here just reads as the same street copied badly at a distance. This is the *surroundings* of Alexandria.
+  //
+  // Everything sits at z < 12. That matters: the beach starts at z=19 and the sea runs from z=24 out to
+  // z=520 across a 900-wide band, so anything past that is standing on the water. An earlier version put
+  // the hamlet at z~104 and a rocky island at z~118, and both were floating on the sea surface.
+  // All unreachable (the player is clamped to +/-29), so none of it takes a collider.
+  //
+  // The palette is deliberately darker than anything in the play area: fog blends these toward a pale blue,
+  // so mid-tone stone out here washes straight out. Starting dark is what keeps the horizon readable.
+  const farStone = voxMat(0x7f7768,{noise:12});
+  const farStoneDark = voxMat(0x635c4e,{noise:12});
+  const farMud = voxMat(0x6f5b42,{noise:14});
+  const farGreen = voxMat(0x3f5130,{noise:14});
+  function far(w,h,d,mat,x,y,z){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); scene.add(m); return m;
+  }
+  // coastal ridge wrapping the whole landward side, so the horizon has a profile in every inland direction
+  // Sits at ~95, i.e. BEHIND the 82-unit haze band and right at the edge of the 96-unit fog, so it reads as
+  // soft hills dissolving into atmosphere. Pulled in to 74 first and that was a mistake: close, unfogged and
+  // near-continuous, it stopped being a ridge and became a grey wall boxing the map in. Heights vary widely
+  // and a quarter of the segments are skipped, so the skyline undulates and sky shows through the gaps.
+  for(let i=0;i<38;i++){
+    const a=Math.PI*(1.02+(i/37)*0.96), r=95+Math.sin(i*1.7)*16;
+    const x=Math.cos(a)*r, z=Math.sin(a)*r;
+    if(z>10) continue;
+    if(Math.sin(i*4.7)>0.5) continue;                  // gaps in the skyline
+    const h=3.5+Math.abs(Math.sin(i*1.7))*3+Math.abs(Math.sin(i*0.6))*4;
+    far(14+Math.sin(i*1.1)*5, h, 13+Math.sin(i*2.3)*5, i%3?farStone:farStoneDark, x, h/2-1.2, z);
+  }
+  // aqueduct marching along the ridge line: repeating arches, a silhouette nothing in the map has
+  (function aqueduct(z){
+    for(let i=0;i<9;i++){
+      const x=-58+i*8.4;
+      far(2.1,9,2.1, farStone, x, 4.5, z);             // pier
+      far(8.4,1.8,2.4, farStone, x+4.2, 9.4, z);       // span above the arch opening
+      far(1.3,2.4,2.3, farStoneDark, x+4.2, 7.3, z);   // arch haunch, breaking the gap into an arch shape
+    }
+    far(77,1.0,2.8, farStone, -24.4, 10.7, z);         // the channel running the whole length
+  })(-78);
+  // rocky bluffs on the open plain, west and east — these fill the flanks that read as bare ground
+  function bluff(x,z,s){
+    far(30*s,5*s,22*s, farStoneDark, x, 1.4*s, z);
+    far(20*s,4*s,14*s, farStoneDark, x-2*s, 4.4*s, z-1*s);
+    far(11*s,4.5*s,8*s, farStone, x+3*s, 7.4*s, z+1*s);
+  }
+  bluff(-64,-10,0.62); bluff(-88,-40,0.5); bluff(70,-16,0.6); bluff(92,-44,0.47);
+  // a hilltop shrine on the western bluff: a squat cella and a stub roof, not a colonnade
+  far(3.2,2.6,2.9, farStone, -62,7.1,-9);
+  far(4.1,0.6,3.7, farStoneDark, -62,8.5,-9);
+  far(0.7,1.6,0.7, voxMat(0xad8730,{noise:10}), -62,9.6,-9); // bronze finial
+  // inland villages: small mudbrick boxes with flat roofs, nothing monumental
+  function village(cx,cz,n,seed){
+    for(let i=0;i<n;i++){
+      const x=cx+i*5.2+Math.sin((i+seed)*2.1)*3.4, z=cz+Math.sin((i+seed)*1.3)*8;
+      const h=3.4+Math.sin((i+seed)*3.3)*1.2;
+      // width capped under the 5.2 spacing below — at 4.2+1.1 a house could reach 5.3 and overlap its
+      // neighbour, and with heights only 2.4 apart their roofs sometimes landed on the same plane
+      far(3.5+Math.sin(i+seed)*0.7, h*0.8, 3.4, farMud, x, h*0.4, z);
+      far(4.3, 0.5, 4.1, farStoneDark, x, h*0.8+0.22, z);
+    }
+  }
+  // NOTE the run length: this lays houses at cx + i*5.2, so a 9-house row spans roughly cx..cx+45. At
+  // village(-62,...) the east end landed at x=-17 — inside the map, with the boundary wall cutting through
+  // the row. Both are placed by their far end now, not their near one.
+  village(-88,-52,9,0); village(52,-56,8,3.7);
+  // rock-cut tomb facades in a low cliff east of the city — Alexandria's necropolis was exactly this
+  (function necropolis(x,z){
+    far(46,7.5,11, farStoneDark, x, 3.1, z);
+    for(let i=0;i<9;i++){
+      const fx=x-18.5+i*4.6;
+      far(2.6,3.4,0.9, farStone, fx, 1.7, z+5.6);
+      far(1.2,2.1,0.5, voxMat(0x20201c,{noise:6}), fx, 1.05, z+6.1); // dark doorway
+    }
+  })(66,10);   // clear of the ridge ring; at (64,0) the cliff top sat 0.03 from a ridge segment's
+  // quarry terraces and spoil heaps, where all that stone came from
+  (function quarry(x,z){
+    for(let s=0;s<4;s++) far(24-s*4.5, 1.6, 16-s*3, s%2?farStone:farStoneDark, x, 0.8+s*1.5, z);
+    for(let i=0;i<5;i++) far(2.6+i*0.4,1.5,2.6, farStone, x-16+i*3.5, 0.75, z+11);
+  })(-20,-68);
+  // cypress rows along the ridge: vertical accents, and the only strong green out here
+  // Clumped, not evenly spaced around the ring: an even ring of them at the aqueduct's own radius read as
+  // a continuous hedge closing the map in, which is the opposite of what these are for.
+  for(let i=0;i<16;i++){
+    if(Math.sin(i*3.3)>0.35) continue;
+    const a=Math.PI*(1.10+(i/15)*0.80), r=71+Math.sin(i*1.9)*9;
+    const x=Math.cos(a)*r, z=Math.sin(a)*r;
+    if(z>6) continue;
+    for(let k=0;k<3;k++){
+      far(1.5, 5+Math.sin((i+k)*2.7)*1.8, 1.5, farGreen, x+k*2.2-2.2, 2.7, z+Math.sin(i+k)*2);
+    }
+  }
+  // ---- boundary barrier. animate() hard-clamps the player to +/-29, and nothing marked that line, so you
+  // simply stopped in open ground. This makes the limit an object you can see: a clear blue translucent wall
+  // standing on the clamp itself. No grid and no top rail — the grid read as a row of windows and the rail as
+  // a ledge sitting on top of the wall; it's a plain pane of blue, just soft enough at the top edge that it
+  // doesn't end on a hard line. depthWrite off so it never occludes anything behind it, DoubleSide so it
+  // reads from both faces. Only three sides: the +Z (harbour) side is already closed by the sea and its
+  // shoreline collider at z=24.5, and a wall there would stand between the beach and the ships. ----
+  (function boundaryBarrier(){
+    // Height 90, not the 7.5 it started at. At 7.5 the wall's top edge crossed anything taller than itself —
+    // the ridge, the aqueduct, the watchtowers — and those objects got a hard horizontal line straight across
+    // them, tinted blue below it and untinted above. It reads as the building being cut in half. The wall now
+    // runs far above every piece of geometry on the map (the tallest is the Pharos at ~17) and the gradient
+    // dissolves it well before its own top edge, so it fades into the sky instead of ending anywhere visible.
+    const P=128, c=_mkCanvas(P), x2=c.getContext('2d');
+    const g=x2.createLinearGradient(0,P,0,0);
+    g.addColorStop(0.00,'rgba(255,255,255,0.95)');
+    g.addColorStop(0.25,'rgba(255,255,255,0.85)');
+    g.addColorStop(0.45,'rgba(255,255,255,0.50)');
+    g.addColorStop(0.70,'rgba(255,255,255,0.18)');
+    g.addColorStop(1.00,'rgba(255,255,255,0.00)');
+    x2.fillStyle=g; x2.fillRect(0,0,P,P);
+    const tex=new THREE.CanvasTexture(c);
+    const H=90, B=33, ZN=-33, ZS=24;   // ZS = the shoreline stop; no wall is needed past it
+    const mat=new THREE.MeshBasicMaterial({map:tex, color:0x45b8ef, transparent:true, opacity:0.42,
+                                           depthWrite:false, side:THREE.DoubleSide, fog:true});
+    function panel(w,px,pz,rotY){
+      const m=new THREE.Mesh(new THREE.PlaneGeometry(w,H), mat);
+      m.position.set(px,H/2,pz); m.rotation.y=rotY||0; m.renderOrder=2; scene.add(m);
+    }
+    const depth = ZS - ZN;
+    panel(B*2, 0, ZN, 0);                      // inland
+    panel(depth, -B, ZN + depth/2, Math.PI/2); // west
+    panel(depth,  B, ZN + depth/2, Math.PI/2); // east
+  })();
+
+  // ---- edge berm. animate() hard-clamps the player to +/-29 whatever the colliders say, so on this map —
+  // the one with no perimeter wall — you walked into an invisible stop with open, obviously walkable ground
+  // stretching away beyond it. This is a broken, gappy line of spoil, boulders and scrub just outside the
+  // clamp: waist-to-chest height, nothing monumental, no colliders (the clamp already does the stopping).
+  // Its job is purely to give the stop a visible reason, the way the sea does on the harbour side.
+  (function edgeBerm(){
+    // plain noise, never pattern:'plate' — the plate pattern draws panel seams and turned these into a
+    // wall of stacked crates. Kept low (under ~1.2) and sparse: you should be able to see straight over it.
+    const rubble = voxMat(0x9a958a,{noise:20});
+    const scrub  = voxMat(0x5c6b41,{noise:16});
+    const soil   = voxMat(0x8c7f66,{noise:20});
+    function lump(x,z,seed){
+      if(Math.sin(seed*12.9)>-0.1) return;                       // roughly 45% kept, so it reads ragged
+      const h=0.45+Math.abs(Math.sin(seed*5.3))*0.7;
+      far(1.3+Math.sin(seed*3.1)*0.5, h, 1.2+Math.cos(seed*2.7)*0.45, soil, x, h/2-0.12, z);
+      if(Math.sin(seed*7.7)>0.3){
+        const r=0.3+Math.abs(Math.cos(seed*4.1))*0.28;
+        far(r*2, r*1.6, r*2, rubble, x+Math.sin(seed)*0.8, h*0.85, z+Math.cos(seed)*0.8);
+      }
+      if(Math.cos(seed*9.1)>0.55){
+        far(0.7, 0.6, 0.7, scrub, x-Math.cos(seed)*0.9, h*0.7, z+Math.sin(seed*2)*0.9);
+      }
+    }
+    for(let z=-34;z<=17;z+=3.4){ lump(-34.4,z,z*1.7); lump(34.4,z,z*2.3+11); }  // west and east edges
+    for(let x=-34;x<=34;x+=3.4){ lump(x,-34.4,x*1.9+5); }                        // inland edge
+  })();
+
+  // ---- the only things still out on the water, because boats belong there. These were a plain box hull
+  // with a flat slab of sail stuck through it, which at distance read as a crate with a signpost. A ship is
+  // recognised almost entirely by silhouette, so what matters here is the taper of the hull, the raised
+  // stern, and a yard-hung sail that is wider than it is tall — not surface detail nobody can resolve. ----
+  const farHull  = voxMat(0x4a3a2e,{noise:12});
+  const farMast  = voxMat(0x6b4f33,{noise:10});
+  const farSail  = new THREE.MeshLambertMaterial({color:0xe8e0cc});
+  const farSailD = new THREE.MeshLambertMaterial({color:0xcfc4a8}); // shaded half, so the sail isn't one flat tone
+  const farWake  = new THREE.MeshLambertMaterial({color:0xbfe4ee, transparent:true, opacity:0.5});
+  function farShip(x,z,s,rot,furled){
+    const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rot; scene.add(g);
+    const add=(w,h,d,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(px,py,pz); g.add(m); return m; };
+    // hull: midship, then a narrower bow and a stem post forward, and a taller stern aft
+    add(1.9*s,1.05*s,5.2*s, farHull, 0, 0.34*s, 0);
+    add(1.25*s,0.9*s,1.7*s, farHull, 0, 0.30*s, 3.1*s);
+    add(0.62*s,0.75*s,0.9*s, farHull, 0, 0.26*s, 4.0*s); // dropped: at 0.34*s its top sat 0.03 from the bow block's
+    add(1.6*s,1.25*s,1.3*s, farHull, 0, 0.5*s, -2.9*s);   // raised stern
+    add(0.5*s,1.0*s,0.5*s, farHull, 0, 1.1*s, -3.3*s);    // sternpost curling up
+    // mast and yard
+    add(0.17*s,6.4*s,0.17*s, farMast, 0, 3.2*s, 0.2*s);
+    add(4.8*s,0.15*s,0.15*s, farMast, 0, 5.5*s, 0.2*s);
+    if(furled){
+      add(4.2*s,0.42*s,0.42*s, farSailD, 0, 5.28*s, 0.2*s); // sail bundled along the yard
+    } else {
+      // square sail, wider than tall — the giveaway shape of an ancient merchantman — split into a lit
+      // and a shaded half so it doesn't read as one flat card
+      add(2.3*s,3.3*s,0.1*s, farSail,  -1.15*s, 3.75*s, 0.26*s);
+      add(2.3*s,3.3*s,0.1*s, farSailD,  1.15*s, 3.75*s, 0.26*s);
+      add(4.7*s,0.2*s,0.16*s, farMast, 0, 2.05*s, 0.26*s);  // foot spar
+    }
+    // wake trailing astern, at the waterline
+    const w=new THREE.Mesh(new THREE.BoxGeometry(1.5*s, 0.06, 9*s), farWake);
+    w.position.set(0, 0.46, -6.5*s); g.add(w);
+  }
+  for(let i=0;i<9;i++){
+    const x=-80+i*20+Math.sin(i*4.7)*12, z=40+Math.abs(Math.sin(i*2.9))*44;
+    farShip(x, z, 0.75+Math.abs(Math.sin(i*3.1))*0.5, Math.sin(i*2.3)*1.5, Math.sin(i*5.9)>0.55);
+  }
 })();
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
@@ -2256,7 +2861,7 @@ heightZoneTarget = heightZonesRoman;
     const arch = new THREE.Mesh(new THREE.TorusGeometry(gap/2+0.35, 0.45, 8, 16, Math.PI), voxMat(stoneMat,{noise:14}));
     arch.position.set(x, pierH, z); scene.add(arch);
     const attic = new THREE.Mesh(new THREE.BoxGeometry(gap+pierW*2+0.6, 1.6, pierD+0.3), voxMat(stoneMatLight,{noise:12,pattern:'plate'}));
-    attic.position.set(x, pierH+1.6, z); scene.add(attic);
+    attic.position.set(x, pierH+1.72, z); scene.add(attic); // lifted clear of the arch torus's top, which it sat level with
     // no collider for the attic itself — this collision system treats every addBox as an infinite-height
     // wall unless the player has actually climbed to a matching height-zone, and there's no ramp up here to
     // do that with, so a full-width attic collider would just permanently block the walk-through gap between
@@ -2275,20 +2880,25 @@ heightZoneTarget = heightZonesRoman;
 
   // ---- aqueduct: a repeating row of arches along the south edge, carrying a raised water channel — the
   // single most recognizable silhouette of Roman engineering, distinguishing this map at a glance ----
-  function aqueductArch(x,z){
+  function aqueductArch(x,z,closing){
     const pierW=1.1, pierH=5.2, pierD=1.4, gap=2.6;
     // real Roman aqueducts were commonly brick-faced construction, not solid cut stone — a genuine use for
     // the brick material, not just decoration
-    [-1,1].forEach(side=>{
-      const px=x+side*(gap/2+pierW/2);
-      const pier=new THREE.Mesh(new THREE.BoxGeometry(pierW,pierH,pierD),brickMat); pier.position.set(px,pierH/2,z); scene.add(pier);
+    function pier(px){
+      const m=new THREE.Mesh(new THREE.BoxGeometry(pierW,pierH,pierD),brickMat); m.position.set(px,pierH/2,z); scene.add(m);
       addBox(px,z,pierW,pierD);
-    });
+    }
+    // Only the LEFT pier per arch. Pier-to-pier spacing here is gap+pierW = 3.7, which is exactly the row's
+    // step — so when this drew both piers, each arch's right pier landed precisely on the next arch's left
+    // pier. Every interior pier was built twice, exactly co-located, and the whole arcade z-fought with
+    // itself down its entire length (it also registered two colliders per pier).
+    pier(x-(gap/2+pierW/2));
+    if(closing) pier(x+(gap/2+pierW/2));
     const arch=new THREE.Mesh(new THREE.TorusGeometry(gap/2+0.25,0.3,10,14,Math.PI), brickMat); arch.position.set(x,pierH,z); scene.add(arch);
   }
   function aqueductRow(z0, x0, x1){
     const span = 3.7; // pier-to-pier spacing (gap+pierW from aqueductArch)
-    for(let x=x0; x<=x1; x+=span) aqueductArch(x, z0);
+    for(let x=x0; x<=x1; x+=span) aqueductArch(x, z0, x+span > x1); // last arch closes the run
     const channel=new THREE.Mesh(new THREE.BoxGeometry(x1-x0+2, 0.7, 1.6), voxMat(stoneMatLight,{noise:12}));
     channel.position.set((x0+x1)/2, 5.2+0.55, z0); scene.add(channel);
     // no collider for the channel — it sits at y~5.75, well above head height; a ground-level collider there
@@ -2338,7 +2948,9 @@ heightZoneTarget = heightZonesRoman;
     // center to edge), which stretches a plain grid checker texture unevenly: compressed near the middle,
     // stretched near the rim. A square gives the same uniform planar UVs every other floor in this game uses.
     const floorSize=(R1-1)*2;
-    const floor=new THREE.Mesh(new THREE.BoxGeometry(floorSize,0.05,floorSize), new THREE.MeshLambertMaterial({map:_finish(checkerTex(),9)}));
+    // polygonOffset for the same reason the crossroads paths use it: this sits 0.02 above the ground slab
+    // and covers 196 square units of it, which is a large field of z-fighting without a depth bias
+    const floor=new THREE.Mesh(new THREE.BoxGeometry(floorSize,0.05,floorSize), new THREE.MeshLambertMaterial({map:_finish(checkerTex(),9), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2}));
     floor.position.set(cx,-0.005,cz); scene.add(floor);
     for(let i=0;i<segs;i++){
       const a=i/segs*Math.PI*2;
@@ -2381,11 +2993,11 @@ heightZoneTarget = heightZonesRoman;
   function fountain(x,z){
     // plain checkered stone paving under the fountain — a flat square, not CircleGeometry (a circle's radial
     // UV mapping stretches a grid checker texture unevenly from center to rim — the same fix as the colosseum floor)
-    const mosaic=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.05,5.2), new THREE.MeshLambertMaterial({map:_finish(checkerTex(),7)}));
+    const mosaic=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.05,5.2), new THREE.MeshLambertMaterial({map:_finish(checkerTex(),7), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2}));
     mosaic.position.set(x,-0.005,z); scene.add(mosaic);
     const basin=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.4,0.5,14), voxMat(stoneMatLight,{noise:12})); basin.position.set(x,0.25,z); scene.add(basin);
     const water=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,0.1,14), new THREE.MeshPhongMaterial({map:_finish(waterRippleTex(),4), color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52}));
-    water.position.set(x,0.52,z); water.userData.isWater=true; scene.add(water); waterSurfaces.push(water);
+    water.position.set(x,0.52,z); water.userData.isWater=true; water.userData.baseY=0.52; scene.add(water); waterSurfaces.push(water);
     const pillar=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.24,1.1,10), voxMat(stoneMat,{noise:12})); pillar.position.set(x,1.1,z); scene.add(pillar);
     addBox(x,z,2.9,2.9);
   }
@@ -2397,9 +3009,13 @@ heightZoneTarget = heightZonesRoman;
   function oliveTreeR(x,z){
     const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,2.2,6), voxMat(0x6b6048,{noise:14})); trunk.position.set(x,1.1,z); trunk.rotation.z=0.06; scene.add(trunk);
     const leafMat=voxMat(0x7a8a5a,{noise:16});
+    // Each blob gets its own radius and height. All four used to be radius 0.7 at y=2.5, so their four
+    // squashed tops landed on exactly the same plane and fought across the whole canopy — on every olive
+    // tree in the map. Varying both also makes the canopy look less like a mechanical rosette.
     for(let i=0;i<4;i++){ const a=i/4*Math.PI*2;
-      const leaf=new THREE.Mesh(new THREE.SphereGeometry(0.7,7,5),leafMat); leaf.scale.set(1,0.7,1);
-      leaf.position.set(x+Math.cos(a)*0.5,2.5,z+Math.sin(a)*0.5); scene.add(leaf); }
+      const r=0.62+((i*0.17)%0.22);
+      const leaf=new THREE.Mesh(new THREE.SphereGeometry(r,7,5),leafMat); leaf.scale.set(1,0.7,1);
+      leaf.position.set(x+Math.cos(a)*0.5, 2.36+i*0.12, z+Math.sin(a)*0.5); scene.add(leaf); }
     addBox(x,z,0.7,0.7);
   }
   oliveTreeR(-27,-15); oliveTreeR(27,14); oliveTreeR(-27,20); oliveTreeR(27,-18);
@@ -2448,9 +3064,15 @@ heightZoneTarget = heightZonesIslamic;
   // ---- perimeter city wall: encloses the map so it reads as a walled city instead of an open plain,
   // and gives the horizon something other than empty sand ----
   const wallMat = new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),10)});
-  [[0,-28,58,1.4],[0,28,58,1.4],[-28,0,1.4,58],[28,0,1.4,58]].forEach(([wx,wz,ww,wd])=>{
+  // Z runs shortened by the wall thickness at both ends so the four runs butt rather than overlap — at a
+  // uniform 58 they doubled up in a 1.4x1.4 block at each corner, cap included.
+  [[0,-28,58,1.4],[0,28,58,1.4],[-28,0,1.4,55.2],[28,0,1.4,55.2]].forEach(([wx,wz,ww,wd])=>{
     const seg=new THREE.Mesh(new THREE.BoxGeometry(ww,5.2,wd), wallMat); seg.position.set(wx,2.6,wz); scene.add(seg);
-    const cornice=new THREE.Mesh(new THREE.BoxGeometry(ww+0.3,0.4,wd+0.3), voxMat(sandstoneLight,{noise:12})); cornice.position.set(wx,5.4,wz); scene.add(cornice);
+    // The Z runs' cornice is dropped fractionally so the four cornices can't share a top plane where they
+    // meet. Shortening them instead would open a visible sliver at each corner of the wall.
+    const isZ = wd > ww;
+    const cornice=new THREE.Mesh(new THREE.BoxGeometry(ww+0.3,0.4,wd+0.3), voxMat(sandstoneLight,{noise:12}));
+    cornice.position.set(wx, isZ ? 5.32 : 5.4, wz); scene.add(cornice);
     addBox(wx,wz,ww,wd);
   });
   // merlons along the wall the player faces from spawn — the one that actually fills their view
@@ -2667,6 +3289,10 @@ addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 const islamicOverworld = new THREE.Group();
 scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld || o===pyramidOverworld || o===greekOverworld || o===romanOverworld) return; islamicOverworld.add(o); });
+// Last map sweep is done, so it's now safe to parent the shared distant-ground plane to the scene itself —
+// it stays there across every clearWorldGroups() swap, which is the whole point of it. See its declaration.
+scene.add(distantGround);
+scene.add(horizonHaze);
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
@@ -4990,7 +5616,8 @@ function enterRomanWorld(banner){
   activeColliders = romanColliders;
   activeHeightZones = heightZonesRoman;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
-  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
+  setDistantGround(0x9a9384); // dry grass and stony verge beyond the paving
+  skyTint(0xffffff); // clear neutral daylight
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
   camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -5014,7 +5641,8 @@ function enterIslamicWorld(banner){
   // map looked washed out. Slightly lower ambient and a deeper amber fog let the new darker ground and the
   // lapis/green accents hold their colour.
   scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8c39a); scene.fog.near=34; scene.fog.far=180;
-  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
+  setDistantGround(0xffffff, dgDustTex); // untinted: matches the city's own groundMat exactly
+  skyTint(0xffe2b4); // warm Cairo afternoon
   hemi.intensity=0.72; hemi.color.set(0xffe4b0); hemi.groundColor.set(0x5a4a2c);
   sun.intensity=1.0; fill.intensity=0.22; fill.color.set(0xffdca0);
   camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -5034,6 +5662,7 @@ function enterHydraArena(){
   activeHeightZones = heightZonesOriginal;   // flat platform, no climbable zones
   scene.background.set(0x8a9c86); scene.fog.color.set(0x7f947c); scene.fog.near=26; scene.fog.far=110; // overcast marsh
   distantGround.visible=false; // the arena's own 320x320 marsh water sits lower than this plane and would be hidden under it
+  skyTint(0x93a894); // sunless overcast — without this the dome renders bright midday blue over the marsh
   hemi.intensity=0.7; hemi.color.set(0xc3d3b4); hemi.groundColor.set(0x384a2e);
   sun.intensity=0.55; fill.intensity=0.2; fill.color.set(0xb0c8a4);
   camera.position.set(0,1.7,17); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -5045,7 +5674,8 @@ function enterColosseumArena(){
   activeColliders = colosseumColliders;
   activeHeightZones = heightZonesOriginal;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8c4a0); scene.fog.near=45; scene.fog.far=200; // warm daylit arena
-  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
+  setDistantGround(0xb09268); // dusty ground outside the arena wall
+  skyTint(0xffdca8); // hot dusty arena light
   hemi.intensity=0.9; hemi.color.set(0xffe6c0); hemi.groundColor.set(0x6a5030);
   sun.intensity=1.0; fill.intensity=0.25; fill.color.set(0xffd8a0);
   camera.position.set(0,1.7,17); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -5057,7 +5687,8 @@ function enterIfritArena(){
   activeColliders = ifritColliders;
   activeHeightZones = heightZonesOriginal;
   scene.background.set(0x8a4a2e); scene.fog.color.set(0xa85a34); scene.fog.near=22; scene.fog.far=90; // warm dusk, fire-lit
-  distantGround.visible=true; distantGround.material.color.copy(scene.fog.color);
+  setDistantGround(0x7a4028); // scorched red desert under a burning sky
+  skyTint(0xc4643a); // burning dusk sky
   hemi.intensity=0.55; hemi.color.set(0xffb87a); hemi.groundColor.set(0x3a2414);
   sun.intensity=0.5; fill.intensity=0.3; fill.color.set(0xff8a4a);
   camera.position.set(0,1.7,14); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
@@ -5278,6 +5909,11 @@ if(isTouch && mobileEl) mobileEl.classList.add('on');
 // ===================== GAME / COMBAT =====================
 const player = { hp:100, maxHp:100, score:0, alive:true, respawn:0, lastHit:-99 };
 const spawnPoint = new THREE.Vector3(0,1.7,10);
+// How far from the origin the player may walk. Was a hardcoded 29 in animate() for every map; Alexandria
+// needs more room because its waterfront landmarks (the Pharos reaches x=31.5) sit outside that line, and
+// the boundary wall has to stand beyond THEM or it slices straight through the lighthouse.
+// clearWorldGroups() resets this to the default on every transition; applyGreekDaylight() raises it.
+let playClamp = 29;
 // several verified-clear overworld spots so death doesn't always drop you back in the same place
 const PLAYER_SPAWNS = [[0,10],[0,-10],[15,0],[-15,0],[0,20],[20,-15],[8,3]].map(([x,z])=>new THREE.Vector3(x,1.7,z));
 let lastSpawnIdx = -1;
@@ -5991,10 +6627,21 @@ function animate(){
     p.mesh.scale.setScalar(scale);
     p.mesh.material.opacity = Math.max(0, 0.5 * (1 - rise/2.8));
   });
-  // shimmering water
+  // The haze band is centred on the player so it stays a constant distance away in every direction, and
+  // tracks eye height too — the horizon is always at eye level, so a band pinned to a fixed y put its
+  // densest part above the horizon line and left the line itself uncovered.
+  horizonHaze.position.set(camera.position.x, camera.position.y, camera.position.z);
+
+  // shimmering water. Each surface bobs around its OWN authored height: this used to hard-set every one of
+  // them to 0.22, which dragged Cairo's raised fountain basin (authored at 0.52) down to street level every
+  // frame, and made the Alexandria harbour's deep water rise and fall straight through the shallows band
+  // sitting just above it — the two swapped depth order about 1.5 times a second, which is what read as the
+  // water glitching. Surfaces meant to stay in a fixed relationship share a wavePhase so they move together.
   waterSurfaces.forEach((w,i) => {
-    w.position.y = 0.22 + Math.sin(t*1.5 + i)*0.03;
-    w.material.emissiveIntensity = 0.6 + Math.sin(t*2+i)*0.2;
+    const baseY = w.userData.baseY !== undefined ? w.userData.baseY : 0.22;
+    const phase = w.userData.wavePhase !== undefined ? w.userData.wavePhase : i;
+    w.position.y = baseY + Math.sin(t*1.5 + phase)*0.03;
+    w.material.emissiveIntensity = 0.6 + Math.sin(t*2+phase)*0.2;
   });
 
   // ----- smooth look: ease actual angles toward the input targets -----
@@ -6023,8 +6670,8 @@ function animate(){
     vel.z += (want.z - vel.z) * accel;
     camera.position.x += vel.x * dt;
     camera.position.z += vel.z * dt;
-    camera.position.x = Math.max(-29, Math.min(29, camera.position.x));
-    camera.position.z = Math.max(-29, Math.min(29, camera.position.z));
+    camera.position.x = Math.max(-playClamp, Math.min(playClamp, camera.position.x));
+    camera.position.z = Math.max(-playClamp, Math.min(playClamp, camera.position.z));
     // solid buildings/props: push the player out of any collider (unless standing on its roof already)
     const [rx,rz] = resolveCollision(camera.position.x, camera.position.z, 0.45, playerHeight);
     if(rx!==camera.position.x) vel.x=0;   // kill velocity into a wall so you don't stutter against it
