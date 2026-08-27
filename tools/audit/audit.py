@@ -110,6 +110,47 @@ def ground_contact(ctx):
     return rows
 
 
+CONNECT_EPS = 0.012   # boxes within this of each other count as touching
+
+
+def check_connectivity(ctx, runs=4):
+    """Every mesh in a model must touch at least one other mesh in that model.
+
+    This is the check for the bug class this file keeps hitting: a chained run of segments
+    positioned by a bare linear offset while being rotated separately renders as a row of
+    disconnected floating shards (Hydra necks, Hydra tail, Saif blade, crossbow lath).
+    Builders randomise, so run each a few times and keep the worst result.
+    """
+    fn = ctx.eval("""
+    (function(builder, invoke, scale, eps){
+      var b = globalThis.__builders[builder];
+      var m = eval(invoke)(b);
+      var boxes = globalThis.__modelBoxes(m, scale);
+      function touches(a, c){
+        return a.min.x <= c.max.x + eps && c.min.x <= a.max.x + eps &&
+               a.min.y <= c.max.y + eps && c.min.y <= a.max.y + eps &&
+               a.min.z <= c.max.z + eps && c.min.z <= a.max.z + eps;
+      }
+      var orphans = [];
+      for(var i=0;i<boxes.length;i++){
+        var hit = false;
+        for(var j=0;j<boxes.length;j++){
+          if(i!==j && touches(boxes[i].box, boxes[j].box)){ hit = true; break; }
+        }
+        if(!hit) orphans.push(Math.round(boxes[i].box.min.y*1000)/1000);
+      }
+      return JSON.stringify({orphans:orphans.length, total:boxes.length});
+    })
+    """)
+    worst = {}
+    for builder, invoke, scale, _floor, label in ACTORS:
+        for _ in range(runs):
+            r = json.loads(fn(builder, invoke, scale, CONNECT_EPS))
+            if r["orphans"] >= worst.get(label, (-1, 0))[0]:
+                worst[label] = (r["orphans"], r["total"])
+    return worst
+
+
 def main():
     html_path = REPO / "index.html"
     ctx, err = build_ctx(html_path)
@@ -143,7 +184,18 @@ def main():
         print(f"{label:24} {scale:6.2f} {floor:7.2f} {min_y:8.3f} {gap:+8.3f}  {n:6d}  {verdict}")
 
     print(f"\n{fails} of {len(ACTORS)} actors fail ground contact (tolerance {TOLERANCE}u)")
-    return 1 if fails else 0
+
+    print(f"\n{'model':24} {'meshes':>6} {'orphans':>8}  verdict")
+    print("-" * 52)
+    cfails = 0
+    for label, (orphans, total) in check_connectivity(ctx).items():
+        ok = orphans == 0
+        if not ok:
+            cfails += 1
+        print(f"{label:24} {total:6d} {orphans:8d}  {'ok' if ok else 'DISCONNECTED'}")
+    print(f"\n{cfails} of {len(ACTORS)} actors have floating parts")
+
+    return 1 if (fails or cfails) else 0
 
 
 if __name__ == "__main__":
