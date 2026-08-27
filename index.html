@@ -111,6 +111,12 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
+// Declared here, immediately after renderer exists, specifically so every texture-building helper below —
+// several of which run at module top-level, not inside a function — can safely reference it. See the note
+// on _finish() for what this actually fixes: mipmapping alone doesn't hold detail on a surface minified
+// unevenly across its two axes (a floor at eye height, a wall seen edge-on), which is most surfaces in an
+// FPS; anisotropic filtering samples along the view direction instead of picking one blurry mip level.
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
 const hemi = new THREE.HemisphereLight(0xbfe3ff, 0x55603f, 0.85);
 scene.add(hemi);
@@ -231,6 +237,7 @@ function cloudSkyTexture(size=512){
   }
   const tex = new THREE.CanvasTexture(c);
   tex.magFilter = THREE.NearestFilter;
+  tex.anisotropy = maxAniso;
   return tex;
 }
 const sky = new THREE.Mesh(
@@ -289,6 +296,7 @@ function distantGroundTexture(size=256){
   }
   const tex=new THREE.CanvasTexture(c);
   tex.wrapS=tex.wrapT=THREE.RepeatWrapping;
+  tex.anisotropy=maxAniso;
   // ~7 units per tile (1400/200), close to the real ground textures' scale. At 70 it was 20 units a tile,
   // visibly coarser than the ground it was supposed to be continuing.
   tex.repeat.set(200,200);
@@ -359,6 +367,7 @@ function distantTex(canvas, repeat){
   const t=new THREE.CanvasTexture(canvas);
   t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(repeat,repeat);
   t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.NearestFilter; t.generateMipmaps=true;
+  t.anisotropy=maxAniso; // the map-edge backing plane is a floor at eye height — see _finish()'s note
   return t;
 }
 // Repeat 450 over the 1400-unit plane is ~3.1 units a tile, the same on-screen texel size the maps' own
@@ -418,12 +427,18 @@ function tileTexture(size=512, cell=8){
   const tex = new THREE.CanvasTexture(c);
   tex.magFilter = THREE.NearestFilter;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = maxAniso; // this is a ground texture — the case anisotropy matters most for
   tex.repeat.set(4,4);
   return tex;
 }
 // ---- crisp, tileable material textures (Minecraft-like) ----
 function _mkCanvas(px){ const c=document.createElement('canvas'); c.width=c.height=px; return c; }
-function _finish(c, repeat){ const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.minFilter=THREE.NearestFilter; t.wrapS=t.wrapT=THREE.RepeatWrapping; if(repeat)t.repeat.set(repeat,repeat); return t; }
+// Same fix, same reasoning as makeVoxelTexture() below: minFilter used to be NearestFilter with no mipmaps.
+// This is the ground/floor/path texture helper — tiled via RepeatWrapping and viewed at shallow grazing
+// angles over large areas, which is the single worst case for that bug. It's most of what was showing up as
+// a shimmering, crawling floor. All canvases passed in here are already power-of-two (16/32/64/128 via
+// _mkCanvas), so mipmapping is legal without any resize.
+function _finish(c, repeat){ const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.minFilter=THREE.NearestMipmapLinearFilter; t.generateMipmaps=true; t.anisotropy=maxAniso; t.wrapS=t.wrapT=THREE.RepeatWrapping; if(repeat)t.repeat.set(repeat,repeat); return t; }
 function grassTopTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   const gs=['#5f9e4a','#6fb257','#568f42','#79bd60'];
   for(let j=0;j<P;j++)for(let i=0;i<P;i++){ const n=Math.abs(Math.sin(i*12.9+j*78.2)*43758.5%1); x.fillStyle=gs[(n*4)|0]; x.fillRect(i,j,1,1); if(n>0.9){x.fillStyle='#4a7d38';x.fillRect(i,j,1,1);} }
@@ -589,6 +604,7 @@ function limestoneCasingTex_mip(){
   const t=new THREE.CanvasTexture(limestoneCasingTex());
   t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(22,22); // ~1.7 units a course on a 38-wide face
   t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter; t.generateMipmaps=true;
+  t.anisotropy=maxAniso;
   return t;
 }
 // Pale Mediterranean beach sand for the Alexandria shoreline. sandFloorTex was tried here first and tinted
@@ -608,6 +624,77 @@ function beachSandTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   for(let k=0;k<20;k++){ const n=Math.abs(Math.sin(k*15.7)*373%1), m=Math.abs(Math.cos(k*9.3)*281%1);
     x.fillStyle=(k%3)?'#b3a074':'#f4ecd8'; x.fillRect((n*P)|0,(m*P)|0,1,1); }
   return c; }
+// ---- Greek palette. Alexandria had none of its own: the whole 70x54 map ran on gravelTex — authored as a
+// generic road surface — plus six near-identical pale greys (0xe0dbc9 / 0xc4bfaf / 0xc7c2b3 / 0xc5c0b2 /
+// 0xb8b3a4 / 0xb3ac9c). That is why it read as one flat wash where Cairo and Giza read as places. Same gap
+// the Giza rebuild filled with the gizaSandTex/graniteTex/basaltTex/limestoneCasingTex set: an era needs its
+// own materials before landmarks and density can carry it. ----
+
+// Pentelic marble — the stone the Greeks actually built in. It weathers to a warm gold, NOT the cool dead
+// grey this map was using, and that warmth against a blue sky is the single most recognisable thing about
+// Greek ruins. It also gives the map somewhere to sit tonally between its sand and its sea.
+function pentelicMarbleTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#e6dfcb'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*5.3+j*11.7)*4375.5%1);
+    const v=(228+(n-0.5)*22)|0;
+    x.fillStyle=`rgb(${v},${v-6},${v-22})`; x.fillRect(i,j,1,1);
+  }
+  // fine grey veining — a few shallow diagonal runs, deterministic so the texture is stable between
+  // reloads. Not a marble-countertop swirl: at the repeat these are used at, heavy veining reads as dirt.
+  x.strokeStyle='rgba(150,146,132,0.32)'; x.lineWidth=1;
+  for(let k=0;k<5;k++){
+    const y0=Math.abs(Math.sin(k*12.9)*173%1)*P;
+    x.beginPath(); x.moveTo(0,y0); x.lineTo(P, y0+(Math.abs(Math.cos(k*7.7)*91%1)-0.5)*10); x.stroke();
+  }
+  return c; }
+
+// Painted stucco — Greek public architecture was NOT bare white stone, it was painted: ochre, Greek blue
+// and oxblood over lime plaster. This is the map's actual colour source, and the one material here allowed
+// to be loud. Used on entablatures, pediments and trim, never whole walls — the mistake Cairo's first pass
+// made was paving everything in bright tile, which read as a giant loud quilt.
+function paintedStuccoTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#efe8d6'; x.fillRect(0,0,P,P);              // lime plaster ground
+  const bands=[['#c8892c',6],['#2f5f8a',5],['#8f2f26',5]]; // ochre / Greek blue / oxblood
+  let y=6;
+  for(const [col,h] of bands){ x.fillStyle=col; x.fillRect(0,y,P,h); y+=h+4; }
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*7.1+j*3.9)*4375.5%1);
+    if(n>0.86){ x.fillStyle='rgba(0,0,0,0.10)'; x.fillRect(i,j,1,1); }   // plaster grain / wear
+  }
+  return c; }
+
+// Terracotta pan-and-cover roof tiling. Seen almost entirely edge-on from a player's eye height, so what
+// has to read is the ridged profile — a flat orange field reads as nothing at all from down on the street.
+function greekRoofTileTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#a8552c'; x.fillRect(0,0,P,P);
+  for(let col=0;col<P;col+=8){
+    x.fillStyle='#b96234'; x.fillRect(col,0,6,P);            // pan tile
+    x.fillStyle='#8c4423'; x.fillRect(col+6,0,2,P);          // cover tile — the raised ridge
+    x.fillStyle='rgba(0,0,0,0.18)'; x.fillRect(col+5,0,1,P); // shadow line down the ridge's side
+  }
+  for(let row=0;row<P;row+=11){ x.fillStyle='rgba(0,0,0,0.14)'; x.fillRect(0,row,P,1); } // course laps
+  return c; }
+
+// Worn quay flagstones for the waterfront and agora paving — large dressed slabs, deliberately a different
+// grain from gravelTex's loose chips so paved ground reads as built rather than merely trodden.
+function harbourFlagstoneTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#8f8b80'; x.fillRect(0,0,P,P);              // joint colour, showing between the slabs
+  const slab=16;
+  for(let by=0;by<P;by+=slab)for(let bx=0;bx<P;bx+=slab){
+    const n=Math.abs(Math.sin(bx*4.1+by*9.3)*137%1);       // per-slab tone, deterministic
+    const v=(150+n*28)|0;
+    x.fillStyle=`rgb(${v},${v-3},${v-11})`;
+    x.fillRect(bx+1,by+1,slab-2,slab-2);                   // 1px inset all round = the recessed joint
+  }
+  // wear: scattered dark pits and a few lighter scuffs, so a slab doesn't read as a flat panel
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*6.7+j*2.3)*4375.5%1);
+    if(n>0.93){ x.fillStyle='rgba(60,58,52,0.22)'; x.fillRect(i,j,1,1); }
+    else if(n<0.04){ x.fillStyle='rgba(255,252,240,0.16)'; x.fillRect(i,j,1,1); }
+  }
+  return c; }
+
 function citadelStoneTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // large sandstone ashlar block coursing, same offset-brick technique romanBrickTex uses, just scaled and
   // colored for big fortress stonework. voxMat()'s plain noise texture is designed for small individual
@@ -718,7 +805,12 @@ function shingleMat(color){
       ctx.fillRect(col*6+off, row*6, 6, 1);
     }
   }
-  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,2);
+  // This never went through _finish()/makeVoxelTexture() — this file's other two texture builders, both
+  // already fixed — so it kept the raw THREE.Texture defaults: no anisotropy at all. Roof slabs are mounted
+  // at a steep angle specifically to look like a sloped roof (see the caller), which is close to the worst
+  // case there is for needing anisotropic filtering. This is what was showing up as a shimmering plaid grid
+  // filling the screen near any angled roof.
+  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,2); t.anisotropy=maxAniso;
   return new THREE.MeshLambertMaterial({map:t});
 }
 
@@ -1330,8 +1422,16 @@ addTarget = hydraColliders;
     // a long panel + a short return, L-shaped, full sight-blocking height
     const p1=new THREE.Mesh(new THREE.BoxGeometry(3.4,3.0,0.5), marbleWallMat); p1.position.set(0,1.5,0); wall.add(p1);
     const p2=new THREE.Mesh(new THREE.BoxGeometry(0.5,2.6,2.2), marbleWallMat); p2.position.set(1.7,1.3,1.15); wall.add(p2);
-    // a broken crenellated top row so it reads as a ruin, not a clean slab
-    for(let i=0;i<4;i++){ if(i===2) continue; const cap=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.4+Math.random()*0.3,0.5), stoneMat); cap.position.set(-1.3+i*0.85,3.1,0); wall.add(cap); }
+    // a broken crenellated top row so it reads as a ruin, not a clean slab. p1's own top is at y=3.0
+    // (position 1.5 + half its 3.0 height); each cap's height is randomised but was placed at a FIXED
+    // y=3.1 regardless, so depending on the roll (0.4-0.7 tall) its bottom face landed anywhere from 0.1
+    // to 0.35 units BELOW that top — sunk into the wall, coplanar with its side faces across the overlap.
+    // That's what was reading as the caps' texture glitching/overlapping with the wall. Each cap's position
+    // is now derived from its own height so it sits flush on the wall's real top with a hairline clearance.
+    for(let i=0;i<4;i++){ if(i===2) continue;
+      const capH=0.4+Math.random()*0.3;
+      const cap=new THREE.Mesh(new THREE.BoxGeometry(0.7,capH,0.5), stoneMat); cap.position.set(-1.3+i*0.85,3.0+capH/2+0.02,0); wall.add(cap);
+    }
     // colliders in world space (account for the group rotation on the two panels)
     const c=Math.cos(rot||0), s=Math.sin(rot||0);
     const add=(lx,lz,w,d)=>{ addBox(x+lx*c - lz*s, z + lx*s + lz*c, w, d); };
@@ -1421,7 +1521,15 @@ addTarget = colosseumColliders;
   function coverWall(x,z,w,rot){
     const wall=new THREE.Group(); wall.position.set(x,0,z); wall.rotation.y=rot||0; colosseumArena.add(wall);
     const main=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,0.7), stoneMat); main.position.set(0,1.7,0); wall.add(main);
-    for(let i=0;i<Math.floor(w/0.9);i++){ if(i%3===1) continue; const cr=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.35+Math.random()*0.3,0.7), stoneDark); cr.position.set(-w/2+0.45+i*0.9,3.55,0); wall.add(cr); }
+    // main's own top is at y=3.4 (1.7 + half its 3.4 height); the crenellation height is randomised (0.35-0.65)
+    // but was placed at a fixed y=3.55, so its bottom face landed anywhere from 0.025 to 0.175 units below
+    // that top and shared main's own side-face planes across the overlap — this is the Colosseum's own copy
+    // of the same bug as the Hydra ruinedWall's caps (see the note there). Same fix: derive the position from
+    // each crenellation's own height so it sits flush on the wall's real top instead of sinking into it.
+    for(let i=0;i<Math.floor(w/0.9);i++){ if(i%3===1) continue;
+      const crH=0.35+Math.random()*0.3;
+      const cr=new THREE.Mesh(new THREE.BoxGeometry(0.7,crH,0.7), stoneDark); cr.position.set(-w/2+0.45+i*0.9,3.4+crH/2+0.02,0); wall.add(cr);
+    }
     const ret=new THREE.Mesh(new THREE.BoxGeometry(0.7,3.0,2.0), stoneMat); ret.position.set(w/2-0.35,1.5,1.0); wall.add(ret);
     const c=Math.cos(rot||0), s=Math.sin(rot||0);
     const add=(lx,lz,bw,bd)=>{ addBox(x+lx*c-lz*s, z+lx*s+lz*c, bw, bd); };
@@ -1597,7 +1705,7 @@ let boatHoles = 0; // the boat sinks once 3 holes have been chewed through it �
 const boatHoleMeshes = [];
 addTarget = nileColliders;
 function waterRippleTex(){
-  const P=48, c=_mkCanvas(P), x=c.getContext('2d');
+  const P=64, c=_mkCanvas(P), x=c.getContext('2d'); // power-of-two, unlike the old 48 — see _finish()'s note
   x.fillStyle='#1a5f88'; x.fillRect(0,0,P,P);
   for(let j=0;j<10;j++){
     const y=(j+0.5)*(P/10);
@@ -2083,7 +2191,11 @@ heightZoneTarget = heightZonesPyramid;
     // full player height (~1.8) — this one fully hides you, not just a peek-over
     block(3.2,1.8,0.4,0xa4854f,x,0.9,z,{noise:20});
     block(0.4,1.5,2.6,0xa4854f,x+1.4,0.75,z+1.3,{noise:20});
-    for(let i=0;i<4;i++){ block(0.7,0.3+Math.random()*0.25,0.4,0xa4854f,x-1.3+i*0.9,1.85,z,{noise:22}); }
+    // The main panel's top is at y=1.8 (0.9 + half its 1.8 height); these caps' height is randomised
+    // (0.3-0.55) but sat at a fixed y=1.85, so they sank 0.1-0.275 units into the wall — the same bug as
+    // the Hydra/Colosseum ruined-wall caps (see the note on the Hydra one). Positioned from each cap's own
+    // height now, so it sits flush on the real top instead.
+    for(let i=0;i<4;i++){ const capH=0.3+Math.random()*0.25; block(0.7,capH,0.4,0xa4854f,x-1.3+i*0.9,1.8+capH/2+0.02,z,{noise:22}); }
     addBox(x,z,3.2,0.4); addBox(x+1.4,z+1.3,0.4,2.6);
   }
   ruinedWall(-21,-19);
@@ -2416,6 +2528,7 @@ heightZoneTarget = heightZonesGreek;
     const t=new THREE.CanvasTexture(canvas);
     t.wrapS=t.wrapT=THREE.RepeatWrapping;
     t.magFilter=THREE.NearestFilter; t.minFilter=THREE.LinearMipmapLinearFilter; t.generateMipmaps=true;
+    t.anisotropy=maxAniso; // the shore bands are a floor at eye height too
     t.repeat.set(Math.max(1,Math.round(w/tile)), Math.max(1,Math.round(d/tile)));
     const mat = extra ? new THREE.MeshPhongMaterial(Object.assign({map:t,color:tint},extra))
                       : new THREE.MeshLambertMaterial({map:t,color:tint});
@@ -2735,6 +2848,7 @@ heightZoneTarget = heightZonesGreek;
     g.addColorStop(1.00,'rgba(255,255,255,0.00)');
     x2.fillStyle=g; x2.fillRect(0,0,P,P);
     const tex=new THREE.CanvasTexture(c);
+    tex.anisotropy=maxAniso;
     const H=90, B=33, ZN=-33, ZS=24;   // ZS = the shoreline stop; no wall is needed past it
     const mat=new THREE.MeshBasicMaterial({map:tex, color:0x45b8ef, transparent:true, opacity:0.42,
                                            depthWrite:false, side:THREE.DoubleSide, fog:true});
@@ -3297,7 +3411,7 @@ addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
 // ---- voxel humanoid bot (Minecraft/Pixel-Gun proportions: blocky head+helmet, layered torso armor, segmented limbs) ----
-function makeVoxelTexture(baseHex, {noise=22, size=48, pattern=null, cell=6} = {}){
+function makeVoxelTexture(baseHex, {noise=22, size=64, pattern=null, cell=6} = {}){
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');
@@ -3347,8 +3461,20 @@ function makeVoxelTexture(baseHex, {noise=22, size=48, pattern=null, cell=6} = {
     }
   }
   const tex = new THREE.CanvasTexture(c);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter; // crisp/blocky up close — unchanged, this is the intended voxel look
+  // minFilter used to be NearestFilter too, with no mipmaps and a 48px (non-power-of-two) canvas — meaning
+  // mipmapping couldn't even be enabled if we'd tried. Any face minified below its native resolution (viewed
+  // from a distance, or edge-on at a grazing angle — a roof or a wall seen up close after bumping into it)
+  // was point-sampling the pattern with zero filtering, which is exactly what produces a shimmering moiré
+  // grid instead of a stable texture. size is now 64 (power-of-two) specifically so mipmapping is legal in a
+  // WebGL1 context, and NearestMipmapLinear keeps each individual mip level hard-edged (still reads as
+  // pixel-art up close) while blending smoothly between levels as a surface recedes.
+  tex.minFilter = THREE.NearestMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  // Same grazing-angle case as _finish() above (see its note): mipmapping alone still leaves a wall panel
+  // seen edge-on, or from very close after bumping into it, sampling one over-blurred mip level. Anisotropic
+  // filtering is what actually holds detail at that angle instead of flattening it into a soft banded blur.
+  tex.anisotropy = maxAniso;
   return tex;
 }
 
@@ -3434,7 +3560,7 @@ function makeFace(type, skinHex, glowHex){
     ctx.strokeStyle=glowCss(glowHex||0xe0b040); ctx.lineWidth=1.5;
     ctx.beginPath(); ctx.moveTo(3,3); ctx.lineTo(13,17); ctx.lineTo(9,29); ctx.stroke();
   }
-  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; return t;
+  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.anisotropy=maxAniso; return t;
 }
 
 function makeVoxelBot(color, weaponType, skinName){
@@ -3697,7 +3823,7 @@ function enemyMarkerTex(){
   ctx.shadowBlur=0;
   ctx.fillStyle='#ff2a2a'; ctx.strokeStyle='#ffffff'; ctx.lineWidth=8;
   ctx.beginPath(); ctx.moveTo(26,20); ctx.lineTo(102,20); ctx.lineTo(64,96); ctx.closePath(); ctx.fill(); ctx.stroke();
-  _markerTex=new THREE.CanvasTexture(c); _markerTex.magFilter=THREE.NearestFilter; return _markerTex;
+  _markerTex=new THREE.CanvasTexture(c); _markerTex.magFilter=THREE.NearestFilter; _markerTex.anisotropy=maxAniso; return _markerTex;
 }
 
 // ---- scarab: small non-humanoid swarm creature (no arms/legs rig — spawned in packs of 5) ----
@@ -4965,7 +5091,7 @@ function metalTexture(baseHex, streaks=true){
     ctx.fillRect(x,y,2,2);
   }
   if(streaks){ ctx.strokeStyle='rgba(255,255,255,0.06)'; for(let y=2;y<32;y+=5){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(32,y+1);ctx.stroke();} }
-  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; return t;
+  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.anisotropy=maxAniso; return t;
 }
 function metalMatP(color,shininess=70,spec=0x777777){
   return new THREE.MeshPhongMaterial({map:metalTexture(color), shininess, specular:spec});
@@ -5164,7 +5290,7 @@ function eyeOfHorusTex(){
   x.beginPath(); x.moveTo(46,32); x.quadraticCurveTo(51,42,44,50); x.lineTo(40,48); x.quadraticCurveTo(44,40,42,33); x.closePath(); x.fill();
   // spiral tail
   x.strokeStyle=ink; x.lineWidth=3; x.beginPath(); x.arc(18,48,5,0.2,Math.PI*1.6); x.stroke();
-  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; return t;
+  const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.anisotropy=maxAniso; return t;
 }
 function makeKhopesh(){
   const g=new THREE.Group();
@@ -5662,6 +5788,13 @@ function enterHydraArena(){
   activeHeightZones = heightZonesOriginal;   // flat platform, no climbable zones
   scene.background.set(0x8a9c86); scene.fog.color.set(0x7f947c); scene.fog.near=26; scene.fog.far=110; // overcast marsh
   distantGround.visible=false; // the arena's own 320x320 marsh water sits lower than this plane and would be hidden under it
+  // This function set distantGround directly instead of going through setDistantGround(), which is also
+  // where horizonHaze gets updated — so horizonHaze was never touched here at all. It kept whatever
+  // visibility/colour it last had from an outdoor overworld map and kept tracking the camera in here too,
+  // which is what showed up as an unexplained, wrongly-coloured translucent "wall" standing in the arena.
+  // Boss arenas are enclosed spaces with their own real walls close to the player — the same reasoning
+  // dungeons already use to disable it (see enterDungeon()) applies here.
+  horizonHaze.visible=false;
   skyTint(0x93a894); // sunless overcast — without this the dome renders bright midday blue over the marsh
   hemi.intensity=0.7; hemi.color.set(0xc3d3b4); hemi.groundColor.set(0x384a2e);
   sun.intensity=0.55; fill.intensity=0.2; fill.color.set(0xb0c8a4);
@@ -5675,6 +5808,12 @@ function enterColosseumArena(){
   activeHeightZones = heightZonesOriginal;
   scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8c4a0); scene.fog.near=45; scene.fog.far=200; // warm daylit arena
   setDistantGround(0xb09268); // dusty ground outside the arena wall
+  // The arena's own outer rim (the seating cap) only reaches ~38 units; the gladiator gate tunnels open a
+  // sightline straight out past it. horizonHaze's 82-unit ring — sized for open overworld maps with a much
+  // larger fog-far distance — reads as a big pale translucent wall looming close behind an intimate ~40-unit
+  // bowl instead of atmosphere. Same call as the other boss arenas: an enclosed space with real walls
+  // doesn't need it.
+  horizonHaze.visible=false;
   skyTint(0xffdca8); // hot dusty arena light
   hemi.intensity=0.9; hemi.color.set(0xffe6c0); hemi.groundColor.set(0x6a5030);
   sun.intensity=1.0; fill.intensity=0.25; fill.color.set(0xffd8a0);
@@ -5688,6 +5827,7 @@ function enterIfritArena(){
   activeHeightZones = heightZonesOriginal;
   scene.background.set(0x8a4a2e); scene.fog.color.set(0xa85a34); scene.fog.near=22; scene.fog.far=90; // warm dusk, fire-lit
   setDistantGround(0x7a4028); // scorched red desert under a burning sky
+  horizonHaze.visible=false; // enclosed arena with its own walls — see the note in enterColosseumArena()
   skyTint(0xc4643a); // burning dusk sky
   hemi.intensity=0.55; hemi.color.set(0xffb87a); hemi.groundColor.set(0x3a2414);
   sun.intensity=0.5; fill.intensity=0.3; fill.color.set(0xff8a4a);
