@@ -82,19 +82,27 @@ All figures below are computed from the geometry in `index.html`, not estimated.
 | Colosseum arena | `floor.position.set(0,-0.1,0)`, h=0.4 (`:1396`) | **`+0.10`** |
 | Hydra arena | `hblock(R*2,0.6,...,0,-0.05,0)` (`:1332`) | **`+0.25`** |
 
-**Models are seated below their own origin.** Lowest local-Y vertex per model, times the
-scale it actually spawns at:
+**Models are seated wrong relative to their floor.** These figures are *measured*, not
+estimated — produced by the headless harness described in section 5, which executes the
+real `index.html` script and reads back world-space bounding boxes at each model's actual
+spawn scale:
 
-| Model | lowest local Y | spawn scale | world Y | vs. its floor |
-|---|---|---|---|---|
-| Champion (Boss III) | −0.35 | 2.3 | −0.805 | **0.905u buried** |
-| Colossus (Boss I) | −0.10 | 3.1 | −0.310 | 0.310u buried |
-| grunts (`makeVoxelBot`) | −0.10 | 1.0 | −0.100 | 0.100u buried |
-| Griffin | +0.155 | 1.0 | +0.155 | **floats 0.155u** |
-| Medusa | +0.097 | 1.25 | +0.121 | floats 0.121u |
+| Model | scale | floor top | model min-Y | gap | verdict |
+|---|---|---|---|---|---|
+| Champion (Boss III) | 2.30 | +0.10 | −0.805 | −0.905 | **buried 0.905u** |
+| Ifrit King (Boss IV) | 2.00 | 0.00 | −0.440 | −0.440 | buried 0.440u |
+| Colossus (Boss I) | 3.10 | 0.00 | −0.310 | −0.310 | buried 0.310u |
+| Hydra (Boss II) | 2.40 | +0.25 | +0.079 | −0.171 | buried 0.171u |
+| Griffin | 1.00 | 0.00 | +0.155 | +0.155 | **floats 0.155u** |
+| Medusa (wave-6 elite) | 1.25 | 0.00 | +0.121 | +0.121 | floats 0.121u |
+| grunts (`makeVoxelBot`) | 1.00 | 0.00 | −0.100 | −0.100 | buried 0.100u |
+| Tiger (Champion add) | 1.15 | +0.10 | +0.029 | −0.071 | buried 0.071u |
+| Minotaur | 1.00 | 0.00 | +0.010 | +0.010 | ok |
 
-The Champion's case is the worst: its feet (`foot.position.y = -0.28`, h=0.14) and
-greaves (`greave.position.y = -0.04`, h=0.4) are both entirely below the arena floor.
+**Eight of the nine actor models in the game fail ground contact.** The Minotaur is the
+only one that is correct. The Champion's case is the worst: its feet
+(`foot.position.y = -0.28`, h=0.14) and greaves (`greave.position.y = -0.04`, h=0.4) are
+both entirely below the arena floor.
 
 **Walk rigs.**
 
@@ -235,13 +243,19 @@ Sling's `slingAnim` rig references) is preserved exactly. **No balance changes i
 
 ## 5. Verification
 
-A `py_mini_racer` harness in the scratchpad — the technique already used for the `b85ac35`
-z-fighting sweep, and this project's established approach for hard JS questions here.
+A `py_mini_racer` harness — the technique already used for the `b85ac35` z-fighting sweep,
+and this project's established approach for hard JS questions here.
 
-It stubs `THREE` (Group, Mesh, BoxGeometry, CylinderGeometry, ConeGeometry, SphereGeometry,
-Vector3, materials, lights) with enough fidelity to track parent/child transforms, then
-instantiates every creature, boss and weapon builder and computes real world-space
-bounding boxes.
+**It is built and working.** It stubs `THREE` and the DOM with enough fidelity that the
+real, unmodified `index.html` script body executes headlessly end to end with no errors —
+all six overworlds, both dungeons, all four arenas and every model builder. It then tracks
+parent/child transforms to produce true world-space bounding boxes. The measured table in
+section 3.2 is its output.
+
+**It lives in the repo, at `tools/audit/`, not in the scratchpad.** This is a deliberate
+change from the original intent: every task in the implementation plan uses it as its test
+gate, so it has to survive between sessions and act as a regression check, which throwaway
+scratchpad tooling cannot do. It is the only automated check this project has.
 
 Assertions:
 
