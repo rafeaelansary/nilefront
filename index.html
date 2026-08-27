@@ -2647,6 +2647,120 @@ heightZoneTarget = heightZonesGreek;
   shallows.userData.baseY=0.27; shallows.userData.wavePhase=0;
   waterSurfaces.push(shallows);
   addBox(0,harborZ0+0.5,70,1); // invisible shoreline — keeps the player from wading in, not a built wall
+
+  // ================= BEACH DRESSING =================
+  // The shore was three perfectly rectangular bands of flat colour meeting along two dead-straight lines —
+  // it read as a solid block of sand rather than as a beach. What was missing is not resolution (the sand
+  // texture tiles at 1.25 units, the same texel scale as the streets) but VARIATION: real shorelines have
+  // no straight edges, uneven tone, and things lying on them. All three are added here.
+  //
+  // Everything is confined to |x| < 36 and z in [beachZ0, harborZ0]. The bands themselves run 900 wide for
+  // the horizon, but the player is clamped to +/-32, so dressing the whole width would be thousands of
+  // invisible meshes. No colliders on the small scatter — you should be able to walk the beach freely.
+  (function beachDressing(){
+    const dryTone  = new THREE.MeshLambertMaterial({map:_finish(beachSandTex(),3), color:0xf0e2c0,
+                                                    polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-3});
+    const dampTone = new THREE.MeshLambertMaterial({map:_finish(beachSandTex(),3), color:0xa89c80,
+                                                    polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-3});
+    const duneMat  = voxMat(0xd8c8a2,{noise:18});
+    const rockMat  = voxMat(0x8a8478,{noise:20});
+    const rockDark = voxMat(0x6a655c,{noise:18});
+    const driftMat = voxMat(0x9a8b72,{noise:16});   // sun-bleached driftwood
+    const weedMat  = voxMat(0x4a5a34,{noise:16});
+    const shellMat = voxMat(0xe8dcc4,{noise:8});
+
+    // ---- 1. tonal patches. Large, soft, overlapping slabs of slightly lighter and darker sand lying flat
+    // on the beach, so it stops being one even wash. Depth-biased, like the crossroads paths. ----
+    for(let i=0;i<26;i++){
+      const px = -34 + ((i*137.5) % 68);
+      const pz = beachZ0 + 0.6 + ((i*2.7) % 3.8);
+      const w  = 3.5 + ((i*1.9) % 5.5), d = 1.2 + ((i*0.9) % 2.2);
+      const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.12,d), (i%3===0)?dampTone:dryTone);
+      m.position.set(px, -0.20, pz); m.rotation.y=(i%5)*0.22; m.receiveShadow=true; scene.add(m);
+    }
+
+    // ---- 2. break the two straight edges. A ragged line of low dune mounds along the gravel-to-sand seam,
+    // and a scalloped damp fringe along the waterline, so neither transition is a ruled line. ----
+    for(let x=-35;x<=35;x+=1.9){
+      const n = Math.abs(Math.sin(x*1.7)*43758.5%1);
+      if(n < 0.30) continue;                                  // gaps, so the dune line is broken
+      const h = 0.22 + n*0.5, w = 1.6 + n*1.9;
+      const dune=new THREE.Mesh(new THREE.BoxGeometry(w,h,1.5+n*1.2), duneMat);
+      dune.position.set(x + (n-0.5)*0.8, h/2 - 0.10, beachZ0 + 0.2 + n*0.7);
+      dune.rotation.y=n*0.5; dune.castShadow=true; dune.receiveShadow=true; scene.add(dune);
+      // marram tufts on about a third of them
+      if(n > 0.72){
+        for(let k=0;k<3;k++){
+          const blade=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.34+n*0.2,0.05), weedMat);
+          blade.position.set(x+(k-1)*0.22, h+0.06, beachZ0+0.2+n*0.7); blade.rotation.z=(k-1)*0.28; scene.add(blade);
+        }
+      }
+    }
+    // scalloped waterline: short damp tongues of varying reach, so the sea's edge is uneven
+    for(let x=-35;x<=35;x+=1.5){
+      const n = Math.abs(Math.sin(x*3.1+1.3)*24634.7%1);
+      const reach = 0.5 + n*1.7;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(1.4+n*0.8,0.10,reach), dampTone);
+      m.position.set(x, -0.195, harborZ0 - reach/2 - 0.1); m.receiveShadow=true; scene.add(m);
+    }
+
+    // ---- 3. things lying on the beach. Scatter, so it reads as a used shoreline. ----
+    function shoreRock(x,z,s){
+      const a=new THREE.Mesh(new THREE.BoxGeometry(s,s*0.62,s*0.85), rockMat);      a.position.set(x,s*0.31-0.06,z); a.rotation.y=s; a.castShadow=true; scene.add(a);
+      const b=new THREE.Mesh(new THREE.BoxGeometry(s*0.62,s*0.44,s*0.58), rockDark); b.position.set(x+s*0.34,s*0.22-0.06,z+s*0.2); b.rotation.y=-s; scene.add(b);
+    }
+    function driftwood(x,z,len,rot){
+      const log=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.16,len,7), driftMat);
+      log.rotation.z=Math.PI/2; log.rotation.y=rot; log.position.set(x,0.07,z); log.castShadow=true; scene.add(log);
+      const stub=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.07,0.5,5), driftMat);
+      stub.rotation.z=Math.PI/2 + 0.7; stub.rotation.y=rot; stub.position.set(x+Math.cos(rot)*len*0.4, 0.16, z-Math.sin(rot)*len*0.4); scene.add(stub);
+    }
+    function seaweed(x,z){
+      for(let i=0;i<4;i++){
+        const n=Math.abs(Math.sin((x+i)*5.3)*911%1);
+        const w=new THREE.Mesh(new THREE.BoxGeometry(0.5+n*0.6,0.06,0.22+n*0.2), weedMat);
+        w.position.set(x+(n-0.5)*0.7, -0.13, z+(i-1.5)*0.24); w.rotation.y=n*2.4; scene.add(w);
+      }
+    }
+    function shells(x,z){
+      for(let i=0;i<5;i++){
+        const n=Math.abs(Math.sin((x*2+i*7)*3.7)*577%1);
+        const sh=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.05,0.10), shellMat);
+        sh.position.set(x+(n-0.5)*1.5, -0.14, z+(i-2)*0.3); sh.rotation.y=n*3.1; scene.add(sh);
+      }
+    }
+    // mooring post — a beach has working fixtures, not just litter
+    function mooringPost(x,z){
+      const post=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.18,1.5,7), driftMat);
+      post.position.set(x,0.55,z); post.rotation.z=0.06; post.castShadow=true; scene.add(post);
+      const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.12,7), driftMat); cap.position.set(x,1.34,z); scene.add(cap);
+      for(let i=0;i<3;i++){ const rope=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.07,7), voxMat(0xbfae86,{noise:10}));
+        rope.position.set(x,0.92+i*0.11,z); scene.add(rope); }
+      addBox(x,z,0.5,0.5);
+    }
+    // a fishing skiff hauled up out of the water, lying over on its side
+    function beachedSkiff(x,z,rot){
+      const g2=new THREE.Group(); g2.position.set(x,0,z); g2.rotation.y=rot; g2.rotation.z=0.22; scene.add(g2);
+      const hullMat=voxMat(0x6b4a28,{noise:15});
+      const hull=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.55,3.6), hullMat); hull.position.set(0,0.24,0); hull.castShadow=true; g2.add(hull);
+      const bow =new THREE.Mesh(new THREE.BoxGeometry(0.7,0.48,0.8), hullMat);  bow.position.set(0,0.24,2.0); g2.add(bow);
+      const stern=new THREE.Mesh(new THREE.BoxGeometry(0.95,0.5,0.7), hullMat); stern.position.set(0,0.26,-1.95); g2.add(stern);
+      const rail=new THREE.Mesh(new THREE.BoxGeometry(1.25,0.1,3.7), voxMat(0x4a3018,{noise:12})); rail.position.set(0,0.54,0); g2.add(rail);
+      for(let i=0;i<3;i++){ const rib=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.08,0.12), voxMat(0x4a3018,{noise:12}));
+        rib.position.set(0,0.46,-1.0+i*1.0); g2.add(rib); }
+      const oar=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.07,2.4,6), driftMat);
+      oar.rotation.x=Math.PI/2; oar.rotation.z=0.35; oar.position.set(0.8,0.12,0.4); g2.add(oar);
+      addBox(x,z,Math.abs(1.3*Math.cos(rot))+Math.abs(3.8*Math.sin(rot)), Math.abs(1.3*Math.sin(rot))+Math.abs(3.8*Math.cos(rot)));
+    }
+
+    shoreRock(-29,21.4,1.5); shoreRock(-18,22.6,1.0); shoreRock(-7.5,21.0,1.25);
+    shoreRock(8.5,22.3,0.9);  shoreRock(17,20.9,1.35); shoreRock(30,22.0,1.1);
+    driftwood(-24,20.6,2.4,0.5); driftwood(-3,23.0,1.8,-0.8); driftwood(12.5,21.5,2.9,0.25); driftwood(27,23.1,2.0,1.1);
+    seaweed(-31,23.3); seaweed(-14,23.5); seaweed(-1,23.2); seaweed(10,23.6); seaweed(22,23.3); seaweed(33,23.4);
+    shells(-26,22.2); shells(-10,20.8); shells(4,22.6); shells(19,21.7); shells(31,20.9);
+    mooringPost(-16,21.8); mooringPost(3.5,22.4); mooringPost(13,22.6);   // clear of both the watchtower legs and the shipsheds
+    beachedSkiff(-21,21.6,0.42); beachedSkiff(9.5,21.4,-0.6);   // clear of the watchtower legs at (18,20)
+  })();
   // an ancient Mediterranean merchant vessel, not just a plank box: tapered pointed bow with a painted eye
   // (real ancient ships were given eyes so the vessel could "see" its way), a curved raised stern with the
   // classic aphlaston flourish, painted shields along the gunwale, a steering oar, and a proper yarded sail
