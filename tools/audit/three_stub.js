@@ -526,4 +526,77 @@ global.__modelBounds = function(root, scale){
   return {min,max,count:boxes.length};
 };
 
+
+// ---------- oriented-box helpers (connectivity uses these, NOT the AABBs) ----------
+// A rotated box's AABB is much larger than the box itself, so testing AABB overlap wrongly reports two
+// rotated-and-separated pieces as touching. That is exactly the case that matters here: chained runs of
+// rotated segments. These helpers test the real oriented boxes instead.
+function matInvert(m){
+  const inv = new Array(16);
+  inv[0]  =  m[5]*m[10]*m[15] - m[5]*m[11]*m[14] - m[9]*m[6]*m[15] + m[9]*m[7]*m[14] + m[13]*m[6]*m[11] - m[13]*m[7]*m[10];
+  inv[4]  = -m[4]*m[10]*m[15] + m[4]*m[11]*m[14] + m[8]*m[6]*m[15] - m[8]*m[7]*m[14] - m[12]*m[6]*m[11] + m[12]*m[7]*m[10];
+  inv[8]  =  m[4]*m[9]*m[15]  - m[4]*m[11]*m[13] - m[8]*m[5]*m[15] + m[8]*m[7]*m[13] + m[12]*m[5]*m[11] - m[12]*m[7]*m[9];
+  inv[12] = -m[4]*m[9]*m[14]  + m[4]*m[10]*m[13] + m[8]*m[5]*m[14] - m[8]*m[6]*m[13] - m[12]*m[5]*m[10] + m[12]*m[6]*m[9];
+  inv[1]  = -m[1]*m[10]*m[15] + m[1]*m[11]*m[14] + m[9]*m[2]*m[15] - m[9]*m[3]*m[14] - m[13]*m[2]*m[11] + m[13]*m[3]*m[10];
+  inv[5]  =  m[0]*m[10]*m[15] - m[0]*m[11]*m[14] - m[8]*m[2]*m[15] + m[8]*m[3]*m[14] + m[12]*m[2]*m[11] - m[12]*m[3]*m[10];
+  inv[9]  = -m[0]*m[9]*m[15]  + m[0]*m[11]*m[13] + m[8]*m[1]*m[15] - m[8]*m[3]*m[13] - m[12]*m[1]*m[11] + m[12]*m[3]*m[9];
+  inv[13] =  m[0]*m[9]*m[14]  - m[0]*m[10]*m[13] - m[8]*m[1]*m[14] + m[8]*m[2]*m[13] + m[12]*m[1]*m[10] - m[12]*m[2]*m[9];
+  inv[2]  =  m[1]*m[6]*m[15]  - m[1]*m[7]*m[14]  - m[5]*m[2]*m[15] + m[5]*m[3]*m[14] + m[13]*m[2]*m[7]  - m[13]*m[3]*m[6];
+  inv[6]  = -m[0]*m[6]*m[15]  + m[0]*m[7]*m[14]  + m[4]*m[2]*m[15] - m[4]*m[3]*m[14] - m[12]*m[2]*m[7]  + m[12]*m[3]*m[6];
+  inv[10] =  m[0]*m[5]*m[15]  - m[0]*m[7]*m[13]  - m[4]*m[1]*m[15] + m[4]*m[3]*m[13] + m[12]*m[1]*m[7]  - m[12]*m[3]*m[5];
+  inv[14] = -m[0]*m[5]*m[14]  + m[0]*m[6]*m[13]  + m[4]*m[1]*m[14] - m[4]*m[2]*m[13] - m[12]*m[1]*m[6]  + m[12]*m[2]*m[5];
+  inv[3]  = -m[1]*m[6]*m[11]  + m[1]*m[7]*m[10]  + m[5]*m[2]*m[11] - m[5]*m[3]*m[10] - m[9]*m[2]*m[7]   + m[9]*m[3]*m[6];
+  inv[7]  =  m[0]*m[6]*m[11]  - m[0]*m[7]*m[10]  - m[4]*m[2]*m[11] + m[4]*m[3]*m[10] + m[8]*m[2]*m[7]   - m[8]*m[3]*m[6];
+  inv[11] = -m[0]*m[5]*m[11]  + m[0]*m[7]*m[9]   + m[4]*m[1]*m[11] - m[4]*m[3]*m[9]  - m[8]*m[1]*m[7]   + m[8]*m[3]*m[5];
+  inv[15] =  m[0]*m[5]*m[10]  - m[0]*m[6]*m[9]   - m[4]*m[1]*m[10] + m[4]*m[2]*m[9]  + m[8]*m[1]*m[6]   - m[8]*m[2]*m[5];
+  let det = m[0]*inv[0] + m[1]*inv[4] + m[2]*inv[8] + m[3]*inv[12];
+  if(Math.abs(det) < 1e-12) return null;
+  det = 1.0/det;
+  for(let i=0;i<16;i++) inv[i] *= det;
+  return inv;
+}
+
+// World-space sample points on a mesh's real (oriented) box: 8 corners, 6 face centres, 1 centre.
+global.__meshSamples = function(mesh){
+  const h = mesh.geometry && mesh.geometry._half ? mesh.geometry._half : {x:0,y:0,z:0};
+  const o = mesh.geometry && mesh.geometry._offset ? mesh.geometry._offset : {x:0,y:0,z:0};
+  const m = mesh.matrixWorld, pts = [];
+  const push = (a,b,c)=>{ pts.push(applyMat(m, o.x+a*h.x, o.y+b*h.y, o.z+c*h.z)); };
+  for(let i=-1;i<=1;i+=2) for(let j=-1;j<=1;j+=2) for(let k=-1;k<=1;k+=2) push(i,j,k);
+  push(0,0,0); push(1,0,0); push(-1,0,0); push(0,1,0); push(0,-1,0); push(0,0,1); push(0,0,-1);
+  return pts;
+};
+
+// Is a world point inside a mesh's real oriented box (with a small tolerance)?
+global.__pointInMesh = function(mesh, p, eps){
+  const inv = matInvert(mesh.matrixWorld);
+  if(!inv) return false;
+  const h = mesh.geometry && mesh.geometry._half ? mesh.geometry._half : {x:0,y:0,z:0};
+  const o = mesh.geometry && mesh.geometry._offset ? mesh.geometry._offset : {x:0,y:0,z:0};
+  const q = applyMat(inv, p.x, p.y, p.z);
+  return Math.abs(q.x-o.x) <= h.x+eps && Math.abs(q.y-o.y) <= h.y+eps && Math.abs(q.z-o.z) <= h.z+eps;
+};
+
+// Meshes that genuinely intersect: at least one of A's surface samples lies inside B, or vice versa.
+global.__connectivity = function(root, scale, eps){
+  const boxes = global.__modelBoxes(root, scale);
+  const meshes = boxes.map(b=>b.mesh);
+  const samples = meshes.map(m=>global.__meshSamples(m));
+  const orphans = [];
+  for(let i=0;i<meshes.length;i++){
+    let hit=false;
+    for(let j=0;j<meshes.length && !hit;j++){
+      if(i===j) continue;
+      // cheap AABB reject first, then the real oriented test
+      const a=boxes[i].box, c=boxes[j].box;
+      if(a.min.x>c.max.x+eps||c.min.x>a.max.x+eps||a.min.y>c.max.y+eps||
+         c.min.y>a.max.y+eps||a.min.z>c.max.z+eps||c.min.z>a.max.z+eps) continue;
+      for(const p of samples[i]) if(global.__pointInMesh(meshes[j], p, eps)){ hit=true; break; }
+      if(!hit) for(const p of samples[j]) if(global.__pointInMesh(meshes[i], p, eps)){ hit=true; break; }
+    }
+    if(!hit) orphans.push({y:Math.round(boxes[i].box.min.y*1000)/1000, type:meshes[i].geometry.type});
+  }
+  return {orphans:orphans, total:meshes.length, detail:orphans.slice(0,6)};
+};
+
 })(this);

@@ -4446,14 +4446,20 @@ function makeGriffin(){
       const dx=Math.cos(rake), dy=Math.sin(rake);
       const m=new THREE.Mesh(new THREE.BoxGeometry(pn.len,pn.h,pn.d), i%2?furMat:furDark);
       m.position.set(wx+side*dx*pn.len/2, wy+dy*pn.len/2, wz-i*0.05);
-      m.rotation.z = side>0 ? -rake : rake;             // panel's long axis lies along the step direction
+      // A box with its length on +X, rotated by rotation.z = t, lies along (cos t, sin t). The step is
+      // (side*cos rake, sin rake), so the matching angle is `rake` on the +X side and `PI - rake` on the
+      // -X side. It was -rake / +rake, which pointed every panel the wrong way and pulled the wing apart
+      // into disconnected segments — visible in game, and the reason the audit's connectivity check was
+      // rewritten to test real oriented boxes instead of AABBs (a rotated box's AABB is much bigger than
+      // the box, so separated panels still registered as touching).
+      m.rotation.z = side>0 ? rake : Math.PI - rake;
       g.add(m);
       // primary flight feathers hanging off the trailing edge of the outer panels
       if(i>=2){
         for(let f=0;f<3;f++){
           const q=new THREE.Mesh(new THREE.BoxGeometry(pn.len*0.85,0.06,0.13), featherG);
           q.position.set(wx+side*dx*pn.len/2, wy+dy*pn.len/2-0.04, wz-i*0.05-pn.d/2-f*0.11);
-          q.rotation.z = side>0 ? -rake : rake; q.rotation.x = -0.16*(f+1);
+          q.rotation.z = side>0 ? rake : Math.PI - rake; q.rotation.x = -0.16*(f+1);
           g.add(q);
         }
       }
@@ -4533,11 +4539,15 @@ function makeMedusa(){
   // ---- serpent lower body. A coil that sweeps out, curves around and rises back to the waist, each
   // segment stepping along the previous one's own direction so the run is continuous. The first segment
   // sits ON the ground; the old version's lowest coil floated 0.12 above it. ----
-  { let cx=0, cz=0.10, cy=0.262, ang=0.0;   // 0.262 seats the lowest ventral plate exactly on y=0
+  // A box with its length on +Z, rotated by rotation.y = a, lies along (sin a, 0, cos a) — so the walk
+  // must step along exactly that. It used -cos(a) for the Z component, which marched the coil backwards
+  // relative to the way each segment was actually facing and broke the run apart. `ang` starts at PI so
+  // the first segment still heads away from the player rather than out toward them.
+  { let cx=0, cz=0.10, cy=0.262, ang=Math.PI;   // 0.262 seats the lowest ventral plate exactly on y=0
     const segs=[{w:0.66,len:0.44},{w:0.64,len:0.42},{w:0.60,len:0.40},{w:0.56,len:0.38},
                 {w:0.50,len:0.36},{w:0.44,len:0.34},{w:0.38,len:0.32},{w:0.30,len:0.30},{w:0.22,len:0.26}];
     segs.forEach((sg,i)=>{
-      const dx=Math.sin(ang), dz=-Math.cos(ang);
+      const dx=Math.sin(ang), dz=Math.cos(ang);
       const h=sg.w*0.72;
       const m=new THREE.Mesh(new THREE.BoxGeometry(sg.w,h,sg.len), i%2?scaleMat2:scaleMat);
       m.position.set(cx+dx*sg.len/2, cy, cz+dz*sg.len/2); m.rotation.y=ang; g.add(m);
@@ -4609,7 +4619,12 @@ function makeMedusa(){
       const dy=Math.cos(lean), dz=Math.sin(lean);
       const m=new THREE.Mesh(new THREE.BoxGeometry(lk.w,lk.len,lk.w), k%2?snakeMat2:snakeMat);
       m.position.set(0, sy+dy*lk.len/2, sz+dz*lk.len/2);
-      m.rotation.x = -lean;         // a box whose length is +Y, tilted toward +Z, is rotation.x = -lean
+      // A box whose length lies on +Y, rotated by rotation.x = t, points along (0, cos t, sin t). The
+      // walk steps along (cos lean, sin lean), so the matching angle is +lean. It was -lean, which sent
+      // each link off along (0, cos lean, -sin lean) — mirrored in Z — and broke the tendril apart from
+      // the second link onward. Compare the Hydra's tail, which steps along -Z and therefore correctly
+      // uses -t: the sign depends on which way the run travels, and it has to match.
+      m.rotation.x = lean;
       sg.add(m);
       sy+=dy*lk.len*0.82; sz+=dz*lk.len*0.82;     // 0.82 = links overlap generously, never gap
       lean += curl;                                // and the tendril curls over as it rises

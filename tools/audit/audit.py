@@ -110,7 +110,7 @@ def ground_contact(ctx):
     return rows
 
 
-CONNECT_EPS = 0.012   # boxes within this of each other count as touching
+CONNECT_EPS = 0.004   # surface samples within this of another mesh count as joined
 
 
 def check_connectivity(ctx, runs=4):
@@ -123,31 +123,17 @@ def check_connectivity(ctx, runs=4):
     """
     fn = ctx.eval("""
     (function(builder, invoke, scale, eps){
-      var b = globalThis.__builders[builder];
-      var m = eval(invoke)(b);
-      var boxes = globalThis.__modelBoxes(m, scale);
-      function touches(a, c){
-        return a.min.x <= c.max.x + eps && c.min.x <= a.max.x + eps &&
-               a.min.y <= c.max.y + eps && c.min.y <= a.max.y + eps &&
-               a.min.z <= c.max.z + eps && c.min.z <= a.max.z + eps;
-      }
-      var orphans = [];
-      for(var i=0;i<boxes.length;i++){
-        var hit = false;
-        for(var j=0;j<boxes.length;j++){
-          if(i!==j && touches(boxes[i].box, boxes[j].box)){ hit = true; break; }
-        }
-        if(!hit) orphans.push(Math.round(boxes[i].box.min.y*1000)/1000);
-      }
-      return JSON.stringify({orphans:orphans.length, total:boxes.length});
+      var m = eval(invoke)(globalThis.__builders[builder]);
+      return JSON.stringify(globalThis.__connectivity(m, scale, eps));
     })
     """)
     worst = {}
     for builder, invoke, scale, _floor, label in ACTORS:
         for _ in range(runs):
             r = json.loads(fn(builder, invoke, scale, CONNECT_EPS))
-            if r["orphans"] >= worst.get(label, (-1, 0))[0]:
-                worst[label] = (r["orphans"], r["total"])
+            n = len(r["orphans"])
+            if n >= worst.get(label, (-1, 0, []))[0]:
+                worst[label] = (n, r["total"], r["detail"])
     return worst
 
 
@@ -188,11 +174,12 @@ def main():
     print(f"\n{'model':24} {'meshes':>6} {'orphans':>8}  verdict")
     print("-" * 52)
     cfails = 0
-    for label, (orphans, total) in check_connectivity(ctx).items():
+    for label, (orphans, total, detail) in check_connectivity(ctx).items():
         ok = orphans == 0
         if not ok:
             cfails += 1
-        print(f"{label:24} {total:6d} {orphans:8d}  {'ok' if ok else 'DISCONNECTED'}")
+        note = '' if ok else '  ' + ', '.join(f"{d['type'][:-8]}@y{d['y']}" for d in detail)
+        print(f"{label:24} {total:6d} {orphans:8d}  {'ok' if ok else 'DISCONNECTED'}{note}")
     print(f"\n{cfails} of {len(ACTORS)} actors have floating parts")
 
     return 1 if (fails or cfails) else 0
