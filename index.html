@@ -5845,46 +5845,116 @@ function makeSling(){
     pouchMesh:pouch, stoneMesh:stone, bandMeshes, bandBaseLen};
   return g;
 }
-// XIPHOS — short leaf-shaped double-edged blade; fast melee, quicker than the khopesh
+// XIPHOS — the Greek hoplite's short sword. The old model was five primitives (sphere pommel, cylinder
+// grip, box guard, one straight 4-sided cone for the blade) — less detail than the Roman Pugio that was
+// explicitly written to contrast with it, and it missed the weapon's single identifying cue: a xiphos is
+// LEAF-SHAPED. It widens as it leaves the guard, reaches its broadest around two-thirds out, then sweeps
+// in to a sharp point. A straight taper reads as any dagger; the leaf reads as Greek.
+// Built as a chain of segments whose width swells then contracts, so the profile is a real curve rather
+// than a stack of steps. Hand near y=0 with the blade rising from it, matching the khopesh's convention.
 function makeXiphos(){
-  // was upside down: pommel at the top with the blade hanging below (which also pushed the blade off the
-  // bottom of the screen). The khopesh's convention is the hand near y=0 with the blade rising upward from
-  // there — flipped to match that instead of just shifting the inverted version into view.
   const g=new THREE.Group();
-  const bronze=metalMatP(0x9a7838,85,0xe8d9a8), leather=voxMat(0x3a2a1a,{noise:12});
-  const pommel=new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6),bronze); pommel.position.y=0; g.add(pommel);
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.03,0.16,8),leather); grip.position.y=0.1; g.add(grip);
-  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.035,0.09),bronze); guard.position.y=0.19; g.add(guard);
-  // one continuous blade — a single 4-sided cone (a real dagger taper, not stacked segments), flattened
-  // into a blade cross-section and rotated 45° so a flat face points at the player instead of an edge
-  const bladeLen = 0.37, bladeY = 0.2075 + bladeLen/2; // base sits flush against the guard's top edge
-  const blade = new THREE.Mesh(new THREE.ConeGeometry(0.075, bladeLen, 4), bronze);
-  blade.scale.set(1, 1, 0.45); // flatten the square cross-section into a blade profile
-  blade.rotation.y = Math.PI/4;
-  blade.position.set(0, bladeY, 0);
-  g.add(blade);
+  const bronze     = metalMatP(0x9a7838,85,0xe8d9a8);   // blade
+  const bronzeDark = metalMatP(0x6d5426,60,0xbfa878);   // fuller/midrib shadow, the dark half of the break
+  const gold       = metalMatP(0xc9a13a,90,0xfff2c8);   // pommel and guard furniture
+  const leather    = voxMat(0x3a2a1a,{noise:12});
+  const bone       = metalMatP(0xe2d9bd,45,0xfff8e8);   // ivory grip inlay — the light half
+
+  // ---- hilt: flared pommel, ribbed grip with ivory inlay, then the guard ----
+  const pommelCap =new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.032,0.035,8), gold);   pommelCap.position.y=0.018; g.add(pommelCap);
+  const pommelNeck=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.042,0.030,8), gold);   pommelNeck.position.y=0.048; g.add(pommelNeck);
+  const grip      =new THREE.Mesh(new THREE.CylinderGeometry(0.030,0.028,0.135,8), leather); grip.position.y=0.128; g.add(grip);
+  for(let i=0;i<3;i++){ const rib=new THREE.Mesh(new THREE.CylinderGeometry(0.033,0.033,0.016,8), bone); rib.position.y=0.082+i*0.042; g.add(rib); }
+  const ferrule   =new THREE.Mesh(new THREE.CylinderGeometry(0.036,0.032,0.022,8), gold);   ferrule.position.y=0.206; g.add(ferrule);
+  // guard: a straight bar with the shallow downturned wings a xiphos actually carried
+  const guard     =new THREE.Mesh(new THREE.BoxGeometry(0.185,0.030,0.075), gold); guard.position.y=0.230; g.add(guard);
+  [-1,1].forEach(s=>{ const wing=new THREE.Mesh(new THREE.BoxGeometry(0.055,0.024,0.062), gold);
+    wing.position.set(s*0.088,0.218,0); wing.rotation.z=s*0.42; g.add(wing); });
+
+  // ---- leaf blade. Widths swell from the guard to a belly around 60% of the length, then draw in to the
+  // point. Each segment starts where the last ended, so the edges form one continuous profile. ----
+  const widths=[0.070,0.092,0.108,0.118,0.120,0.112,0.094,0.068,0.040];
+  const segLen=0.046;
+  let by=0.245;
+  widths.forEach((w,i)=>{
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(w,segLen,0.020), i%2?bronze:bronzeDark);
+    seg.position.set(0, by+segLen/2, 0); g.add(seg);
+    // ground edge bevels down each side, catching the light along the cutting edges
+    [-1,1].forEach(sd=>{
+      const edge=new THREE.Mesh(new THREE.BoxGeometry(0.012,segLen,0.010), bronze);
+      edge.position.set(sd*w/2, by+segLen/2, 0); g.add(edge);
+    });
+    by += segLen*0.92;   // 0.92 = segments overlap so the blade is one solid run
+  });
+  // the point, carrying on from where the last segment ended
+  const point=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.070,4), bronze);
+  point.rotation.y=Math.PI/4; point.position.set(0, by+0.028, 0); g.add(point);
+  // raised midrib running most of the blade's length — the structural spine of a real leaf blade
+  const midrib=new THREE.Mesh(new THREE.BoxGeometry(0.020,0.330,0.032), bronzeDark); midrib.position.set(0,0.415,0); g.add(midrib);
+  const ricasso=new THREE.Mesh(new THREE.BoxGeometry(0.062,0.045,0.030), bronzeDark); ricasso.position.set(0,0.258,0); g.add(ricasso);
+
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.12,name:'Xiphos',
     melee:true, range:2.2, damage:120, fireRate:0.3};
   return g;
 }
-// TRIDENT — long shaft, three bronze prongs; heavy, slow, hits hard — the Mediterranean/coastal-flavored heavy weapon
+// TRIDENT — the Mediterranean heavy weapon. The old model was seven plain cylinders and cones in one flat
+// bronze tone: no barbs, no socket, no binding, nothing to catch the eye at first-person scale. Barbs are
+// the identifying cue on any real fishing trident — without them three prongs on a stick read as a garden
+// fork. Rebuilt with barbed prongs, a socketed ferrule where the head meets the shaft, cord whipping over
+// the joint, a butt-spike, and a two-tone bronze so it is not a single flat colour.
 function makeTrident(){
   const g=new THREE.Group();
-  const wood=metalMatP(0x5a3d22,25,0x332211), bronze=metalMatP(0x3f8f8a,75,0xbfe8e4);
-  part(g,0.045,0.045,0.85,wood,0,0,-0.05);
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.055,0.22,8),wood); grip.rotation.x=Math.PI/2; grip.position.set(0,0,0.34); g.add(grip);
-  const base=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.06,0.1,8),bronze); base.rotation.x=Math.PI/2; base.position.set(0,0,-0.42); g.add(base);
-  function prong(x){
-    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.02,0.28,6),bronze); shaft.rotation.x=Math.PI/2; shaft.position.set(x,0,-0.6); g.add(shaft);
-    const tip=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.16,4),bronze); tip.rotation.x=-Math.PI/2; tip.position.set(x,0,-0.78); g.add(tip);
+  const wood      = metalMatP(0x5a3d22,25,0x332211);
+  const woodDark  = metalMatP(0x3d2916,20,0x241a0e);
+  const bronze    = metalMatP(0x3f8f8a,75,0xbfe8e4);    // verdigris bronze, as before
+  const bronzeLit = metalMatP(0x63b8b0,95,0xdffaf6);    // polished highlight — the light half of the break
+  const cordMat   = voxMat(0xbfae86,{noise:10});
+
+  // ---- shaft: three sections so the length isn't one uniform stick ----
+  part(g,0.042,0.042,0.44,wood,0,0,0.14);                 // rear section
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.052,0.056,0.20,8),woodDark); grip.rotation.x=Math.PI/2; grip.position.set(0,0,0.30); g.add(grip);
+  for(let i=0;i<4;i++){ const whip=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,0.018,8), cordMat);
+    whip.rotation.x=Math.PI/2; whip.position.set(0,0,0.38-i*0.055); g.add(whip); }   // cord whipping on the grip
+  part(g,0.038,0.038,0.42,wood,0,0,-0.26);                // fore section
+
+  // ---- butt-spike, for planting the weapon or striking with the rear end ----
+  const buttFerrule=new THREE.Mesh(new THREE.CylinderGeometry(0.048,0.042,0.06,8),bronze); buttFerrule.rotation.x=Math.PI/2; buttFerrule.position.set(0,0,0.38); g.add(buttFerrule);
+  const buttSpike=new THREE.Mesh(new THREE.ConeGeometry(0.034,0.11,6),bronze); buttSpike.rotation.x=-Math.PI/2; buttSpike.position.set(0,0,0.46); g.add(buttSpike);
+
+  // ---- socket: the flared collar the head is actually mounted into, with cord lashing over the joint ----
+  // The whole head sits where the original's did, so the prong tips stop around z=-0.88 and userData's
+  // muzzleZ of -0.75 still falls just behind them. Built further forward first and the tips reached
+  // -1.01, which put the tracer spawn point visibly inside the weapon.
+  const socket=new THREE.Mesh(new THREE.CylinderGeometry(0.062,0.046,0.13,8),bronze); socket.rotation.x=Math.PI/2; socket.position.set(0,0,-0.37); g.add(socket);
+  for(let i=0;i<3;i++){ const lash=new THREE.Mesh(new THREE.CylinderGeometry(0.050,0.050,0.020,8), cordMat);
+    lash.rotation.x=Math.PI/2; lash.position.set(0,0,-0.29+i*0.030); g.add(lash); }
+  const crossbar=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.034,0.036),bronzeLit); crossbar.position.set(0,0,-0.445); g.add(crossbar);
+
+  // ---- three barbed prongs. The outer pair splay outward; every prong carries a rearward-facing barb
+  // just behind its tip, which is what makes it read as a fishing trident rather than a pitchfork. ----
+  function prong(x, splay){
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.019,0.024,0.30,6),bronze);
+    shaft.rotation.x=Math.PI/2; shaft.rotation.z=splay;
+    shaft.position.set(x+splay*0.07,0,-0.59); g.add(shaft);
+    const tipX = x+splay*0.16;
+    const tip=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.17,4),bronzeLit);
+    tip.rotation.x=-Math.PI/2; tip.rotation.z=splay; tip.position.set(tipX,0,-0.795); g.add(tip);
+    // the barb: a short spur angled back toward the shaft, mirrored either side of the prong
+    [-1,1].forEach(s=>{
+      const barb=new THREE.Mesh(new THREE.ConeGeometry(0.017,0.075,4),bronze);
+      barb.position.set(tipX+s*0.026,0,-0.725);
+      barb.rotation.x=-2.55; barb.rotation.z=s*0.85;
+      g.add(barb);
+    });
   }
-  prong(0); prong(-0.11); prong(0.11);
-  const crossbar=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.03,0.03),bronze); crossbar.position.set(0,0,-0.48); g.add(crossbar);
+  prong(0, 0); prong(-0.105, -0.28); prong(0.105, 0.28);
+
   g.userData={muzzleZ:-0.75,muzzleY:0,pos:new THREE.Vector3(0.24,-0.22,-0.4),recoil:0.22,name:'Trident',
     damage:135, fireRate:0.85, auto:false, spread:0, tracer:0x6fd6c9,
     magSize:4, ammo:4, reloadTime:1.7, reloading:false, reloadT:0};
   return g;
 }
+
 
 // GREEK FIRE — a handheld bronze siphon that hurls a jar of incendiary liquid; the same lob-arc-and-explode
 // mechanic as the pyramid era's Grenade Launcher (userData.grenade=true routes through the exact same
