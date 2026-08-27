@@ -4270,6 +4270,10 @@ function makeMinotaur(){
   // turn-rate branch), pointing the group's local -Z at its target; build facing +Z as usual, then flip
   // once here so the horns and snout end up on the correct side instead of facing away
   const body = new THREE.Group(); body.rotation.y = Math.PI; g.add(body);
+  // Built at full anatomical size and then taken down to 0.86, which lands the horn tips just under 3
+  // units — imposing against the player's 1.7 eye height without reading as a boss. At 1.0 the model
+  // stood 3.47 tall, which is taller than the Colossus's own torso.
+  body.scale.setScalar(0.86);
   const hideMat  = voxMat(0x7a4c2e,{noise:16});   // main hide — mid brown, the body's base tone
   const hideDark = voxMat(0x4a2c18,{noise:16});   // dark shaggy fur — mane, forearms, shins, tail
   const hidePale = voxMat(0xb08a5c,{noise:12});   // pale underside/muzzle, the light half of the break
@@ -4280,90 +4284,103 @@ function makeMinotaur(){
   const eyeMat   = new THREE.MeshBasicMaterial({color:0xff3a1a,fog:false});
   const noseMat  = new THREE.MeshBasicMaterial({color:0x1c1210,fog:false});
 
-  // ---- hindquarters: narrow, set BACK and low, so the mass reads as front-loaded like a real bull ----
-  const rump  = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.52,0.46), hideMat);  rump.position.set(0,0.92,-0.30); body.add(rump);
-  const loins = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.46,0.34), hideMat);  loins.position.set(0,1.06,-0.08); body.add(loins);
+  // ---- stance. The first rebuild slung the head LOW and forward between the shoulders, aiming for a
+  // bull's carriage — but on a biped that just reads as slouching, like a man stooping. A minotaur stands
+  // UPRIGHT: the bull mass belongs in the chest and shoulders, and the head sits squarely on top of the
+  // neck, above the shoulder line, so it looms over the player instead of peering up at them. ----
 
-  // ---- barrel chest: deeper front-to-back than it is wide, and it climbs FORWARD and up into the
-  // shoulders. This wedge is the whole silhouette; everything else hangs off it. ----
-  const chest     = new THREE.Mesh(new THREE.BoxGeometry(0.72,0.72,0.62), hideMat);  chest.position.set(0,1.36,0.18); body.add(chest);
-  const brisket   = new THREE.Mesh(new THREE.BoxGeometry(0.58,0.40,0.50), hidePale); brisket.position.set(0,1.04,0.26); body.add(brisket);
-  const chestFur  = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.34,0.16), hideDark); chestFur.position.set(0,1.30,0.50); body.add(chestFur);
-
-  // ---- the hump: a bull's withers, the highest point of the back, sitting between the shoulders ----
-  const hump    = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.34,0.50), hideMat);  hump.position.set(0,1.80,0.06); body.add(hump);
-  const humpFur = new THREE.Mesh(new THREE.BoxGeometry(0.50,0.20,0.40), hideDark); humpFur.position.set(0,2.00,0.04); body.add(humpFur);
-
-  // ---- shoulders: carried HIGH and pushed WIDE, bracketing the head. These plus the horns are what make
-  // the front-on silhouette read; the old model's shoulders were narrower than its own chest. ----
+  // ---- legs: long and straight, taking the full height. Digitigrade with a real backward hock. ----
   [-1,1].forEach(side=>{
-    const deltoid = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.46,0.52), hideMat);  deltoid.position.set(side*0.47,1.60,0.16); body.add(deltoid);
-    const cap     = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.24,0.42), hideDark); cap.position.set(side*0.50,1.84,0.12); body.add(cap);
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.58,0.34), hideMat);  thigh.position.set(side*0.21,1.02,-0.02); body.add(thigh);
+    const knee =new THREE.Mesh(new THREE.BoxGeometry(0.28,0.20,0.30), hideDark); knee.position.set(side*0.21,0.72,0.02); body.add(knee);
+    const shin =new THREE.Mesh(new THREE.BoxGeometry(0.24,0.48,0.26), hideDark); shin.position.set(side*0.21,0.44,-0.06); shin.rotation.x=0.22; body.add(shin);
+    const fet  =new THREE.Mesh(new THREE.BoxGeometry(0.24,0.18,0.24), hideDark); fet.position.set(side*0.21,0.20,0.02); body.add(fet);
+    const hoof =new THREE.Mesh(new THREE.BoxGeometry(0.28,0.20,0.34), hoofMat);  hoof.position.set(side*0.21,0.10,0.08); body.add(hoof);
+    const cleft=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.18,0.32), hidePale);cleft.position.set(side*0.21,0.10,0.10); body.add(cleft);
   });
 
-  // ---- neck: short, THICK and angled DOWN and forward, so the head sits below the shoulder line ----
-  const neck     = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.42,0.52), hideDark); neck.position.set(0,1.62,0.52); neck.rotation.x=0.42; body.add(neck);
-  // mane ruff where the neck meets the shoulders, hiding the joint and widening the front
-  for(let i=0;i<5;i++){
-    const a=(i/4-0.5)*1.5;
-    const tuft=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.26,0.14), hideDark);
-    tuft.position.set(Math.sin(a)*0.34, 1.78+Math.cos(a)*0.06, 0.32+Math.cos(a)*0.06); tuft.rotation.z=a*0.5; body.add(tuft);
+  // ---- pelvis and waist: narrow, so the taper up into the chest is visible ----
+  const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.60,0.34,0.42), hideMat);  pelvis.position.set(0,1.34,-0.02); body.add(pelvis);
+  const waist  = new THREE.Mesh(new THREE.BoxGeometry(0.54,0.30,0.40), hideMat);  waist.position.set(0,1.60,0.00); body.add(waist);
+
+  // ---- chest: the bull mass. Deep front-to-back and broad, flaring UP and OUT from the narrow waist so
+  // the torso is a wedge standing on its point — the classic heavy-upper-body build. ----
+  const chest    = new THREE.Mesh(new THREE.BoxGeometry(0.80,0.60,0.60), hideMat);  chest.position.set(0,1.98,0.04); body.add(chest);
+  const pecs     = new THREE.Mesh(new THREE.BoxGeometry(0.66,0.34,0.20), hideMat);  pecs.position.set(0,2.02,0.32); body.add(pecs);
+  const chestFur = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.42,0.14), hideDark); chestFur.position.set(0,1.94,0.40); body.add(chestFur);
+  const abs      = new THREE.Mesh(new THREE.BoxGeometry(0.48,0.30,0.38), hidePale); abs.position.set(0,1.63,0.16); body.add(abs);
+
+  // ---- shoulders: wide and square, carried at chest-top height. Wide shoulders read as powerful; the
+  // slouch came from putting the head below them, not from their width, so they stay big. ----
+  [-1,1].forEach(side=>{
+    const deltoid = new THREE.Mesh(new THREE.BoxGeometry(0.36,0.42,0.54), hideMat);  deltoid.position.set(side*0.52,2.10,0.04); body.add(deltoid);
+    const cap     = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.22,0.44), hideDark); cap.position.set(side*0.54,2.32,0.02); body.add(cap);
+    const trap    = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.24,0.36), hideMat);  trap.position.set(side*0.28,2.34,-0.02); body.add(trap);
+  });
+  // withers ridge behind the neck — keeps a bull's silhouette without dragging the head down
+  const withers = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.22,0.38), hideDark); withers.position.set(0,2.40,-0.14); body.add(withers);
+
+  // ---- neck: THICK and vertical, carrying the head up above the shoulders rather than out in front ----
+  const neck    = new THREE.Mesh(new THREE.BoxGeometry(0.40,0.34,0.42), hideDark); neck.position.set(0,2.42,0.10); body.add(neck);
+  // mane ruff around the base of the neck, hiding the joint
+  for(let i=0;i<6;i++){
+    const a=(i/5-0.5)*2.4;
+    const tuft=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.24,0.15), hideDark);
+    tuft.position.set(Math.sin(a)*0.26, 2.34, 0.06+Math.cos(a)*0.16); tuft.rotation.z=a*0.35; body.add(tuft);
   }
 
-  // ---- head: slung LOW and well forward, the lowest-and-frontmost element of the upper body. A real bull
-  // skull is long and narrow, not a cube — cranium, then a tapering muzzle out in front of it. ----
-  const cranium = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.38,0.40), hideDark); cranium.position.set(0,1.40,0.80); body.add(cranium);
-  const brow    = new THREE.Mesh(new THREE.BoxGeometry(0.48,0.14,0.22), hideDark); brow.position.set(0,1.56,0.90); brow.rotation.x=0.30; body.add(brow);
-  const muzzle  = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.28,0.38), hidePale); muzzle.position.set(0,1.28,1.06); body.add(muzzle);
-  const nosePad = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.16,0.08), hideDark); nosePad.position.set(0,1.26,1.26); body.add(nosePad);
-  const jaw     = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.12,0.32), hidePale); jaw.position.set(0,1.13,1.02); body.add(jaw);
-  const teeth   = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.05,0.04), teethMat); teeth.position.set(0,1.17,1.20); body.add(teeth);
+  // ---- head: sits ON the neck, its base above the shoulder caps. A bull skull is long — cranium, then a
+  // muzzle projecting forward from it — so the length goes into the snout, not into dropping the head. ----
+  const cranium = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.42,0.44), hideDark); cranium.position.set(0,2.74,0.14); body.add(cranium);
+  const brow    = new THREE.Mesh(new THREE.BoxGeometry(0.50,0.14,0.24), hideDark); brow.position.set(0,2.86,0.30); brow.rotation.x=0.28; body.add(brow);
+  const muzzle  = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.30,0.36), hidePale); muzzle.position.set(0,2.62,0.42); body.add(muzzle);
+  const nosePad = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.17,0.09), hideDark); nosePad.position.set(0,2.60,0.62); body.add(nosePad);
+  const jaw     = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.13,0.32), hidePale); jaw.position.set(0,2.47,0.40); body.add(jaw);
+  const teeth   = new THREE.Mesh(new THREE.BoxGeometry(0.23,0.05,0.04), teethMat); teeth.position.set(0,2.51,0.56); body.add(teeth);
   [-1,1].forEach(side=>{
-    const tusk=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.11,0.05), teethMat); tusk.position.set(side*0.09,1.11,1.17); tusk.rotation.x=0.35; body.add(tusk);
-    const nostril=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.04), noseMat); nostril.position.set(side*0.07,1.26,1.29); body.add(nostril);
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.05,0.06), eyeMat); eye.position.set(side*0.19,1.47,0.92); eye.rotation.z=side*0.28; body.add(eye);
-    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.09,0.12), hideDark); ear.position.set(side*0.28,1.44,0.68); ear.rotation.z=side*0.5; body.add(ear);
+    const tusk=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.12,0.05), teethMat); tusk.position.set(side*0.09,2.45,0.53); tusk.rotation.x=0.35; body.add(tusk);
+    const nostril=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.04), noseMat); nostril.position.set(side*0.08,2.60,0.66); body.add(nostril);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.055,0.06), eyeMat); eye.position.set(side*0.20,2.78,0.33); eye.rotation.z=side*0.28; body.add(eye);
+    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.10,0.13), hideDark); ear.position.set(side*0.30,2.74,0.02); ear.rotation.z=side*0.55; body.add(ear);
   });
 
-  // ---- horns: the widest thing on the model, sweeping OUT then forward. Built as a three-link chain per
-  // side, each link stepping along its own rotated direction so the sections actually meet — a bare lateral
-  // offset with a separate rotation is what leaves curved runs as floating shards (see the Hydra necks). ----
+  // ---- horns: still the widest thing on the model, but now crowning the head rather than jutting from a
+  // lowered skull. Three-link chain per side, each link stepping along its own rotated direction so the
+  // sections actually meet — a bare lateral offset with a separate rotation is what leaves curved runs as
+  // floating shards (see the Hydra necks). ----
   [-1,1].forEach(side=>{
-    let hx=side*0.22, hy=1.62, hz=0.74, ang=side*1.15;   // ang = tilt out from vertical, in the XY plane
-    [{len:0.26,r:0.095},{len:0.24,r:0.072},{len:0.22,r:0.05}].forEach((seg,i)=>{
+    let hx=side*0.23, hy=2.94, hz=0.10, ang=side*1.15;   // ang = tilt out from vertical, in the XY plane
+    [{len:0.27,r:0.10},{len:0.25,r:0.075},{len:0.23,r:0.052}].forEach((seg,i)=>{
       const dx=Math.sin(ang), dy=Math.cos(ang);
       const m=new THREE.Mesh(new THREE.CylinderGeometry(seg.r*0.78,seg.r,seg.len,6), i===2?hornTip:hornMat);
       m.position.set(hx+dx*seg.len/2, hy+dy*seg.len/2, hz);
       m.rotation.z=-ang;
       body.add(m);
-      hx+=dx*seg.len*0.9; hy+=dy*seg.len*0.9; hz+=0.06;   // 0.9 = deliberate overlap between links
+      hx+=dx*seg.len*0.9; hy+=dy*seg.len*0.9; hz+=0.07;   // 0.9 = deliberate overlap between links
       ang -= side*0.62;                                    // curl from out-and-up round to forward
     });
   });
 
-  // ---- forelimbs: heavy, planted FORWARD under the chest, taking the creature's weight like a bull's ----
+  // ---- arms: long and heavy, hanging from the wide shoulders. The AI loop swings these, so they read as
+  // a biped's arms rather than a quadruped's forelegs. ----
   [-1,1].forEach(side=>{
-    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.48,0.30), hideMat);  upper.position.set(side*0.46,1.24,0.24); upper.rotation.z=side*-0.10; body.add(upper);
-    const fore =new THREE.Mesh(new THREE.BoxGeometry(0.24,0.46,0.26), hideDark); fore.position.set(side*0.52,0.80,0.32);  fore.rotation.z=side*-0.06; body.add(fore);
-    const fist =new THREE.Mesh(new THREE.BoxGeometry(0.26,0.24,0.28), hideDark); fist.position.set(side*0.55,0.52,0.36); body.add(fist);
-    const knuckle=new THREE.Mesh(new THREE.BoxGeometry(0.27,0.10,0.12), hoofMat); knuckle.position.set(side*0.55,0.44,0.44); body.add(knuckle);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.50,0.30), hideMat);  upper.position.set(side*0.54,1.86,0.04); upper.rotation.z=side*-0.10; body.add(upper);
+    const elbow=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.18,0.28), hideDark); elbow.position.set(side*0.58,1.58,0.04); body.add(elbow);
+    const fore =new THREE.Mesh(new THREE.BoxGeometry(0.25,0.46,0.27), hideDark); fore.position.set(side*0.60,1.32,0.08); fore.rotation.z=side*-0.05; body.add(fore);
+    const fist =new THREE.Mesh(new THREE.BoxGeometry(0.28,0.26,0.30), hideDark); fist.position.set(side*0.62,1.02,0.10); body.add(fist);
+    const knuckle=new THREE.Mesh(new THREE.BoxGeometry(0.29,0.11,0.13), hoofMat); knuckle.position.set(side*0.62,0.92,0.18); body.add(knuckle);
   });
 
-  // ---- hind legs: digitigrade, folded back, ending in cloven hooves ----
-  [-1,1].forEach(side=>{
-    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.50,0.36), hideMat);  thigh.position.set(side*0.20,0.76,-0.24); body.add(thigh);
-    const shin =new THREE.Mesh(new THREE.BoxGeometry(0.22,0.44,0.24), hideDark); shin.position.set(side*0.20,0.36,-0.14); shin.rotation.x=-0.20; body.add(shin);
-    const hoof =new THREE.Mesh(new THREE.BoxGeometry(0.26,0.18,0.32), hoofMat);  hoof.position.set(side*0.20,0.09,-0.04); body.add(hoof);
-    const cleft=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.16,0.30), hidePale); cleft.position.set(side*0.20,0.09,-0.02); body.add(cleft);
-  });
-  // tufted tail, hanging off the rump
-  const tailA=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.34,0.10), hideMat);  tailA.position.set(0,0.82,-0.50); tailA.rotation.x=-0.35; body.add(tailA);
-  const tailB=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.20,0.12), hideDark); tailB.position.set(0,0.58,-0.60); body.add(tailB);
+  // tufted tail, hanging behind the pelvis
+  const tailA=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.36,0.11), hideMat);  tailA.position.set(0,1.26,-0.26); tailA.rotation.x=-0.30; body.add(tailA);
+  const tailB=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.30,0.10), hideMat);  tailB.position.set(0,0.98,-0.36); tailB.rotation.x=-0.18; body.add(tailB);
+  const tailC=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.22,0.14), hideDark); tailC.position.set(0,0.76,-0.40); body.add(tailC);
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 2.7, 0); marker.scale.set(1.1,1.1,1.1); marker.renderOrder = 9999;
+  // 3.15: the upright rebuild stands just under 3 to the horn tips, so the old 2.7 sat inside its head
+  marker.position.set(0, 3.15, 0); marker.scale.set(1.1,1.1,1.1); marker.renderOrder = 9999;
   marker.raycast = function(){};
   g.add(marker); g.userData.marker = marker;
   return g;
