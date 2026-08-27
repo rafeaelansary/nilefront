@@ -2370,6 +2370,16 @@ heightZoneTarget = heightZonesGreek;
 (function buildGreekOverworld(){
   const bronzeMat = metalMatP(0xad8730,80,0xffe9b0);
 
+  // ---- one shared palette for the whole map, so the era reads as a single place rather than a dozen
+  // independently-chosen greys. Warm marble is the dominant note, painted stucco the accent, terracotta the
+  // roofline — the same three-way break Cairo gets from its sandstone / lapis tile / market awnings. Every
+  // landmark below pulls from these instead of naming its own hex. ----
+  const marbleMat    = new THREE.MeshLambertMaterial({map:_finish(pentelicMarbleTex(),4)});
+  const marbleTrim   = new THREE.MeshLambertMaterial({map:_finish(pentelicMarbleTex(),2)});
+  const stuccoMat    = new THREE.MeshLambertMaterial({map:_finish(paintedStuccoTex(),1)});
+  const roofTileMat  = new THREE.MeshLambertMaterial({map:_finish(greekRoofTileTex(),3)});
+  const flagstoneMat = new THREE.MeshLambertMaterial({map:_finish(harbourFlagstoneTex(),8)});
+
   // natural loose grey gravel ground (not smooth marble) — one consistent surface, the same texture the
   // pathway below now uses too, so the whole map reads as one real gravelled place instead of a patchwork
   const gravelMat = new THREE.MeshLambertMaterial({map:_finish(gravelTex(),20)});
@@ -2383,9 +2393,11 @@ heightZoneTarget = heightZonesGreek;
   // edges are dressed with scattered Mediterranean trees/rocks/fallen columns instead (below), and the Med Sea
   // itself forms a natural boundary along the north edge (see the harbor section further down).
 
-  // gravel crossroads too now — same texture as the ground, just a slightly denser/more packed repeat so it
-  // still reads as a distinct trodden path rather than being indistinguishable from the open ground
-  const marblePathMat = new THREE.MeshLambertMaterial({map:_finish(gravelTex(),14), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
+  // Paved flagstone crossroads. This used to be gravelTex again at a denser repeat, which meant the streets
+  // were the same material as the open ground and only barely distinguishable from it — an Alexandrian
+  // thoroughfare should read as built, not merely trodden. The polygonOffset stays exactly as it was: that
+  // is what keeps the path from z-fighting the ground slab it lies on.
+  const marblePathMat = new THREE.MeshLambertMaterial({map:_finish(harbourFlagstoneTex(),10), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
   function marblePath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),marblePathMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
   // stops right at the beach edge (z=19, see beachZ0 below) instead of running its original full length
   // (z=-30..30) straight through the beach sand and into the harbor water box — that overlap was the
@@ -2394,34 +2406,105 @@ heightZoneTarget = heightZonesGreek;
   marblePath(-17.25,0,25.5,9);
   marblePath(17.25,0,25.5,9);
 
-  // ---- Pharos Lighthouse: moved to stand right at the harbor shore where it actually belongs historically
-  // (it used to sit stranded deep inland, which read as "generic Greek tower," not "Alexandria") — solid,
-  // not climbable, the towers below cover that role ----
+  // ================= THE PHAROS — the map's hero landmark =================
+  // The player enters this map at (0,10) looking down -Z (see switchToGreekWorld). The Pharos used to stand
+  // at (27,21) — behind their right shoulder — so the opening view was a low gate and bare gravel, while the
+  // one building that actually says "Alexandria" was somewhere off-camera. That empty sightline is the same
+  // failure Cairo and Giza were each rebuilt to fix. It now stands straight down the main street, and it is
+  // ~28 units tall rather than ~17: at the old size, moved this far back, it would have read as a distant
+  // tower rather than dominating the view. The pylon gate at z=-2 stays where it is and becomes the near
+  // frame, exactly the way Giza's broken gate frames its pyramids.
+  //
+  // Historically the Pharos rose in three stages — square base, octagonal drum, cylindrical lantern — and
+  // that stepped silhouette is what makes it recognisable, so each stage keeps a distinct profile and a
+  // distinct tone rather than being one tapering stack.
   function pharosLighthouse(x,z){
-    addBox(x,z,9,9);
-    const base=new THREE.Mesh(new THREE.BoxGeometry(9,5,9), voxMat(0xe0dbc9,{noise:16,pattern:'plate'})); base.position.set(x,2.5,z); scene.add(base);
-    const mid=new THREE.Mesh(new THREE.CylinderGeometry(3,3.6,6,8), voxMat(0xb8b3a4,{noise:14})); mid.position.set(x,8,z); scene.add(mid);
-    const top=new THREE.Mesh(new THREE.CylinderGeometry(1.6,2.2,4,8), voxMat(0xb3ac9c,{noise:14})); top.position.set(x,13,z); scene.add(top);
-    const beaconBase=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,1,8), bronzeMat); beaconBase.position.set(x,15.5,z); scene.add(beaconBase);
-    const flame=new THREE.Mesh(new THREE.ConeGeometry(0.7,1.4,8), new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false})); flame.position.set(x,16.7,z); scene.add(flame);
-    const L=new THREE.PointLight(0xffa040, 2.4, 40); L.position.set(x,17,z); scene.add(L);
+    // 11x11, not 15x15: at 15 the base overlapped the south watchtower's legs and the Serapis altar,
+    // and swallowed the wave spawn point at (-2,-20). Height is what makes this the hero landmark, not
+    // footprint, so the stages stayed tall and the base got narrower.
+    addBox(x,z,11,11);
+    // stage 1: massive square base with a battered (inward-sloping) wall and a cornice
+    const base=new THREE.Mesh(new THREE.BoxGeometry(11,8.5,11), marbleMat); base.position.set(x,4.25,z); base.castShadow=true; scene.add(base);
+    const baseCornice=new THREE.Mesh(new THREE.BoxGeometry(12.2,0.8,12.2), marbleTrim); baseCornice.position.set(x,8.9,z); scene.add(baseCornice);
+    // a painted band around the base — the one place on the map that carries real colour at scale
+    const band=new THREE.Mesh(new THREE.BoxGeometry(11.3,1.6,11.3), stuccoMat); band.position.set(x,7.2,z); scene.add(band);
+    // stage 2: octagonal drum
+    const mid=new THREE.Mesh(new THREE.CylinderGeometry(3.6,4.4,9.5,8), marbleMat); mid.position.set(x,14.05,z); mid.castShadow=true; scene.add(mid);
+    const midCornice=new THREE.Mesh(new THREE.CylinderGeometry(3.9,3.9,0.7,8), marbleTrim); midCornice.position.set(x,19.15,z); scene.add(midCornice);
+    // stage 3: cylindrical lantern
+    const top=new THREE.Mesh(new THREE.CylinderGeometry(2.2,2.9,6.2,12), marbleMat); top.position.set(x,22.6,z); top.castShadow=true; scene.add(top);
+    // the beacon itself: a colonnaded open lantern with the fire burning inside it
     for(let i=0;i<8;i++){ const a=i/8*Math.PI*2;
-      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.4,4.2,8), voxMat(0xc5c0b2,{noise:10}));
-      col.position.set(x+Math.cos(a)*5.4, 2.1, z+Math.sin(a)*5.4); scene.add(col);
+      const post=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.24,2.6,6), marbleTrim);
+      post.position.set(x+Math.cos(a)*2.0, 27.0, z+Math.sin(a)*2.0); scene.add(post);
+    }
+    const lanternCap=new THREE.Mesh(new THREE.CylinderGeometry(1.3,2.5,1.4,8), bronzeMat); lanternCap.position.set(x,29.0,z); scene.add(lanternCap);
+    const flame=new THREE.Mesh(new THREE.ConeGeometry(1.15,2.4,8), new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false})); flame.position.set(x,27.2,z); scene.add(flame);
+    const L=new THREE.PointLight(0xffa040, 3.0, 70); L.position.set(x,27.6,z); scene.add(L);
+    // Helios statue crowning the lantern, as the real one carried
+    const statue=new THREE.Mesh(new THREE.BoxGeometry(0.8,2.2,0.7), bronzeMat); statue.position.set(x,30.8,z); scene.add(statue);
+    const shead=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.5,0.55), bronzeMat); shead.position.set(x,32.15,z); scene.add(shead);
+    // ring of columns around the base, as before but scaled to the new footprint
+    for(let i=0;i<12;i++){ const a=i/12*Math.PI*2;
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.58,6.6,10), marbleTrim);
+      col.position.set(x+Math.cos(a)*6.7, 3.3, z+Math.sin(a)*6.7); col.castShadow=true; scene.add(col);
+    }
+    // approach stair up to the base, facing the player as they walk toward it
+    for(let s=0;s<4;s++){
+      const st=new THREE.Mesh(new THREE.BoxGeometry(7-s*0.5,0.45,1.1), marbleTrim);
+      st.position.set(x, 0.22+s*0.45, z+6.2+s*1.05); scene.add(st);
     }
   }
-  pharosLighthouse(27,21);
+  // z=-27: down the -Z spawn sightline, and beyond the pylon gate at z=-2 so the gate frames it rather than
+  // hiding it. The 11-wide base spans z=-32.5..-21.5, clearing the boundary barrier's inland panel at z=-33
+  // and leaving the wave spawn point at (-2,-20) walkable. Do not widen or push this back without
+  // re-checking both.
+  pharosLighthouse(0,-27);
 
   // Heptastadion — the causeway that historically linked mainland Alexandria to the Pharos island. Without it
-  // the lighthouse just reads as a random tower; this ties it visibly back to the rest of the city.
+  // the lighthouse just reads as a random tower; this ties it visibly back to the rest of the city. Re-aimed
+  // along the new approach now that the lighthouse sits on the main street rather than out at the harbour.
   function causeway(x,z0,z1){
-    const path=new THREE.Mesh(new THREE.BoxGeometry(4,0.2,z1-z0), marblePathMat); path.position.set(x,0.1,(z0+z1)/2); path.receiveShadow=true; scene.add(path);
-    const bollardMat = voxMat(0xb3ac9c,{noise:12});
+    const path=new THREE.Mesh(new THREE.BoxGeometry(5,0.2,z1-z0), marblePathMat); path.position.set(x,0.1,(z0+z1)/2); path.receiveShadow=true; scene.add(path);
+    const bollardMat = marbleTrim;
     for(let zz=z0+1; zz<z1; zz+=3){
-      [-2.3,2.3].forEach(ox=>{ const b=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.18,0.9,6), bollardMat); b.position.set(x+ox,0.55,zz); scene.add(b); });
+      [-2.8,2.8].forEach(ox=>{ const b=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.2,1.0,6), bollardMat); b.position.set(x+ox,0.6,zz); scene.add(b); });
     }
   }
-  causeway(27,7,15.5);
+  causeway(0,-20,-11);
+
+  // ---- Shipsheds (neosoikoi) at the harbour corner the Pharos vacated. Moving the lighthouse onto the
+  // sightline would otherwise just relocate the empty-corner problem: (27,21) was the only tall thing
+  // anchoring the waterfront. A row of open-fronted vaulted boat bays facing the water is the right building
+  // for that spot — every ancient war harbour had them, and it reads as harbour infrastructure rather than
+  // as a second monument competing with the Pharos. ----
+  function shipsheds(x,z){
+    const bays=3, bayW=3.0;
+    for(let i=0;i<bays;i++){
+      const bx = x - (bays-1)*bayW/2 + i*bayW;
+      // party walls between bays (one more than there are bays)
+      const wall=new THREE.Mesh(new THREE.BoxGeometry(0.6,4.2,7.4), marbleMat); wall.position.set(bx-bayW/2,2.1,z+0.3); wall.castShadow=true; scene.add(wall);
+      addBox(bx-bayW/2,z+0.3,0.6,7.4);   // 7.4 deep, offset +0.3: at 8 it ran into the shed's own back wall
+      // pitched roof over each bay, two slabs meeting at a ridge
+      const rl=new THREE.Mesh(new THREE.BoxGeometry(bayW*0.78,0.3,8.4), roofTileMat); rl.position.set(bx-bayW*0.2,4.75,z); rl.rotation.z= 0.42; scene.add(rl);
+      const rr=new THREE.Mesh(new THREE.BoxGeometry(bayW*0.78,0.3,8.4), roofTileMat); rr.position.set(bx+bayW*0.2,4.75,z); rr.rotation.z=-0.42; scene.add(rr);
+      // back wall, closing the landward end
+      const back=new THREE.Mesh(new THREE.BoxGeometry(bayW,4.0,0.5), marbleMat); back.position.set(bx,2.0,z-4.0); scene.add(back);
+    }
+    const endWall=new THREE.Mesh(new THREE.BoxGeometry(0.6,4.2,7.4), marbleMat); endWall.position.set(x+(bays-1)*bayW/2+bayW/2,2.1,z+0.3); endWall.castShadow=true; scene.add(endWall);
+    addBox(x+(bays-1)*bayW/2+bayW/2,z+0.3,0.6,7.4);
+    addBox(x,z-4.0,bays*bayW,0.5);
+    // slipway ramps running down into the water
+    for(let i=0;i<bays;i++){
+      const bx = x - (bays-1)*bayW/2 + i*bayW;
+      const ramp=new THREE.Mesh(new THREE.BoxGeometry(bayW*0.8,0.18,5), marblePathMat); ramp.position.set(bx,0.09,z+6.2); scene.add(ramp);
+    }
+  }
+  // x=20, not 24: five 3-unit bays put the outer wall at x+7.5, and from 24 that landed at 31.5 — hard
+  // against the map's own playClamp of 32, with the wall effectively on the boundary.
+  // (26,20) with 3 bays rather than 5 at (20,17): the wider block ran into the watchtower at (18,20)
+  // and swallowed the shared wave spawn point at (18,14).
+  shipsheds(26,20);
 
   // ---- Great Library / Mouseion: the single most famous Ptolemaic institution and the intellectual heart of
   // Hellenistic Alexandria — a long flat-roofed colonnaded hall with scroll-niche relief along its side wall,
@@ -2429,17 +2512,17 @@ heightZoneTarget = heightZonesGreek;
   function library(x,z){
     const w=13, d=8;
     addBox(x,z,w,d);
-    block(w+1.2,0.5,d+1.2,0xb8b3a4,x,0.25,z,{noise:14,pattern:'plate'});
-    block(w,5,d,0xc4bfaf,x,2.75,z,{noise:14,pattern:'plate'});
-    const roof=new THREE.Mesh(new THREE.BoxGeometry(w+0.8,0.4,d+0.8), voxMat(0xc9a671,{noise:12})); roof.position.set(x,5.4,z); scene.add(roof);
-    const colMat=voxMat(0xc7c2b3,{noise:10});
+    const stylobate=new THREE.Mesh(new THREE.BoxGeometry(w+1.2,0.5,d+1.2), marbleTrim); stylobate.position.set(x,0.25,z); stylobate.receiveShadow=true; scene.add(stylobate);
+    const cella=new THREE.Mesh(new THREE.BoxGeometry(w,5,d), marbleMat); cella.position.set(x,2.75,z); cella.castShadow=true; scene.add(cella);
+    // painted entablature between wall top and roof — the band Greek buildings actually carried colour on
+    const entab=new THREE.Mesh(new THREE.BoxGeometry(w+0.4,0.7,d+0.4), stuccoMat); entab.position.set(x,5.6,z); scene.add(entab);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(w+0.8,0.4,d+0.8), roofTileMat); roof.position.set(x,6.15,z); scene.add(roof);
     for(let i=0;i<6;i++){ const cx=-w/2+(i/5)*w;
-      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.4,5.2,10), colMat); col.position.set(x+cx,2.85,z-d/2-0.9); scene.add(col);
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.4,5.2,10), marbleTrim); col.position.set(x+cx,2.85,z-d/2-0.9); col.castShadow=true; scene.add(col);
     }
-    const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,0.55,0.4), voxMat(0xc5c0b2,{noise:10})); pediment.position.set(x,5.6,z-d/2-0.9); scene.add(pediment);
-    const nicheMat=voxMat(0xb3ac9c,{noise:12});
+    const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,0.55,0.4), stuccoMat); pediment.position.set(x,5.75,z-d/2-0.9); scene.add(pediment);
     for(let i=0;i<8;i++){ const nx=-w/2+0.6+(i/7)*(w-1.2);
-      const niche=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.15), nicheMat); niche.position.set(x+nx,3.4,z+d/2+0.05); scene.add(niche);
+      const niche=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.15), marbleTrim); niche.position.set(x+nx,3.4,z+d/2+0.05); scene.add(niche);
     }
   }
   library(3,-11);
@@ -2456,22 +2539,20 @@ heightZoneTarget = heightZonesGreek;
   function templeOfPoseidon(x,z){
     const w=13, d=9;
     addBox(x,z,w,d);
-    block(w+1.5,0.6,d+1.5,0xb8b3a4,x,0.3,z,{noise:14,pattern:'plate'}); // stylobate platform
-    block(w,5.5,d,0xe0dbc9,x,3.1,z,{noise:16,pattern:'plate'});
-    const roofMat = voxMat(0xc9a671,{noise:14}); // aged bronze-green roof
-    const roofL=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofMat); roofL.position.set(x,6.1,z-d*0.19); roofL.rotation.x=0.4; scene.add(roofL);
-    const roofR=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofMat); roofR.position.set(x,6.1,z+d*0.19); roofR.rotation.x=-0.4; scene.add(roofR);
-    const colMat = voxMat(0xc7c2b3,{noise:10});
+    const stylobate=new THREE.Mesh(new THREE.BoxGeometry(w+1.5,0.6,d+1.5), marbleTrim); stylobate.position.set(x,0.3,z); stylobate.receiveShadow=true; scene.add(stylobate);
+    const cella=new THREE.Mesh(new THREE.BoxGeometry(w,5.5,d), marbleMat); cella.position.set(x,3.1,z); cella.castShadow=true; scene.add(cella);
+    const roofL=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofTileMat); roofL.position.set(x,6.1,z-d*0.19); roofL.rotation.x=0.4; scene.add(roofL);
+    const roofR=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofTileMat); roofR.position.set(x,6.1,z+d*0.19); roofR.rotation.x=-0.4; scene.add(roofR);
     for(let i=0;i<5;i++){ const cz=-d/2+(i/4)*d;
-      [x-w/2-0.9, x+w/2+0.9].forEach(cx=>{ const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), colMat); col.position.set(cx,3,z+cz); scene.add(col); });
+      [x-w/2-0.9, x+w/2+0.9].forEach(cx=>{ const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), marbleTrim); col.position.set(cx,3,z+cz); col.castShadow=true; scene.add(col); });
     }
     for(let i=0;i<5;i++){ const cx=-w/2+(i/4)*w;
-      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), colMat); col.position.set(x+cx,3,z-d/2-0.9); scene.add(col);
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), marbleTrim); col.position.set(x+cx,3,z-d/2-0.9); col.castShadow=true; scene.add(col);
     }
-    const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.55,0.6,0.4), voxMat(0xc5c0b2,{noise:10})); pediment.position.set(x,6.2,z-d/2-0.9); scene.add(pediment);
+    const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.55,0.6,0.4), stuccoMat); pediment.position.set(x,6.2,z-d/2-0.9); scene.add(pediment);
     // Poseidon statue on its own plinth, out front
     const sz = z-d/2-3.2;
-    const plinth=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.7,1.6), voxMat(0xb3ac9c,{noise:12})); plinth.position.set(x,0.65,sz); scene.add(plinth);
+    const plinth=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.7,1.6), marbleTrim); plinth.position.set(x,0.65,sz); scene.add(plinth);
     const statueMat = voxMat(0xb8c4c0,{noise:10}); // weathered sea-stone
     const body=new THREE.Mesh(new THREE.BoxGeometry(0.7,2.0,0.6), statueMat); body.position.set(x,2.0,sz); scene.add(body);
     const head=new THREE.Mesh(new THREE.BoxGeometry(0.45,0.42,0.42), statueMat); head.position.set(x,3.2,sz); scene.add(head);
@@ -2617,7 +2698,10 @@ heightZoneTarget = heightZonesGreek;
     const cap=new THREE.Mesh(new THREE.BoxGeometry(0.6,1,0.6), bronzeMat); cap.position.set(x,h+0.5,z); scene.add(cap);
     addBox(x,z,1.3,1.3);
   }
-  obelisk(10,4,7); obelisk(-11,4,7);
+  // z=2.5, not 4: the shared SPAWN_POINTS entry at (9,4) sat inside the east obelisk's collider, so a bot
+  // spawning there started embedded and had to be shoved out by resolveCollision. Moved forward rather than
+  // back — at z=5.5 the west obelisk landed inside the Temple of Poseidon's stylobate instead.
+  obelisk(10,2.5,7); obelisk(-11,2.5,7);
 
   // ---- Egyptian pylon gate: the trapezoidal tapered-tower silhouette that fronted every real Egyptian temple,
   // straddling the main north-south path a few steps from spawn so the very first thing seen reads as Egypt,
@@ -2655,7 +2739,7 @@ heightZoneTarget = heightZonesGreek;
   sphinx(4.2,2.0); sphinx(-4.2,2.0);
   // weathered broken statues, toppled and snapped — a quiet nod to Medusa's petrifying gaze
   function brokenStatue(x,z,rot){
-    const stoneMat = voxMat(0xa8a49a,{noise:16});
+    const stoneMat = marbleTrim;
     const base=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.4,0.9),stoneMat); base.position.set(x,0.2,z); scene.add(base);
     const torso=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.1,0.4),stoneMat); torso.position.set(x,0.95,z); torso.rotation.z=rot||0.3; scene.add(torso);
     const head=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.34,0.32),stoneMat); head.position.set(x+0.7,0.17,z+0.4); head.rotation.y=0.6; scene.add(head);
@@ -2718,7 +2802,7 @@ heightZoneTarget = heightZonesGreek;
     addBox(x,z,s*1.3,s*1.3);
   }
   function fallenColumn(x,z,rot){
-    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,2.6,8), voxMat(0xb8b3a4,{noise:12})); col.rotation.z=Math.PI/2; col.rotation.y=rot||0; col.position.set(x,0.32,z); scene.add(col);
+    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,2.6,8), marbleTrim); col.rotation.z=Math.PI/2; col.rotation.y=rot||0; col.position.set(x,0.32,z); scene.add(col);
     addBox(x,z,2.8,0.8);
   }
   // palms now dominate (Nile character); a few cypress/olive remain for the Greek-fusion accent, not removed entirely
@@ -2731,6 +2815,174 @@ heightZoneTarget = heightZonesGreek;
   // and not out in the deep open water either) — the player can't wade out to them anyway (invisible shoreline
   // wall stops at the water's edge), so this reads correctly from the beach without needing to be reachable
   papyrusCluster(-20,25); papyrusCluster(-2,25.5); papyrusCluster(13,25.5); papyrusCluster(20,25.8);
+
+  // ================= DENSITY PASS =================
+  // This map had ~45 objects on 70x54 and NO vernacular architecture whatsoever — no houses, no market, no
+  // civic buildings. Monuments standing on gravel. Cairo's townhouses and Khan bazaar are what make that map
+  // read as a city rather than a set of landmarks, and Giza's own note records the same lesson ("~20 objects
+  // on a 60x60 plain, read mostly as empty sand"). Everything below is the ordinary city the monuments stand in.
+
+  // ---- Stoa: a long colonnaded market hall, the defining Greek civic building and the single biggest type
+  // this map was missing. Deep colonnade along the open face, solid back wall — which also makes it the best
+  // piece of hard cover on the map, since you can fight from between the columns. ----
+  function stoa(x,z,len,rot){
+    const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rot||0; scene.add(g);
+    const d=5.5;
+    const podium=new THREE.Mesh(new THREE.BoxGeometry(len+1.0,0.5,d+1.0), marbleTrim); podium.position.set(0,0.25,0); podium.receiveShadow=true; g.add(podium);
+    const back=new THREE.Mesh(new THREE.BoxGeometry(len,5.2,0.7), marbleMat); back.position.set(0,3.1,-d/2); back.castShadow=true; g.add(back);
+    // shop doorways punched along the back wall, so it isn't one blank slab
+    const nDoors=Math.max(2,Math.floor(len/4));
+    for(let i=0;i<nDoors;i++){
+      const dx=-len/2+len*(i+0.5)/nDoors;
+      const door=new THREE.Mesh(new THREE.BoxGeometry(1.1,2.2,0.16), voxMat(0x2a241c,{noise:8})); door.position.set(dx,1.6,-d/2+0.42); g.add(door);
+    }
+    // two rows of columns: outer (tall, on the open face) and inner
+    const nCols=Math.max(3,Math.floor(len/2.6));
+    for(let i=0;i<nCols;i++){
+      const cx=-len/2+0.9+(i/(nCols-1))*(len-1.8);
+      [[d/2-0.5,5.0],[0,4.6]].forEach(([cz,ch])=>{
+        const col=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.38,ch,10), marbleTrim);
+        col.position.set(cx,0.5+ch/2,cz); col.castShadow=true; g.add(col);
+        const cap=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.26,0.62), marbleTrim); cap.position.set(cx,0.5+ch+0.13,cz); g.add(cap);
+      });
+    }
+    // painted entablature and a tiled shed roof over the whole run
+    const entab=new THREE.Mesh(new THREE.BoxGeometry(len+0.5,0.62,d+0.4), stuccoMat); entab.position.set(0,6.0,0); g.add(entab);
+    const roof=new THREE.Mesh(new THREE.BoxGeometry(len+1.4,0.34,d+1.2), roofTileMat); roof.position.set(0,6.45,0.1); roof.rotation.x=-0.13; g.add(roof);
+    // Colliders in world space. addBox takes WORLD extents, so a rotated piece has to have its own
+    // width/depth rotated too — passing the local pair straight through registered this stoa's back
+    // wall 90 degrees out of true, which is how a wave spawn point ended up inside it.
+    const c=Math.cos(rot||0), s=Math.sin(rot||0);
+    const add=(lx,lz,w,dd)=>{
+      addBox(x+lx*c-lz*s, z+lx*s+lz*c, Math.abs(w*c)+Math.abs(dd*s), Math.abs(w*s)+Math.abs(dd*c));
+    };
+    add(0,-d/2,len,0.7);
+    for(let i=0;i<nCols;i++){ const cx=-len/2+0.9+(i/(nCols-1))*(len-1.8); add(cx,d/2-0.5,0.8,0.8); }
+  }
+  // One stoa, on the west side of the main street facing it. A second one was tried on the east side and
+  // there is nowhere to put it: that quarter is boxed in by the library, the watchtower at (24,-4), the
+  // obelisk pair and three shared SPAWN_POINTS. Townhouses carry the density there instead.
+  stoa(-17.5,-5,15,Math.PI/2);
+
+  // ---- Agora: the paved public square the stoa fronts onto, with market stalls, crates and a speaker's
+  // bema. Flagstone rather than gravel so it reads as a deliberate civic space and not just a clearing. ----
+  // Stops at x=-4.5, the main street's own west edge. Run any wider and it lies directly on the street
+  // slab — two ground meshes at the same height fighting for the same pixels, the exact z-fight the
+  // shoreline and the Cairo crossroads each had to be fixed for.
+  const agoraPave=new THREE.Mesh(new THREE.BoxGeometry(14,0.16,15), flagstoneMat);
+  agoraPave.position.set(-11.5,0.08,-6); agoraPave.receiveShadow=true;
+  agoraPave.material=flagstoneMat.clone();
+  agoraPave.material.polygonOffset=true; agoraPave.material.polygonOffsetFactor=-3; agoraPave.material.polygonOffsetUnits=-3;
+  scene.add(agoraPave);
+
+  function greekStall(x,z,awnCol,rot){
+    const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rot||0; scene.add(g);
+    const counter=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.0,1.0), marbleTrim); counter.position.set(0,0.5,0); counter.castShadow=true; g.add(counter);
+    [-1,1].forEach(s=>{ const post=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.09,2.4,6), voxMat(0x6b4a28,{noise:14})); post.position.set(s*1.2,1.2,-0.7); g.add(post); });
+    const awn=new THREE.Mesh(new THREE.BoxGeometry(3.0,0.12,1.9), new THREE.MeshLambertMaterial({color:awnCol}));
+    awn.position.set(0,2.32,-0.15); awn.rotation.x=0.26; g.add(awn);
+    // goods on the counter — amphorae and stacked cloth bolts
+    for(let i=0;i<3;i++){
+      const jar=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.18,0.42,8), voxMat(0xc9703c,{noise:16}));
+      jar.position.set(-0.85+i*0.85,1.21,0.05); g.add(jar);
+    }
+    const c=Math.cos(rot||0), s=Math.sin(rot||0);
+    addBox(x, z, Math.abs(2.6*c)+Math.abs(1.0*s), Math.abs(2.6*s)+Math.abs(1.0*c));
+  }
+  // Two rows facing each other across the square. Kept between x=-14 and x=-7: further west runs into
+  // the stoa's back wall, further east into the pylon gate's own tower at (-6.2,-2).
+  greekStall(-12.5,-5.0,0x8f2f26,0);
+  greekStall(-8.5,-5.0,0x2f5f8a,0);   // z=-5: at -4 the east stall clipped the amphora at (-9,-3.4)
+  greekStall(-12.5,-11.0,0xc8892c,Math.PI);
+  greekStall(-8.5,-11.0,0x8f2f26,Math.PI);
+  // bema: the speaker's platform every agora had — also chest-high cover in the middle of the square
+  (function bema(x,z){
+    const b1=new THREE.Mesh(new THREE.BoxGeometry(3.2,0.9,3.2), marbleTrim); b1.position.set(x,0.45,z); b1.castShadow=true; scene.add(b1);
+    const b2=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.4,2.4), marbleMat); b2.position.set(x,1.1,z); scene.add(b2);
+    addBox(x,z,3.2,3.2);
+  })(-11.0,-7.5);
+
+  // ---- Townhouse block: flat-roofed courtyard houses, the ordinary building of a Greek city. Clustered
+  // rather than evenly spaced — the same lesson Cairo's townhouses and its palm groves both record. These
+  // carry most of the density; the monuments are accents standing among them. ----
+  function townhouse(x,z,w,d,h,rot){
+    const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rot||0; scene.add(g);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), marbleMat); body.position.set(0,h/2,0); body.castShadow=true; body.receiveShadow=true; g.add(body);
+    // parapet rather than a pitched roof — flat roofs with a low wall are the Mediterranean vernacular
+    const para=new THREE.Mesh(new THREE.BoxGeometry(w+0.3,0.34,d+0.3), marbleTrim); para.position.set(0,h+0.17,0); g.add(para);
+    // painted lintel over a recessed doorway
+    const door=new THREE.Mesh(new THREE.BoxGeometry(0.95,1.9,0.16), voxMat(0x2a241c,{noise:8})); door.position.set(0,0.95,d/2+0.02); g.add(door);
+    const lintel=new THREE.Mesh(new THREE.BoxGeometry(1.3,0.24,0.22), stuccoMat); lintel.position.set(0,2.02,d/2+0.03); g.add(lintel);
+    // small high windows, the way a courtyard house faces inward
+    [-1,1].forEach(s=>{
+      const win=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.14), voxMat(0x2a3038,{noise:8}));
+      win.position.set(s*w*0.28, h-0.85, d/2+0.02); g.add(win);
+    });
+    const c=Math.cos(rot||0), s=Math.sin(rot||0);
+    addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
+  }
+  // west quarter, packed tight behind the stoa
+  townhouse(-25.5,-14,5.0,4.4,3.2,0);
+  townhouse(-25.0,-19.0,4.6,4.2,2.7,0.12);   // threaded between its neighbour at z=-14 and the palm at (-26,-22)
+  townhouse(-20.0,-16.5,4.2,4.6,3.6,-0.08);
+  townhouse(-15.0,-21.5,4.4,4.0,2.9,0.05);   // was (-25.8,-8.5): sat on the broken statue at (-24,-10)
+  // east quarter, along the far side of the crossroads
+  townhouse(24.0,-9.0,5.2,4.6,3.4,0);
+  townhouse(25.5,2.5,4.4,4.2,2.8,0.1);      // was (23.5,-3): overlapped the watchtower's legs at (24,-4)
+  // no house between z=-11 and z=-20 on this side: the rock outcrop at (29,-11) and the cypress at
+  // (27,-18) already occupy it, and anything that fits between them is too small to read as a building.
+  townhouse(28.0,-21.0,4.2,4.0,2.7,0.08);   // extra pair, standing in for the east stoa that would not fit
+  townhouse(21.5,-29.5,4.6,4.2,3.2,-0.06);   // clear of the pre-existing fallen column at (24,-24)
+  // south quarter, either side of the road as it runs out of the map
+  townhouse(-11.5,-28.5,4.8,4.4,3.0,0.06);   // threaded past the watchtower legs at (-8,-22) and the outcrop at (-16,-27)
+  townhouse(-21.0,-25.5,4.2,4.0,2.6,-0.1);  // was (-17.5,-25.5): sat on the rock outcrop at (-16,-27)
+  townhouse(11.5,-24.5,5.0,4.4,3.3,-0.05);
+  townhouse(17.0,-22.5,4.4,4.2,2.9,0.15);
+
+  // ---- Combat cover. The playable area had 7 usable pieces (2 broken statues, 2 fallen columns, 3 rock
+  // outcrops), most of them out at the edges where nobody fights. These are chest-height or taller, all
+  // collidered, spread across the middle of the map where the wave fighting actually happens. ----
+  function cistern(x,z){
+    const rim=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,1.25,12), marbleTrim); rim.position.set(x,0.62,z); rim.castShadow=true; scene.add(rim);
+    const water=new THREE.Mesh(new THREE.CylinderGeometry(0.95,0.95,0.06,12), new THREE.MeshPhongMaterial({color:0x3a8fc0, shininess:110, specular:0xbfefff}));
+    water.position.set(x,1.22,z); scene.add(water);
+    addBox(x,z,2.3,2.3);
+  }
+  function amphoraStack(x,z){
+    // three big storage jars leaning together — waist-to-chest cover, and unmistakably a marketplace prop
+    const jarMat=voxMat(0xc9703c,{noise:16,pattern:'plate'});
+    [[0,0,1.5],[0.62,0.18,1.3],[0.24,0.68,1.15]].forEach(([ox,oz,h],i)=>{
+      const jar=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.46,h,10), jarMat);
+      jar.position.set(x+ox,h/2,z+oz); jar.rotation.z=(i-1)*0.07; jar.castShadow=true; scene.add(jar);
+      const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,0.26,8), jarMat); neck.position.set(x+ox,h+0.13,z+oz); scene.add(neck);
+    });
+    addBox(x+0.3,z+0.3,1.9,1.9);
+  }
+  function lowWall(x,z,len,rot){
+    const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rot||0; scene.add(g);
+    const w=new THREE.Mesh(new THREE.BoxGeometry(len,1.45,0.55), marbleMat); w.position.set(0,0.725,0); w.castShadow=true; g.add(w);
+    // coping course, sized off the wall's own top so it sits flush rather than sinking into it
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(len+0.2,0.22,0.75), marbleTrim); cap.position.set(0,1.45+0.11+0.02,0); g.add(cap);
+    // rotated world extents, not the local pair — see the note on the stoa's collider helper
+    const c=Math.abs(Math.cos(rot||0)), s=Math.abs(Math.sin(rot||0));
+    addBox(x, z, len*c+0.55*s, len*s+0.55*c);
+  }
+  function votivePillar(x,z,h){
+    const base=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.35,0.9), marbleTrim); base.position.set(x,0.175,z); scene.add(base);
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.34,h,10), marbleMat); shaft.position.set(x,0.35+h/2,z); shaft.castShadow=true; scene.add(shaft);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.72,0.3,0.72), stuccoMat); cap.position.set(x,0.35+h+0.15,z); scene.add(cap);
+    addBox(x,z,1.0,1.0);
+  }
+  // spread across the fighting ground: the crossroads, the approach to the Pharos, the agora edges
+  lowWall(8.5,-4.5,5.5,0);    lowWall(-6.0,-17.0,4.5,0);   // clear of the wave spawn at (-2,-20)
+  lowWall(14.0,4.5,5.0,0.35); lowWall(-24.0,1.0,4.8,Math.PI/2);  // x=14: at 12 it sat on the obelisk
+  lowWall(-7.0,-13.0,5.0,0);  // flanking the Pharos approach, so that walk up isn't open ground
+  cistern(9.0,-1.0);   cistern(-4.5,6.5);   cistern(19.0,-6.0);
+  amphoraStack(-7.5,8.0);  amphoraStack(16.5,-13.5);   // clear of the shared wave spawn at (12,-16)  amphoraStack(-6.0,-9.5);  amphoraStack(21.5,9.0);
+  votivePillar(7.5,10.0,2.4); votivePillar(-8.5,11.5,2.0); votivePillar(-22.0,-9.5,2.6);
+  votivePillar(13.5,-11.0,2.2);
+  fallenColumn(3.0,-19.5,0.9); fallenColumn(-15.0,17.0,0.2); fallenColumn(18.5,1.0,1.35);
+  brokenStatue(-9.0,-19.0,0.5); brokenStatue(14.0,-29.0,-0.25);
 
   // ================= DISTANT SCENERY =================
   // Out past the play area, on the backing-ground plane. Deliberately none of the building types the map

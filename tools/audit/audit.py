@@ -41,12 +41,11 @@ def build_ctx(html_path):
     # must NOT cost us the builders defined above it, so the try/catch goes INSIDE the IIFE and the
     # export block runs after it. Function declarations inside the try block still hoist to the
     # enclosing function scope under sloppy-mode Annex B semantics, so they stay reachable.
-    ctx.eval(
-        "globalThis.__err=null; (function(){\n"
-        "try {\n" + script + "\n} catch(e) { globalThis.__err = (e && e.message) ? e.message : String(e); }\n"
-        + EXPORTS
-        + "\n})();"
-    )
+    # No try/catch wrapper around the script body: `const`/`let` are block-scoped, so wrapping it
+    # in a try block would hide every top-level declaration (greekColliders, SPAWN_POINTS, ...) from
+    # the export block below. The script loads cleanly against this stub, so a throw here is a real
+    # regression and should surface as one.
+    ctx.eval("globalThis.__err=null; (function(){\n" + script + "\n" + EXPORTS + "\n})();")
     err = ctx.eval("globalThis.__err")
     return ctx, err
 
@@ -65,6 +64,14 @@ globalThis.__builders = {
   makeXiphos: typeof makeXiphos==='function' ? makeXiphos : null,
   makeTrident: typeof makeTrident==='function' ? makeTrident : null,
   makeSling: typeof makeSling==='function' ? makeSling : null,
+};
+// World state the placement checks need. Everything above runs inside an IIFE, so these are
+// otherwise unreachable from outside.
+globalThis.__world = {
+  greekColliders:  typeof greekColliders !== 'undefined' ? greekColliders : null,
+  pyramidColliders:typeof pyramidColliders!== 'undefined' ? pyramidColliders : null,
+  hydraColliders:  typeof hydraColliders !== 'undefined' ? hydraColliders : null,
+  SPAWN_POINTS:    typeof SPAWN_POINTS !== 'undefined' ? SPAWN_POINTS : null,
 };
 """
 
