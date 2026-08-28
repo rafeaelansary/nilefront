@@ -4444,32 +4444,42 @@ function makeMinotaur(){
   }
 
   // ---- head: sits ON the neck, its base above the shoulder caps. A bull skull is long — cranium, then a
-  // muzzle projecting forward from it — so the length goes into the snout, not into dropping the head. ----
-  const cranium = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.42,0.44), hideDark); cranium.position.set(0,2.74,0.14); body.add(cranium);
-  const brow    = new THREE.Mesh(new THREE.BoxGeometry(0.50,0.14,0.24), hideDark); brow.position.set(0,2.86,0.30); brow.rotation.x=0.28; body.add(brow);
-  const muzzle  = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.30,0.36), hidePale); muzzle.position.set(0,2.62,0.42); body.add(muzzle);
-  const nosePad = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.17,0.09), hideDark); nosePad.position.set(0,2.60,0.62); body.add(nosePad);
-  const jaw     = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.13,0.32), hidePale); jaw.position.set(0,2.47,0.40); body.add(jaw);
-  const teeth   = new THREE.Mesh(new THREE.BoxGeometry(0.23,0.05,0.04), teethMat); teeth.position.set(0,2.51,0.56); body.add(teeth);
+  // muzzle projecting forward from it — so the length goes into the snout, not into dropping the head.
+  //
+  // Every part of the head (horns included) lives in this one group, pivoted where the skull meets the top
+  // of the neck, so the whole face can be angled as a unit. It is tipped slightly DOWN: a bull lowers its
+  // head to threaten, and level eyes on a creature this tall read as vacant. This is a tilt of the face
+  // only — the neck and shoulders stay upright, so it does not reintroduce the slouch. ----
+  const head = new THREE.Group();
+  head.position.set(0, 2.60, 0.06);
+  head.rotation.x = 0.26;          // ~15 degrees down. Any more and the horns start to hide the eyes.
+  body.add(head);
+
+  const cranium = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.42,0.44), hideDark); cranium.position.set(0,0.14,0.08); head.add(cranium);
+  const brow    = new THREE.Mesh(new THREE.BoxGeometry(0.50,0.14,0.24), hideDark); brow.position.set(0,0.26,0.24); brow.rotation.x=0.28; head.add(brow);
+  const muzzle  = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.30,0.36), hidePale); muzzle.position.set(0,0.02,0.36); head.add(muzzle);
+  const nosePad = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.17,0.09), hideDark); nosePad.position.set(0,0.00,0.56); head.add(nosePad);
+  const jaw     = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.13,0.32), hidePale); jaw.position.set(0,-0.13,0.34); head.add(jaw);
+  const teeth   = new THREE.Mesh(new THREE.BoxGeometry(0.23,0.05,0.04), teethMat); teeth.position.set(0,-0.09,0.50); head.add(teeth);
   [-1,1].forEach(side=>{
-    const tusk=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.12,0.05), teethMat); tusk.position.set(side*0.09,2.45,0.53); tusk.rotation.x=0.35; body.add(tusk);
-    const nostril=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.04), noseMat); nostril.position.set(side*0.08,2.60,0.66); body.add(nostril);
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.055,0.06), eyeMat); eye.position.set(side*0.20,2.78,0.33); eye.rotation.z=side*0.28; body.add(eye);
-    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.10,0.13), hideDark); ear.position.set(side*0.30,2.74,0.02); ear.rotation.z=side*0.55; body.add(ear);
+    const tusk=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.12,0.05), teethMat); tusk.position.set(side*0.09,-0.15,0.47); tusk.rotation.x=0.35; head.add(tusk);
+    const nostril=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.04), noseMat); nostril.position.set(side*0.08,0.00,0.60); head.add(nostril);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.055,0.06), eyeMat); eye.position.set(side*0.20,0.18,0.27); eye.rotation.z=side*0.28; head.add(eye);
+    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.10,0.13), hideDark); ear.position.set(side*0.30,0.14,-0.04); ear.rotation.z=side*0.55; head.add(ear);
   });
 
-  // ---- horns: still the widest thing on the model, but now crowning the head rather than jutting from a
-  // lowered skull. Three-link chain per side, each link stepping along its own rotated direction so the
-  // sections actually meet — a bare lateral offset with a separate rotation is what leaves curved runs as
-  // floating shards (see the Hydra necks). ----
+  // ---- horns: still the widest thing on the model, and parented to the head group so they tip with the
+  // face rather than staying level while the skull drops. Three-link chain per side, each link stepping
+  // along its own rotated direction so the sections actually meet — a bare lateral offset with a separate
+  // rotation is what leaves curved runs as floating shards (see the Hydra necks). ----
   [-1,1].forEach(side=>{
-    let hx=side*0.23, hy=2.94, hz=0.10, ang=side*1.15;   // ang = tilt out from vertical, in the XY plane
+    let hx=side*0.23, hy=0.34, hz=0.04, ang=side*1.15;   // ang = tilt out from vertical, in the XY plane
     [{len:0.27,r:0.10},{len:0.25,r:0.075},{len:0.23,r:0.052}].forEach((seg,i)=>{
       const dx=Math.sin(ang), dy=Math.cos(ang);
       const m=new THREE.Mesh(new THREE.CylinderGeometry(seg.r*0.78,seg.r,seg.len,6), i===2?hornTip:hornMat);
       m.position.set(hx+dx*seg.len/2, hy+dy*seg.len/2, hz);
       m.rotation.z=-ang;
-      body.add(m);
+      head.add(m);
       hx+=dx*seg.len*0.9; hy+=dy*seg.len*0.9; hz+=0.07;   // 0.9 = deliberate overlap between links
       ang -= side*0.62;                                    // curl from out-and-up round to forward
     });
@@ -5439,24 +5449,35 @@ function makeHydra(){
     // a chunky collar straddling the joint (half behind the tip, half ahead of it) so neck and skull
     // physically overlap no matter which way the neck ended up pointing
     const collar=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3), scaleMat2); collar.position.set(x,y,z); g.add(collar);
-    const skull=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.28,0.36), headMat); skull.position.set(hx,hy,hz); g.add(skull);
-    const upperJaw=new THREE.Mesh(new THREE.BoxGeometry(0.31,0.14,0.46), scaleMat2); upperJaw.position.set(hx,hy-0.04,hz+0.3); g.add(upperJaw);
-    const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.1,0.38), bellyMat); lowerJaw.position.set(hx,hy-0.19,hz+0.28); lowerJaw.rotation.x=-0.35; g.add(lowerJaw);
+    // Every part of the head hangs off this one group, pivoted at the neck tip, so the whole skull can be
+    // angled as a unit. Tipped DOWN: the necks rear up and the heads used to sit level on top of them,
+    // staring straight ahead over the player's head. A striking snake drops its skull to aim along the
+    // bite, and it also puts the fangs and open jaw where they can actually be seen from the ground.
+    // The collar above stays on `g`, not in here — it straddles the neck joint and must not tilt with the
+    // head, or it opens a gap on the underside of every neck.
+    const hd = new THREE.Group();
+    hd.position.set(hx,hy,hz);
+    hd.rotation.x = 0.34;      // ~19 degrees. The necks each end at a different angle, so this is applied
+                               // on top of whatever direction the neck finished in, not instead of it.
+    g.add(hd);
+    const skull=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.28,0.36), headMat); skull.position.set(0,0,0); hd.add(skull);
+    const upperJaw=new THREE.Mesh(new THREE.BoxGeometry(0.31,0.14,0.46), scaleMat2); upperJaw.position.set(0,-0.04,0.3); hd.add(upperJaw);
+    const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.1,0.38), bellyMat); lowerJaw.position.set(0,-0.19,0.28); lowerJaw.rotation.x=-0.35; hd.add(lowerJaw);
     // flared hood: two angled plates behind the skull, cobra-style — the single most identifying "snake"
     // silhouette cue, and it also helps visually separate each of the 5 heads from its neighbours
     [-1,1].forEach(s=>{
-      const hood=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.32,0.2), hoodMat); hood.position.set(hx+s*0.22,hy+0.02,hz-0.1); hood.rotation.z=s*0.55; hood.rotation.y=s*0.3; g.add(hood);
+      const hood=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.32,0.2), hoodMat); hood.position.set(s*0.22,0.02,-0.1); hood.rotation.z=s*0.55; hood.rotation.y=s*0.3; hd.add(hood);
     });
-    const browRidge=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.08,0.16), crestMat); browRidge.position.set(hx,hy+0.15,hz+0.1); g.add(browRidge);
+    const browRidge=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.08,0.16), crestMat); browRidge.position.set(0,0.15,0.1); hd.add(browRidge);
     [-1,1].forEach(s=>{
-      const eye=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.08,0.05), eyeMat); eye.position.set(hx+s*0.13,hy+0.05,hz+0.17); g.add(eye);
+      const eye=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.08,0.05), eyeMat); eye.position.set(s*0.13,0.05,0.17); hd.add(eye);
       // two visible fangs per side — from the upper jaw pointing down, echoing a real snake bite
-      const fangA=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.16,4), fangMat); fangA.position.set(hx+s*0.09,hy-0.12,hz+0.46); fangA.rotation.x=Math.PI; g.add(fangA);
-      const fangB=new THREE.Mesh(new THREE.ConeGeometry(0.022,0.11,4), fangMat); fangB.position.set(hx+s*0.15,hy-0.1,hz+0.42); fangB.rotation.x=Math.PI; g.add(fangB);
+      const fangA=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.16,4), fangMat); fangA.position.set(s*0.09,-0.12,0.46); fangA.rotation.x=Math.PI; hd.add(fangA);
+      const fangB=new THREE.Mesh(new THREE.ConeGeometry(0.022,0.11,4), fangMat); fangB.position.set(s*0.15,-0.1,0.42); fangB.rotation.x=Math.PI; hd.add(fangB);
     });
     // forked tongue flicking out past the jaw
-    const tongueRoot=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.035,0.24), tongueMat); tongueRoot.position.set(hx,hy-0.15,hz+0.58); g.add(tongueRoot);
-    [-1,1].forEach(s=>{ const fork=new THREE.Mesh(new THREE.BoxGeometry(0.028,0.028,0.11), tongueMat); fork.position.set(hx+s*0.04,hy-0.15,hz+0.71); fork.rotation.y=s*0.5; g.add(fork); });
+    const tongueRoot=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.035,0.24), tongueMat); tongueRoot.position.set(0,-0.15,0.58); hd.add(tongueRoot);
+    [-1,1].forEach(s=>{ const fork=new THREE.Mesh(new THREE.BoxGeometry(0.028,0.028,0.11), tongueMat); fork.position.set(s*0.04,-0.15,0.71); fork.rotation.y=s*0.5; hd.add(fork); });
   }
   // `spread` is a TOTAL FAN ANGLE IN RADIANS, not a lateral distance. It previously carried the old
   // lean-offset values (1.6 and 2.6) straight over when the fan became a rotation — and 2.6 rad is 149
