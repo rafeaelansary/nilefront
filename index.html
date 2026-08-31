@@ -1749,7 +1749,12 @@ function applyGreekDaylight(){
   // the invisible clamp at +/-29 feel arbitrary, since there was obviously walkable ground beyond it.
   // Ending the visible world ~90 units out closes it off instead, and the distant scenery was moved in to
   // match so it still sits inside the draw distance.
-  scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=18; scene.fog.far=96;
+  // fog.far was 96 while the coastal ridge sits at radius ~95 and the inland villages at ~100 — meaning the
+  // entire far field was at or past 100% fog and rendered as flat pale-blue blocks no matter what shape it
+  // actually was. 112 leaves the horizon roughly three-quarters fogged: still atmospheric, still closing the
+  // map off, but the silhouettes out there now read. The colour is also pulled off pure cyan toward a
+  // gentler haze, because a strongly-tinted fog reads as blue paint on everything rather than as distance.
+  scene.background.set(0x8fd6f2); scene.fog.color.set(0xa9d8e6); scene.fog.near=20; scene.fog.far=112;
   skyTint(0xffffff); // clear neutral daylight
   hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
   sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
@@ -3197,10 +3202,19 @@ heightZoneTarget = heightZonesGreek;
   //
   // The palette is deliberately darker than anything in the play area: fog blends these toward a pale blue,
   // so mid-tone stone out here washes straight out. Starting dark is what keeps the horizon readable.
-  const farStone = voxMat(0x7f7768,{noise:12});
-  const farStoneDark = voxMat(0x635c4e,{noise:12});
-  const farMud = voxMat(0x6f5b42,{noise:14});
-  const farGreen = voxMat(0x3f5130,{noise:14});
+  // These were 0x7f7768 / 0x635c4e / 0x6f5b42 — all mid-tone and all within a few percent of each other in
+  // value, so once the fog blended them toward pale blue the whole far field collapsed into one flat wash
+  // of blue-grey boxes with no readable separation. Darkened substantially and pulled apart in HUE as well
+  // as value: warm ochre limestone against cool grey-violet shadow rock against olive green. Hue survives
+  // fogging much better than value does, because fog interpolates toward one colour and crushes value
+  // differences while leaving relative hue intact.
+  const farStone     = voxMat(0x6a5c42,{noise:14});   // warm ochre limestone, the lit faces
+  const farStoneLit  = voxMat(0x857445,{noise:14});   // sun-caught tops and ridges
+  const farStoneDark = voxMat(0x413b3a,{noise:12});   // cool shadow rock — the value anchor
+  const farMud       = voxMat(0x5c452c,{noise:14});   // mudbrick
+  const farRoof      = voxMat(0x7a3f28,{noise:12});   // terracotta roofs, the one warm accent out there
+  const farGreen     = voxMat(0x2f4526,{noise:14});   // cypress/olive dark green
+  const farWhite     = voxMat(0x9a927e,{noise:10});   // whitewashed walls, catching the light
   function far(w,h,d,mat,x,y,z){
     const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); scene.add(m); return m;
   }
@@ -3209,29 +3223,66 @@ heightZoneTarget = heightZonesGreek;
   // soft hills dissolving into atmosphere. Pulled in to 74 first and that was a mistake: close, unfogged and
   // near-continuous, it stopped being a ridge and became a grey wall boxing the map in. Heights vary widely
   // and a quarter of the segments are skipped, so the skyline undulates and sky shows through the gaps.
+  // Each hill is three stacked, offset masses rather than one flat-topped slab: a broad dark base, a
+  // narrower shoulder, and a small lit cap. A single box has a horizontal top edge, and a row of them
+  // reads as a wall of crates — the stepping is what makes it a skyline.
   for(let i=0;i<38;i++){
     const a=Math.PI*(1.02+(i/37)*0.96), r=95+Math.sin(i*1.7)*16;
     const x=Math.cos(a)*r, z=Math.sin(a)*r;
     if(z>10) continue;
     if(Math.sin(i*4.7)>0.5) continue;                  // gaps in the skyline
     const h=3.5+Math.abs(Math.sin(i*1.7))*3+Math.abs(Math.sin(i*0.6))*4;
-    far(14+Math.sin(i*1.1)*5, h, 13+Math.sin(i*2.3)*5, i%3?farStone:farStoneDark, x, h/2-1.2, z);
+    const w=14+Math.sin(i*1.1)*5, d=13+Math.sin(i*2.3)*5;
+    const ox=Math.sin(i*2.9)*2.2, oz=Math.cos(i*3.7)*2.0;
+    far(w, h*0.60, d, farStoneDark, x, h*0.30-1.2, z);                                  // base mass
+    far(w*0.72, h*0.42, d*0.74, farStone, x+ox*0.5, h*0.60+h*0.21-1.2, z+oz*0.5);        // shoulder
+    far(w*0.40, h*0.30, d*0.42, farStoneLit, x+ox, h*1.02+h*0.15-1.2, z+oz);             // lit cap
+    // a scrub of dark green on about half the hills, breaking the bare rock
+    if(Math.sin(i*5.1)>0){
+      far(w*0.5, h*0.16, d*0.5, farGreen, x-ox*0.6, h*0.62-1.2, z-oz*0.6);
+    }
   }
   // aqueduct marching along the ridge line: repeating arches, a silhouette nothing in the map has
+  // Two-tier arcade with tapered piers and haunched arches. A real aqueduct's silhouette is the RHYTHM of
+  // openings, so the small upper arcade doubles the count of them; and the piers taper, so the run does not
+  // read as a picket fence of identical posts.
   (function aqueduct(z){
     for(let i=0;i<9;i++){
       const x=-58+i*8.4;
-      far(2.1,9,2.1, farStone, x, 4.5, z);             // pier
-      far(8.4,1.8,2.4, farStone, x+4.2, 9.4, z);       // span above the arch opening
-      far(1.3,2.4,2.3, farStoneDark, x+4.2, 7.3, z);   // arch haunch, breaking the gap into an arch shape
+      far(2.6,4.6,2.6, farStoneDark, x, 2.3, z);       // pier foot, wider
+      far(2.1,4.6,2.1, farStone,     x, 6.9, z);       // pier shaft
+      far(2.9,0.5,2.9, farStoneLit,  x, 9.4, z);       // impost capital the arch springs from
+      // lower arch: haunches either side narrowing the opening into an arch shape
+      far(2.0,2.2,2.3, farStoneDark, x+2.6, 8.2, z);
+      far(2.0,2.2,2.3, farStoneDark, x+5.8, 8.2, z);
+      far(8.4,1.3,2.4, farStone,     x+4.2, 10.3, z);  // spandrel over the lower arch
+      // upper arcade: shorter, tighter openings riding on the spandrel
+      far(1.5,2.4,2.0, farStone,     x+1.6, 12.1, z);
+      far(1.5,2.4,2.0, farStone,     x+6.8, 12.1, z);
+      far(8.4,0.9,2.1, farStoneLit,  x+4.2, 13.7, z);
     }
-    far(77,1.0,2.8, farStone, -24.4, 10.7, z);         // the channel running the whole length
+    far(77,0.9,2.9, farStone,    -24.4, 14.6, z);      // the channel running the whole length
+    far(77,0.35,3.4, farStoneLit,-24.4, 15.2, z);      // its coping, catching the light
   })(-78);
   // rocky bluffs on the open plain, west and east — these fill the flanks that read as bare ground
+  // Stepped strata, each course inset and offset from the one below, with the top two catching the light.
+  // The old version was three concentric boxes, which from any angle read as a stack of crates.
   function bluff(x,z,s){
-    far(30*s,5*s,22*s, farStoneDark, x, 1.4*s, z);
-    far(20*s,4*s,14*s, farStoneDark, x-2*s, 4.4*s, z-1*s);
-    far(11*s,4.5*s,8*s, farStone, x+3*s, 7.4*s, z+1*s);
+    const beds=[{w:30,h:2.6,d:22,ox: 0.0,oz: 0.0,m:farStoneDark},
+                {w:26,h:2.2,d:19,ox:-1.4,oz: 0.8,m:farStoneDark},
+                {w:21,h:2.4,d:15,ox:-2.6,oz:-0.6,m:farStone},
+                {w:15,h:2.2,d:11,ox:-1.0,oz: 1.2,m:farStone},
+                {w:9, h:2.6,d:7, ox: 1.8,oz: 0.4,m:farStoneLit}];
+    let y=-1.0;
+    beds.forEach(b=>{
+      far(b.w*s, b.h*s, b.d*s, b.m, x+b.ox*s, y+b.h*s/2, z+b.oz*s);
+      y += b.h*s*0.86;                                  // courses overlap, so no seam opens between them
+    });
+    // scree fanning out from the foot, so the bluff meets the plain instead of being planted in it
+    for(let k=0;k<4;k++){
+      const a=k*1.9;
+      far((7-k)*s, 0.9*s, (6-k*0.8)*s, farStoneDark, x+Math.cos(a)*13*s, 0.45*s-1.0, z+Math.sin(a)*10*s);
+    }
   }
   bluff(-64,-10,0.62); bluff(-88,-40,0.5); bluff(70,-16,0.6); bluff(92,-44,0.47);
   // a hilltop shrine on the western bluff: a squat cella and a stub roof, not a colonnade
@@ -3239,14 +3290,28 @@ heightZoneTarget = heightZonesGreek;
   far(4.1,0.6,3.7, farStoneDark, -62,8.5,-9);
   far(0.7,1.6,0.7, voxMat(0xad8730,{noise:10}), -62,9.6,-9); // bronze finial
   // inland villages: small mudbrick boxes with flat roofs, nothing monumental
+  // Whitewashed walls under pitched terracotta roofs, with the odd taller house and a cypress or two. The
+  // old version was a mudbrick box with a flat dark slab on top, repeated — no roofline, no colour, nothing
+  // to tell you it was a village rather than a row of crates. The terracotta is the only warm accent in the
+  // far field, which is what makes these read as inhabited at this distance.
   function village(cx,cz,n,seed){
     for(let i=0;i<n;i++){
       const x=cx+i*5.2+Math.sin((i+seed)*2.1)*3.4, z=cz+Math.sin((i+seed)*1.3)*8;
       const h=3.4+Math.sin((i+seed)*3.3)*1.2;
-      // width capped under the 5.2 spacing below — at 4.2+1.1 a house could reach 5.3 and overlap its
-      // neighbour, and with heights only 2.4 apart their roofs sometimes landed on the same plane
-      far(3.5+Math.sin(i+seed)*0.7, h*0.8, 3.4, farMud, x, h*0.4, z);
-      far(4.3, 0.5, 4.1, farStoneDark, x, h*0.8+0.22, z);
+      const w=3.5+Math.sin(i+seed)*0.7;
+      // width stays under the 5.2 spacing so neighbours cannot overlap
+      far(w, h*0.8, 3.4, (i%3===0)?farMud:farWhite, x, h*0.4, z);
+      // pitched roof: two slabs leaning into a ridge, rather than one flat cap
+      const rl=new THREE.Mesh(new THREE.BoxGeometry(w*0.62,0.42,3.9), farRoof); rl.position.set(x-w*0.19, h*0.8+0.42, z); rl.rotation.z= 0.5; scene.add(rl);
+      const rr=new THREE.Mesh(new THREE.BoxGeometry(w*0.62,0.42,3.9), farRoof); rr.position.set(x+w*0.19, h*0.8+0.42, z); rr.rotation.z=-0.5; scene.add(rr);
+      far(w*0.26, 0.30, 4.0, farRoof, x, h*0.8+0.80, z);          // ridge tile closing the apex
+      // every third house gets an upper storey, so the roofline steps instead of running flat
+      if(i%3===1){
+        far(w*0.72, 1.5, 2.6, farWhite, x, h*0.8+1.35, z-0.3);
+        far(w*0.86, 0.34, 3.0, farRoof, x, h*0.8+2.20, z-0.3);
+      }
+      // a cypress beside every other house — vertical accents, and the only green in the settlement
+      if(i%2===0) far(1.1, 4.2+Math.abs(Math.sin(i*2.3))*1.6, 1.1, farGreen, x+2.9, 2.1, z+2.4);
     }
   }
   // NOTE the run length: this lays houses at cx + i*5.2, so a 9-house row spans roughly cx..cx+45. At
@@ -3255,13 +3320,55 @@ heightZoneTarget = heightZonesGreek;
   village(-88,-52,9,0); village(52,-56,8,3.7);
   // rock-cut tomb facades in a low cliff east of the city — Alexandria's necropolis was exactly this
   (function necropolis(x,z){
-    far(46,7.5,11, farStoneDark, x, 3.1, z);
+    // The cliff is stepped back in three courses rather than being one 46-wide slab, and each tomb facade
+    // now has a pediment and framing pilasters — at this distance a doorway alone just reads as a smudge,
+    // but the repeated triangular pediments give the whole cliff a rhythm you can read.
+    far(46,3.4,11, farStoneDark, x, 1.0, z);
+    far(42,2.6,9,  farStone,     x-0.8, 3.9, z-0.6);
+    far(34,2.4,7,  farStoneLit,  x+1.2, 6.2, z-1.2);
     for(let i=0;i<9;i++){
       const fx=x-18.5+i*4.6;
-      far(2.6,3.4,0.9, farStone, fx, 1.7, z+5.6);
-      far(1.2,2.1,0.5, voxMat(0x20201c,{noise:6}), fx, 1.05, z+6.1); // dark doorway
+      far(3.0,3.6,0.9, farStone, fx, 1.8, z+5.6);                       // facade panel
+      [-1,1].forEach(sd=>{ far(0.5,3.2,1.1, farStoneLit, fx+sd*1.25, 1.6, z+5.9); });  // framing pilasters
+      far(3.4,0.5,1.2, farStoneLit, fx, 3.7, z+5.9);                    // architrave
+      far(2.2,0.5,1.1, farStoneLit, fx, 4.15, z+5.9);                   // pediment, stepped
+      far(1.1,0.45,1.0, farStoneLit, fx, 4.55, z+5.9);
+      far(1.3,2.3,0.5, voxMat(0x1a1a17,{noise:6}), fx, 1.15, z+6.15);   // dark doorway
     }
-  })(66,10);   // clear of the ridge ring; at (64,0) the cliff top sat 0.03 from a ridge segment's
+  })(66,10);
+
+  // ---- terraced olive groves stepping up the ridge slopes. Nothing else out here has horizontal banding,
+  // so these read instantly as cultivated hillside and give the far field a second texture besides rock. ----
+  function terraces(cx,cz,rows,w,rot){
+    const c=Math.cos(rot), sn=Math.sin(rot);
+    for(let r=0;r<rows;r++){
+      const off=r*3.4, y=r*1.5;
+      const px=cx+(-sn)*off, pz=cz+c*off;
+      const wall=new THREE.Mesh(new THREE.BoxGeometry(w,1.5,1.1), farStone); wall.position.set(px,y+0.75-1.0,pz); wall.rotation.y=rot; scene.add(wall);
+      const bed =new THREE.Mesh(new THREE.BoxGeometry(w,0.5,3.2), farGreen); bed.position.set(px+(-sn)*1.9, y+1.35-1.0, pz+c*1.9); bed.rotation.y=rot; scene.add(bed);
+      // a few olive crowns dotted along each bed
+      for(let k=0;k<4;k++){
+        const t=(-w/2)+(k+0.5)*(w/4);
+        far(1.5,1.3,1.5, farGreen, px+c*t+(-sn)*1.9, y+2.0-1.0, pz+sn*t+c*1.9);
+      }
+    }
+  }
+  terraces(-52,-44,4,20,0.35); terraces(38,-52,3,17,-0.4); terraces(-30,-62,3,15,0.15);
+
+  // ---- a hill town on the western headland: stacked whitewashed cubes climbing a rock, crowned by a small
+  // sanctuary. A single strong shape on that flank, where the horizon was otherwise just ridge. ----
+  (function hillTown(x,z){
+    far(22,5.0,16, farStoneDark, x, 1.5, z);                    // the rock it sits on
+    far(16,3.2,12, farStone,     x+1.0, 5.4, z-0.6);
+    const cubes=[[-5,7.2,-2,3.4],[ -1,8.0,1,3.0],[3,7.6,-1,3.2],[6,8.8,2,2.6],[0,10.4,-2,2.4],[-4,9.6,2,2.2]];
+    cubes.forEach(([ox,oy,oz,cw])=>{
+      far(cw,2.4,cw*0.9, farWhite, x+ox, oy, z+oz);
+      far(cw*1.15,0.4,cw*1.05, farRoof, x+ox, oy+1.4, z+oz);
+    });
+    far(3.0,2.6,3.0, farWhite,    x+1, 12.6, z);                // sanctuary cella on the summit
+    far(3.8,0.5,3.6, farStoneLit, x+1, 14.1, z);
+    far(0.6,1.4,0.6, voxMat(0xad8730,{noise:10}), x+1, 15.0, z); // bronze finial
+  })(-74,-30);   // clear of the ridge ring; at (64,0) the cliff top sat 0.03 from a ridge segment's
   // quarry terraces and spoil heaps, where all that stone came from
   (function quarry(x,z){
     for(let s=0;s<4;s++) far(24-s*4.5, 1.6, 16-s*3, s%2?farStone:farStoneDark, x, 0.8+s*1.5, z);
