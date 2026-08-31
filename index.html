@@ -968,33 +968,120 @@ stall(2,4, 3, 3, 0x8a6a42, 0x3f6a3a);
 cottage(-27,-5, 4, 4, 1, 0x9a8f7f, 0x3a2f26);
 
 // ---- sniper towers: climbable rooftops reached by an exterior wooden staircase ----
+// ---- watchtower: the climbable sniper perch used on every map. It was four flat brickWall panels, a flat
+// cap, a low solid parapet and a run of unsupported floating steps — from the ground it read as a plain
+// grid-textured box with a ladder of blocks stuck to it, which is exactly how it looked in game.
+//
+// Rebuilt as a real tower: a battered base, corner pilasters so the faces are not four blank planes, a
+// string course, arrow slits, a corbelled cornice, and a CRENELLATED parapet (merlons with gaps) instead
+// of a solid kerb. The stair gets a stringer, support posts down to the ground and a handrail, so it reads
+// as built rather than floating.
+//
+// The climbing mechanic is untouched: same signature, same plateau height zone at y=height, same ramp zone
+// geometry. Everything added here is cosmetic and carries no collider, so nothing can block the ramp.
 function sniperTower(x,z,size,height,wallColor,rampDir){
   const half=size/2;
-  function wallCollider(cx,cz,w,d){ addBox(cx,cz,w,d,height); }
-  brickWall(size,height,0.4,wallColor,x,height/2,z-half,0); wallCollider(x,z-half,size,0.6);
-  brickWall(size,height,0.4,wallColor,x,height/2,z+half,0); wallCollider(x,z+half,size,0.6);
-  brickWall(size,height,0.4,wallColor,x-half,height/2,z,Math.PI/2); wallCollider(x-half,z,0.6,size);
-  brickWall(size,height,0.4,wallColor,x+half,height/2,z,Math.PI/2); wallCollider(x+half,z,0.6,size);
-  block(size,0.3,size,wallColor,x,height,z,{noise:16,pattern:'plate'}); // roof cap
-  // low cosmetic parapet around the roof edge for cover while sniping
-  const pMat={noise:14};
-  block(size,0.5,0.25,wallColor,x,height+0.35,z-half,pMat); block(size,0.5,0.25,wallColor,x,height+0.35,z+half,pMat);
-  block(0.25,0.5,size,wallColor,x-half,height+0.35,z,pMat); block(0.25,0.5,size,wallColor,x+half,height+0.35,z,pMat);
-  heightZoneTarget.push({type:'plateau', x1:x-half,z1:z-half,x2:x+half,z2:z+half, y:height});
-  // exterior wooden staircase up one side (dir: 'n'|'s'|'e'|'w' — which face it climbs)
-  const steps=Math.max(6,Math.round(height/0.45));
-  const rampWidth=2.8, rampLen=height*1.7; // wide margin so a fast/diagonal step can't drift off the walkable corridor
-  const woodMat={noise:14,pattern:'plate'};
-  for(let i=0;i<=steps;i++){
-    // i=0 is the step against the tower wall (full height, flush with the roof); i=steps is the far end (ground level)
-    const y=(1-i/steps)*height, along=half+(i/steps)*rampLen;
-    let sx=x, sz=z, w=rampWidth, d=rampLen/steps+0.08;
-    if(rampDir==='s'){ sz=z+along; } else if(rampDir==='n'){ sz=z-along; }
-    else if(rampDir==='e'){ sx=x+along; w=rampLen/steps+0.08; d=rampWidth; }
-    else { sx=x-along; w=rampLen/steps+0.08; d=rampWidth; }
-    block(w,0.45,d,wallColor,sx,y+0.22,sz,woodMat);
+  const dark = new THREE.Color(wallColor).multiplyScalar(0.78).getHex();
+  const light= new THREE.Color(wallColor).multiplyScalar(1.12).getHex();
+
+  // ---- battered base: a wider plinth with a chamfer course, so the tower grows out of the ground ----
+  block(size+0.9, 0.35, size+0.9, dark,  x, 0.175, z, {noise:16});
+  block(size+0.5, 0.30, size+0.5, wallColor, x, 0.50, z, {noise:16,pattern:'plate'});
+
+  // ---- shaft. One solid mass rather than four separate panels: the interior was never reachable, and a
+  // single block means no seams where the panels met at the corners. ----
+  block(size, height-0.65, size, wallColor, x, 0.65+(height-0.65)/2, z, {noise:18,pattern:'plate'});
+  // string course dividing the shaft, breaking up the flat run of wall
+  block(size+0.28, 0.22, size+0.28, dark, x, height*0.52, z, {noise:12});
+  // corner pilasters, standing slightly proud so the tower has vertical articulation from every angle
+  [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([sx,sz])=>{
+    block(0.5, height-0.65, 0.5, light, x+sx*(half-0.12), 0.65+(height-0.65)/2, z+sz*(half-0.12), {noise:14});
+  });
+  // arrow slits on all four faces, at two levels
+  const slitMat = {noise:6};
+  [[0,-1],[0,1],[-1,0],[1,0]].forEach(([nx,nz])=>{
+    [height*0.38, height*0.72].forEach(sy=>{
+      block(nx?0.14:0.22, 0.5, nz?0.14:0.22, 0x241f18, x+nx*(half+0.02), sy, z+nz*(half+0.02), slitMat);
+    });
+  });
+  // corbelled cornice: two stepped courses carrying the roof out past the shaft
+  block(size+0.35, 0.18, size+0.35, dark,  x, height-0.34, z, {noise:12});
+  block(size+0.7,  0.22, size+0.7,  light, x, height-0.14, z, {noise:12});
+  // roof deck — its top face lands exactly on `height`, which is what the plateau zone below assumes
+  block(size+0.7, 0.3, size+0.7, wallColor, x, height+0.15, z, {noise:16,pattern:'plate'});
+
+  // ---- crenellated parapet: merlons with real gaps between them, not a continuous kerb ----
+  const merlonH = 0.62, step = 0.78, edge = half + 0.28;
+  const nMer = Math.max(3, Math.floor((size+0.7)/step));
+  for(let i=0;i<nMer;i++){
+    const t = -((nMer-1)/2) * step + i*step;
+    if(i%2===1) continue;                       // every other one omitted = the embrasures
+    block(0.56, merlonH, 0.3, light, x+t, height+0.3+merlonH/2, z-edge, {noise:12});
+    block(0.56, merlonH, 0.3, light, x+t, height+0.3+merlonH/2, z+edge, {noise:12});
+    block(0.3, merlonH, 0.56, light, x-edge, height+0.3+merlonH/2, z+t, {noise:12});
+    block(0.3, merlonH, 0.56, light, x+edge, height+0.3+merlonH/2, z+t, {noise:12});
   }
-  const nearD=half, farD=half+rampLen; // ramp butts right up against the wall — no dead gap between ramp and roof
+  // corner posts, tying the four crenellated runs together
+  [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([sx,sz])=>{
+    block(0.42, merlonH+0.18, 0.42, dark, x+sx*edge, height+0.3+(merlonH+0.18)/2, z+sz*edge, {noise:12});
+  });
+
+  // one collider for the whole footprint, with roofY so the deck stays walkable. The old version placed a
+  // collider per wall and left the interior open, which a fast diagonal move could slip into.
+  addBox(x, z, size+0.7, size+0.7, height);
+  heightZoneTarget.push({type:'plateau', x1:x-half,z1:z-half,x2:x+half,z2:z+half, y:height});
+
+  // ---- exterior staircase up one side (rampDir: 'n'|'s'|'e'|'w' — which face it climbs) ----
+  const steps=Math.max(6,Math.round(height/0.45));
+  const rampWidth=2.8, rampLen=height*1.7; // wide margin so a fast/diagonal step can't drift off the corridor
+  const woodMat={noise:14,pattern:'plate'};
+  const woodCol = 0x6b4a28, woodDarkCol = 0x4a3018;
+  // unit vector pointing out along the ramp, plus its perpendicular, so the rails work for any direction
+  const dx = rampDir==='e' ? 1 : rampDir==='w' ? -1 : 0;
+  const dz = rampDir==='s' ? 1 : rampDir==='n' ? -1 : 0;
+  const px = dz, pz = -dx;      // perpendicular, for offsetting the rails to either side
+  const axisX = dx !== 0;
+
+  for(let i=0;i<=steps;i++){
+    // i=0 is the step against the tower wall (full height, flush with the roof); i=steps is the ground end
+    const y=(1-i/steps)*height, along=half+(i/steps)*rampLen;
+    const sx=x+dx*along, sz=z+dz*along;
+    const w = axisX ? rampLen/steps+0.08 : rampWidth;
+    const d = axisX ? rampWidth : rampLen/steps+0.08;
+    block(w,0.45,d,woodCol,sx,y+0.22,sz,woodMat);                       // tread
+    // riser behind each tread, so the flight is solid rather than a ladder of floating slabs
+    if(i<steps){
+      const ry=(1-(i+0.5)/steps)*height, ra=half+((i+0.5)/steps)*rampLen;
+      block(axisX?0.12:rampWidth-0.15, 0.42, axisX?rampWidth-0.15:0.12, woodDarkCol,
+            x+dx*ra, ry+0.2, z+dz*ra, {noise:12});
+    }
+  }
+  // stringer beams running the length of the flight underneath the treads, and posts down to the ground
+  [-1,1].forEach(sd=>{
+    for(let i=1;i<steps;i+=2){
+      const y=(1-i/steps)*height, along=half+(i/steps)*rampLen;
+      const postH=Math.max(0.3,y);
+      block(0.16, postH, 0.16, woodDarkCol,
+            x+dx*along+px*sd*(rampWidth/2-0.18), postH/2, z+dz*along+pz*sd*(rampWidth/2-0.18), {noise:12});
+      // handrail post rising from the tread, plus the rail itself between them
+      block(0.12, 0.72, 0.12, woodCol,
+            x+dx*along+px*sd*(rampWidth/2+0.06), y+0.45+0.36, z+dz*along+pz*sd*(rampWidth/2+0.06), {noise:12});
+    }
+    // the rail: one long slab lying along the flight's slope, rotated to match the pitch
+    const railLen = Math.hypot(rampLen, height);
+    const midAlong = half + rampLen/2, midY = height/2 + 0.95;
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(axisX?railLen:0.12, 0.12, axisX?0.12:railLen), voxMat(woodCol,{noise:12}));
+    rail.position.set(x+dx*midAlong+px*sd*(rampWidth/2+0.06), midY, z+dz*midAlong+pz*sd*(rampWidth/2+0.06));
+    // the flight drops as it runs outward, so the rail pitches down along its own axis
+    if(axisX) rail.rotation.z = dx>0 ?  Math.atan2(height, rampLen) : -Math.atan2(height, rampLen);
+    else      rail.rotation.x = dz>0 ? -Math.atan2(height, rampLen) :  Math.atan2(height, rampLen);
+    scene.add(rail);
+  });
+
+  // The walkable ramp zone. This is what actually carries the player up — the step meshes above are only
+  // what it looks like. Geometry is unchanged from the original: the ramp butts right against the wall, so
+  // there is no dead gap between the top of the flight and the roof deck.
+  const nearD=half, farD=half+rampLen;
   if(rampDir==='s') heightZoneTarget.push({type:'ramp', x1:x-rampWidth/2,x2:x+rampWidth/2, z1:z+nearD,z2:z+farD, y1:height,y2:0});
   else if(rampDir==='n') heightZoneTarget.push({type:'ramp', x1:x-rampWidth/2,x2:x+rampWidth/2, z1:z-farD,z2:z-nearD, y1:0,y2:height});
   else if(rampDir==='e') heightZoneTarget.push({type:'ramp', x1:x+nearD,x2:x+farD, z1:z-rampWidth/2,z2:z+rampWidth/2, y1:height,y2:0, axisX:true});

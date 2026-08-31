@@ -72,6 +72,11 @@ globalThis.__world = {
   pyramidColliders:typeof pyramidColliders!== 'undefined' ? pyramidColliders : null,
   hydraColliders:  typeof hydraColliders !== 'undefined' ? hydraColliders : null,
   SPAWN_POINTS:    typeof SPAWN_POINTS !== 'undefined' ? SPAWN_POINTS : null,
+  heightZonesGreek:   typeof heightZonesGreek   !== 'undefined' ? heightZonesGreek   : null,
+  heightZonesPyramid: typeof heightZonesPyramid !== 'undefined' ? heightZonesPyramid : null,
+  heightZonesRoman:   typeof heightZonesRoman   !== 'undefined' ? heightZonesRoman   : null,
+  heightZonesIslamic: typeof heightZonesIslamic !== 'undefined' ? heightZonesIslamic : null,
+  heightZonesOriginal:typeof heightZonesOriginal!== 'undefined' ? heightZonesOriginal: null,
 };
 """
 
