@@ -2532,7 +2532,10 @@ heightZoneTarget = heightZonesPyramid;
     water.position.set(x,0.22,z); water.userData.isWater=true; water.userData.baseY=0.22; scene.add(water);
     waterSurfaces.push(water);
   }
-  oasisPool(-2,16, 5, 4);
+  // (-11,17), not (-2,16). exitDungeon() drops the player into this map at (0,1.7,18), and the pool's
+  // collider is w+0.8 by d+0.8 — so it spanned x[-4.9,0.9] z[13.6,18.4] and the player started the game
+  // standing inside it, immediately shoved out by resolveCollision. Moved off the spawn entirely.
+  oasisPool(-11.5,18, 5, 4);
   function palm(x,z){
     const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.2,3.4,6), voxMat(0x7a5a38,{noise:14})); trunk.position.set(x,1.7,z); trunk.rotation.z=0.08; scene.add(trunk);
     const leafMat = voxMat(0x4f7a3a,{noise:14});
@@ -2542,7 +2545,7 @@ heightZoneTarget = heightZonesPyramid;
   }
   // fringed around the pool's kerb, not standing in the water: the collider audit caught two of these
   // (-4,17) and (-3,14.5) sitting inside the pool's own 5.8x4.8 collider box
-  palm(-5.6,18.4); palm(1.9,18.6); palm(-5.4,13.6); palm(2.2,13.8);
+  palm(-15.4,20.6); palm(-7.6,20.8); palm(-15.2,15.4); palm(-7.4,15.6);   // the pool's palms, moved with it
 
   // ---- more hiding spots: taller, more enclosing cover than the jars/rubble/obelisks above ----
   // a broken L-shaped temple wall, tall enough to fully break line of sight
@@ -2636,7 +2639,7 @@ heightZoneTarget = heightZonesPyramid;
     // roof-line cavetto with a painted blue band — the accent colour the Sphinx's nemes also uses
     const band=new THREE.Mesh(new THREE.BoxGeometry(w+0.75,0.28,d+0.75), voxMat(0x2f5f8a,{noise:12})); band.position.set(x,5.5,z); scene.add(band);
   }
-  valleyTemple(12,-9);
+  valleyTemple(14,-11);   // was (12,-9): its 9x7 footprint swallowed the shared wave spawn at (16,-6)
 
   // mastaba tomb field — low flat-topped tombs with battered sides, the private cemetery that fills the
   // ground west of the causeway. Waist-to-chest height, so they double as real cover.
@@ -2707,7 +2710,7 @@ heightZoneTarget = heightZonesPyramid;
     block(2.4,1.8,0.4,0xa4854f,x,0.9,z-1.0,{noise:20});
     addBox(x-1.0,z,0.4,2.2); addBox(x+1.0,z,0.4,2.2); addBox(x,z-1.0,2.4,0.4);
   }
-  alcove(-15,-15);
+  alcove(-16.5,-16.5); // was (-15,-15): its west wall sat on the shared wave spawn at (-14,-14)
   // a few more, spread into the other open corners
   ruinedWall(22,-16);
   alcove(-24,-8);
@@ -8099,7 +8102,11 @@ function setBanner(txt){ if(bannerEl){ bannerEl.textContent=txt||''; bannerEl.st
 
 // ---- wave / boss manager ----
 const ENEMY_COLORS=[0xc0392b,0x2980b9,0x27ae60,0x8e44ad,0xe67e22,0x16a085,0xd35400,0x2c3e50];
-const SPAWN_POINTS=[[-6,-6],[9,4],[-9,9],[-14,-14],[16,-6],[4,16],[-20,4],[18,14],[-2,-20],[12,-16]];
+// SPAWN_POINTS is shared by every wave-bearing overworld, so an entry has to be clear on ALL of them.
+// [8] was (-2,-20), which sits inside the Great Sphinx's body collider on the pyramid map — the Sphinx is
+// that map's hero landmark and trimming its footprint to dodge a spawn point is the wrong trade. [7] was
+// (18,14), inside a date palm's collider in Cairo. Both moved to points verified clear on all four maps.
+const SPAWN_POINTS=[[-6,-6],[9,4],[-9,9],[-14,-14],[16,-6],[4,16],[-20,4],[20,16],[-4,-20],[12,-16]];
 const WAVES=[3,4,5, 6,7,9, 7,8,10, 9,10,12]; // 12 waves; a boss after wave 3, 6, 9, and 12
 function waveDiff(n){ return 1 + n*n*0.05 + n*0.16; } // accelerating curve: each wave is meaningfully tougher than the last
 let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWon=false, gameStarted=false;
