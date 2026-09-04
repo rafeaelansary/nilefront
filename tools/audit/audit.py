@@ -86,13 +86,13 @@ globalThis.__world = {
 ACTORS = [
     ("makeVoxelBot", "b=>b(0x808080,'pistol',null)",        1.00, 0.00, "grunt (town/pyramid)"),
     ("makeVoxelBot", "b=>b(0xc9a671,'pistol','colossus')",  3.10, 0.00, "Colossus  (Boss I)"),
-    ("makeHydra",    "b=>b()",                              2.40, 0.25, "Hydra     (Boss II)"),
-    ("makeChampion", "b=>b()",                              2.30, 0.10, "Champion  (Boss III)"),
+    ("makeHydra",    "b=>b()",                              2.40, 0.00, "Hydra     (Boss II)"),
+    ("makeChampion", "b=>b()",                              2.30, 0.00, "Champion  (Boss III)"),
     ("makeIfritKing","b=>b()",                              2.00, 0.00, "IfritKing (Boss IV)"),
     ("makeMinotaur", "b=>b()",                              1.00, 0.00, "Minotaur"),
     ("makeGriffin",  "b=>b()",                              1.00, 0.00, "Griffin"),
     ("makeMedusa",   "b=>b()",                              1.25, 0.00, "Medusa (wave-6 elite)"),
-    ("makeTiger",    "b=>b()",                              1.15, 0.10, "Tiger (Champion add)"),
+    ("makeTiger",    "b=>b()",                              1.15, 0.00, "Tiger (Champion add)"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor

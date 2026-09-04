@@ -1518,8 +1518,11 @@ addTarget = hydraColliders;
   const waterMat = new THREE.MeshPhongMaterial({color:0x2f4526, shininess:50, specular:0x5a7a48, transparent:true, opacity:0.92, emissive:0x0a1a0c});
   const water = new THREE.Mesh(new THREE.BoxGeometry(320,1,320), waterMat); water.position.set(0,-0.7,0); hydraArena.add(water);
   // raised square marble platform (Box, not Circle — avoids the radial-UV tile distortion)
-  hblock(R*2,0.6,R*2, marbleFloorMat, 0,-0.05,0);
-  hblock(R*2+1.2,0.4,R*2+1.2, stoneMat, 0,-0.35,0); // a slightly wider stone lip below the marble
+  // Floor top must land exactly on y=0: spawnBot() puts every actor at y=0 with no terrain sampling, so
+  // any other top face buries (or floats) every bot in the arena by the difference. This topped out at
+  // +0.25, which sank the Hydra 0.17 into its own floor.
+  hblock(R*2,0.6,R*2, marbleFloorMat, 0,-0.3,0);
+  hblock(R*2+1.2,0.4,R*2+1.2, stoneMat, 0,-0.5,0); // wider stone lip, dropped in step to stay under the marble
   // low perimeter kerb on all four sides + colliders so you can't walk off into the marsh
   [[0,-R,R*2,1],[0,R,R*2,1],[-R,0,1,R*2],[R,0,1,R*2]].forEach(([x,z,w,d])=>{
     hblock(w||1.2,0.8,d||1.2, stoneMat, x,0.4,z); addBox(x,z,(w||1.2),(d||1.2));
@@ -1581,7 +1584,9 @@ addTarget = colosseumColliders;
   const brickMat = new THREE.MeshLambertMaterial({map:_finish(romanBrickTex(),3)});
   const R=22, segs=32, tiers=6;
   // the pit floor — sand, reaching just past the barrier wall
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(R*2.1,0.4,R*2.1), sandMat); floor.position.set(0,-0.1,0); colosseumArena.add(floor);
+  // -0.2, not -0.1: a 0.4-tall floor centred at -0.1 tops out at +0.1, and spawnBot() places every actor
+  // at y=0 regardless, so the Champion and its tigers stood inside the sand.
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(R*2.1,0.4,R*2.1), sandMat); floor.position.set(0,-0.2,0); colosseumArena.add(floor);
   const aisles = [0, Math.PI/2, Math.PI, Math.PI*1.5]; // 4 stairway aisles cutting through the seats
   const aisleHalf = 0.16; // half-width of each aisle gap, radians
   // The wall/seats used to be built from ~28 individually rotated, deliberately-OVERSIZED boxes per ring
@@ -4450,7 +4455,9 @@ function makeVoxelBot(color, weaponType, skinName){
     const dark = voxMat(0x1b2630,{noise:10});
     const barrel=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.5,0.17),dark); barrel.position.y=-0.26; heldGrp.add(barrel);
     const core=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.52,0.08),new THREE.MeshBasicMaterial({color:cfg.bossgunColor||0x35c8ff,fog:false})); core.position.y=-0.26; heldGrp.add(core);
-    const ring=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.07,0.22),new THREE.MeshBasicMaterial({color:cfg.bossgunColor2||0x8fe6ff,fog:false})); ring.position.y=-0.52; heldGrp.add(ring);
+    // -0.50, not -0.52: this ring is the lowest mesh on the whole Colossus (the arm hangs at rest), and at
+    // its 3.1x boss scale the extra 0.02 put the glow ring through the dungeon floor.
+    const ring=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.07,0.22),new THREE.MeshBasicMaterial({color:cfg.bossgunColor2||0x8fe6ff,fog:false})); ring.position.y=-0.50; heldGrp.add(ring);
     const grip=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.18,0.11),dark); grip.position.y=0.06; heldGrp.add(grip);
   } else {
     const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.34,0.1), voxMat(0x1b1d22,{noise:10})); barrel.position.y=-0.16; heldGrp.add(barrel);
@@ -4472,7 +4479,10 @@ function makeVoxelBot(color, weaponType, skinName){
     const thigh = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.36,0.22), thighMat); thigh.position.y=-0.18; leg.add(thigh);
     const shin = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.32,0.2), thighMat); shin.position.y=-0.5; leg.add(shin);
     const boot = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.16,0.26), bootMat); boot.position.y=-0.72; leg.add(boot);
-    leg.position.set(side*0.16, 0.7, 0); g.add(leg); return leg;
+    // 0.80, not 0.70: the boot hangs to local -0.72 and is 0.16 tall, so its underside sat at
+    // (0.70-0.72-0.08) = -0.10 — every grunt in the game stood 0.1 inside the floor, and the Colossus,
+    // which reuses this rig at scale 3.1, stood 0.31 inside it.
+    leg.position.set(side*0.16, 0.80, 0); g.add(leg); return leg;
   }
   const legL = makeLeg(-1);
   const legR = makeLeg(1);
@@ -5604,8 +5614,11 @@ function makeIfritKing(){
     cape.position.set(mx,1.95,-0.33); g.add(cape);
   }
   // ---- wide raging flame base (standing IN fire, not wearing a cone skirt) ----
+  // Each cone's y is its CENTRE, so a cone of height h centred at y reaches down to y-h/2. The innermost
+  // core was centred at -0.02 with h=0.4, i.e. its point dipped to -0.22 — 0.44 below the floor once the
+  // boss is scaled to 2.0. The Ifrit hovers, so the flame should meet the ground, not pass through it.
   [{y:0.9,r:0.66,h:0.9,m:flameOuter},{y:0.5,r:0.48,h:0.75,m:flameMid},
-   {y:0.2,r:0.3,h:0.6,m:flameHot},{y:-0.02,r:0.15,h:0.4,m:flameCore}].forEach(c=>{
+   {y:0.3,r:0.3,h:0.6,m:flameHot},{y:0.20,r:0.15,h:0.4,m:flameCore}].forEach(c=>{
     const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,8), c.m); cone.position.set(0,c.y,0); g.add(cone);
   });
   // licking side flames, so the base is ragged rather than a clean cone stack
@@ -5615,6 +5628,7 @@ function makeIfritKing(){
     lick.position.set(Math.cos(a)*r,0.5+((i%3)*0.1),Math.sin(a)*r); lick.rotation.z=Math.cos(a)*0.3; lick.rotation.x=-Math.sin(a)*0.3; g.add(lick);
   }
   const flameLight = new THREE.PointLight(0xff8a2a,2.0,9); flameLight.position.set(0,0.7,0); g.add(flameLight);
+  g.userData.hoverBase = 0;   // it floats; the AI loop bobs the whole mesh around this rest height
 
   // ---- head: heavy brow, burning eyes and maw ----
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.58,0.56,0.52), basalt); head.position.set(0,2.92,0.02); g.add(head);
@@ -5688,9 +5702,13 @@ function makeHydra(){
     {z:-1.5,  w:0.8,  h:0.72, y:0.44}, {z:-2.0,  w:0.6,  h:0.55, y:0.35},
     {z:-2.45, w:0.42, h:0.4,  y:0.26},
   ];
+  // The belly plates hang below each segment's centre, and the lowest reached +0.033 — the whole serpent
+  // hovered a hair off the floor. Dropping every segment by that amount seats it.
+  trunkSegs.forEach(sg=>{ sg.y -= 0.033; });
+  const trunkMeshes = [];
   trunkSegs.forEach((s,i)=>{
     const mat = i%2 ? scaleMat2 : scaleMat;
-    const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,0.66), mat); seg.position.set(0,s.y,s.z); g.add(seg);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,0.66), mat); seg.position.set(0,s.y,s.z); g.add(seg); trunkMeshes.push(seg);
     // pale belly plates along the underside
     const belly=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.6,s.h*0.26,0.62), bellyMat); belly.position.set(0,s.y-s.h*0.42,s.z); g.add(belly);
     // dorsal scute ridge along the spine, so the top edge isn't a flat run
@@ -5802,6 +5820,8 @@ function makeHydra(){
   neck(-0.56,-1.15, 5);   // outermost pair, splayed clear of their neighbours
   neck( 0.56, 1.15, 5);
 
+  // the AI loop undulates these while the Hydra moves — it has no legs, so this is its walk
+  g.userData.hydraTrunk = trunkMeshes.map(m=>({mesh:m, baseY:m.position.y, z:m.position.z}));
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
@@ -5865,18 +5885,40 @@ function makeChampion(){
   const foreR=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.42,0.22), skinMat); foreR.position.set(0,-0.6,0.1); foreR.rotation.x=-0.7; armR.add(foreR);
   const grip=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.22,0.1), voxMat(0x3a2a1a,{noise:10})); grip.position.set(0,-0.78,0.28); armR.add(grip);
   const guard=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.06,0.12), bronzeMat); guard.position.set(0,-0.66,0.32); armR.add(guard);
-  const blade=new THREE.Mesh(new THREE.BoxGeometry(0.12,1.0,0.05), steelMat); blade.position.set(0,-0.1,0.55); blade.rotation.x=-0.4; armR.add(blade);
-  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.2,4), steelMat); tip.position.set(0,0.42,0.72); tip.rotation.x=-0.4; armR.add(tip);
+  // The blade and its tip disagreed about which way the sword pointed. rotation.x = -0.4 sends a box's
+  // local +Y along (0, cos-0.4, sin-0.4) = up and BACKWARD, but the blade was positioned forward of the
+  // guard and the tip further forward still — so the blade floated clear of the hilt with a 0.42 gap and
+  // the tip floated clear of the blade. Both now use +0.4 (up and forward) and are placed by walking that
+  // same direction out from the guard, so hilt, blade and tip form one continuous run.
+  const bladeDir = {y:Math.cos(0.4), z:Math.sin(0.4)};
+  const guardY = -0.66, guardZ = 0.32, bladeLen = 1.0;
+  const blade=new THREE.Mesh(new THREE.BoxGeometry(0.12,bladeLen,0.05), steelMat);
+  blade.position.set(0, guardY+bladeDir.y*bladeLen/2, guardZ+bladeDir.z*bladeLen/2); blade.rotation.x=0.4; armR.add(blade);
+  const fuller=new THREE.Mesh(new THREE.BoxGeometry(0.04,bladeLen*0.8,0.06), armorDark);
+  fuller.position.set(0, guardY+bladeDir.y*bladeLen/2, guardZ+bladeDir.z*bladeLen/2); fuller.rotation.x=0.4; armR.add(fuller);
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.2,4), steelMat);
+  tip.position.set(0, guardY+bladeDir.y*(bladeLen+0.08), guardZ+bladeDir.z*(bladeLen+0.08)); tip.rotation.x=0.4; armR.add(tip);
   g.userData.bossgunAnchor = armR; // AI can wave the sword arm via armR if desired
 
-  // legs with greaves + sandals
-  [-1,1].forEach(s=>{
-    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.5,0.28), skinMat); thigh.position.set(s*0.24,0.32,0); g.add(thigh);
-    const greave=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.4,0.26), armorMat); greave.position.set(s*0.24,-0.04,0.02); g.add(greave);
-    const foot=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.14,0.4), voxMat(0x5a4020,{noise:10})); foot.position.set(s*0.24,-0.28,0.08); g.add(foot);
-  });
+  // Legs as hip-pivoted groups, not loose meshes. This rig previously set userData.legL/legR to null, so
+  // the shared leg animation at the bottom of the AI loop — guarded by `if(ud.legL)` — skipped this boss
+  // entirely and Boss III slid across the arena with completely rigid legs.
+  //
+  // Every Y is also 0.35 higher than it was: the foot is 0.14 tall and sat at -0.28, putting its underside
+  // at -0.35, and at the boss scale of 2.3 that is 0.8 of a unit below the arena floor — the Champion's
+  // feet and shins were entirely underground. Hip pivot at 0.92 with the sole at local -0.92 puts it on 0.
+  function championLeg(sd){
+    const leg = new THREE.Group();
+    leg.position.set(sd*0.24, 0.92, 0);
+    const thigh =new THREE.Mesh(new THREE.BoxGeometry(0.28,0.5,0.28), skinMat);   thigh.position.set(0,-0.25,0); leg.add(thigh);
+    const greave=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.4,0.26), armorMat);  greave.position.set(0,-0.61,0.02); leg.add(greave);
+    const knee  =new THREE.Mesh(new THREE.BoxGeometry(0.29,0.14,0.29), bronzeMat); knee.position.set(0,-0.40,0.03); leg.add(knee);
+    const foot  =new THREE.Mesh(new THREE.BoxGeometry(0.28,0.14,0.4), voxMat(0x5a4020,{noise:10})); foot.position.set(0,-0.85,0.08); leg.add(foot);
+    g.add(leg); return leg;
+  }
+  const champLegL = championLeg(-1), champLegR = championLeg(1);
 
-  g.userData.legL = null; g.userData.legR = null; g.userData.armR = armR; g.userData.armL = armL;
+  g.userData.legL = champLegL; g.userData.legR = champLegR; g.userData.armR = armR; g.userData.armL = armL;
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
@@ -5932,18 +5974,22 @@ function makeTiger(){
   [[-0.17,0.32],[0.17,0.32],[-0.19,-0.5],[0.19,-0.5]].forEach(([lx,lz])=>{
     const upper=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.26,0.16),furMat); upper.position.set(lx,0.42,lz); g.add(upper);
     const lower=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.24,0.13),furMat); lower.position.set(lx,0.19,lz); g.add(lower);
-    const paw=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.09,0.19), bellyMat); paw.position.set(lx,0.07,lz+0.02); g.add(paw);
+    const paw=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.09,0.19), bellyMat); paw.position.set(lx,0.045,lz+0.02); g.add(paw); // 0.045: at 0.07 the pads floated clear of the sand
     const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.05,0.04), stripeMat); stripe.position.set(lx,0.34,lz+0.08); g.add(stripe);
   });
 
   // longer, chain-built tail (each segment starts where the last ended, so it flows instead of floating)
-  { let ty=0.62, tz=-0.75, theta=-1.1;
+  // NOTE the axis pairing — this is the bug the Hydra's own tail comment warns about, repeated here. These
+  // boxes carry their LENGTH on local Z, and a box rotated by rotation.x = t points its +Z along
+  // (0, -sin t, cos t). The walk stepped along (0, cos t, sin t) instead: the wrong pairing entirely, so
+  // the segments marched one way while facing another and the tail rendered as five floating blocks.
+  { let ty=0.62, tz=-0.75, theta=3.0;   // 3.0 = pointing back and very slightly down, under the new pairing
     [{s:0.09,len:0.22},{s:0.075,len:0.2},{s:0.06,len:0.18},{s:0.05,len:0.16},{s:0.045,len:0.14}].forEach((seg,i)=>{
-      const dy=Math.cos(theta), dz=Math.sin(theta);
+      const dy=-Math.sin(theta), dz=Math.cos(theta);
       const cy=ty+(seg.len/2)*dy, cz=tz+(seg.len/2)*dz;
       const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s,seg.len), i%2?stripeMat:furMat);
       m.position.set(0,cy,cz); m.rotation.x=theta; g.add(m);
-      ty=ty+seg.len*dy-0.01*dy; tz=tz+seg.len*dz-0.01*dz; theta+=0.3;
+      ty+=seg.len*dy*0.92; tz+=seg.len*dz*0.92; theta-=0.22;   // 0.92 = segments overlap; tail droops as it runs
     });
   }
 
@@ -5961,13 +6007,21 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
   const bot = makeVoxelBot(color, weaponType, opts.skin);
   if(opts.scale) bot.scale.setScalar(opts.scale);
   bot.position.set(x,0,z);
+  // Bosses get a collision radius measured from the model's real footprint rather than a flat constant.
+  // Floored at the old 1.2 so nothing shrinks, and capped so a boss can still path between obstacles.
+  let radius = 0.55*(opts.scale||1);
+  if(opts.boss){
+    const bb = new THREE.Box3().setFromObject(bot);
+    radius = Math.max(Math.abs(bb.max.x), Math.abs(bb.min.x), Math.abs(bb.max.z), Math.abs(bb.min.z));
+    radius = Math.max(1.2, Math.min(3.0, radius));
+  }
   bot.userData.isBot = true;
   scene.add(bot);
   const hp = opts.hp || BOT_MAX_HP;
   const data = {mesh:bot, color, weaponType, skin:opts.skin, pA:new THREE.Vector3(...pA), pB:new THREE.Vector3(...pB),
     t:Math.random()*6, hp, maxHp:hp, alive:true, flash:0, diff:opts.diff||1,
     fireCd:1+Math.random()*2, aim:0, swing:0, boss:!!opts.boss, speed:opts.speed||1, scale:opts.scale||1,
-    heading:Math.random()*Math.PI*2, wanderT:0, moving:0, facing:0};
+    heading:Math.random()*Math.PI*2, wanderT:0, moving:0, facing:0, radius};
   bot.userData.data = data;
   bots.push(data);
   return bot;
@@ -8020,7 +8074,10 @@ function animate(){
     // scale into the collision radius too — a 1.3x-scaled hippo (or any other up-scaled non-boss enemy) was
     // using the same tiny radius as a normal-sized bot, so a third of its visible bulk could clip straight
     // through rails/walls/other bots instead of actually being blocked by them (boss radius stays flat/tuned)
-    const R = b.boss?1.2:0.55*(b.scale||1);
+    // Boss radius used to be a flat 1.2 for every boss regardless of model. The Hydra's trunk alone is
+    // 1.3 wide at scale 2.4 — 1.56 half-width — and it is ~8 long nose to tail, so its body and tail
+    // walked straight through the arena's columns and cover. Measured once at spawn instead.
+    const R = b.radius !== undefined ? b.radius : (b.boss?1.2:0.55*(b.scale||1));
     const toPX = camera.position.x-b.mesh.position.x, toPZ = camera.position.z-b.mesh.position.z;
     let facePlayer = true;
     if(b.boss){
@@ -8130,8 +8187,22 @@ function animate(){
     }
 
     // ---- animation: legs/arms swing only while actually moving (skipped by non-humanoid rigs, e.g. scarabs) ----
-    const walk = Math.sin(t*7 + b.t*3) * (b.moving?1:0);
+    // b.moving is a hard 0/1 flip, and bosses set it from `distToPlayer>4` — so crossing that threshold
+    // snapped the legs from mid-stride to rest in a single frame, a visible pop on every approach.
+    // b.gait eases toward it over ~0.2s and drives the animation instead.
+    b.gait = (b.gait===undefined) ? (b.moving?1:0) : b.gait + ((b.moving?1:0) - b.gait) * Math.min(1, dt*5);
+    const walk = Math.sin(t*7 + b.t*3) * b.gait;
     if(ud.legL){ ud.legL.rotation.x = walk*0.5; ud.legR.rotation.x = -walk*0.5; }
+    // Legless bosses get idle motion instead of sliding rigidly. Both ride b.gait, so they settle when the
+    // boss stops rather than writhing on the spot.
+    if(ud.hydraTrunk){
+      for(const sg of ud.hydraTrunk){
+        sg.mesh.position.y = sg.baseY + Math.sin(t*4 + sg.z*1.6) * 0.05 * (0.35 + 0.65*b.gait);
+      }
+    }
+    if(ud.hoverBase !== undefined){
+      b.mesh.position.y = ud.hoverBase + Math.sin(t*1.6 + b.t) * 0.16;
+    }
     // aim blend: 0 = arm down swinging, 1 = arm raised toward player
     const targetAim = canEngage ? 1 : 0;
     b.aim += (targetAim - b.aim) * Math.min(1, dt*8);
