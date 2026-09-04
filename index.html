@@ -980,9 +980,20 @@ cottage(-27,-5, 4, 4, 1, 0x9a8f7f, 0x3a2f26);
 // The climbing mechanic is untouched: same signature, same plateau height zone at y=height, same ramp zone
 // geometry. Everything added here is cosmetic and carries no collider, so nothing can block the ramp.
 function sniperTower(x,z,size,height,wallColor,rampDir){
+  // Slimmer and taller than the caller asks for. A 4.5-wide box 6 tall is almost a cube, and no amount of
+  // surface detail makes a cube read as a tower — the proportion is the thing. Applied BEFORE `half` is
+  // taken, so the roof deck, the collider and the plateau height zone all agree; deriving half from the
+  // original size left the walkable plateau wider than the deck it sat on.
+  size = size * 0.78;
+  height = height * 1.22;
   const half=size/2;
-  const dark = new THREE.Color(wallColor).multiplyScalar(0.78).getHex();
-  const light= new THREE.Color(wallColor).multiplyScalar(1.12).getHex();
+  // The tonal spread has to be WIDE. At 0.78/1.12 the pilasters, cornice and merlons were within about a
+  // tenth of the wall's own tone, and under bright daylight that difference vanishes — the tower still read
+  // as a plain grey crate from any face the stair wasn't on. 0.55/1.30 plus a near-black recess tone gives
+  // the detail enough contrast to actually be seen.
+  const dark  = new THREE.Color(wallColor).multiplyScalar(0.55).getHex();
+  const light = new THREE.Color(wallColor).multiplyScalar(1.30).getHex();
+  const shade = new THREE.Color(wallColor).multiplyScalar(0.34).getHex();
 
   // ---- battered base: a wider plinth with a chamfer course, so the tower grows out of the ground ----
   block(size+0.9, 0.35, size+0.9, dark,  x, 0.175, z, {noise:16});
@@ -1001,7 +1012,10 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
   const slitMat = {noise:6};
   [[0,-1],[0,1],[-1,0],[1,0]].forEach(([nx,nz])=>{
     [height*0.38, height*0.72].forEach(sy=>{
-      block(nx?0.14:0.22, 0.5, nz?0.14:0.22, 0x241f18, x+nx*(half+0.02), sy, z+nz*(half+0.02), slitMat);
+      // surround first, then the dark opening inside it — a bare dark rectangle on a flat wall reads as
+      // a stain rather than an opening; the lighter frame is what makes it a window
+      block(nx?0.34:0.46, 0.72, nz?0.34:0.46, light, x+nx*(half+0.01), sy, z+nz*(half+0.01), {noise:10});
+      block(nx?0.16:0.24, 0.52, nz?0.16:0.24, shade, x+nx*(half+0.06), sy, z+nz*(half+0.06), slitMat);
     });
   });
   // corbelled cornice: two stepped courses carrying the roof out past the shaft
@@ -1026,6 +1040,19 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
     block(0.42, merlonH+0.18, 0.42, dark, x+sx*edge, height+0.3+(merlonH+0.18)/2, z+sz*edge, {noise:12});
   });
 
+  // ---- a mast with a pennant on the roof. This is the piece that actually sells it as a watchtower from
+  // across the map: a single strong vertical spike above the crenellations, visible over every rooftop, and
+  // the one saturated colour on an otherwise stone-toned building. No collider — it stands inside the deck.
+  const mastH = height*0.55;
+  block(0.16, mastH, 0.16, 0x4a3018, x, height+0.3+mastH/2, z, {noise:12});
+  const pennant=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.9,1.35), new THREE.MeshLambertMaterial({color:0xb8382a}));
+  pennant.position.set(x+0.05, height+0.3+mastH-0.7, z+0.72); scene.add(pennant);
+  block(0.26, 0.22, 0.26, 0xad8730, x, height+0.3+mastH+0.1, z, {noise:8});   // finial
+  // corner brazier, so the tower reads as manned
+  block(0.42, 0.5, 0.42, dark, x+half-0.35, height+0.55, z+half-0.35, {noise:12});
+  const emb=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.16,0.3), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false}));
+  emb.position.set(x+half-0.35, height+0.86, z+half-0.35); scene.add(emb);
+
   // one collider for the whole footprint, with roofY so the deck stays walkable. The old version placed a
   // collider per wall and left the interior open, which a fast diagonal move could slip into.
   addBox(x, z, size+0.7, size+0.7, height);
@@ -1033,7 +1060,10 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
 
   // ---- exterior staircase up one side (rampDir: 'n'|'s'|'e'|'w' — which face it climbs) ----
   const steps=Math.max(6,Math.round(height/0.45));
-  const rampWidth=2.8, rampLen=height*1.7; // wide margin so a fast/diagonal step can't drift off the corridor
+  // 1.45, not the original 1.7. The tower is 22% taller now, and at the old ratio the stair grew with it and
+  // started running through the cover, the stalls and the shipsheds — verified against the collider list,
+  // 7 buildings hit. A slightly steeper flight keeps the ramp's ground footprint where it has always been.
+  const rampWidth=2.8, rampLen=height*1.45; // wide margin so a fast/diagonal step can't drift off the corridor
   const woodMat={noise:14,pattern:'plate'};
   const woodCol = 0x6b4a28, woodDarkCol = 0x4a3018;
   // unit vector pointing out along the ramp, plus its perpendicular, so the rails work for any direction
@@ -2678,14 +2708,34 @@ heightZoneTarget = heightZonesGreek;
   altar(7,-20);
 
   // a sea cave/grotto — a rock archway near the shore, purely atmospheric
+  // Three plain grey boxes in a doorway shape. Sea rock is layered and undercut, so this is built as
+  // stacked strata of slightly different tone stepping back as they rise, with the opening narrowing
+  // toward the top the way a wave-cut arch actually does, and a dark recess so it reads as a cave mouth
+  // rather than a gap between two blocks.
   function seaCave(x,z){
-    const rockMat = voxMat(0x8a8478,{noise:20});
-    block(5,3.2,3, 0x8a8478, x-2.6,1.6,z,{noise:20});
-    block(5,3.2,3, 0x8a8478, x+2.6,1.6,z,{noise:20});
-    block(9.5,1,3, 0x8a8478, x,3.4,z,{noise:20});
-    addBox(x-2.6,z,5,3); addBox(x+2.6,z,5,3);
+    const bands=[0x7d7669, 0x8f887a, 0x6e6759, 0x99917f];
+    [-1,1].forEach(sd=>{
+      let px = x + sd*2.9, w = 5.2, h = 0.9, y = 0;
+      for(let i=0;i<4;i++){
+        block(w, h, 3.2+i*0.15, bands[i], px, y+h/2, z+(i%2?0.10:-0.10), {noise:20});
+        y += h*0.92; w *= 0.90; h *= 1.06;
+        px -= sd*0.28;                      // each course steps in, so the pier leans over the opening
+      }
+      addBox(x+sd*2.9, z, 5.0, 3.2);
+    });
+    // the arch head: two courses spanning the gap, the lower one narrower so the opening is pointed
+    block(4.6, 0.85, 3.3, bands[2], x, 3.65, z, {noise:20});
+    block(7.8, 0.95, 3.5, bands[1], x, 4.5,  z, {noise:20});
+    block(5.6, 0.7,  3.0, bands[3], x, 5.3,  z, {noise:20});
+    // dark recess behind the opening, so it reads as depth rather than a hole through to the skybox
+    block(3.4, 3.0, 1.2, 0x241f1a, x, 1.5, z-1.4, {noise:10});
+    // weed and wet rock at the waterline
+    for(let i=0;i<5;i++){
+      const t=-2.2+i*1.1;
+      block(0.9, 0.22, 1.0, 0x3f5136, x+t, 0.11, z+1.5, {noise:16});
+    }
   }
-  seaCave(-6,16);
+  seaCave(-5,16.6);   // shifted clear of the Temple of Poseidon's stylobate now that the arch is wider
 
   // ---- the open Mediterranean Sea along the north edge: a sandy beach slope into real open water, no quay wall ----
   // The shore reads as three bands running out from the streets: the same gravel, then sand, then open sea.
@@ -2851,7 +2901,7 @@ heightZoneTarget = heightZonesGreek;
     seaweed(-31,23.3); seaweed(-14,23.5); seaweed(-1,23.2); seaweed(10,23.6); seaweed(22,23.3); seaweed(33,23.4);
     shells(-26,22.2); shells(-10,20.8); shells(4,22.6); shells(19,21.7); shells(31,20.9);
     mooringPost(-16,21.8); mooringPost(3.5,22.4); mooringPost(13,22.6);   // clear of both the watchtower legs and the shipsheds
-    beachedSkiff(-21,21.6,0.42); beachedSkiff(9.5,21.4,-0.6);   // clear of the watchtower legs at (18,20)
+    beachedSkiff(-21,21.6,0.42); beachedSkiff(-2.5,21.6,-0.6);  // clear of the north tower's stair and the mooring post
   })();
   // an ancient Mediterranean merchant vessel, not just a plank box: tapered pointed bow with a painted eye
   // (real ancient ships were given eyes so the vessel could "see" its way), a curved raised stern with the
@@ -2944,17 +2994,57 @@ heightZoneTarget = heightZonesGreek;
   }
   sphinx(4.2,2.0); sphinx(-4.2,2.0);
   // weathered broken statues, toppled and snapped — a quiet nod to Medusa's petrifying gaze
+  // Was a plinth, a tilted slab and a cube on the ground. A broken statue is legible from ONE detail: the
+  // feet still standing on the plinth after the rest has come down. That plus a draped torso lying beside
+  // it, a snapped-off arm and a real head reads instantly; three boxes read as rubble.
   function brokenStatue(x,z,rot){
-    const stoneMat = marbleTrim;
-    const base=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.4,0.9),stoneMat); base.position.set(x,0.2,z); scene.add(base);
-    const torso=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.1,0.4),stoneMat); torso.position.set(x,0.95,z); torso.rotation.z=rot||0.3; scene.add(torso);
-    const head=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.34,0.32),stoneMat); head.position.set(x+0.7,0.17,z+0.4); head.rotation.y=0.6; scene.add(head);
-    addBox(x,z,1.1,1.1);
+    const stoneMat = marbleTrim, fleshMat = marbleMat;
+    const plinth=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.45,1.0),stoneMat); plinth.position.set(x,0.225,z); scene.add(plinth);
+    // the feet and snapped ankles, still in place on top of the plinth — the giveaway detail
+    [-1,1].forEach(sd=>{
+      const foot=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.12,0.34), fleshMat); foot.position.set(x+sd*0.15,0.51,z+0.04); scene.add(foot);
+      const ankle=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,0.26,8), fleshMat); ankle.position.set(x+sd*0.15,0.70,z); scene.add(ankle);
+      const snap=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.09,0.06,8), stoneMat); snap.position.set(x+sd*0.15,0.85,z); snap.rotation.x=sd*0.12; scene.add(snap);
+    });
+    // the torso, fallen and lying on its side, with drapery folds down one flank
+    const tR=(rot||0.3);
+    const torso=new THREE.Mesh(new THREE.BoxGeometry(0.52,1.15,0.42), fleshMat);
+    torso.position.set(x+1.15,0.27,z+0.25); torso.rotation.z=Math.PI/2; torso.rotation.y=tR; scene.add(torso);
+    for(let i=0;i<3;i++){
+      const fold=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.95,0.08), stoneMat);
+      fold.position.set(x+1.15+Math.sin(tR)*0.0, 0.44, z+0.25-0.14+i*0.14); fold.rotation.z=Math.PI/2; fold.rotation.y=tR; scene.add(fold);
+    }
+    // a snapped arm, thrown clear
+    const arm=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,0.62,8), fleshMat);
+    arm.position.set(x-0.85,0.11,z+0.7); arm.rotation.z=Math.PI/2; arm.rotation.y=-0.5; scene.add(arm);
+    // the head, face up, with a suggestion of features rather than a bare cube
+    const head=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.36,0.34),fleshMat); head.position.set(x+2.05,0.18,z-0.35); head.rotation.y=0.6; head.rotation.z=0.35; scene.add(head);
+    const hair=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.14,0.38),stoneMat); hair.position.set(x+2.05,0.33,z-0.35); hair.rotation.y=0.6; hair.rotation.z=0.35; scene.add(hair);
+    // only the plinth blocks. The fallen torso lies at 0.27 and is steppable, and giving it a collider
+    // put a second obstacle in the open where the player reads bare ground.
+    addBox(x,z,1.2,1.2);
   }
   brokenStatue(6,-16,0.3); brokenStatue(-24,-10,-0.4);
+  // One tapered cylinder. An amphora is recognised by its PROFILE — a swelling belly, a narrow neck, a
+  // flaring rim, and the two handles bridging neck to shoulder — so all four are here. The pointed toe is
+  // why they were stored leaning in racks rather than standing, so this one rests in a low stone collar.
   function amphora(x,z){
-    const m=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.42,0.95,8), voxMat(0xc9703c,{noise:16,pattern:'plate'}));
-    m.position.set(x,0.475,z); scene.add(m); addBox(x,z,0.7,0.7);
+    const clay = voxMat(0xc9703c,{noise:16,pattern:'plate'});
+    const clayDark = voxMat(0x8f4a26,{noise:14});
+    const collar=new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.34,0.16,10), marbleTrim); collar.position.set(x,0.08,z); scene.add(collar);
+    const toe=new THREE.Mesh(new THREE.ConeGeometry(0.20,0.28,10), clayDark); toe.position.set(x,0.16,z); toe.rotation.x=Math.PI; scene.add(toe);
+    const belly=new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.20,0.44,10), clay); belly.position.set(x,0.50,z); scene.add(belly);
+    const shoulder=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.30,0.22,10), clay); shoulder.position.set(x,0.82,z); scene.add(shoulder);
+    const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.14,0.26,10), clay); neck.position.set(x,1.05,z); scene.add(neck);
+    const rim=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.12,0.09,10), clayDark); rim.position.set(x,1.22,z); scene.add(rim);
+    // two handles, each an upright and a shoulder return, bridging rim down to the shoulder
+    [-1,1].forEach(sd=>{
+      const up=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.26,0.07), clayDark); up.position.set(x+sd*0.19,1.06,z); scene.add(up);
+      const ret=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.07,0.07), clayDark); ret.position.set(x+sd*0.15,0.90,z); ret.rotation.z=sd*0.6; scene.add(ret);
+    });
+    // a painted band round the belly — Greek pottery was decorated, and it breaks the flat terracotta
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(0.305,0.245,0.09,10), voxMat(0x2a241c,{noise:8})); band.position.set(x,0.60,z); scene.add(band);
+    addBox(x,z,0.7,0.7);
   }
   amphora(4.5,4.6); amphora(-9,-3.4); amphora(21,3.2);
 
@@ -3007,9 +3097,30 @@ heightZoneTarget = heightZonesGreek;
       block(r,r*0.8,r,0x9a9284,x+(Math.random()-0.5)*s,r*0.4,z+(Math.random()-0.5)*s,{noise:18}); }
     addBox(x,z,s*1.3,s*1.3);
   }
+  // A toppled column breaks at its drum joints and the pieces roll apart — it does not stay a single
+  // unbroken cylinder, which is what this was. Four drums with gaps and slight misalignment, a capital
+  // shed off one end, and a stump still standing on its base at the other.
   function fallenColumn(x,z,rot){
-    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.32,2.6,8), marbleTrim); col.rotation.z=Math.PI/2; col.rotation.y=rot||0; col.position.set(x,0.32,z); scene.add(col);
-    addBox(x,z,2.8,0.8);
+    const c=Math.cos(rot||0), sn=Math.sin(rot||0);
+    // the stump: a base block with the lowest drum still seated on it, snapped off short
+    const base=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.3,1.1), marbleTrim); base.position.set(x-c*1.5,0.15,z-sn*1.5); base.rotation.y=rot||0; scene.add(base);
+    const stump=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,0.55,10), marbleMat); stump.position.set(x-c*1.5,0.57,z-sn*1.5); scene.add(stump);
+    // the shaft, lying on its side: four drums, each rolled a little off the line of the fall
+    for(let i=0;i<4;i++){
+      const t=-0.35+i*0.78, jitter=(i%2?0.13:-0.10);
+      const drum=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.33,0.7,10), i%2?marbleTrim:marbleMat);
+      drum.position.set(x+c*t - sn*jitter, 0.33, z+sn*t + c*jitter);
+      drum.rotation.z=Math.PI/2; drum.rotation.y=(rot||0)+jitter*0.5; scene.add(drum);
+    }
+    // the capital, shed off the far end and lying face-down
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.34,0.9), marbleTrim);
+    cap.position.set(x+c*3.1, 0.17, z+sn*3.1); cap.rotation.y=(rot||0)+0.4; scene.add(cap);
+    const echinus=new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.40,0.26,10), marbleMat);
+    echinus.position.set(x+c*3.1, 0.47, z+sn*3.1); scene.add(echinus);
+    // collider covers the stump and the drum run only. The shed capital at the far end is 0.5 tall and
+    // steppable, and blocking the full 4.6-unit scatter made a walk-around obstacle out of what should
+    // read as low rubble.
+    addBox(x, z, Math.abs(3.2*c)+Math.abs(0.9*sn), Math.abs(3.2*sn)+Math.abs(0.9*c));
   }
   // palms now dominate (Nile character); a few cypress/olive remain for the Greek-fusion accent, not removed entirely
   palmTree(-27,-6); palmTree(-27,8); cypressTree(27,-18); cypressTree(27,-4);
@@ -3100,7 +3211,9 @@ heightZoneTarget = heightZonesGreek;
   greekStall(-12.5,-5.0,0x8f2f26,0);
   greekStall(-8.5,-5.0,0x2f5f8a,0);   // z=-5: at -4 the east stall clipped the amphora at (-9,-3.4)
   greekStall(-12.5,-11.0,0xc8892c,Math.PI);
-  greekStall(-8.5,-11.0,0x8f2f26,Math.PI);
+  // The south tower's stair corridor runs right through the agora at x[-9.4,-6.6], and the stoa closes
+  // its west side at x=-15.1, so this stall has to sit in the band between them.
+  greekStall(-12.0,-13.0,0x8f2f26,Math.PI);
   // bema: the speaker's platform every agora had — also chest-high cover in the middle of the square
   (function bema(x,z){
     const b1=new THREE.Mesh(new THREE.BoxGeometry(3.2,0.9,3.2), marbleTrim); b1.position.set(x,0.45,z); b1.castShadow=true; scene.add(b1);
@@ -3180,15 +3293,15 @@ heightZoneTarget = heightZonesGreek;
     addBox(x,z,1.0,1.0);
   }
   // spread across the fighting ground: the crossroads, the approach to the Pharos, the agora edges
-  lowWall(8.5,-4.5,5.5,0);    lowWall(-6.0,-17.0,4.5,0);   // clear of the wave spawn at (-2,-20)
+  lowWall(8.5,-4.5,5.5,0);    lowWall(-2.0,-17.0,4.5,0);   // clear of the wave spawn at (-2,-20) and the tower stair
   lowWall(14.0,4.5,5.0,0.35); lowWall(-24.0,1.0,4.8,Math.PI/2);  // x=14: at 12 it sat on the obelisk
-  lowWall(-7.0,-13.0,5.0,0);  // flanking the Pharos approach, so that walk up isn't open ground
-  cistern(9.0,-1.0);   cistern(-4.5,6.5);   cistern(19.0,-6.0);
+  lowWall(-13.0,-16.0,5.0,0); // flanking the Pharos approach, so that walk up isn't open ground
+  cistern(9.0,-1.0);   cistern(-4.5,6.5);   cistern(19.0,-10.0);   // clear of the east tower's stair corridor
   amphoraStack(-7.5,8.0);  amphoraStack(16.5,-13.5);   // clear of the shared wave spawn at (12,-16)  amphoraStack(-6.0,-9.5);  amphoraStack(21.5,9.0);
   votivePillar(7.5,10.0,2.4); votivePillar(-8.5,11.5,2.0); votivePillar(-22.0,-9.5,2.6);
   votivePillar(13.5,-11.0,2.2);
   fallenColumn(3.0,-19.5,0.9); fallenColumn(-15.0,17.0,0.2); fallenColumn(18.5,1.0,1.35);
-  brokenStatue(-9.0,-19.0,0.5); brokenStatue(14.0,-29.0,-0.25);
+  brokenStatue(-11.0,-20.0,0.5); brokenStatue(14.0,-29.0,-0.25);
 
   // ================= DISTANT SCENERY =================
   // Out past the play area, on the backing-ground plane. Deliberately none of the building types the map
@@ -3410,7 +3523,9 @@ heightZoneTarget = heightZonesGreek;
     const tex=new THREE.CanvasTexture(c);
     tex.anisotropy=maxAniso;
     const H=90, B=33, ZN=-33, ZS=24;   // ZS = the shoreline stop; no wall is needed past it
-    const mat=new THREE.MeshBasicMaterial({map:tex, color:0x45b8ef, transparent:true, opacity:0.42,
+    // lighter, less saturated blue than the original 0x45b8ef — at that depth of colour the barrier read
+    // as a solid painted pane rather than as a soft limit, and it tinted everything visible through it
+    const mat=new THREE.MeshBasicMaterial({map:tex, color:0x86d4f6, transparent:true, opacity:0.36,
                                            depthWrite:false, side:THREE.DoubleSide, fog:true});
     function panel(w,px,pz,rotY){
       const m=new THREE.Mesh(new THREE.PlaneGeometry(w,H), mat);
