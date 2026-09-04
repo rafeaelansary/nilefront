@@ -4621,7 +4621,7 @@ function makeMummy(){
       seg.position.set(0,0.05+i*0.046,0); kh.add(seg);
     }
     kh_part(0.16,0.03,0.09,kDeep,0,0.225,0).rotation.z=0.05;   // guard
-    const kSegs=[
+    const kCtrl=[
       {w:0.05,  x:0,       y:0.27,   rz:0},
       {w:0.045, x:-0.0109, y:0.3387, rz:0.2443},
       {w:0.042, x:-0.0475, y:0.3983, rz:0.733},
@@ -4629,12 +4629,15 @@ function makeMummy(){
       {w:0.038, x:-0.1778, y:0.4367, rz:1.7104},
       {w:0.036, x:-0.241,  y:0.4065, rz:2.1991},
     ];
+    const kSegs=[];   // subdivided the same way the player's blade is — see the note there
+    kCtrl.forEach((b,i)=>{ kSegs.push(b); const n=kCtrl[i+1];
+      if(n) kSegs.push({w:(b.w+n.w)/2, x:(b.x+n.x)/2, y:(b.y+n.y)/2, rz:(b.rz+n.rz)/2}); });
     kSegs.forEach(b=>{
       const seg=kh_part(b.w,0.1,0.05,kGold,b.x,b.y,0); seg.rotation.z=b.rz;
-      const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.34,0.102,0.056), kBack);
-      back.position.set(-b.w*0.34,0,0); seg.add(back);
+      const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.30,0.101,0.056), kBack);
+      back.position.set(-b.w*0.33,0,0); seg.add(back);
     });
-    const kl=kSegs[kSegs.length-1];
+    const kl=kCtrl[kCtrl.length-1];
     const ktip=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.075,4), kGold);
     ktip.position.set(kl.x-Math.sin(kl.rz)*0.055, kl.y+Math.cos(kl.rz)*0.055, 0);
     ktip.rotation.z=kl.rz; kh.add(ktip);
@@ -6629,7 +6632,8 @@ function makeKhopesh(){
   // it worse — too closed and it becomes a shepherd's crook, too open and it stops being a khopesh.
   // The redesign here is entirely SURFACE: each segment gets a blunt inner back and a bright outer edge,
   // parented to it so they inherit its rotation and cannot drift off.
-  const bladeSegs=[
+  // The six verified control points. Positions and angles are NOT re-derived — they are the originals.
+  const bladeCtrl=[
     {w:0.05,  x:0,       y:0.27,   rz:0},
     {w:0.045, x:-0.0109, y:0.3387, rz:0.2443},
     {w:0.042, x:-0.0475, y:0.3983, rz:0.733},
@@ -6637,17 +6641,27 @@ function makeKhopesh(){
     {w:0.038, x:-0.1778, y:0.4367, rz:1.7104},
     {w:0.036, x:-0.241,  y:0.4065, rz:2.1991},
   ];
-  bladeSegs.forEach((b,i)=>{
+  // Six segments spanning 126 degrees means a 21-degree jump at every joint, and at that angular step the
+  // corners of adjacent boxes stick out past one another — which is the sawtooth running down the outer
+  // edge of the blade in game. Subdividing halves the step to about 10 degrees and the facets close up.
+  // This walks the SAME curve: every control point is kept exactly, and the inserted segments sit at the
+  // midpoint between neighbours, so the silhouette is unchanged and only the faceting goes away.
+  const bladeSegs=[];
+  bladeCtrl.forEach((b,i)=>{
+    bladeSegs.push(b);
+    const n=bladeCtrl[i+1];
+    if(n) bladeSegs.push({w:(b.w+n.w)/2, x:(b.x+n.x)/2, y:(b.y+n.y)/2, rz:(b.rz+n.rz)/2});
+  });
+  bladeSegs.forEach(b=>{
     const seg=part(g,b.w,0.1,0.05,goldBlade,b.x,b.y,0.04); seg.rotation.z=b.rz;
     // A khopesh is sharpened on the OUTER edge of the curve only; the inner edge is a blunt back. That
-    // asymmetry is what gives the blade a direction instead of reading as a symmetrical gold arc.
-    const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.34,0.102,0.056), bronzeBack);
-    back.position.set(-b.w*0.34,0,0); seg.add(back);
-    const edge=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.22,0.102,0.038), goldBlade);
-    edge.position.set(b.w*0.40,0,0); seg.add(edge);
+    // asymmetry is what gives the blade a direction instead of reading as a symmetrical gold arc. Kept
+    // inside the segment's own width so it cannot add a second set of protruding corners.
+    const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.30,0.101,0.056), bronzeBack);
+    back.position.set(-b.w*0.33,0,0); seg.add(back);
   });
   // point, carried on along the last segment's own direction so it meets the blade rather than floating
-  const last=bladeSegs[bladeSegs.length-1];
+  const last=bladeCtrl[bladeCtrl.length-1];
   const tip=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.075,4), goldBlade);
   tip.position.set(last.x - Math.sin(last.rz)*0.055, last.y + Math.cos(last.rz)*0.055, 0.04);
   tip.rotation.z=last.rz; g.add(tip);
