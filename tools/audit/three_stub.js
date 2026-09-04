@@ -631,4 +631,91 @@ global.__coplanar = function(root, scale, eps, omin){
   return hits;
 };
 
+
+// ---- whole-world sweeps. These run over thousands of meshes, so both use a uniform grid hash to avoid
+// the O(n^2) all-pairs comparison. ----
+global.__worldBoxes = function(group){
+  group.updateMatrixWorld();
+  const out = [];
+  group.traverse(o=>{ if(o.isMesh) out.push({mesh:o, box:global.__meshWorldBox(o)}); });
+  return out;
+};
+
+// Near-coplanar face pairs across a whole map. Same rule as the per-model check: two boxes overlapping
+// substantially in two axes whose faces sit within eps on the third will fight in the depth buffer.
+global.__worldCoplanar = function(group, eps, omin, cell){
+  const boxes = global.__worldBoxes(group);
+  cell = cell || 4;
+  const grid = new Map();
+  const key = (i,j,k)=> i+','+j+','+k;
+  boxes.forEach((b,idx)=>{
+    // A material with polygonOffset set is DELIBERATELY coplanar with what it lies on — paths on roads,
+    // plazas on ground. The depth bias is the fix, so flagging them is noise.
+    const mt = b.mesh.material;
+    if(mt && mt.polygonOffset) return;
+    const i0=Math.floor(b.box.min.x/cell), i1=Math.floor(b.box.max.x/cell);
+    const j0=Math.floor(b.box.min.y/cell), j1=Math.floor(b.box.max.y/cell);
+    const k0=Math.floor(b.box.min.z/cell), k1=Math.floor(b.box.max.z/cell);
+    // skip enormous meshes (ground slabs, backing planes): they touch every cell and everything is
+    // legitimately coplanar with a floor
+    if((i1-i0)>12 || (j1-j0)>12 || (k1-k0)>12) return;
+    for(let i=i0;i<=i1;i++) for(let j=j0;j<=j1;j++) for(let k=k0;k<=k1;k++){
+      const s=key(i,j,k); if(!grid.has(s)) grid.set(s,[]); grid.get(s).push(idx);
+    }
+  });
+  const AX=['x','y','z'];
+  const seen=new Set(); const hits=[];
+  for(const bucket of grid.values()){
+    for(let a=0;a<bucket.length;a++) for(let b=a+1;b<bucket.length;b++){
+      const ia=bucket[a], ib=bucket[b];
+      const pk = ia<ib ? ia+':'+ib : ib+':'+ia;
+      if(seen.has(pk)) continue; seen.add(pk);
+      const A=boxes[ia].box, B=boxes[ib].box;
+      for(let k=0;k<3;k++){
+        const ax=AX[k], u=AX[(k+1)%3], v=AX[(k+2)%3];
+        const ou=Math.min(A.max[u],B.max[u])-Math.max(A.min[u],B.min[u]);
+        const ov=Math.min(A.max[v],B.max[v])-Math.max(A.min[v],B.min[v]);
+        if(ou<omin||ov<omin) continue;
+        const oa=Math.min(A.max[ax],B.max[ax])-Math.max(A.min[ax],B.min[ax]);
+        if(oa<=0) continue;
+        for(const [pp,qq] of [[A.min[ax],B.min[ax]],[A.max[ax],B.max[ax]]]){
+          const d=Math.abs(pp-qq);
+          if(d>1e-9 && d<eps){
+            hits.push({axis:ax, gap:Math.round(d*10000)/10000,
+                       x:Math.round((A.min.x+A.max.x)/2*10)/10,
+                       y:Math.round((A.min.y+A.max.y)/2*10)/10,
+                       z:Math.round((A.min.z+A.max.z)/2*10)/10});
+          }
+        }
+      }
+    }
+  }
+  return hits;
+};
+
+// Scenery that floats: a mesh whose underside is well above the ground and which touches nothing else.
+global.__worldFloaters = function(group, groundY, minGap, eps){
+  const boxes = global.__worldBoxes(group).filter(b=>{
+    const s=b.box.max.x-b.box.min.x, t=b.box.max.z-b.box.min.z;
+    return s<40 && t<40;                       // ignore ground slabs and backing planes
+  });
+  const out=[];
+  for(let i=0;i<boxes.length;i++){
+    const A=boxes[i].box;
+    if(A.min.y < groundY + minGap) continue;   // sitting on or near the ground: fine
+    let supported=false;
+    for(let j=0;j<boxes.length && !supported;j++){
+      if(i===j) continue;
+      const B=boxes[j].box;
+      if(A.min.x<=B.max.x+eps && B.min.x<=A.max.x+eps &&
+         A.min.y<=B.max.y+eps && B.min.y<=A.max.y+eps &&
+         A.min.z<=B.max.z+eps && B.min.z<=A.max.z+eps) supported=true;
+    }
+    if(!supported) out.push({x:Math.round((A.min.x+A.max.x)/2*10)/10,
+                             y:Math.round(A.min.y*100)/100,
+                             z:Math.round((A.min.z+A.max.z)/2*10)/10});
+  }
+  return out;
+};
+
 })(this);

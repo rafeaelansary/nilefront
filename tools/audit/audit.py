@@ -103,6 +103,23 @@ globalThis.__world = {
   heightZonesIslamic: typeof heightZonesIslamic !== 'undefined' ? heightZonesIslamic : null,
   heightZonesOriginal:typeof heightZonesOriginal!== 'undefined' ? heightZonesOriginal: null,
 };
+// Every world group and its collider array, for the whole-game sweep.
+globalThis.__worlds = {};
+[['overworld','colliders'],['pyramidOverworld','pyramidColliders'],['greekOverworld','greekColliders'],
+ ['romanOverworld','romanColliders'],['islamicOverworld','islamicColliders'],
+ ['dungeon','dungeonColliders'],['pyramidDungeon','pyramidDungeonColliders'],
+ ['greekDungeon','greekDungeonColliders'],['nileWorld','nileColliders'],
+ ['hydraArena','hydraColliders'],['colosseumArena','colosseumColliders'],
+ ['ifritArena','ifritColliders']].forEach(function(pair){
+  var g=null, c=null;
+  try { g = eval(pair[0]); } catch(e) {}
+  try { c = eval(pair[1]); } catch(e) {}
+  if(g) globalThis.__worlds[pair[0]] = {group:g, colliders:c};
+});
+globalThis.__loadouts = {};
+['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons'].forEach(function(n){
+  try { globalThis.__loadouts[n] = eval(n); } catch(e) {}
+});
 """
 
 
