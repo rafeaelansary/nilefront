@@ -173,6 +173,30 @@ def check_connectivity(ctx, runs=4):
     return worst
 
 
+# 0.005: a gap under about 5mm at this scale is what actually shimmers on screen. Anything looser
+# flags every small part nested inside a larger one, where the coincident faces are interior and
+# never visible.
+COPLANAR_EPS = 0.005
+# 0.12: the shared face area has to be big enough to actually be seen fighting.
+OVERLAP_MIN  = 0.12
+
+
+def check_coplanar(ctx, runs=3):
+    fn = ctx.eval("""
+    (function(builder, invoke, scale, eps, omin){
+      var m = eval(invoke)(globalThis.__builders[builder]);
+      return JSON.stringify(globalThis.__coplanar(m, scale, eps, omin));
+    })
+    """)
+    worst = {}
+    for builder, invoke, scale, _floor, label in ACTORS:
+        for _ in range(runs):
+            hits = json.loads(fn(builder, invoke, scale, COPLANAR_EPS, OVERLAP_MIN))
+            if len(hits) >= worst.get(label, (-1, []))[0]:
+                worst[label] = (len(hits), hits[:4])
+    return worst
+
+
 def main():
     html_path = REPO / "index.html"
     ctx, err = build_ctx(html_path)
@@ -218,7 +242,19 @@ def main():
         print(f"{label:24} {total:6d} {orphans:8d}  {'ok' if ok else 'DISCONNECTED'}{note}")
     print(f"\n{cfails} of {len(ACTORS)} actors have floating parts")
 
-    return 1 if (fails or cfails) else 0
+    print(f"\n{'model':24} {'z-fight pairs':>14}  worst gaps")
+    print("-" * 62)
+    zfails = 0
+    for label, (n, hits) in check_coplanar(ctx).items():
+        if n:
+            zfails += 1
+            note = "  " + ", ".join(f"{h['axis']}@{h['gap']}" for h in hits)
+        else:
+            note = "  ok"
+        print(f"{label:24} {n:>14}{note}")
+    print(f"\n{zfails} of {len(ACTORS)} actors have near-coplanar faces")
+
+    return 1 if (fails or cfails or zfails) else 0
 
 
 if __name__ == "__main__":

@@ -599,4 +599,36 @@ global.__connectivity = function(root, scale, eps){
   return {orphans:orphans, total:meshes.length, detail:orphans.slice(0,6)};
 };
 
+
+// Near-coplanar face pairs: two boxes that overlap substantially in two axes and whose faces sit within
+// eps on the third will fight for the same pixels in the depth buffer. This is the single most recurring
+// visual bug in this project, so it is checked automatically.
+global.__coplanar = function(root, scale, eps, omin){
+  const boxes = global.__modelBoxes(root, scale);
+  const AX = ['x','y','z'];
+  const hits = [];
+  for(let i=0;i<boxes.length;i++) for(let j=i+1;j<boxes.length;j++){
+    const a = boxes[i].box, c = boxes[j].box;
+    for(let k=0;k<3;k++){
+      const ax=AX[k], u=AX[(k+1)%3], v=AX[(k+2)%3];
+      const ou = Math.min(a.max[u],c.max[u]) - Math.max(a.min[u],c.min[u]);
+      const ov = Math.min(a.max[v],c.max[v]) - Math.max(a.min[v],c.min[v]);
+      if(ou < omin || ov < omin) continue;
+      // the two boxes must actually interpenetrate on this axis, else they are merely stacked
+      const oa = Math.min(a.max[ax],c.max[ax]) - Math.max(a.min[ax],c.min[ax]);
+      if(oa <= 0) continue;
+      const pairs = [[a.min[ax],c.min[ax]],[a.max[ax],c.max[ax]]];
+      for(const [p,q] of pairs){
+        const d = Math.abs(p-q);
+        if(d > 1e-9 && d < eps){
+          hits.push({axis:ax, gap:Math.round(d*10000)/10000,
+                     y:Math.round(a.min.y*1000)/1000,
+                     ta:boxes[i].mesh.geometry.type, tb:boxes[j].mesh.geometry.type});
+        }
+      }
+    }
+  }
+  return hits;
+};
+
 })(this);

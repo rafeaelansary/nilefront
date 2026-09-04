@@ -2082,35 +2082,67 @@ function waterRippleTex(){
   // real tiled materials (repeat derived from each surface's world size, the way the Greek shore bands do
   // it) and as a sequence of TERRACES stepping up from the water — wet mud, damp silt, dry sand, then the
   // desert behind — instead of two boxes. The waterline is also scalloped rather than ruled.
-  const mudMat  = new THREE.MeshLambertMaterial({map:_finish(nileMudTex(),   26)});
-  const siltMat = new THREE.MeshLambertMaterial({map:_finish(nileSiltTex(),  30)});
-  const reedMat = new THREE.MeshLambertMaterial({map:_finish(nileReedBedTex(),22)});
-  const duneMat = new THREE.MeshLambertMaterial({map:_finish(gizaSandTex(),  34)});
+  // Each surface gets its OWN material with a per-axis repeat derived from its real world size. A single
+  // shared material with a uniform repeat is what made the desert read as a flat wall: _finish() sets
+  // repeat.set(n,n), and on the backing slab's visible side face — 260 long by 3.2 tall — that squashed
+  // the texture into 34 copies across 3.2 units vertically, i.e. into featureless horizontal banding.
+  // This is the same fix the Greek shoreBand() uses: tile by world size, not by BoxGeometry's 0..1 UVs.
+  function bandMat(canvas, w, d, tile, tint){
+    const t=new THREE.CanvasTexture(canvas);
+    t.wrapS=t.wrapT=THREE.RepeatWrapping;
+    t.magFilter=THREE.NearestFilter; t.minFilter=THREE.NearestMipmapLinearFilter; t.generateMipmaps=true;
+    t.anisotropy=maxAniso;
+    t.repeat.set(Math.max(1,Math.round(w/tile)), Math.max(1,Math.round(d/tile)));
+    return new THREE.MeshLambertMaterial({map:t, color:tint||0xffffff});
+  }
   function bankMesh(w,h,d,mat,x,y,z){
     const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z);
     m.receiveShadow=true; nileWorld.add(m); return m;
   }
   function bankStrip(nearX, dir){
     const RIVER_LEN = 260;
-    // Terraces stepping back and up from the water. Each is its own material, so the bank has four tonal
-    // bands rather than one wash, and each sits a little higher than the one in front of it.
+    // Terraces stepping back and up from the water, each its own material and tile scale, so the bank has
+    // four tonal bands rather than one wash.
     const terraces = [
-      {mat:reedMat, off: 1.5,  w: 5,  h:0.55, y:-0.10},   // reed margin, right at the water
-      {mat:mudMat,  off: 5.5,  w: 7,  h:0.80, y: 0.10},   // wet mud flat
-      {mat:siltMat, off:12.0,  w: 9,  h:1.30, y: 0.40},   // dried silt terrace
-      {mat:duneMat, off:22.0,  w:14,  h:2.20, y: 0.95},   // sand rise
-      {mat:duneMat, off:70.0,  w:90,  h:3.20, y: 1.50},   // desert backing, out past the 140 fog
+      {tex:nileReedBedTex, off: 1.5,  w: 5,  h:0.55, y:-0.10, tile:1.1},   // reed margin at the water
+      {tex:nileMudTex,     off: 5.5,  w: 7,  h:0.80, y: 0.10, tile:1.3},   // wet mud flat
+      {tex:nileSiltTex,    off:12.0,  w: 9,  h:1.30, y: 0.40, tile:1.6},   // dried silt terrace
+      {tex:gizaSandTex,    off:22.0,  w:14,  h:2.20, y: 0.95, tile:2.0},   // sand rise
     ];
     terraces.forEach(t=>{
-      bankMesh(t.w, t.h, RIVER_LEN, t.mat, nearX + dir*t.off, t.y, 0);
+      bankMesh(t.w, t.h, RIVER_LEN, bandMat(t.tex(), t.w, RIVER_LEN, t.tile), nearX + dir*t.off, t.y, 0);
     });
+
+    // ---- the desert behind. This was a single 90x3.2x260 slab, which is a WALL however it is textured.
+    // Built as actual blocky dune terrain instead: a run of stepped mounds at varying depth and height,
+    // each a stack of offset boxes so it has a profile rather than a flat top, marching back from the
+    // river and rising as it goes. That is what makes it read as desert rather than a painted backdrop.
+    const duneA = bandMat(gizaSandTex(), 12, 12, 2.2);
+    const duneB = bandMat(gizaSandTex(), 12, 12, 2.2, 0xe8d3a4);
+    const duneC = bandMat(gizaSandTex(), 12, 12, 2.2, 0xc7ab77);
+    for(let i=0;i<40;i++){
+      const n = Math.abs(Math.sin(i*3.7 + nearX)*4375.5%1);
+      const m = Math.abs(Math.cos(i*2.3 + nearX)*911%1);
+      const z = -130 + i*6.8 + (n-0.5)*4;
+      // three ranks marching back from the river, each rank taller than the one in front
+      [[34, 3.0+n*2.4, 13+m*6], [56, 5.0+m*3.2, 17+n*7], [82, 7.5+n*4.0, 22+m*9]].forEach(([off,h,w],r)=>{
+        if(r===0 && n<0.28) return;                       // gaps in the front rank, so it is not a wall
+        const bx = nearX + dir*(off + (m-0.5)*7);
+        const d  = w*0.8;
+        bankMesh(w,       h,       d,       duneA, bx,            h/2 - 0.6,        z);
+        bankMesh(w*0.66,  h*0.55,  d*0.68,  duneB, bx + dir*w*0.1, h*0.78 - 0.6,    z + (n-0.5)*3);
+        bankMesh(w*0.34,  h*0.34,  d*0.38,  duneC, bx - dir*w*0.06, h*1.05 - 0.6,   z - (m-0.5)*3);
+      });
+    }
+
     // Scalloped waterline: short tongues of mud reaching different distances into the river, so the bank's
     // near edge is uneven instead of a dead-straight line running the whole length of the map.
+    const tongueMat = bandMat(nileMudTex(), 4, 4, 1.3);
     for(let z=-RIVER_LEN/2; z<RIVER_LEN/2; z+=4){
       const n = Math.abs(Math.sin(z*0.37 + nearX)*4375.5%1);
       if(n < 0.25) continue;                                   // gaps, so the edge is ragged
       const reach = 1.2 + n*3.0;
-      bankMesh(reach, 0.42, 3.2+n*1.4, mudMat, nearX - dir*(reach/2 - 0.6), -0.14, z + n*1.5);
+      bankMesh(reach, 0.42, 3.2+n*1.4, tongueMat, nearX - dir*(reach/2 - 0.6), -0.14, z + n*1.5);
     }
     // Bank detail: boulders, driftwood and dry scrub, clustered rather than evenly spread.
     const rockMat = voxMat(0x8a7c62,{noise:20});
@@ -2121,12 +2153,11 @@ function waterRippleTex(){
       const n = Math.abs(Math.sin(i*7.3 + nearX)*911%1);
       const m = Math.abs(Math.cos(i*4.1 + nearX)*577%1);
       const z = -120 + i*9.4 + (n-0.5)*6;
-      const off = 4 + m*14;
-      const bx = nearX + dir*off;
+      const bx = nearX + dir*(4 + m*14);
       if(n > 0.62){
-        const s = 0.9 + n*1.5;
-        bankMesh(s, s*0.7, s*0.85, rockMat, bx, s*0.35, z);
-        bankMesh(s*0.6, s*0.5, s*0.55, rockLit, bx + dir*s*0.4, s*0.75, z + 0.3);
+        const sz = 0.9 + n*1.5;
+        bankMesh(sz, sz*0.7, sz*0.85, rockMat, bx, sz*0.35, z);
+        bankMesh(sz*0.6, sz*0.5, sz*0.55, rockLit, bx + dir*sz*0.4, sz*0.78, z + 0.3);
       } else if(n > 0.36){
         const log=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.20,1.8+n,7), driftMat);
         log.rotation.z=Math.PI/2; log.rotation.y=n*2.4; log.position.set(bx,0.42,z); nileWorld.add(log);
@@ -5158,9 +5189,15 @@ function makeHippo(){
   const skull  = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.44,0.40), hide);     skull.position.set(0,0.66,1.02); g.add(skull);
   const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.86,0.42,0.52), hide);     muzzle.position.set(0,0.56,1.38); g.add(muzzle);
   const muzzleTop=new THREE.Mesh(new THREE.BoxGeometry(0.80,0.12,0.46), hideLit); muzzleTop.position.set(0,0.79,1.40); g.add(muzzleTop);
-  // open jaw: an upper lip, a pink mouth cavity, and a heavy lower jaw dropped away from it
-  const upperLip=new THREE.Mesh(new THREE.BoxGeometry(0.84,0.16,0.48), hideDark); upperLip.position.set(0,0.42,1.40); g.add(upperLip);
-  const mouth   =new THREE.Mesh(new THREE.BoxGeometry(0.74,0.20,0.44), gumMat);   mouth.position.set(0,0.28,1.42); g.add(mouth);
+  // Open jaw: an upper lip, a pink mouth cavity, and a heavy lower jaw dropped away from it.
+  //
+  // Each of these is STEPPED BACK from the one outside it, in both width and depth. Before, the muzzle,
+  // the upper lip and the mouth cavity all ended at exactly z=1.64 and were within 0.01 of each other in
+  // width, so three pairs of faces were coincident to within 0.4mm and fought for the same pixels — which
+  // is the flicker that showed up inside the hippo's mouth. The audit's coplanarity check now catches this
+  // class automatically.
+  const upperLip=new THREE.Mesh(new THREE.BoxGeometry(0.78,0.16,0.44), hideDark); upperLip.position.set(0,0.42,1.38); g.add(upperLip);
+  const mouth   =new THREE.Mesh(new THREE.BoxGeometry(0.68,0.20,0.38), gumMat);   mouth.position.set(0,0.28,1.37); g.add(mouth);
   const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(0.80,0.20,0.50), hide);     lowerJaw.position.set(0,0.14,1.44); g.add(lowerJaw);
   const chin    =new THREE.Mesh(new THREE.BoxGeometry(0.66,0.14,0.16), bellyMat); chin.position.set(0,0.12,1.70); g.add(chin);
   // the canines — outsized, curving up out of the lower jaw. This is the silhouette cue.
