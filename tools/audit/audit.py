@@ -94,6 +94,7 @@ globalThis.__world = {
   greekColliders:  typeof greekColliders !== 'undefined' ? greekColliders : null,
   pyramidColliders:typeof pyramidColliders!== 'undefined' ? pyramidColliders : null,
   hydraColliders:  typeof hydraColliders !== 'undefined' ? hydraColliders : null,
+  nileColliders:   typeof nileColliders !== 'undefined' ? nileColliders : null,
   SPAWN_POINTS:    typeof SPAWN_POINTS !== 'undefined' ? SPAWN_POINTS : null,
   heightZonesGreek:   typeof heightZonesGreek   !== 'undefined' ? heightZonesGreek   : null,
   heightZonesPyramid: typeof heightZonesPyramid !== 'undefined' ? heightZonesPyramid : null,

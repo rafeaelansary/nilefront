@@ -695,6 +695,91 @@ function harbourFlagstoneTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
   }
   return c; }
 
+// ---- Nile bank palette. The river banks were nblock() slabs carrying a voxMat noise texture, and voxMat
+// stretches ONE copy of a 16px canvas across whatever it is applied to — so on a 130x260 backing slab the
+// texture resolved to roughly a flat colour. That is why the banks read as plain blocks. These are proper
+// tileable canvases used through _finish(), which sets a repeat from the surface's real world size. ----
+
+// Wet river mud at the waterline: dark, silty, with a scatter of pebbles and darker damp patches.
+function nileMudTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#6b5a3e'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*4.7+j*8.3)*4375.5%1);
+    const v=(104+(n-0.5)*40)|0;
+    x.fillStyle=`rgb(${v},${(v-14)|0},${(v-40)|0})`; x.fillRect(i,j,1,1);
+  }
+  // damp darker pooling and a few pale pebbles
+  for(let k=0;k<26;k++){
+    const n=Math.abs(Math.sin(k*13.1)*611%1), m=Math.abs(Math.cos(k*7.7)*409%1);
+    x.fillStyle = k%3 ? 'rgba(48,38,24,0.40)' : 'rgba(190,175,140,0.65)';
+    const w=1+(n*3)|0;
+    x.fillRect((n*P)|0,(m*P)|0,w,w);
+  }
+  return c; }
+
+// Sun-dried silt further up the bank: paler, with the cracked polygon pattern dried Nile mud actually
+// forms. The crack lines are what stop it reading as another flat sand band next to the mud.
+function nileSiltTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#c2ab7e'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*6.1+j*3.7)*4375.5%1);
+    const v=(198+(n-0.5)*30)|0;
+    x.fillStyle=`rgb(${v},${(v-22)|0},${(v-64)|0})`; x.fillRect(i,j,1,1);
+  }
+  // dried-mud crack polygons — deterministic so the tile is stable
+  x.strokeStyle='rgba(96,78,50,0.55)'; x.lineWidth=1;
+  const pts=[[4,3],[19,6],[29,14],[13,17],[2,24],[22,27],[9,30]];
+  for(let k=0;k<pts.length;k++){
+    const a=pts[k], b=pts[(k+2)%pts.length];
+    x.beginPath(); x.moveTo(a[0],a[1]); x.lineTo(b[0],b[1]); x.stroke();
+  }
+  return c; }
+
+// Reed-choked margin: silt showing through a broken mat of green growth, for the strip right at the edge.
+function nileReedBedTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#8a7a4e'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*5.3+j*9.1)*4375.5%1);
+    if(n>0.42){ const v=(74+n*54)|0; x.fillStyle=`rgb(${(v-24)|0},${v},${(v-40)|0})`; x.fillRect(i,j,1,1); }
+  }
+  for(let k=0;k<18;k++){
+    const n=Math.abs(Math.sin(k*11.3)*733%1), m=Math.abs(Math.cos(k*5.9)*281%1);
+    x.fillStyle='rgba(40,58,30,0.5)'; x.fillRect((n*P)|0,(m*P)|0,1,2+((m*3)|0));
+  }
+  return c; }
+
+// Deck planking for the Nile boat: long boards running fore-and-aft with dark seams and visible nail
+// heads. The deck was a voxMat 'plate' pattern stretched over a 5x8 slab, which resolved to a faint smudge.
+function nileDeckPlankTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#8a6a42'; x.fillRect(0,0,P,P);
+  for(let col=0;col<P;col+=8){
+    const n=Math.abs(Math.sin(col*3.1)*211%1);
+    const v=(150+n*36)|0;
+    x.fillStyle=`rgb(${v},${(v-38)|0},${(v-80)|0})`; x.fillRect(col,0,7,P);   // board
+    x.fillStyle='rgba(52,36,20,0.75)'; x.fillRect(col+7,0,1,P);               // seam between boards
+    // grain streaks along the board
+    for(let k=0;k<3;k++){ const m=Math.abs(Math.sin((col+k)*7.7)*373%1);
+      x.fillStyle='rgba(70,48,26,0.30)'; x.fillRect(col+1+((m*5)|0),0,1,P); }
+    // nail heads at the ends
+    x.fillStyle='rgba(40,34,28,0.8)'; x.fillRect(col+3,2,1,1); x.fillRect(col+3,P-3,1,1);
+  }
+  return c; }
+
+// Hull planking: darker, wider strakes running horizontally, with pitch caulking in the seams.
+function nileHullPlankTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#5a3f26'; x.fillRect(0,0,P,P);
+  for(let row=0;row<P;row+=6){
+    const n=Math.abs(Math.sin(row*5.3)*307%1);
+    const v=(104+n*30)|0;
+    x.fillStyle=`rgb(${v},${(v-30)|0},${(v-58)|0})`; x.fillRect(0,row,P,5);
+    x.fillStyle='rgba(28,20,12,0.85)'; x.fillRect(0,row+5,P,1);   // pitched seam
+  }
+  for(let k=0;k<20;k++){
+    const n=Math.abs(Math.sin(k*9.1)*617%1), m=Math.abs(Math.cos(k*4.3)*431%1);
+    x.fillStyle='rgba(34,24,14,0.55)'; x.fillRect((n*P)|0,(m*P)|0,1,1);   // pegs
+  }
+  return c; }
+
 function citadelStoneTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // large sandstone ashlar block coursing, same offset-brick technique romanBrickTex uses, just scaled and
   // colored for big fortress stonework. voxMat()'s plain noise texture is designed for small individual
@@ -1867,12 +1952,33 @@ function waterRippleTex(){
     nileWorld.add(line);
   }
   const woodDark = voxMat(0x6b4a2c,{noise:14});
+  // Hull and deck use a real tiled plank material rather than voxMat noise. voxMat stretches one copy of
+  // its canvas across the whole surface, so on a 5x8 deck the grain resolved to almost nothing — the same
+  // reason the river banks read as flat blocks. _finish() sets a repeat from world size instead.
+  const deckMat = new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(), 6)});
+  const hullMat = new THREE.MeshLambertMaterial({map:_finish(nileHullPlankTex(), 5)});
+  function boatMesh(w,h,d,mat,x,y,z){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z);
+    m.castShadow=true; m.receiveShadow=true; nileWorld.add(m); return m;
+  }
   // below-deck hull, tapering down and inward like a real hull cross-section, not just a thin flat slab
-  nblock(4.9,0.35,7.6,0x5a3f26,0,-0.28,0,{noise:16});
-  nblock(4.3,0.35,6.6,0x4a3320,0,-0.58,0,{noise:16});
+  boatMesh(4.9,0.35,7.6,hullMat,0,-0.28,0);
+  boatMesh(4.3,0.35,6.6,hullMat,0,-0.58,0);
   nblock(3.2,0.3,5.0,0x3f2a1a,0,-0.85,0,{noise:16});
-  nblock(5,0.3,8,0x8a6a42,0,0.05,0,{noise:20,pattern:'plate'});
-  nblock(4.8,0.15,7.8,0x6b4a2c,0,0.22,0,{noise:14}); // plank seam layer for texture depth
+  // hull strakes: horizontal planking bands standing proud of the sides, which is what actually reads as a
+  // built boat from the water rather than a smooth tapered box
+  [-1,1].forEach(sd=>{
+    [[-0.28,2.48],[-0.58,2.18]].forEach(([hy,hx])=>{
+      boatMesh(0.10,0.34,7.2,hullMat,sd*hx,hy,0);
+    });
+  });
+  // ribs showing on the inside of the hull below the rail
+  for(let i=0;i<7;i++){
+    const rz=-3.0+i*1.0;
+    [-1,1].forEach(sd=>{ boatMesh(0.14,0.30,0.16,hullMat,sd*2.42,0.22,rz); });
+  }
+  boatMesh(5,0.3,8,deckMat,0,0.05,0);
+  boatMesh(4.8,0.15,7.8,deckMat,0,0.22,0); // plank seam layer for texture depth
   [-2.6,2.6].forEach(rx=>{ nblock(0.25,0.5,8,0x6b4a2c,rx,0.35,0,{noise:14}); addBox(rx,0,0.25,8); });
   [-4.1,4.1].forEach(rz=>{ nblock(5.4,0.5,0.25,0x6b4a2c,0,0.35,rz,{noise:14}); addBox(0,rz,5.4,0.25); });
   // raised bow and stern points for a real boat silhouette, built up to a sharper prow with an upturned flourish
@@ -1970,15 +2076,63 @@ function waterRippleTex(){
   // Each bank is a big continuous backing slab (not just a thin near-edge strip) that runs the full length
   // of the river and well past the fog draw distance (140), so there's no gap or "back edge" visible from
   // any angle — plus the near-edge mud-flat/reed detail, now much closer to the boat than the first pass.
+  // ---- river banks ----
+  // These were nblock() slabs: voxMat noise stretched across a 130x260 backing plane, which resolves to a
+  // flat colour at that size, so each bank read as one plain block with a ruled straight edge. Rebuilt with
+  // real tiled materials (repeat derived from each surface's world size, the way the Greek shore bands do
+  // it) and as a sequence of TERRACES stepping up from the water — wet mud, damp silt, dry sand, then the
+  // desert behind — instead of two boxes. The waterline is also scalloped rather than ruled.
+  const mudMat  = new THREE.MeshLambertMaterial({map:_finish(nileMudTex(),   26)});
+  const siltMat = new THREE.MeshLambertMaterial({map:_finish(nileSiltTex(),  30)});
+  const reedMat = new THREE.MeshLambertMaterial({map:_finish(nileReedBedTex(),22)});
+  const duneMat = new THREE.MeshLambertMaterial({map:_finish(gizaSandTex(),  34)});
+  function bankMesh(w,h,d,mat,x,y,z){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z);
+    m.receiveShadow=true; nileWorld.add(m); return m;
+  }
   function bankStrip(nearX, dir){
-    const backSpan = 130;
-    nblock(backSpan, 3, 260, 0xb9a978, nearX+dir*(backSpan/2), 0.5, 0, {noise:16});
-    for(let i=0;i<6;i++){
-      const z=-50+i*20, xj=(Math.random()-0.5)*3;
-      // depth 20, matching the 20-unit step below — at 26 each slab overlapped both neighbours by 6 units
-      // at an identical top height, and the whole bank shimmered along those seams
-      nblock(14+Math.random()*4, 0.6, 20, 0xcbb27a, nearX+dir*7+xj, -0.05, z, {noise:16}); // low mud-flat at the waterline
-      nblock(8+Math.random()*3, 0.9, 15, 0xd8c088, nearX+dir*4+xj, 0.25, z, {noise:14}); // drier raised hump, closer to the water than before
+    const RIVER_LEN = 260;
+    // Terraces stepping back and up from the water. Each is its own material, so the bank has four tonal
+    // bands rather than one wash, and each sits a little higher than the one in front of it.
+    const terraces = [
+      {mat:reedMat, off: 1.5,  w: 5,  h:0.55, y:-0.10},   // reed margin, right at the water
+      {mat:mudMat,  off: 5.5,  w: 7,  h:0.80, y: 0.10},   // wet mud flat
+      {mat:siltMat, off:12.0,  w: 9,  h:1.30, y: 0.40},   // dried silt terrace
+      {mat:duneMat, off:22.0,  w:14,  h:2.20, y: 0.95},   // sand rise
+      {mat:duneMat, off:70.0,  w:90,  h:3.20, y: 1.50},   // desert backing, out past the 140 fog
+    ];
+    terraces.forEach(t=>{
+      bankMesh(t.w, t.h, RIVER_LEN, t.mat, nearX + dir*t.off, t.y, 0);
+    });
+    // Scalloped waterline: short tongues of mud reaching different distances into the river, so the bank's
+    // near edge is uneven instead of a dead-straight line running the whole length of the map.
+    for(let z=-RIVER_LEN/2; z<RIVER_LEN/2; z+=4){
+      const n = Math.abs(Math.sin(z*0.37 + nearX)*4375.5%1);
+      if(n < 0.25) continue;                                   // gaps, so the edge is ragged
+      const reach = 1.2 + n*3.0;
+      bankMesh(reach, 0.42, 3.2+n*1.4, mudMat, nearX - dir*(reach/2 - 0.6), -0.14, z + n*1.5);
+    }
+    // Bank detail: boulders, driftwood and dry scrub, clustered rather than evenly spread.
+    const rockMat = voxMat(0x8a7c62,{noise:20});
+    const rockLit = voxMat(0xa89a78,{noise:18});
+    const driftMat= voxMat(0x9a8b72,{noise:16});
+    const scrubMat= voxMat(0x5c6b41,{noise:16});
+    for(let i=0;i<26;i++){
+      const n = Math.abs(Math.sin(i*7.3 + nearX)*911%1);
+      const m = Math.abs(Math.cos(i*4.1 + nearX)*577%1);
+      const z = -120 + i*9.4 + (n-0.5)*6;
+      const off = 4 + m*14;
+      const bx = nearX + dir*off;
+      if(n > 0.62){
+        const s = 0.9 + n*1.5;
+        bankMesh(s, s*0.7, s*0.85, rockMat, bx, s*0.35, z);
+        bankMesh(s*0.6, s*0.5, s*0.55, rockLit, bx + dir*s*0.4, s*0.75, z + 0.3);
+      } else if(n > 0.36){
+        const log=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.20,1.8+n,7), driftMat);
+        log.rotation.z=Math.PI/2; log.rotation.y=n*2.4; log.position.set(bx,0.42,z); nileWorld.add(log);
+      } else {
+        bankMesh(0.9+m, 0.5+m*0.4, 0.9+m, scrubMat, bx, 0.35, z);
+      }
     }
   }
   bankStrip(20,1); bankStrip(-20,-1);
@@ -4972,60 +5126,168 @@ function makeShabti(){
 }
 
 // ---- hippo: low, wide, tanky river charger — non-humanoid ----
+// HIPPO — the Nile's real killer. Identified by the enormous blunt MUZZLE, far wider than the skull behind
+// it, the gaping jaw with outsized lower canines, and eyes/ears/nostrils sitting on TOP of the head so it
+// can float with only those above water. The old model had none of that: a plain box body, a smaller box
+// head and four leg stubs, 15 meshes total.
 function makeHippo(){
   const g = new THREE.Group();
-  const skinMat = voxMat(0x7a7a82,{noise:16});
-  const bellyMat = voxMat(0x9a8a86,{noise:12});
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.7,1.3), skinMat); body.position.y=0.55; g.add(body);
-  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.94,0.3,1.3), bellyMat); belly.position.set(0,0.25,0); g.add(belly);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.5,0.55), skinMat); head.position.set(0,0.65,0.78); g.add(head);
-  const jawLower = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.18,0.5), bellyMat); jawLower.position.set(0,0.42,0.95); g.add(jawLower);
-  [-1,1].forEach(side=>{
-    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.08),skinMat); ear.position.set(side*0.22,0.94,0.75); g.add(ear);
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.05),voxMat(0x201c1c,{noise:4})); eye.position.set(side*0.18,0.86,0.98); g.add(eye);
-    const tusk=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.16,0.06),new THREE.MeshLambertMaterial({color:0xf2f0e6})); tusk.position.set(side*0.16,0.32,1.15); g.add(tusk);
+  const hide     = voxMat(0x7a6f74,{noise:16});   // wet grey-brown hide
+  const hideLit  = voxMat(0x968a8e,{noise:14});   // sun-dried back
+  const hideDark = voxMat(0x53494e,{noise:16});   // creases and shadowed underside
+  const bellyMat = voxMat(0xa8908c,{noise:12});   // pink-grey belly
+  const gumMat   = voxMat(0xb5626a,{noise:12});   // pink mouth interior
+  const toothMat = new THREE.MeshLambertMaterial({color:0xf2ecd8});
+  const eyeMat   = new THREE.MeshBasicMaterial({color:0x1c1614, fog:false});
+
+  // ---- barrel body: widest at the middle and sagging low, with a distinct shoulder and rump ----
+  const barrel  = new THREE.Mesh(new THREE.BoxGeometry(0.98,0.74,1.15), hide);     barrel.position.set(0,0.56,-0.05); g.add(barrel);
+  const shoulder= new THREE.Mesh(new THREE.BoxGeometry(0.92,0.68,0.42), hide);     shoulder.position.set(0,0.58,0.55); g.add(shoulder);
+  const rump    = new THREE.Mesh(new THREE.BoxGeometry(0.86,0.66,0.40), hide);     rump.position.set(0,0.54,-0.66); g.add(rump);
+  const backLit = new THREE.Mesh(new THREE.BoxGeometry(0.72,0.16,1.60), hideLit);  backLit.position.set(0,0.90,-0.05); g.add(backLit);
+  const belly   = new THREE.Mesh(new THREE.BoxGeometry(0.90,0.30,1.50), bellyMat); belly.position.set(0,0.24,-0.05); g.add(belly);
+  // skin creases across the flanks — a hippo's hide is deeply folded, and it breaks up the slab sides
+  [-1,1].forEach(sd=>{
+    [0.30,-0.20,-0.60].forEach(cz=>{
+      const fold=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.52,0.10), hideDark); fold.position.set(sd*0.50,0.55,cz); g.add(fold);
+    });
   });
-  const legMat = voxMat(0x6a6a72,{noise:14});
-  [[-0.35,-0.5],[0.35,-0.5],[-0.35,0.5],[0.35,0.5]].forEach(([lx,lz])=>{
-    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.5,0.28),legMat); leg.position.set(lx,0.25,lz); g.add(leg);
+
+  // ---- head. The muzzle is the whole animal: broader than the skull, squared off, carried low. ----
+  const neck   = new THREE.Mesh(new THREE.BoxGeometry(0.70,0.52,0.26), hide);     neck.position.set(0,0.60,0.80); g.add(neck);
+  const skull  = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.44,0.40), hide);     skull.position.set(0,0.66,1.02); g.add(skull);
+  const muzzle = new THREE.Mesh(new THREE.BoxGeometry(0.86,0.42,0.52), hide);     muzzle.position.set(0,0.56,1.38); g.add(muzzle);
+  const muzzleTop=new THREE.Mesh(new THREE.BoxGeometry(0.80,0.12,0.46), hideLit); muzzleTop.position.set(0,0.79,1.40); g.add(muzzleTop);
+  // open jaw: an upper lip, a pink mouth cavity, and a heavy lower jaw dropped away from it
+  const upperLip=new THREE.Mesh(new THREE.BoxGeometry(0.84,0.16,0.48), hideDark); upperLip.position.set(0,0.42,1.40); g.add(upperLip);
+  const mouth   =new THREE.Mesh(new THREE.BoxGeometry(0.74,0.20,0.44), gumMat);   mouth.position.set(0,0.28,1.42); g.add(mouth);
+  const lowerJaw=new THREE.Mesh(new THREE.BoxGeometry(0.80,0.20,0.50), hide);     lowerJaw.position.set(0,0.14,1.44); g.add(lowerJaw);
+  const chin    =new THREE.Mesh(new THREE.BoxGeometry(0.66,0.14,0.16), bellyMat); chin.position.set(0,0.12,1.70); g.add(chin);
+  // the canines — outsized, curving up out of the lower jaw. This is the silhouette cue.
+  [-1,1].forEach(sd=>{
+    const canine=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.26,0.11), toothMat); canine.position.set(sd*0.30,0.30,1.56); canine.rotation.x=-0.20; g.add(canine);
+    const tip   =new THREE.Mesh(new THREE.ConeGeometry(0.055,0.14,5), toothMat);  tip.position.set(sd*0.30,0.46,1.60); g.add(tip);
+    const incisor=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.13,0.07), toothMat); incisor.position.set(sd*0.11,0.28,1.62); g.add(incisor);
+    // eyes, ears and nostrils all ride HIGH — a hippo floats with only these three above the surface
+    const eyeMound=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.14,0.17), hide);   eyeMound.position.set(sd*0.24,0.88,1.06); g.add(eyeMound);
+    const eye     =new THREE.Mesh(new THREE.BoxGeometry(0.09,0.08,0.06), eyeMat); eye.position.set(sd*0.24,0.92,1.18); g.add(eye);
+    const ear     =new THREE.Mesh(new THREE.BoxGeometry(0.13,0.14,0.10), hide);   ear.position.set(sd*0.24,1.00,0.90); g.add(ear);
+    const earIn   =new THREE.Mesh(new THREE.BoxGeometry(0.07,0.08,0.06), hideDark); earIn.position.set(sd*0.24,1.03,0.94); g.add(earIn);
+    const nostril =new THREE.Mesh(new THREE.BoxGeometry(0.11,0.09,0.09), hideDark); nostril.position.set(sd*0.20,0.83,1.60); g.add(nostril);
   });
-  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.25),skinMat); tail.position.set(0,0.6,-0.68); g.add(tail);
+
+  // ---- legs: short, thick pillars, barely clearing the belly — a hippo is almost comically stumpy ----
+  [[-0.36,0.52],[0.36,0.52],[-0.36,-0.60],[0.36,-0.60]].forEach(([lx,lz])=>{
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.28,0.36), hide);     upper.position.set(lx,0.30,lz); g.add(upper);
+    const lower=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.22,0.32), hideDark); lower.position.set(lx,0.13,lz); g.add(lower);
+    const foot =new THREE.Mesh(new THREE.BoxGeometry(0.34,0.10,0.38), hideDark); foot.position.set(lx,0.05,lz+0.02); g.add(foot);
+    [-1,0,1].forEach(t=>{ const toe=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.06,0.08), bellyMat);
+      toe.position.set(lx+t*0.10,0.04,lz+0.19); g.add(toe); });
+  });
+  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.16,0.26), hide);     tail.position.set(0,0.58,-0.92); g.add(tail);
+  const tuft=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.12,0.12), hideDark); tuft.position.set(0,0.54,-1.06); g.add(tuft);
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.3, 0); marker.scale.set(1.1,1.1,1.1); marker.renderOrder = 9999;
+  marker.position.set(0, 1.5, 0); marker.scale.set(1.1,1.1,1.1); marker.renderOrder = 9999;
   marker.raycast = function(){};
   g.add(marker); g.userData.marker = marker;
   return g;
 }
 
-// ---- crocodile: a real animal-shaped crocodile — long low body, snapping jaw, tapering tail — not a humanoid reskin ----
+// CROCODILE — read from the long flat SNOUT with interlocking teeth showing along a closed mouth, the
+// armoured dorsal scutes running the length of the back, and the laterally-flattened swimming tail. The old
+// model had a single box snout, one flat strip of teeth, no scutes at all and a three-box stub tail.
 function makeCrocodile(){
   const g = new THREE.Group();
-  const skinMat = voxMat(0x3e5c2e,{noise:16});
-  const bellyMat = voxMat(0xc9c9a0,{noise:10});
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.55,0.35,1.4), skinMat); body.position.set(0,0.35,0); g.add(body);
-  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.15,1.4), bellyMat); belly.position.set(0,0.2,0); g.add(belly);
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.22,0.6), skinMat); snout.position.set(0,0.32,0.95); g.add(snout);
-  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.1,0.55), bellyMat); jaw.position.set(0,0.2,0.95); g.add(jaw);
-  const teeth = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.04,0.02), new THREE.MeshLambertMaterial({color:0xf0f0e0})); teeth.position.set(0,0.26,1.2); g.add(teeth);
-  [-1,1].forEach(side=>{
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.08), voxMat(0x1c2410,{noise:6})); eye.position.set(side*0.14,0.46,0.68); g.add(eye);
+  const hide     = voxMat(0x3e5c2e,{noise:16});
+  const hideDark = voxMat(0x2a3f1e,{noise:16});
+  const scuteMat = voxMat(0x4d6b34,{noise:14});
+  const bellyMat = voxMat(0xc4c49a,{noise:10});
+  const toothMat = new THREE.MeshLambertMaterial({color:0xf0f0e0});
+  const eyeMat   = new THREE.MeshBasicMaterial({color:0xd8b83a, fog:false});
+
+  // ---- body: long, low and flat, with a defined chest and hips ----
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.58,0.34,0.60), hide);     chest.position.set(0,0.33,0.42); g.add(chest);
+  const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.54,0.32,0.70), hide);     trunk.position.set(0,0.32,-0.15); g.add(trunk);
+  const hips  = new THREE.Mesh(new THREE.BoxGeometry(0.48,0.30,0.42), hide);     hips.position.set(0,0.31,-0.66); g.add(hips);
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(0.50,0.14,1.66), bellyMat); belly.position.set(0,0.17,-0.10); g.add(belly);
+  // dorsal scutes: two staggered rows of raised keeled plates down the back — the armour that identifies it
+  for(let i=0;i<9;i++){
+    const z=0.62-i*0.20;
+    [-1,1].forEach(sd=>{
+      const scute=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.10,0.15), scuteMat);
+      scute.position.set(sd*0.14,0.50,z); g.add(scute);
+      const keel=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.07,0.10), hideDark);
+      keel.position.set(sd*0.14,0.57,z); g.add(keel);
+    });
+  }
+
+  // ---- head: a long flat snout, wider at the base, with the teeth interlocking along the closed jawline ----
+  const skull  = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.24,0.34), hide);     skull.position.set(0,0.36,0.86); g.add(skull);
+  const snout  = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.17,0.52), hide);     snout.position.set(0,0.35,1.26); g.add(snout);
+  const snoutTip=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.14,0.16), hide);     snoutTip.position.set(0,0.35,1.58); g.add(snoutTip);
+  const lowJaw =new THREE.Mesh(new THREE.BoxGeometry(0.30,0.11,0.60), bellyMat);  lowJaw.position.set(0,0.24,1.28); g.add(lowJaw);
+  const nostril=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.07,0.10), hideDark);  nostril.position.set(0,0.44,1.60); g.add(nostril);
+  // interlocking teeth: alternating up and down along the jawline, not one flat strip
+  for(let i=0;i<7;i++){
+    const z=1.02+i*0.09;
+    [-1,1].forEach(sd=>{
+      const up=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.075,0.035), toothMat);
+      up.position.set(sd*0.15,0.255,z); g.add(up);
+      // i<6: the jaw ends at z=1.58, and at i=6 this pair landed at 1.605 — past the end of it, floating
+      if(i%2===0 && i<6){
+        const dn=new THREE.Mesh(new THREE.BoxGeometry(0.032,0.065,0.032), toothMat);
+        dn.position.set(sd*0.145,0.315,z+0.045); g.add(dn);
+      }
+    });
+  }
+  [-1,1].forEach(sd=>{
+    // eyes bulge UP off the skull, the way a crocodile's do so it can see while submerged
+    const socket=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.14), hide);     socket.position.set(sd*0.15,0.49,0.86); g.add(socket);
+    const eye   =new THREE.Mesh(new THREE.BoxGeometry(0.09,0.07,0.06), eyeMat);   eye.position.set(sd*0.15,0.53,0.93); g.add(eye);
+    const slit  =new THREE.Mesh(new THREE.BoxGeometry(0.02,0.07,0.05), hideDark); slit.position.set(sd*0.15,0.53,0.96); g.add(slit);
+    const ridge =new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.30), hideDark); ridge.position.set(sd*0.13,0.44,1.20); g.add(ridge);
   });
-  const legMat = voxMat(0x35501f,{noise:14});
-  [[-0.28,-0.4],[0.28,-0.4],[-0.28,0.4],[0.28,0.4]].forEach(([lx,lz])=>{
-    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.24,0.22),legMat); leg.position.set(lx,0.13,lz); g.add(leg);
+
+  // ---- sprawled legs: elbows OUT to the sides, which is what makes it read as a reptile and not a dog ----
+  [[0.52,1],[0.52,-1],[-0.62,1],[-0.62,-1]].forEach(([lz,sd])=>{
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.11,0.16), hideDark);
+    upper.position.set(sd*0.33,0.27,lz); upper.rotation.z=sd*0.45; g.add(upper);
+    const lower=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.20,0.13), hideDark);
+    lower.position.set(sd*0.42,0.14,lz); g.add(lower);
+    const foot =new THREE.Mesh(new THREE.BoxGeometry(0.16,0.06,0.20), hideDark);
+    foot.position.set(sd*0.44,0.03,lz+0.03); g.add(foot);
+    [-1,0,1].forEach(t=>{ const claw=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.03,0.07), bellyMat);
+      claw.position.set(sd*0.44+t*0.05,0.03,lz+0.15); g.add(claw); });
   });
-  // tapering tail
-  [{s:0.4,z:-0.8},{s:0.3,z:-1.1},{s:0.2,z:-1.35}].forEach(seg=>{
-    const t=new THREE.Mesh(new THREE.BoxGeometry(0.32*seg.s/0.4,0.22*seg.s/0.4,0.35), skinMat); t.position.set(0,0.3,seg.z); g.add(t);
-  });
+
+  // ---- tail: tapering and laterally FLATTENED, with a double scute crest that merges into a single row.
+  // These boxes carry their length on Z and are unrotated, so no axis pairing is involved. ----
+  for(let i=0;i<7;i++){
+    const t=i/6, z=-0.92-i*0.26;
+    const w=0.42*(1-t*0.72), h=0.30*(1-t*0.45);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.30), i%2?hide:hideDark); seg.position.set(0,0.31,z); g.add(seg);
+    // The crest: paired near the hips, single along the back half — exactly how a crocodile's tail runs.
+    // Each crest's height is derived from ITS OWN segment's top rather than pinned to a fixed y. The tail
+    // tapers, so a fixed height left the rearmost crests hanging in the air above a segment that had
+    // already shrunk below them.
+    const segTop = 0.31 + h/2;
+    if(i<3){
+      [-1,1].forEach(sd=>{ const cr=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.13,0.16), scuteMat);
+        cr.position.set(sd*0.10, segTop+0.13/2-0.04, z); g.add(cr); });
+    } else {
+      const ch=0.16-t*0.06;
+      const cr=new THREE.Mesh(new THREE.BoxGeometry(0.09,ch,0.18), scuteMat); cr.position.set(0, segTop+ch/2-0.04, z); g.add(cr);
+    }
+  }
+  const tailTip=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.14,0.24), hideDark); tailTip.position.set(0,0.31,-2.72); g.add(tailTip);
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 0.9, 0); marker.scale.set(0.9,0.9,0.9); marker.renderOrder = 9999;
+  marker.position.set(0, 1.0, 0); marker.scale.set(0.9,0.9,0.9); marker.renderOrder = 9999;
   marker.raycast = function(){};
   g.add(marker); g.userData.marker = marker;
   return g;
@@ -6737,15 +6999,54 @@ function makeWasScepter(){
 // HARPOON — the only weapon during the Nile Wave: a heavy barbed spear, powerful enough to drop a charging hippo
 function makeHarpoon(){
   const g=new THREE.Group();
-  const wood=metalMatP(0x6b4a2c,20,0x442211), metal=metalMatP(0xaab4be,90,0xffffff);
-  part(g,0.04,0.04,0.9,wood,0,0,-0.1);                     // shaft
-  const head=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.28,4), metal); head.position.set(0,0,-0.62); head.rotation.x=-Math.PI/2; g.add(head);
-  [-1,1].forEach(side=>{ // barbs
-    const barb=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.03,0.14), metal); barb.position.set(side*0.05,0,-0.5); barb.rotation.y=side*0.5; g.add(barb);
+  // Six parts before this, two of which floated: the grip sat above the shaft with a gap, and the rope was
+  // a single stick lying beside it touching nothing. A harpoon reads from the barbed head, the line coiled
+  // and made fast to the shaft, and the throwing grip — all three are built properly now.
+  const wood      = metalMatP(0x6b4a2c,20,0x442211);
+  const woodDark  = metalMatP(0x46301b,18,0x2a1c0e);
+  const metal     = metalMatP(0xaab4be,90,0xffffff);
+  const metalDark = metalMatP(0x6a737c,60,0xb8c2cc);
+  const bronze    = metalMatP(0x9a7328,70,0xffdca0);
+  const cordMat   = voxMat(0xd9c9a0,{noise:10});
+  const cordDark  = voxMat(0xa8977a,{noise:10});
+
+  // ---- shaft in two sections with a bronze collar between, so it isn't one uniform stick ----
+  part(g,0.042,0.042,0.52,wood,0,0,-0.26);
+  part(g,0.038,0.038,0.46,woodDark,0,0,0.20);
+  const collar=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.05,8), bronze); collar.rotation.x=Math.PI/2; collar.position.set(0,0,-0.02); g.add(collar);
+
+  // ---- head: a socket, a leaf blade, and barbs sweeping BACK from behind it. Backward-facing barbs are
+  // the whole point of a harpoon — they stop the animal pulling free — so they are the identifying cue. ----
+  const socket=new THREE.Mesh(new THREE.CylinderGeometry(0.052,0.044,0.10,8), metalDark); socket.rotation.x=Math.PI/2; socket.position.set(0,0,-0.53); g.add(socket);
+  for(let i=0;i<3;i++){ const lash=new THREE.Mesh(new THREE.CylinderGeometry(0.046,0.046,0.016,8), cordMat);
+    lash.rotation.x=Math.PI/2; lash.position.set(0,0,-0.48+i*0.026); g.add(lash); }   // lashing at the socket
+  const shank=new THREE.Mesh(new THREE.BoxGeometry(0.030,0.030,0.14), metalDark); shank.position.set(0,0,-0.64); g.add(shank);
+  const blade=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.022,0.18), metal); blade.position.set(0,0,-0.76); g.add(blade);
+  const point=new THREE.Mesh(new THREE.ConeGeometry(0.038,0.14,4), metal); point.position.set(0,0,-0.90); point.rotation.x=-Math.PI/2; g.add(point);
+  [-1,1].forEach(sd=>{
+    // two barbs a side, angled back toward the shaft
+    const b1=new THREE.Mesh(new THREE.ConeGeometry(0.024,0.11,4), metal);
+    b1.position.set(sd*0.045,0,-0.72); b1.rotation.x=Math.PI/2; b1.rotation.z=sd*0.75; g.add(b1);
+    const b2=new THREE.Mesh(new THREE.ConeGeometry(0.020,0.09,4), metal);
+    b2.position.set(sd*0.038,0,-0.62); b2.rotation.x=Math.PI/2; b2.rotation.z=sd*0.8; g.add(b2);
   });
-  part(g,0.05,0.22,0.06,wood,0,0.2,0.32);                  // grip
-  const rope=new THREE.Mesh(new THREE.BoxGeometry(0.015,0.015,0.5), new THREE.MeshBasicMaterial({color:0xd9c9a0,fog:false})); rope.position.set(0.06,0,0.1); g.add(rope);
-  g.userData={muzzleZ:-0.7,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.4),recoil:0.2,name:'Harpoon',
+
+  // ---- throwing grip: a bound section ON the shaft (not hovering above it) with a thumb rest ----
+  for(let i=0;i<5;i++){
+    const wrap=new THREE.Mesh(new THREE.CylinderGeometry(0.052,0.052,0.042,8), i%2?cordDark:cordMat);
+    wrap.rotation.x=Math.PI/2; wrap.position.set(0,0,0.06+i*0.045); g.add(wrap);
+  }
+  const thumb=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.055,0.09), woodDark); thumb.position.set(0,0.048,0.30); g.add(thumb);
+  const buttCap=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.036,0.06,8), bronze); buttCap.rotation.x=Math.PI/2; buttCap.position.set(0,0,0.44); g.add(buttCap);
+
+  // ---- retrieval line: coiled round the shaft and made fast, rather than a loose stick beside it ----
+  for(let i=0;i<6;i++){
+    const coil=new THREE.Mesh(new THREE.TorusGeometry(0.052,0.011,5,10), cordMat);
+    coil.rotation.y=Math.PI/2; coil.position.set(0,0,-0.20+i*0.036); g.add(coil);
+  }
+  const tie=new THREE.Mesh(new THREE.BoxGeometry(0.016,0.016,0.30), cordMat); tie.position.set(0.045,0.030,-0.34); tie.rotation.y=0.10; g.add(tie);
+
+  g.userData={muzzleZ:-0.98,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.4),recoil:0.2,name:'Harpoon',
     damage:120, fireRate:0.9, auto:false, spread:0, tracer:0xaab4be,
     magSize:6, ammo:6, reloadTime:1.5, reloading:false, reloadT:0};
   return g;
