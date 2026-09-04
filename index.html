@@ -4244,6 +4244,8 @@ function makeFace(type, skinHex, glowHex){
 }
 
 function makeVoxelBot(color, weaponType, skinName){
+  if(skinName==='mummy') return makeMummy();
+  if(skinName==='jackal') return makeJackal();
   if(skinName==='scarab') return makeScarab();
   if(skinName==='scorpion') return makeScorpion();
   if(skinName==='shabti') return makeShabti();
@@ -4509,6 +4511,209 @@ function enemyMarkerTex(){
   ctx.fillStyle='#ff2a2a'; ctx.strokeStyle='#ffffff'; ctx.lineWidth=8;
   ctx.beginPath(); ctx.moveTo(26,20); ctx.lineTo(102,20); ctx.lineTo(64,96); ctx.closePath(); ctx.fill(); ctx.stroke();
   _markerTex=new THREE.CanvasTexture(c); _markerTex.magFilter=THREE.NearestFilter; _markerTex.anisotropy=maxAniso; return _markerTex;
+}
+
+// ---- Pyramid era regular enemies (waves 1-3). Both were SKINS entries on the shared humanoid rig — a
+// recoloured soldier with a different face texture — which is exactly what the Greek and Islamic eras were
+// each moved away from. They get dedicated builders now, like the minotaur/griffin/medusa and the
+// ifrit/ghoul/roc, so they read as their own creatures rather than as palette swaps of one another.
+//
+// Both keep the humanoid rig CONTRACT the shared AI loop depends on: userData.legL/legR (walk swing),
+// armR/armL (aim blend and melee stab), botMuzzle (muzzle flash on ranged fire), bodyMeshes (hit
+// detection) and marker (the through-wall indicator). Built facing +Z; the loop turns them with
+// mesh.lookAt(), which points a plain Object3D's local +Z at its target.
+
+// MUMMY — a shambling bandaged corpse. The identifying features are the loose wrappings TRAILING off the
+// limbs, the gaps where bandage has rotted away to show bone underneath, and the stiff forward reach of
+// both arms. The old version had none of these: it was the soldier rig tinted bone-white.
+function makeMummy(){
+  const g = new THREE.Group();
+  const wrapPale = voxMat(0xd9c9a3,{noise:16});   // clean-ish linen
+  const wrapDim  = voxMat(0xb0a17c,{noise:18});   // older, dirtier linen — the layering tone
+  const wrapDark = voxMat(0x7d715a,{noise:18});   // deep shadow between wrappings
+  const boneMat  = voxMat(0xe8e0cc,{noise:10});   // exposed bone in the gaps
+  const rotMat   = voxMat(0x3a3227,{noise:14});   // dried flesh / cavity
+  const goldMat  = metalMatP(0xc9a13a,85,0xffe9b0);
+  const eyeMat   = new THREE.MeshBasicMaterial({color:0xe8a23d, fog:false});
+
+  // ---- torso: banded wrappings rather than one block, so the linen reads as wound on in courses ----
+  for(let i=0;i<6;i++){
+    const y=0.86+i*0.115, w=0.50+Math.sin(i*1.7)*0.045;
+    const band=new THREE.Mesh(new THREE.BoxGeometry(w,0.11,0.31), i%2?wrapPale:wrapDim);
+    band.position.set(0,y,0); band.rotation.z=(i%2?1:-1)*0.045; g.add(band);
+  }
+  // a rotted gap in the wrappings with ribs showing through — the detail that says "corpse", not "statue"
+  const cavity=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.22,0.30), rotMat); cavity.position.set(0.02,1.19,0.02); g.add(cavity);
+  for(let i=0;i<3;i++){
+    const rib=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.035,0.05), boneMat); rib.position.set(0.02,1.11+i*0.075,0.15); g.add(rib);
+  }
+  const hips=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.20,0.30), wrapDim); hips.position.set(0,0.78,0); g.add(hips);
+  const collar=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.10,0.34), goldMat); collar.position.set(0,1.56,0); g.add(collar);  // funerary pectoral
+
+  // ---- head: a wrapped skull with the face bandage sunken over the sockets ----
+  const neck=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.12,0.18), wrapDark); neck.position.set(0,1.64,0); g.add(neck);
+  const skull=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.38,0.36), wrapPale); skull.position.set(0,1.86,0); g.add(skull);
+  const jaw=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.12,0.30), wrapDim); jaw.position.set(0,1.68,0.02); g.add(jaw);
+  const brow=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.08,0.10), wrapDim); brow.position.set(0,1.99,0.16); g.add(brow);
+  // trailing bandage end hanging off the head — the classic silhouette cue
+  const trail=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.42,0.05), wrapPale); trail.position.set(-0.19,1.68,-0.12); trail.rotation.z=0.22; g.add(trail);
+  [-1,1].forEach(sd=>{
+    const socket=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.09,0.04), rotMat); socket.position.set(sd*0.09,1.88,0.19); g.add(socket);
+    const glow=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.05,0.03), eyeMat); glow.position.set(sd*0.09,1.88,0.21); g.add(glow);
+  });
+  const mouth=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.05,0.04), rotMat); mouth.position.set(0,1.71,0.19); g.add(mouth);
+
+  // ---- arms: reaching FORWARD and slightly down, stiff, with bandage streamers off both forearms ----
+  const arms=[];
+  [-1,1].forEach(sd=>{
+    const arm=new THREE.Group(); arm.position.set(sd*0.34,1.38,0); g.add(arm); arms.push(arm);
+    const shoulder=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.18,0.24), wrapDim); shoulder.position.set(0,-0.02,0); arm.add(shoulder);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.32,0.18), wrapPale); upper.position.set(0,-0.20,0.02); arm.add(upper);
+    const elbow=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.10,0.17), wrapDark); elbow.position.set(0,-0.39,0.04); arm.add(elbow);
+    const lower=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.30,0.16), wrapDim); lower.position.set(0,-0.56,0.08); arm.add(lower);
+    // bone showing at a torn wrist
+    const wristBone=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.09,0.10), boneMat); wristBone.position.set(0,-0.72,0.10); arm.add(wristBone);
+    const hand=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.13,0.16), wrapPale); hand.position.set(0,-0.82,0.12); arm.add(hand);
+    // clawed fingers, reaching
+    [-1,0,1].forEach(f=>{
+      const finger=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.035,0.12), boneMat);
+      finger.position.set(f*0.045,-0.86,0.21); finger.rotation.x=0.25; arm.add(finger);
+    });
+    // streamers of loose bandage trailing off the forearm
+    for(let k=0;k<2;k++){
+      const strip=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.30+k*0.10,0.035), k?wrapDim:wrapPale);
+      // tucked against the forearm rather than hanging in space beside it — at the original offsets these
+      // four streamers cleared the arm entirely and the connectivity check flagged them as floating
+      strip.position.set(sd*0.055-k*0.02,-0.62,-0.03-k*0.035); strip.rotation.z=sd*0.18; arm.add(strip);
+    }
+  });
+  const armL=arms[0], armR=arms[1];
+  const botMuzzle = new THREE.Mesh(new THREE.PlaneGeometry(0.35,0.35),
+    new THREE.MeshBasicMaterial({color:0xffd08a, transparent:true, opacity:0, fog:false, side:THREE.DoubleSide}));
+  botMuzzle.position.set(0,-1.0,0.02); botMuzzle.visible=false; armR.add(botMuzzle);
+
+  // ---- legs, hip-pivoted so the shared walk animation drives them. One is more heavily bound than the
+  // other, which is what makes the gait read as a shamble rather than a march. ----
+  function mummyLeg(sd){
+    const leg=new THREE.Group(); leg.position.set(sd*0.15,0.74,0);
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.34,0.21), wrapDim); thigh.position.set(0,-0.17,0); leg.add(thigh);
+    const knee =new THREE.Mesh(new THREE.BoxGeometry(0.19,0.09,0.20), wrapDark); knee.position.set(0,-0.36,0.01); leg.add(knee);
+    const shin =new THREE.Mesh(new THREE.BoxGeometry(0.18,0.30,0.19), sd<0?wrapPale:wrapDim); shin.position.set(0,-0.55,0.01); leg.add(shin);
+    const foot =new THREE.Mesh(new THREE.BoxGeometry(0.20,0.13,0.27), wrapPale); foot.position.set(0,-0.68,0.05); leg.add(foot);
+    // one leg drags a long loose bandage
+    if(sd<0){
+      const drag=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.40,0.04), wrapPale); drag.position.set(-0.07,-0.52,-0.06); drag.rotation.z=0.3; leg.add(drag);
+    }
+    g.add(leg); return leg;
+  }
+  const legL=mummyLeg(-1), legR=mummyLeg(1);
+
+  g.userData.legL=legL; g.userData.legR=legR; g.userData.armR=armR; g.userData.armL=armL;
+  g.userData.botMuzzle=botMuzzle;
+  g.userData.bodyMeshes=[]; g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker=new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0,2.5,0); marker.scale.set(1.05,1.05,1.05); marker.renderOrder=9999; marker.raycast=function(){};
+  g.add(marker); g.userData.marker=marker;
+  return g;
+}
+
+// ANUBIS JACKAL — a tomb guardian, not a soldier in a dog mask. Reads from the long tapering snout carried
+// on a forward-set neck, the tall upright ears, the black-and-gold funerary palette, and the pleated shendyt
+// kilt. The old version was the soldier rig recoloured black with a wedge stuck on the face.
+function makeJackal(){
+  const g = new THREE.Group();
+  const furMat   = voxMat(0x241a12,{noise:14});   // near-black jackal fur
+  const furLit   = voxMat(0x3d2c1e,{noise:14});   // where the light catches it
+  const skinMat  = voxMat(0x4a3624,{noise:12});   // dark hide of the torso/limbs
+  const goldMat  = metalMatP(0xc9a13a,90,0xffe9b0);
+  const linenMat = voxMat(0xe0d6bb,{noise:12});   // bleached linen kilt
+  const lapisMat = voxMat(0x2a4a8a,{noise:10});   // lapis inlay — the one cool note
+  const eyeMat   = new THREE.MeshBasicMaterial({color:0x5fb8d6, fog:false});
+  const clawMat  = voxMat(0x14100c,{noise:8});
+
+  // ---- torso: lean and upright, with a broad gold usekh collar across the chest ----
+  const torso=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.60,0.30), skinMat); torso.position.set(0,1.14,0); g.add(torso);
+  const abs  =new THREE.Mesh(new THREE.BoxGeometry(0.42,0.22,0.26), skinMat); abs.position.set(0,0.80,0); g.add(abs);
+  const usekh=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.20,0.36), goldMat); usekh.position.set(0,1.42,0.01); g.add(usekh);
+  const usekhRow=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.07,0.38), lapisMat); usekhRow.position.set(0,1.33,0.01); g.add(usekhRow);
+  // shendyt: a pleated kilt, the unmistakable Egyptian garment
+  const kilt=new THREE.Mesh(new THREE.BoxGeometry(0.48,0.30,0.34), linenMat); kilt.position.set(0,0.62,0.01); g.add(kilt);
+  for(let i=0;i<6;i++){
+    const pleat=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.28,0.03), voxMat(0xc4b998,{noise:8}));
+    pleat.position.set(-0.19+i*0.076,0.62,0.18); g.add(pleat);
+  }
+  const beltG=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.09,0.36), goldMat); beltG.position.set(0,0.79,0); g.add(beltG);
+  const apron=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.26,0.05), goldMat); apron.position.set(0,0.60,0.19); g.add(apron);
+
+  // ---- head: the whole identity. A long wedge snout carried FORWARD on an angled neck, tall ears. ----
+  const neck=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.20,0.22), furMat); neck.position.set(0,1.52,0.03); neck.rotation.x=0.25; g.add(neck);
+  const skull=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.28,0.34), furMat); skull.position.set(0,1.76,0.06); g.add(skull);
+  const cheeks=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.16,0.20), furLit); cheeks.position.set(0,1.70,0.14); g.add(cheeks);
+  // snout in three tapering stages, so it narrows to a point instead of ending as a blunt box
+  const snout1=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.17,0.20), furMat); snout1.position.set(0,1.70,0.30); g.add(snout1);
+  const snout2=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.13,0.18), furMat); snout2.position.set(0,1.68,0.45); g.add(snout2);
+  const snout3=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.10,0.14), furLit); snout3.position.set(0,1.67,0.57); g.add(snout3);
+  const nose  =new THREE.Mesh(new THREE.BoxGeometry(0.08,0.07,0.05), clawMat); nose.position.set(0,1.68,0.65); g.add(nose);
+  const jawLine=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.06,0.34), clawMat); jawLine.position.set(0,1.60,0.42); g.add(jawLine);
+  [-1,1].forEach(sd=>{
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.06,0.04), eyeMat); eye.position.set(sd*0.10,1.79,0.22); g.add(eye);
+    const kohl=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.035,0.04), goldMat); kohl.position.set(sd*0.11,1.74,0.22); g.add(kohl);  // kohl stripe, painted like a statue
+    // tall pointed ears, standing straight up — the jackal's other signature
+    const earBase=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.20,0.07), furMat); earBase.position.set(sd*0.14,1.98,0.02); earBase.rotation.z=sd*0.16; g.add(earBase);
+    const earTip =new THREE.Mesh(new THREE.ConeGeometry(0.06,0.20,4), furMat);   earTip.position.set(sd*0.17,2.16,0.02);  earTip.rotation.z=sd*0.16; g.add(earTip);
+    const earIn  =new THREE.Mesh(new THREE.BoxGeometry(0.04,0.15,0.03), goldMat); earIn.position.set(sd*0.14,1.99,0.06); earIn.rotation.z=sd*0.16; g.add(earIn);
+  });
+
+  // ---- arms: hip... shoulder-pivoted groups, with gold armlets ----
+  const arms=[];
+  [-1,1].forEach(sd=>{
+    const arm=new THREE.Group(); arm.position.set(sd*0.33,1.34,0); g.add(arm); arms.push(arm);
+    const shoulder=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.17,0.22), skinMat); shoulder.position.set(0,-0.02,0); arm.add(shoulder);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.32,0.17), skinMat); upper.position.set(0,-0.21,0); arm.add(upper);
+    const armlet=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.07,0.19), goldMat); armlet.position.set(0,-0.36,0); arm.add(armlet);
+    const lower=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.30,0.15), skinMat); lower.position.set(0,-0.53,0); arm.add(lower);
+    const cuff =new THREE.Mesh(new THREE.BoxGeometry(0.16,0.06,0.17), goldMat); cuff.position.set(0,-0.68,0); arm.add(cuff);
+    const hand =new THREE.Mesh(new THREE.BoxGeometry(0.14,0.14,0.15), furMat); hand.position.set(0,-0.78,0.01); arm.add(hand);
+    [-1,0,1].forEach(f=>{
+      const claw=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.03,0.08), clawMat); claw.position.set(f*0.042,-0.82,0.10); arm.add(claw);
+    });
+  });
+  const armL=arms[0], armR=arms[1];
+  const botMuzzle = new THREE.Mesh(new THREE.PlaneGeometry(0.35,0.35),
+    new THREE.MeshBasicMaterial({color:0xbfe8ff, transparent:true, opacity:0, fog:false, side:THREE.DoubleSide}));
+  botMuzzle.position.set(0,-1.0,0.02); botMuzzle.visible=false; armR.add(botMuzzle);
+
+  // ---- digitigrade legs: a jackal stands on its toes, so there is a real backward hock and the foot is
+  // long and narrow. This is the main thing separating its stance from the human soldier rig. ----
+  function jackalLeg(sd){
+    const leg=new THREE.Group(); leg.position.set(sd*0.15,0.72,0);
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.30,0.22), skinMat); thigh.position.set(0,-0.15,0); leg.add(thigh);
+    const hock =new THREE.Mesh(new THREE.BoxGeometry(0.15,0.24,0.16), furLit); hock.position.set(0,-0.40,-0.05); hock.rotation.x=-0.30; leg.add(hock);
+    const shin =new THREE.Mesh(new THREE.BoxGeometry(0.13,0.24,0.14), furMat); shin.position.set(0,-0.58,0.03); shin.rotation.x=0.28; leg.add(shin);
+    const foot =new THREE.Mesh(new THREE.BoxGeometry(0.15,0.10,0.28), furMat); foot.position.set(0,-0.67,0.11); leg.add(foot);
+    [-1,0,1].forEach(t=>{
+      const toe=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.05,0.09), clawMat); toe.position.set(t*0.045,-0.69,0.26); leg.add(toe);
+    });
+    g.add(leg); return leg;
+  }
+  const legL=jackalLeg(-1), legR=jackalLeg(1);
+  // tail, hanging low and curving back
+  { let ty=0.86, tz=-0.18, theta=2.6;
+    [{s:0.11,len:0.20},{s:0.095,len:0.18},{s:0.08,len:0.16},{s:0.065,len:0.14}].forEach((sg,i)=>{
+      const dy=-Math.sin(theta), dz=Math.cos(theta);
+      const m=new THREE.Mesh(new THREE.BoxGeometry(sg.s,sg.s,sg.len), i%2?furLit:furMat);
+      m.position.set(0,ty+dy*sg.len/2,tz+dz*sg.len/2); m.rotation.x=theta; g.add(m);
+      ty+=dy*sg.len*0.9; tz+=dz*sg.len*0.9; theta-=0.18;
+    });
+  }
+
+  g.userData.legL=legL; g.userData.legR=legR; g.userData.armR=armR; g.userData.armL=armL;
+  g.userData.botMuzzle=botMuzzle;
+  g.userData.bodyMeshes=[]; g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker=new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0,2.7,0); marker.scale.set(1.05,1.05,1.05); marker.renderOrder=9999; marker.raycast=function(){};
+  g.add(marker); g.userData.marker=marker;
+  return g;
 }
 
 // ---- scarab: small non-humanoid swarm creature (no arms/legs rig — spawned in packs of 5) ----
@@ -6252,6 +6457,8 @@ function makeZahraGun(){
 function makeBow(){
   const g=new THREE.Group();
   const wood=metalMatP(0x6b4a2c,18,0x332211), gold=metalMatP(0xad8730,55,0xffdd99);
+  const leather=voxMat(0x4a2c18,{noise:14}), leatherDark=voxMat(0x33200f,{noise:12});
+  const sinew=voxMat(0xbfae86,{noise:10}), horn=metalMatP(0x2a2018,45,0x6a5a44);
   const stringMat=new THREE.MeshBasicMaterial({color:0xe8dcc0, fog:false});
   // each segment is walked along the previous one's own rotated direction (verified against a plotted render),
   // so the limb is a properly connected curve instead of segments that only touch at one corner.
@@ -6282,7 +6489,18 @@ function makeBow(){
   }
   const limbUp=limb(1), limbDown=limb(-1);
   g.add(limbUp.grp); g.add(limbDown.grp);
-  part(g,0.06,0.22,0.07,wood,0,0,0.03);              // grip
+  // riser: a shaped centre section the limbs socket into, rather than the limbs simply meeting in mid-air
+  part(g,0.075,0.30,0.085,wood,0,0,0.03);
+  part(g,0.088,0.10,0.095,gold,0,0,0.03);            // gold riser plate
+  part(g,0.06,0.22,0.07,leather,0,0,0.055);          // wrapped grip over the riser's front face
+  for(let i=0;i<4;i++){                              // grip wrapping turns
+    part(g,0.066,0.022,0.076,leatherDark,0,-0.075+i*0.05,0.055);
+  }
+  // sinew bindings where each limb leaves the riser — real composite bows are bound at exactly these joints
+  [1,-1].forEach(dir=>{
+    part(g,0.05,0.035,0.055,sinew,0,dir*0.155,0.033);
+    part(g,0.046,0.028,0.05,sinew,0,dir*0.30,0.052);
+  });
   const stringLen=Math.hypot(limbUp.tipY-limbDown.tipY, limbUp.tipZ-limbDown.tipZ);
   const string=new THREE.Mesh(new THREE.BoxGeometry(0.012,stringLen,0.012),stringMat);
   string.position.set(0,(limbUp.tipY+limbDown.tipY)/2,(limbUp.tipZ+limbDown.tipZ)/2);
@@ -6291,7 +6509,17 @@ function makeBow(){
   // nocked arrow, tip pointing forward (-Z) to match muzzleZ
   part(g,0.02,0.02,0.62,metalMatP(0x8a6a42,20),0,0,-0.18);
   const head=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.09,4),metalMatP(0xaab4be,80,0xffffff)); head.position.set(0,0,-0.52); head.rotation.x=-Math.PI/2; g.add(head);
-  const fletch=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.01),new THREE.MeshLambertMaterial({color:0xb5502c})); fletch.position.set(0,0,0.1); fletch.rotation.z=Math.PI/4; g.add(fletch);
+  // barbs behind the head — an Egyptian war arrow is barbed, and it is the one detail visible at this scale
+  [-1,1].forEach(sd=>{ const barb=new THREE.Mesh(new THREE.ConeGeometry(0.016,0.05,4),metalMatP(0xaab4be,80,0xffffff));
+    barb.position.set(sd*0.022,0,-0.455); barb.rotation.x=Math.PI/2; barb.rotation.z=sd*0.7; g.add(barb); });
+  part(g,0.026,0.026,0.03,sinew,0,0,-0.43);          // binding at the head socket
+  // three fletches radiating round the shaft, not one crossed card
+  for(let f=0;f<3;f++){
+    const a=f*(Math.PI*2/3);
+    const vane=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.055,0.11), new THREE.MeshLambertMaterial({color:f===0?0xd8b040:0xb5502c}));
+    vane.position.set(Math.sin(a)*0.028,Math.cos(a)*0.028,0.10); vane.rotation.z=-a; g.add(vane);
+  }
+  part(g,0.03,0.03,0.028,horn,0,0,0.155);            // horn nock at the string end
   // a small bronze aiming ring mounted just above the grip — a peep sight, not a glass sniper scope, but
   // wired to the same scoped/scopeFov mechanic (right-click/hold-shift zooms in, same as the sniper rifle)
   const sightRing=new THREE.Mesh(new THREE.TorusGeometry(0.045,0.009,6,12), gold); sightRing.position.set(-0.05,0.16,0.03); g.add(sightRing);
@@ -6328,25 +6556,54 @@ function eyeOfHorusTex(){
 function makeKhopesh(){
   const g=new THREE.Group();
   const goldDeep=metalMatP(0x9a7020,80,0xd9b872), goldBlade=metalMatP(0xd4af37,90,0xfff4c0);
+  const bronzeDark=metalMatP(0x6b4d18,60,0xa88a44);
   const leatherLight=voxMat(0x6b4226,{noise:16}), leatherDark=voxMat(0x4a2c18,{noise:14});
-  // pommel: gold cap with an engraved Eye of Horus decal on its face
+  const lapisMat=voxMat(0x2a4a8a,{noise:10});
+  // pommel: gold cap with an engraved Eye of Horus decal on its face, now with a collar under it
   part(g,0.09,0.06,0.07,goldDeep,0,0.0,0.04);
   const eyePlane=new THREE.Mesh(new THREE.PlaneGeometry(0.08,0.08), new THREE.MeshBasicMaterial({map:eyeOfHorusTex(), transparent:true}));
   eyePlane.position.set(0,0.0,0.076); g.add(eyePlane);
+  const pommelCollar=new THREE.Mesh(new THREE.CylinderGeometry(0.038,0.045,0.022,8), goldDeep); pommelCollar.position.set(0,0.028,0.04); g.add(pommelCollar);
   // ribbed leather-wrapped grip: stacked matte segments alternating tones, not shiny gold
   for(let i=0;i<5;i++){
     const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.042,8), i%2?leatherDark:leatherLight);
     seg.position.set(0,0.04+i*0.04,0.04); g.add(seg);
+    // a fine gold wire binding between each pair of leather turns
+    if(i<4){ const wire=new THREE.Mesh(new THREE.CylinderGeometry(0.034,0.034,0.008,8), goldDeep); wire.position.set(0,0.06+i*0.04,0.04); g.add(wire); }
   }
+  const ferrule=new THREE.Mesh(new THREE.CylinderGeometry(0.036,0.033,0.018,8), goldDeep); ferrule.position.set(0,0.215,0.04); g.add(ferrule);
   const guard=part(g,0.16,0.03,0.09,goldDeep,0,0.23,0.04); guard.rotation.z=0.05;
+  // lapis inlay set into the guard — the era's colour accent, matching the was-sceptre and the jackal
+  part(g,0.09,0.014,0.05,lapisMat,0,0.245,0.04);
   // blade: a tiny straight rise, then an obtuse ~140° curve (a "C", not a full doubled-back semicircle) —
-  // verified by plotting the exact chain-walked box transforms first.
-  part(g,0.05,0.1,0.05,goldBlade,0,0.27,0.04);                            // tiny straight base
-  part(g,0.045,0.1,0.05,goldBlade,-0.0109,0.3387,0.04).rotation.z=0.2443; // curve begins
-  part(g,0.042,0.1,0.05,goldBlade,-0.0475,0.3983,0.04).rotation.z=0.733;
-  part(g,0.04,0.1,0.05,goldBlade,-0.1079,0.4338,0.04).rotation.z=1.2217;
-  part(g,0.038,0.1,0.05,goldBlade,-0.1778,0.4367,0.04).rotation.z=1.7104;
-  part(g,0.036,0.1,0.05,goldBlade,-0.241,0.4065,0.04).rotation.z=2.1991; // tip
+  // verified by plotting the exact chain-walked box transforms first. DO NOT re-derive these positions by
+  // hand; they were solved once against the rotation chain and any drift reopens the gaps this once had.
+  const bladeSegs=[
+    {w:0.05,  x:0,       y:0.27,   rz:0},
+    {w:0.045, x:-0.0109, y:0.3387, rz:0.2443},
+    {w:0.042, x:-0.0475, y:0.3983, rz:0.733},
+    {w:0.04,  x:-0.1079, y:0.4338, rz:1.2217},
+    {w:0.038, x:-0.1778, y:0.4367, rz:1.7104},
+    {w:0.036, x:-0.241,  y:0.4065, rz:2.1991},
+  ];
+  bladeSegs.forEach((b,i)=>{
+    part(g,b.w,0.1,0.05,goldBlade,b.x,b.y,0.04).rotation.z=b.rz;
+    // The khopesh is sharpened on the OUTER edge of the curve only — the inner edge is a blunt back. A
+    // darker back-strip riding the inside of each segment is what makes the blade read as a sickle with a
+    // direction to it, rather than as a symmetrical gold crescent.
+    const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.42,0.1,0.056), bronzeDark);
+    back.position.set(b.x+Math.cos(b.rz)*b.w*0.30, b.y+Math.sin(b.rz)*b.w*0.30, 0.04);
+    back.rotation.z=b.rz; g.add(back);
+    // a bright edge highlight on the outer side, catching the light along the cut
+    if(i>0){
+      const edge=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.22,0.1,0.044), goldBlade);
+      edge.position.set(b.x-Math.cos(b.rz)*b.w*0.40, b.y-Math.sin(b.rz)*b.w*0.40, 0.04);
+      edge.rotation.z=b.rz; g.add(edge);
+    }
+  });
+  // hooked tip — the point of a khopesh turns back on itself, which is how it catches a shield rim
+  const hook=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.075,4), goldBlade);
+  hook.position.set(-0.288,0.379,0.04); hook.rotation.z=2.5; g.add(hook);
   g.scale.setScalar(1.05);  // bigger — uniform scale keeps every part's proportions/connections intact
   g.userData={muzzleZ:-0.1,muzzleY:0.4,pos:new THREE.Vector3(0.22,-0.22,-0.42),recoil:0.16,name:'Khopesh',
     damage:100, fireRate:0.42, melee:true, range:2.5, auto:false, spread:0, tracer:0xffe9b0,
@@ -6356,15 +6613,58 @@ function makeKhopesh(){
 // WAS SCEPTER — forked-base staff with a glowing animal-head finial, channels a rapid sand-magic bolt
 function makeWasScepter(){
   const g=new THREE.Group();
-  const shaftMat=metalMatP(0x8a6a42,30,0x664422), goldMat=metalMatP(0xad8730,70,0xffe9b0);
-  const glowMat=new THREE.MeshBasicMaterial({color:0x5fe8c9, fog:false});
-  part(g,0.05,0.05,0.62,shaftMat,0,0,-0.05);          // long shaft
-  const prongL=part(g,0.03,0.16,0.03,goldMat,-0.05,-0.1,0.28); prongL.rotation.z=0.3;  // forked base
-  const prongR=part(g,0.03,0.16,0.03,goldMat,0.05,-0.1,0.28); prongR.rotation.z=-0.3;
-  part(g,0.09,0.11,0.14,goldMat,0,0.04,-0.36);        // animal-head finial
-  const core=new THREE.Mesh(new THREE.SphereGeometry(0.05,8,6),glowMat); core.position.set(0,0.04,-0.42); g.add(core);
-  const emit=new THREE.PointLight(0x5fe8c9,0.5,2.2); emit.position.copy(core.position); g.add(emit);
-  g.userData={muzzleZ:-0.44,muzzleY:0.04,pos:new THREE.Vector3(0.24,-0.24,-0.4),recoil:0.05,name:'Was Scepter',
+  // A was-sceptre is identified by exactly two things at either end of the staff: the FORKED base (two
+  // prongs, like a tuning fork) and the stylised Set-animal head at the top — a long square-cut muzzle
+  // angling down, with tall straight-topped ears. The old model had a two-prong stub and a single 0.09
+  // box labelled "animal-head finial", which read as a stick with a lump on it, and the glowing core
+  // floated clear of that lump entirely (the connectivity check flagged 2 of its 5 parts).
+  //
+  // Weapon convention here is -Z forward, so the head points away from the player and the forked base sits
+  // back near the hand.
+  const shaftMat = metalMatP(0x8a6a42,30,0x664422);
+  const shaftDark= metalMatP(0x5f4728,25,0x3a2a16);
+  const goldMat  = metalMatP(0xc9a13a,90,0xffe9b0);
+  const goldDeep = metalMatP(0x8f6f1e,70,0xd9b872);
+  const lapisMat = voxMat(0x2a4a8a,{noise:10});
+  const glowMat  = new THREE.MeshBasicMaterial({color:0x5fe8c9, fog:false});
+
+  // ---- shaft, in three sections with gold binding rings, so it is not one uniform stick ----
+  part(g,0.048,0.048,0.30,shaftMat,0,0,0.10);
+  part(g,0.044,0.044,0.34,shaftDark,0,0,-0.16);
+  [0.24,0.02,-0.30].forEach(z=>{ const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.033,0.033,0.035,8), goldMat);
+    ring.rotation.x=Math.PI/2; ring.position.set(0,0,z); g.add(ring); });
+  // lapis inlay band down the middle section — colour against all that brown and gold
+  part(g,0.012,0.05,0.20,lapisMat,0,0.001,-0.10);
+
+  // ---- forked base: two prongs splaying back and apart, joined by a collar. This is the end that rests
+  // on the ground when the sceptre is planted, and half of what identifies the object. ----
+  const fork=new THREE.Mesh(new THREE.CylinderGeometry(0.042,0.036,0.07,8), goldDeep); fork.rotation.x=Math.PI/2; fork.position.set(0,0,0.26); g.add(fork);
+  [-1,1].forEach(sd=>{
+    const prong=new THREE.Mesh(new THREE.BoxGeometry(0.032,0.032,0.17), goldMat);
+    prong.position.set(sd*0.035,-0.02,0.36); prong.rotation.y=sd*-0.22; prong.rotation.x=0.16; g.add(prong);
+    const tip=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.07,5), goldDeep);
+    tip.position.set(sd*0.055,-0.045,0.46); tip.rotation.x=-Math.PI/2+0.16; tip.rotation.z=sd*-0.22; g.add(tip);
+  });
+
+  // ---- Set-animal head. Square muzzle angling DOWN off the shaft, a defined jaw, an eye, and the two
+  // tall flat-topped ears that make the silhouette unmistakable even as a first-person prop. ----
+  const neck  =new THREE.Mesh(new THREE.BoxGeometry(0.07,0.09,0.10), goldDeep); neck.position.set(0,0.01,-0.36); g.add(neck);
+  const skull =new THREE.Mesh(new THREE.BoxGeometry(0.09,0.11,0.13), goldMat);  skull.position.set(0,0.04,-0.45); g.add(skull);
+  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.065,0.075,0.14), goldMat); muzzle.position.set(0,-0.005,-0.55); muzzle.rotation.x=-0.30; g.add(muzzle);
+  const snoutTip=new THREE.Mesh(new THREE.BoxGeometry(0.055,0.055,0.05), goldDeep); snoutTip.position.set(0,-0.055,-0.62); g.add(snoutTip);
+  const jaw   =new THREE.Mesh(new THREE.BoxGeometry(0.05,0.035,0.12), goldDeep); jaw.position.set(0,-0.045,-0.53); jaw.rotation.x=-0.30; g.add(jaw);
+  [-1,1].forEach(sd=>{
+    // ears: tall, straight, square-topped — a Set animal's, not a jackal's points
+    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.028,0.11,0.055), goldMat); ear.position.set(sd*0.032,0.145,-0.44); g.add(ear);
+    const earCap=new THREE.Mesh(new THREE.BoxGeometry(0.040,0.028,0.062), goldDeep); earCap.position.set(sd*0.032,0.205,-0.44); g.add(earCap);
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.022,0.022,0.02), lapisMat); eye.position.set(sd*0.046,0.055,-0.50); g.add(eye);
+  });
+  // the channelled magic: a glowing core seated INSIDE the open jaw, plus a wisp ahead of it
+  const core=new THREE.Mesh(new THREE.SphereGeometry(0.038,8,6),glowMat); core.position.set(0,-0.025,-0.60); g.add(core);
+  const wisp=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.09,6),glowMat); wisp.position.set(0,-0.035,-0.66); wisp.rotation.x=-Math.PI/2; g.add(wisp);
+  const emit=new THREE.PointLight(0x5fe8c9,0.6,2.4); emit.position.set(0,-0.03,-0.62); g.add(emit);
+
+  g.userData={muzzleZ:-0.66,muzzleY:-0.035,pos:new THREE.Vector3(0.24,-0.24,-0.4),recoil:0.05,name:'Was Scepter',
     damage:13, fireRate:0.1, auto:true, spread:0.025, tracer:0x5fe8c9,
     magSize:36, ammo:36, reloadTime:1.5, reloading:false, reloadT:0};
   return g;
