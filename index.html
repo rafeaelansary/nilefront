@@ -720,11 +720,13 @@ function nileMudTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
 // Sun-dried silt further up the bank: paler, with the cracked polygon pattern dried Nile mud actually
 // forms. The crack lines are what stop it reading as another flat sand band next to the mud.
 function nileSiltTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
-  x.fillStyle='#c2ab7e'; x.fillRect(0,0,P,P);
+  x.fillStyle='#d6b968'; x.fillRect(0,0,P,P);
   for(let j=0;j<P;j++)for(let i=0;i<P;i++){
     const n=Math.abs(Math.sin(i*6.1+j*3.7)*4375.5%1);
-    const v=(198+(n-0.5)*30)|0;
-    x.fillStyle=`rgb(${v},${(v-22)|0},${(v-64)|0})`; x.fillRect(i,j,1,1);
+    // pushed warmer and more saturated: the bank was reading as a pale grey-tan band next to the blue
+    // water, when Nile silt in sun is a strong ochre yellow
+    const v=(214+(n-0.5)*40)|0;
+    x.fillStyle=`rgb(${v},${(v-34)|0},${(v-104)|0})`; x.fillRect(i,j,1,1);
   }
   // dried-mud crack polygons — deterministic so the tile is stable
   x.strokeStyle='rgba(96,78,50,0.55)'; x.lineWidth=1;
@@ -2104,13 +2106,36 @@ function waterRippleTex(){
     // Terraces stepping back and up from the water, each its own material and tile scale, so the bank has
     // four tonal bands rather than one wash.
     const terraces = [
-      {tex:nileReedBedTex, off: 1.5,  w: 5,  h:0.55, y:-0.10, tile:1.1},   // reed margin at the water
-      {tex:nileMudTex,     off: 5.5,  w: 7,  h:0.80, y: 0.10, tile:1.3},   // wet mud flat
-      {tex:nileSiltTex,    off:12.0,  w: 9,  h:1.30, y: 0.40, tile:1.6},   // dried silt terrace
-      {tex:gizaSandTex,    off:22.0,  w:14,  h:2.20, y: 0.95, tile:2.0},   // sand rise
+      {tex:nileReedBedTex, off: 1.5,  w: 5,  h:0.55, y:-0.10, tile:1.1, tint:0xffffff},  // reed margin
+      {tex:nileMudTex,     off: 5.5,  w: 7,  h:0.80, y: 0.10, tile:1.3, tint:0xffffff},  // wet mud flat
+      {tex:nileSiltTex,    off:12.0,  w: 9,  h:1.30, y: 0.40, tile:1.6, tint:0xffe9a8},  // dried silt, warmed
+      {tex:gizaSandTex,    off:22.0,  w:14,  h:2.20, y: 0.95, tile:2.0, tint:0xffe2a0},  // sand rise, warmed
     ];
-    terraces.forEach(t=>{
-      bankMesh(t.w, t.h, RIVER_LEN, bandMat(t.tex(), t.w, RIVER_LEN, t.tile), nearX + dir*t.off, t.y, 0);
+    // Each terrace is built as a RUN OF CHUNKS along the river rather than one 260-unit slab. A single slab
+    // has a dead-straight top edge and a dead-straight side for the whole length of the map, which is what
+    // made the bank read as smooth and solid. Every chunk jitters its width, its height and its distance
+    // from the water, so the terrace steps and staggers the way a real bank does, and the two upper bands
+    // are tinted warmer so the whole thing sits yellow against the blue river instead of pale grey-tan.
+    const CHUNK = 7;
+    terraces.forEach((t,ti)=>{
+      const mat = bandMat(t.tex(), t.w, CHUNK, t.tile, t.tint);
+      const matLo = bandMat(t.tex(), t.w, CHUNK, t.tile,
+                            new THREE.Color(t.tint).multiplyScalar(0.86).getHex());
+      for(let z=-RIVER_LEN/2; z<RIVER_LEN/2; z+=CHUNK){
+        const n = Math.abs(Math.sin(z*0.21 + ti*3.1 + nearX)*4375.5%1);
+        const m = Math.abs(Math.cos(z*0.13 + ti*1.7 + nearX)*911%1);
+        const w = t.w * (0.78 + n*0.5);
+        const h = t.h * (0.72 + m*0.7);
+        const off = t.off + (n-0.5)*2.4;
+        // height is derived so each chunk's TOP varies while its base stays buried, rather than the whole
+        // run sharing one flat top plane
+        bankMesh(w, h, CHUNK*1.06, (n>0.5?mat:matLo), nearX + dir*off, t.y + (h-t.h)/2, z + CHUNK/2);
+        // an occasional higher shelf sitting on top, so the profile is stepped rather than a single ledge
+        if(n > 0.66){
+          bankMesh(w*0.55, h*0.5, CHUNK*0.7, matLo,
+                   nearX + dir*(off + (m-0.5)*1.8), t.y + (h-t.h)/2 + h*0.72, z + CHUNK/2 + (m-0.5)*2);
+        }
+      }
     });
 
     // ---- the desert behind. This was a single 90x3.2x260 slab, which is a WALL however it is textured.
