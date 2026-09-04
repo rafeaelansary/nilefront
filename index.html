@@ -4592,24 +4592,52 @@ function makeMummy(){
     new THREE.MeshBasicMaterial({color:0xffd08a, transparent:true, opacity:0, fog:false, side:THREE.DoubleSide}));
   botMuzzle.position.set(0,-1.0,0.02); botMuzzle.visible=false; armR.add(botMuzzle);
 
-  // ---- held khopesh, gripped in the right hand. It uses buildKhopeshBlade, the same profile the player's
-  // weapon draws, so the two can never drift apart. Parented to armR so it swings with the melee animation.
-  // Scaled down and rotated so the blade stands up out of the fist rather than reaching back into the arm.
+  // ---- held khopesh, gripped in the right hand ----
+  // Same six verified blade transforms the player's khopesh uses, at 0.55 scale. Two nested groups: the
+  // outer one sits AT the fist and carries the wrist angle; the inner one shifts the weapon down its own
+  // length so the middle of the GRIP lands in the hand, rather than the pommel sitting in the palm with
+  // the whole weapon hanging off one end.
+  //
+  // The wrist angle matters. The model's blade runs up its local +Y, but this mummy's arm hangs downward,
+  // so an unrotated blade would run straight back up inside the arm mesh. rotation.x = 1.15 tips it onto
+  // (0, cos 1.15, sin 1.15) — forward and slightly up out of the fist, which is how a shambling corpse
+  // would carry a sword and matches the reference's forward-held pose.
   {
-    const heldGrp = new THREE.Group();
-    heldGrp.position.set(0.03,-0.86,0.14);
-    heldGrp.rotation.set(0.35, 0, -0.30);
-    heldGrp.scale.setScalar(0.62);
-    armR.add(heldGrp);
-    const bladeGold = metalMatP(0xd4af37,90,0xfff4c0), bladeDark = metalMatP(0x6b4d18,60,0xa88a44);
-    const gripDark  = voxMat(0x2a1c12,{noise:14});
-    const pommel=new THREE.Mesh(new THREE.BoxGeometry(0.085,0.055,0.065), bladeDark); pommel.position.y=-0.115; heldGrp.add(pommel);
-    for(let i=0;i<3;i++){
-      const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.030,0.030,0.048,8), i%2?gripDark:bladeDark);
-      seg.position.y=-0.075+i*0.046; heldGrp.add(seg);
+    const wrist = new THREE.Group();
+    wrist.position.set(0.02,-0.84,0.13);
+    wrist.rotation.set(1.15, 0, -0.22);
+    armR.add(wrist);
+    const kh = new THREE.Group();
+    kh.position.set(0,-0.10,0);      // centre the grip in the palm
+    kh.scale.setScalar(0.55);
+    wrist.add(kh);
+
+    const kGold = metalMatP(0xd4af37,90,0xfff4c0), kDeep = metalMatP(0x9a7020,80,0xd9b872);
+    const kBack = metalMatP(0x6b4d18,60,0xa88a44), kGrip = voxMat(0x4a2c18,{noise:14});
+    const kh_part=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); kh.add(m); return m; };
+    kh_part(0.09,0.06,0.07,kDeep,0,0,0);                       // pommel
+    for(let i=0;i<4;i++){
+      const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.048,8), i%2?kGrip:voxMat(0x6b4226,{noise:16}));
+      seg.position.set(0,0.05+i*0.046,0); kh.add(seg);
     }
-    const guard=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.028,0.085), bladeDark); guard.position.y=0.062; heldGrp.add(guard);
-    buildKhopeshBlade(heldGrp, 0.058, 0, bladeGold, bladeDark, 0.076);
+    kh_part(0.16,0.03,0.09,kDeep,0,0.225,0).rotation.z=0.05;   // guard
+    const kSegs=[
+      {w:0.05,  x:0,       y:0.27,   rz:0},
+      {w:0.045, x:-0.0109, y:0.3387, rz:0.2443},
+      {w:0.042, x:-0.0475, y:0.3983, rz:0.733},
+      {w:0.04,  x:-0.1079, y:0.4338, rz:1.2217},
+      {w:0.038, x:-0.1778, y:0.4367, rz:1.7104},
+      {w:0.036, x:-0.241,  y:0.4065, rz:2.1991},
+    ];
+    kSegs.forEach(b=>{
+      const seg=kh_part(b.w,0.1,0.05,kGold,b.x,b.y,0); seg.rotation.z=b.rz;
+      const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.34,0.102,0.056), kBack);
+      back.position.set(-b.w*0.34,0,0); seg.add(back);
+    });
+    const kl=kSegs[kSegs.length-1];
+    const ktip=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.075,4), kGold);
+    ktip.position.set(kl.x-Math.sin(kl.rz)*0.055, kl.y+Math.cos(kl.rz)*0.055, 0);
+    ktip.rotation.z=kl.rz; kh.add(ktip);
   }
 
   // ---- legs, hip-pivoted so the shared walk animation drives them. One is more heavily bound than the
@@ -6573,70 +6601,58 @@ function eyeOfHorusTex(){
   x.strokeStyle=ink; x.lineWidth=3; x.beginPath(); x.arc(18,48,5,0.2,Math.PI*1.6); x.stroke();
   const t=new THREE.CanvasTexture(c); t.magFilter=THREE.NearestFilter; t.anisotropy=maxAniso; return t;
 }
-// ---- khopesh blade profile, shared by the player's weapon and the mummy's held copy so the two can never
-// drift apart. Matches the reference: a LONG straight rise out of the guard, then a single pronounced
-// crescent hooking over at the TOP only, with the point curling back down. Two things were wrong before —
-// the curve started immediately at the guard (no straight section, so it read as a closed C), and it
-// stopped at 82 degrees, which is a gentle sickle rather than the reference's hook.
-//
-// Chain-walked: a box whose length lies on +Y rotated by rotation.z = t points along (-sin t, cos t), so
-// the walk steps along exactly that. Back and edge strips are PARENTED to each segment, so they inherit
-// its rotation and cannot drift off it.
-function khopeshBladeSegs(){
-  return [
-    {w:0.052, t:0.00}, {w:0.056, t:0.00}, {w:0.060, t:0.00}, {w:0.064, t:0.00},  // straight rise
-    {w:0.070, t:0.22}, {w:0.076, t:0.52}, {w:0.082, t:0.84},                     // crescent opens
-    {w:0.084, t:1.18}, {w:0.080, t:1.52}, {w:0.072, t:1.86},                     // over the top
-    {w:0.060, t:2.18}, {w:0.046, t:2.46},                                        // ~141 deg, point curls down
-  ];
-}
-function buildKhopeshBlade(parent, L, z, bladeMat, backMat, startY){
-  let bx = 0, by = startY, tipX = 0, tipY = startY, tipT = 0;
-  khopeshBladeSegs().forEach(sg=>{
-    const dx = -Math.sin(sg.t), dy = Math.cos(sg.t);
-    const seg = new THREE.Mesh(new THREE.BoxGeometry(sg.w, L, 0.05), bladeMat);
-    seg.position.set(bx + dx*L/2, by + dy*L/2, z);
-    seg.rotation.z = sg.t;
-    parent.add(seg);
-    // blunt back on the concave (inner) side — local -X. The khopesh is sharpened on the OUTER curve only,
-    // and that asymmetry is what makes it read as a sickle-sword rather than a symmetrical arc.
-    const back = new THREE.Mesh(new THREE.BoxGeometry(sg.w*0.30, L*1.02, 0.056), backMat);
-    back.position.set(-sg.w*0.36, 0, 0); seg.add(back);
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(sg.w*0.20, L*1.02, 0.038), bladeMat);
-    edge.position.set(sg.w*0.42, 0, 0); seg.add(edge);
-    bx += dx*L*0.94; by += dy*L*0.94;     // 0.94 = segments overlap, so the blade is one solid run
-    tipX = bx; tipY = by; tipT = sg.t;
-  });
-  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.024, 0.07, 4), bladeMat);
-  tip.position.set(tipX - Math.sin(tipT)*(L*0.42), tipY + Math.cos(tipT)*(L*0.42), z);
-  tip.rotation.z = tipT; parent.add(tip);
-}
 function makeKhopesh(){
   const g=new THREE.Group();
   const goldDeep=metalMatP(0x9a7020,80,0xd9b872), goldBlade=metalMatP(0xd4af37,90,0xfff4c0);
-  const bronzeDark=metalMatP(0x6b4d18,60,0xa88a44);
+  const bronzeBack=metalMatP(0x6b4d18,60,0xa88a44);
   const leatherLight=voxMat(0x6b4226,{noise:16}), leatherDark=voxMat(0x4a2c18,{noise:14});
-  // pommel: gold cap with an engraved Eye of Horus decal on its face, now with a collar under it
+
+  // ---- hilt ----
+  // pommel: gold cap with an engraved Eye of Horus decal on its face
   part(g,0.09,0.06,0.07,goldDeep,0,0.0,0.04);
   const eyePlane=new THREE.Mesh(new THREE.PlaneGeometry(0.08,0.08), new THREE.MeshBasicMaterial({map:eyeOfHorusTex(), transparent:true}));
   eyePlane.position.set(0,0.0,0.076); g.add(eyePlane);
-  const pommelCollar=new THREE.Mesh(new THREE.CylinderGeometry(0.038,0.045,0.022,8), goldDeep); pommelCollar.position.set(0,0.028,0.04); g.add(pommelCollar);
+  const pommelCollar=new THREE.Mesh(new THREE.CylinderGeometry(0.037,0.045,0.020,8), goldDeep); pommelCollar.position.set(0,0.028,0.04); g.add(pommelCollar);
   // ribbed leather-wrapped grip: stacked matte segments alternating tones, not shiny gold
   for(let i=0;i<5;i++){
     const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.042,8), i%2?leatherDark:leatherLight);
     seg.position.set(0,0.04+i*0.04,0.04); g.add(seg);
-    // a fine gold wire binding between each pair of leather turns
-    if(i<4){ const wire=new THREE.Mesh(new THREE.CylinderGeometry(0.034,0.034,0.008,8), goldDeep); wire.position.set(0,0.06+i*0.04,0.04); g.add(wire); }
+    if(i<4){ const wire=new THREE.Mesh(new THREE.CylinderGeometry(0.0335,0.0335,0.007,8), goldDeep); wire.position.set(0,0.06+i*0.04,0.04); g.add(wire); }
   }
-  const ferrule=new THREE.Mesh(new THREE.CylinderGeometry(0.036,0.033,0.018,8), goldDeep); ferrule.position.set(0,0.215,0.04); g.add(ferrule);
+  const ferrule=new THREE.Mesh(new THREE.CylinderGeometry(0.036,0.033,0.016,8), goldDeep); ferrule.position.set(0,0.216,0.04); g.add(ferrule);
   const guard=part(g,0.16,0.03,0.09,goldDeep,0,0.23,0.04); guard.rotation.z=0.05;
-  // NOTE: no inlay strip on the guard. A lapis band was tried here and it sat inside the blade's own base
-  // block, so the two fought for the same pixels and showed up in game as a blue flicker across the hilt.
 
-  buildKhopeshBlade(g, 0.062, 0.04, goldBlade, bronzeDark, 0.245);
-  // 0.85, down from 1.05: the rebuilt blade is a longer run than the old six-segment hook, and at the
-  // previous scale it filled a third of the screen. Uniform scale keeps every part's connections intact.
-  g.scale.setScalar(0.85);
+  // ---- blade ----
+  // These six transforms are the ORIGINAL, verified ones: a tiny straight rise, then an obtuse ~140° curve
+  // (a "C", not a full doubled-back semicircle), solved once by plotting the actual chain-walked box
+  // positions. They are left exactly as they were. Every attempt to re-derive this curve by hand has made
+  // it worse — too closed and it becomes a shepherd's crook, too open and it stops being a khopesh.
+  // The redesign here is entirely SURFACE: each segment gets a blunt inner back and a bright outer edge,
+  // parented to it so they inherit its rotation and cannot drift off.
+  const bladeSegs=[
+    {w:0.05,  x:0,       y:0.27,   rz:0},
+    {w:0.045, x:-0.0109, y:0.3387, rz:0.2443},
+    {w:0.042, x:-0.0475, y:0.3983, rz:0.733},
+    {w:0.04,  x:-0.1079, y:0.4338, rz:1.2217},
+    {w:0.038, x:-0.1778, y:0.4367, rz:1.7104},
+    {w:0.036, x:-0.241,  y:0.4065, rz:2.1991},
+  ];
+  bladeSegs.forEach((b,i)=>{
+    const seg=part(g,b.w,0.1,0.05,goldBlade,b.x,b.y,0.04); seg.rotation.z=b.rz;
+    // A khopesh is sharpened on the OUTER edge of the curve only; the inner edge is a blunt back. That
+    // asymmetry is what gives the blade a direction instead of reading as a symmetrical gold arc.
+    const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.34,0.102,0.056), bronzeBack);
+    back.position.set(-b.w*0.34,0,0); seg.add(back);
+    const edge=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.22,0.102,0.038), goldBlade);
+    edge.position.set(b.w*0.40,0,0); seg.add(edge);
+  });
+  // point, carried on along the last segment's own direction so it meets the blade rather than floating
+  const last=bladeSegs[bladeSegs.length-1];
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.075,4), goldBlade);
+  tip.position.set(last.x - Math.sin(last.rz)*0.055, last.y + Math.cos(last.rz)*0.055, 0.04);
+  tip.rotation.z=last.rz; g.add(tip);
+
+  g.scale.setScalar(1.05);  // bigger — uniform scale keeps every part's proportions/connections intact
   g.userData={muzzleZ:-0.1,muzzleY:0.4,pos:new THREE.Vector3(0.22,-0.22,-0.42),recoil:0.16,name:'Khopesh',
     damage:100, fireRate:0.42, melee:true, range:2.5, auto:false, spread:0, tracer:0xffe9b0,
     magSize:1, ammo:1, reloadTime:0.1, reloading:false, reloadT:0};
