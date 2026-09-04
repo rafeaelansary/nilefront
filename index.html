@@ -6558,7 +6558,6 @@ function makeKhopesh(){
   const goldDeep=metalMatP(0x9a7020,80,0xd9b872), goldBlade=metalMatP(0xd4af37,90,0xfff4c0);
   const bronzeDark=metalMatP(0x6b4d18,60,0xa88a44);
   const leatherLight=voxMat(0x6b4226,{noise:16}), leatherDark=voxMat(0x4a2c18,{noise:14});
-  const lapisMat=voxMat(0x2a4a8a,{noise:10});
   // pommel: gold cap with an engraved Eye of Horus decal on its face, now with a collar under it
   part(g,0.09,0.06,0.07,goldDeep,0,0.0,0.04);
   const eyePlane=new THREE.Mesh(new THREE.PlaneGeometry(0.08,0.08), new THREE.MeshBasicMaterial({map:eyeOfHorusTex(), transparent:true}));
@@ -6573,38 +6572,50 @@ function makeKhopesh(){
   }
   const ferrule=new THREE.Mesh(new THREE.CylinderGeometry(0.036,0.033,0.018,8), goldDeep); ferrule.position.set(0,0.215,0.04); g.add(ferrule);
   const guard=part(g,0.16,0.03,0.09,goldDeep,0,0.23,0.04); guard.rotation.z=0.05;
-  // lapis inlay set into the guard — the era's colour accent, matching the was-sceptre and the jackal
-  part(g,0.09,0.014,0.05,lapisMat,0,0.245,0.04);
-  // blade: a tiny straight rise, then an obtuse ~140° curve (a "C", not a full doubled-back semicircle) —
-  // verified by plotting the exact chain-walked box transforms first. DO NOT re-derive these positions by
-  // hand; they were solved once against the rotation chain and any drift reopens the gaps this once had.
-  const bladeSegs=[
-    {w:0.05,  x:0,       y:0.27,   rz:0},
-    {w:0.045, x:-0.0109, y:0.3387, rz:0.2443},
-    {w:0.042, x:-0.0475, y:0.3983, rz:0.733},
-    {w:0.04,  x:-0.1079, y:0.4338, rz:1.2217},
-    {w:0.038, x:-0.1778, y:0.4367, rz:1.7104},
-    {w:0.036, x:-0.241,  y:0.4065, rz:2.1991},
-  ];
-  bladeSegs.forEach((b,i)=>{
-    part(g,b.w,0.1,0.05,goldBlade,b.x,b.y,0.04).rotation.z=b.rz;
-    // The khopesh is sharpened on the OUTER edge of the curve only — the inner edge is a blunt back. A
-    // darker back-strip riding the inside of each segment is what makes the blade read as a sickle with a
-    // direction to it, rather than as a symmetrical gold crescent.
-    const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.42,0.1,0.056), bronzeDark);
-    back.position.set(b.x+Math.cos(b.rz)*b.w*0.30, b.y+Math.sin(b.rz)*b.w*0.30, 0.04);
-    back.rotation.z=b.rz; g.add(back);
-    // a bright edge highlight on the outer side, catching the light along the cut
-    if(i>0){
-      const edge=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.22,0.1,0.044), goldBlade);
-      edge.position.set(b.x-Math.cos(b.rz)*b.w*0.40, b.y-Math.sin(b.rz)*b.w*0.40, 0.04);
-      edge.rotation.z=b.rz; g.add(edge);
-    }
-  });
-  // hooked tip — the point of a khopesh turns back on itself, which is how it catches a shield rim
-  const hook=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.075,4), goldBlade);
-  hook.position.set(-0.288,0.379,0.04); hook.rotation.z=2.5; g.add(hook);
-  g.scale.setScalar(1.05);  // bigger — uniform scale keeps every part's proportions/connections intact
+  // NOTE: no inlay strip on the guard. A lapis band was tried here and it sat inside the blade's own base
+  // block, so the two fought for the same pixels and showed up in game as a blue flicker across the hilt.
+
+  // ---- blade. The previous curve ran to 2.20 rad (126 degrees) of accumulated rotation and read as a
+  // shepherd's crook — a closed hook doubling back over itself. A khopesh is not that shape: it has a
+  // substantial STRAIGHT section rising out of the guard, and only then opens into a shallow crescent of
+  // roughly a quarter turn. The cutting edge is on the OUTER, convex side; the inner concave side is a
+  // blunt back, and that asymmetry is what makes it read as a sickle-sword rather than a symmetrical arc.
+  //
+  // Chain-walked: a box whose length lies on +Y, rotated by rotation.z = t, points along (-sin t, cos t),
+  // so the walk steps along exactly that. The back and edge strips are PARENTED to each segment, so they
+  // inherit its rotation and can never drift off it.
+  {
+    const L = 0.062;
+    const segs = [
+      {w:0.058, t:0.00}, {w:0.062, t:0.00},                      // straight rise out of the guard
+      {w:0.068, t:0.16}, {w:0.074, t:0.40}, {w:0.078, t:0.66},   // crescent opens
+      {w:0.074, t:0.92}, {w:0.064, t:1.18}, {w:0.050, t:1.44},   // ~82 degrees total — a sickle, not a hook
+    ];
+    let bx = 0, by = 0.245;
+    let tipX = bx, tipY = by, tipT = 0;
+    segs.forEach((sg,i)=>{
+      const dx = -Math.sin(sg.t), dy = Math.cos(sg.t);
+      const seg = new THREE.Mesh(new THREE.BoxGeometry(sg.w, L, 0.05), goldBlade);
+      seg.position.set(bx + dx*L/2, by + dy*L/2, 0.04);
+      seg.rotation.z = sg.t;
+      g.add(seg);
+      // blunt back on the concave (inner) side — local -X
+      const back = new THREE.Mesh(new THREE.BoxGeometry(sg.w*0.30, L*1.02, 0.056), bronzeDark);
+      back.position.set(-sg.w*0.36, 0, 0); seg.add(back);
+      // sharpened edge on the convex (outer) side — local +X
+      const edge = new THREE.Mesh(new THREE.BoxGeometry(sg.w*0.20, L*1.02, 0.038), goldBlade);
+      edge.position.set(sg.w*0.42, 0, 0); seg.add(edge);
+      bx += dx*L*0.94; by += dy*L*0.94;     // 0.94 = segments overlap, so the blade is one solid run
+      tipX = bx; tipY = by; tipT = sg.t;
+    });
+    // point, carrying on along the last segment's own direction
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.026, 0.075, 4), goldBlade);
+    tip.position.set(tipX - Math.sin(tipT)*0.03, tipY + Math.cos(tipT)*0.03, 0.04);
+    tip.rotation.z = tipT; g.add(tip);
+  }
+  // 0.85, down from 1.05: the rebuilt blade is a longer run than the old six-segment hook, and at the
+  // previous scale it filled a third of the screen. Uniform scale keeps every part's connections intact.
+  g.scale.setScalar(0.85);
   g.userData={muzzleZ:-0.1,muzzleY:0.4,pos:new THREE.Vector3(0.22,-0.22,-0.42),recoil:0.16,name:'Khopesh',
     damage:100, fireRate:0.42, melee:true, range:2.5, auto:false, spread:0, tracer:0xffe9b0,
     magSize:1, ammo:1, reloadTime:0.1, reloading:false, reloadT:0};
@@ -6655,8 +6666,10 @@ function makeWasScepter(){
   const jaw   =new THREE.Mesh(new THREE.BoxGeometry(0.05,0.035,0.12), goldDeep); jaw.position.set(0,-0.045,-0.53); jaw.rotation.x=-0.30; g.add(jaw);
   [-1,1].forEach(sd=>{
     // ears: tall, straight, square-topped — a Set animal's, not a jackal's points
-    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.028,0.11,0.055), goldMat); ear.position.set(sd*0.032,0.145,-0.44); g.add(ear);
-    const earCap=new THREE.Mesh(new THREE.BoxGeometry(0.040,0.028,0.062), goldDeep); earCap.position.set(sd*0.032,0.205,-0.44); g.add(earCap);
+    // short and stubby. At 0.11 tall on a 0.11-tall skull the ears were as long as the head itself, which
+    // read as antennae rather than as a Set animal's squared-off ears.
+    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.028,0.052,0.052), goldMat); ear.position.set(sd*0.032,0.117,-0.44); g.add(ear);
+    const earCap=new THREE.Mesh(new THREE.BoxGeometry(0.038,0.022,0.058), goldDeep); earCap.position.set(sd*0.032,0.149,-0.44); g.add(earCap);
     const eye=new THREE.Mesh(new THREE.BoxGeometry(0.022,0.022,0.02), lapisMat); eye.position.set(sd*0.046,0.055,-0.50); g.add(eye);
   });
   // the channelled magic: a glowing core seated INSIDE the open jaw, plus a wisp ahead of it
