@@ -1440,6 +1440,28 @@ addTarget = pyramidDungeonColliders;
   pblock(1,12,R*2,sandBrickMat,-R,6,0); pblock(1,12,R*2,sandBrickMat,R,6,0);
   // same missing-collider bug as the original dungeon — the perimeter walls were purely visual
   addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
+
+  // ---- wall articulation. The four walls were flat 46-unit brick slabs, which is the same "one big
+  // untextured plane" problem the Nile banks had: a brick texture stretched across that span resolves to
+  // noise, and there is no relief for the light to catch. Real Egyptian chamber walls are divided by a
+  // dado course, engaged pilasters and a cavetto cornice, so the surface is broken into panels. ----
+  const dadoMat  = voxMat(0xa4854f,{noise:18,pattern:'plate'});
+  const corniceMat= voxMat(0xb99a63,{noise:14});
+  [[0,-R,1],[0,R,1],[-R,0,0],[R,0,0]].forEach(([wx,wz,alongX])=>{
+    const len = R*2;
+    // battered plinth running the base of every wall
+    pblock(alongX?len:1.5, 1.2, alongX?1.5:len, dadoMat, wx + (alongX?0:(wx>0?-0.3:0.3)), 0.6, wz + (alongX?(wz>0?-0.3:0.3):0));
+    // cavetto cornice under the ceiling — the flared Egyptian moulding
+    pblock(alongX?len:1.6, 0.5, alongX?1.6:len, corniceMat, wx + (alongX?0:(wx>0?-0.35:0.35)), 9.5, wz + (alongX?(wz>0?-0.35:0.35):0));
+    pblock(alongX?len:1.2, 0.35, alongX?1.2:len, goldMat,   wx + (alongX?0:(wx>0?-0.2:0.2)), 9.05, wz + (alongX?(wz>0?-0.2:0.2):0));
+    // engaged pilasters dividing the run into bays
+    for(let t=-R+5; t<=R-5; t+=7.5){
+      const px = alongX ? t : wx + (wx>0?-0.45:0.45);
+      const pz = alongX ? wz + (wz>0?-0.45:0.45) : t;
+      pblock(1.1, 7.6, 1.1, corniceMat, px, 5.0, pz);
+      pblock(1.35,0.45,1.35, goldMat,   px, 8.95, pz);
+    }
+  });
   // solid ceiling backing flush under the beam strips — see the matching comment in buildDungeon for why
   pblock(R*2,0.6,R*2,sandBrickMat,0,10.6,0);
   for(let k=-2;k<=2;k++) pblock(2,1,R*2,sandBrickMat,k*8,11.4,0);
@@ -4454,6 +4476,7 @@ function makeFace(type, skinHex, glowHex){
 }
 
 function makeVoxelBot(color, weaponType, skinName){
+  if(skinName==='colossus') return makeColossus();
   if(skinName==='mummy') return makeMummy();
   if(skinName==='jackal') return makeJackal();
   if(skinName==='scarab') return makeScarab();
@@ -4721,6 +4744,150 @@ function enemyMarkerTex(){
   ctx.fillStyle='#ff2a2a'; ctx.strokeStyle='#ffffff'; ctx.lineWidth=8;
   ctx.beginPath(); ctx.moveTo(26,20); ctx.lineTo(102,20); ctx.lineTo(64,96); ctx.closePath(); ctx.fill(); ctx.stroke();
   _markerTex=new THREE.CanvasTexture(c); _markerTex.magFilter=THREE.NearestFilter; _markerTex.anisotropy=maxAniso; return _markerTex;
+}
+
+// BOSS I — SANDSTONE COLOSSUS. Like the mummy and the jackal this was a SKINS entry on the shared soldier
+// rig: a recoloured trooper with glowing crack strips and a held gun. A colossus should not be a person at
+// all — it is a monumental Egyptian statue that has stood up. So it is built the way that statue would be
+// carved: heavy square masses with almost no taper, a nemes headdress, a false beard, a broad usekh collar,
+// a pleated shendyt, and a uraeus on the brow. What makes it read as ALIVE rather than as scenery is the
+// damage — chipped corners, missing chunks, and light pouring out of the fracture lines holding it together.
+//
+// Keeps the rig contract the AI loop needs: legL/legR (walk swing), armR/armL (aim blend), botMuzzle
+// (muzzle flash), bodyMeshes and marker. Built facing +Z; turned with mesh.lookAt().
+//
+// Proportions are deliberately compact — about 2.3 units tall. It spawns at scale 3.1, and the pyramid
+// dungeon's ceiling backing sits at y=10.6, so anything much taller would push its headdress through it.
+function makeColossus(){
+  const g = new THREE.Group();
+  const stone     = voxMat(0xc9a671,{noise:16,pattern:'plate'});  // carved sandstone
+  const stoneLit  = voxMat(0xe0c48f,{noise:14});                  // sun-bleached faces
+  const stoneDark = voxMat(0x8f7548,{noise:18});                  // shadowed recesses and joints
+  const stoneWorn = voxMat(0xa4854f,{noise:20});                  // weathered, chipped surfaces
+  const goldMat   = metalMatP(0xd8b040,85,0xffe9b0);
+  const lapisMat  = voxMat(0x2a4a8a,{noise:10});
+  const coreMat   = new THREE.MeshBasicMaterial({color:0xe0b040, fog:false});
+  const crackMat  = new THREE.MeshBasicMaterial({color:0xffd873, fog:false});
+  const voidMat   = voxMat(0x2e2415,{noise:10});                  // the dark inside a broken-open limb
+
+  // a glowing fracture line — the light bleeding out of the statue's cracks
+  function crack(w,h,d,x,y,z,rz){
+    const c=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), crackMat);
+    c.position.set(x,y,z); if(rz) c.rotation.z=rz; g.add(c); return c;
+  }
+
+  // ---- legs: square pillars, hip-pivoted so the shared walk animation drives them ----
+  function colossusLeg(sd){
+    const leg=new THREE.Group(); leg.position.set(sd*0.24,1.02,0);
+    const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.44,0.38), stone);      thigh.position.set(0,-0.22,0); leg.add(thigh);
+    const knee =new THREE.Mesh(new THREE.BoxGeometry(0.38,0.10,0.40), stoneDark);  knee.position.set(0,-0.46,0.01); leg.add(knee);
+    const shin =new THREE.Mesh(new THREE.BoxGeometry(0.33,0.42,0.35), stone);      shin.position.set(0,-0.70,0); leg.add(shin);
+    const anklet=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.07,0.38), goldMat);   anklet.position.set(0,-0.90,0); leg.add(anklet);
+    const foot =new THREE.Mesh(new THREE.BoxGeometry(0.38,0.16,0.52), stoneWorn);  foot.position.set(0,-0.94,0.08); leg.add(foot);
+    // toes carved as a row, the way a statue's are
+    for(let t=-1;t<=1;t++){
+      const toe=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.09,0.11), stoneWorn); toe.position.set(t*0.11,-0.965,0.30); leg.add(toe);
+    }
+    // a crack running down the shin, and a chipped corner off the knee
+    const cr=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.34,0.36), crackMat); cr.position.set(sd*0.13,-0.68,0.01); cr.rotation.z=sd*0.14; leg.add(cr);
+    const chip=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.12), voidMat); chip.position.set(sd*0.17,-0.44,0.18); leg.add(chip);
+    g.add(leg); return leg;
+  }
+  const legL=colossusLeg(-1), legR=colossusLeg(1);
+
+  // ---- shendyt: the pleated kilt every Egyptian statue wears, with a gold belt and a central apron ----
+  const kilt=new THREE.Mesh(new THREE.BoxGeometry(0.86,0.34,0.62), stoneLit); kilt.position.set(0,1.12,0.02); g.add(kilt);
+  for(let i=0;i<7;i++){
+    const pl=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.32,0.05), stoneDark); pl.position.set(-0.34+i*0.113,1.12,0.33); g.add(pl);
+  }
+  const belt=new THREE.Mesh(new THREE.BoxGeometry(0.90,0.12,0.66), goldMat); belt.position.set(0,1.33,0.02); g.add(belt);
+  const apron=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.30,0.07), goldMat); apron.position.set(0,1.10,0.35); g.add(apron);
+  const apronIn=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.22,0.04), lapisMat); apronIn.position.set(0,1.10,0.39); g.add(apronIn);
+
+  // ---- torso: a broad slab with almost no waist, the way monumental statuary is cut ----
+  const abs   =new THREE.Mesh(new THREE.BoxGeometry(0.78,0.24,0.54), stone);    abs.position.set(0,1.50,0); g.add(abs);
+  const chest =new THREE.Mesh(new THREE.BoxGeometry(0.92,0.42,0.60), stone);    chest.position.set(0,1.80,0); g.add(chest);
+  const pecs  =new THREE.Mesh(new THREE.BoxGeometry(0.72,0.16,0.14), stoneLit); pecs.position.set(0,1.88,0.32); g.add(pecs);
+  // the big damage: a chunk broken out of the ribs with light pouring from the cavity
+  const cavity=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.26,0.22), voidMat);  cavity.position.set(-0.20,1.66,0.28); g.add(cavity);
+  const core  =new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.10), coreMat);  core.position.set(-0.20,1.66,0.36); g.add(core);
+  const coreL =new THREE.PointLight(0xe0b040,1.6,5); coreL.position.set(-0.20,1.66,0.45); g.add(coreL);
+  // fracture lines radiating from it, plus a long one down the flank
+  crack(0.30,0.05,0.14, -0.02,1.72,0.32,  0.5);
+  crack(0.24,0.05,0.14, -0.34,1.52,0.30, -0.7);
+  // x=0.375, not 0.40: rotated by 0.18 this crack's AABB reached x=0.4604 and the chest's own side
+  // face sits at 0.46 — the two were coincident to about 1mm and fought down the whole flank.
+  crack(0.05,0.40,0.14,  0.375,1.70,0.28, 0.18);
+  crack(0.60,0.05,0.12,  0.06,1.46,0.30, -0.12);
+
+  // ---- usekh collar: the broad banded pectoral, the single most identifying Egyptian statue element ----
+  const collar1=new THREE.Mesh(new THREE.BoxGeometry(0.98,0.13,0.66), goldMat);  collar1.position.set(0,2.05,0.01); g.add(collar1);
+  const collar2=new THREE.Mesh(new THREE.BoxGeometry(0.90,0.09,0.62), lapisMat); collar2.position.set(0,1.95,0.01); g.add(collar2);
+  const collar3=new THREE.Mesh(new THREE.BoxGeometry(0.80,0.07,0.58), goldMat);  collar3.position.set(0,1.88,0.01); g.add(collar3);
+
+  // ---- head: nemes headdress with its striped lappets falling either side, false beard, uraeus ----
+  const neck=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.14,0.30), stoneDark); neck.position.set(0,2.16,0); g.add(neck);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.44,0.44), stoneLit);  head.position.set(0,2.42,0.02); g.add(head);
+  // nemes: a headcloth cap, then the two lappets hanging down in front of the shoulders
+  const nemes=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.22,0.54), goldMat);  nemes.position.set(0,2.68,0); g.add(nemes);
+  const nemesBack=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.34,0.16), goldMat); nemesBack.position.set(0,2.48,-0.24); g.add(nemesBack);
+  [-1,1].forEach(sd=>{
+    const lappet=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.42,0.34), goldMat); lappet.position.set(sd*0.30,2.36,0.06); g.add(lappet);
+    // the blue stripes that make a nemes read as a nemes
+    for(let k=0;k<3;k++){
+      const st=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.05,0.35), lapisMat); st.position.set(sd*0.30,2.50-k*0.13,0.06); g.add(st);
+    }
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.07,0.05), coreMat); eye.position.set(sd*0.11,2.46,0.25); g.add(eye);
+    const kohl=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.04,0.05), lapisMat); kohl.position.set(sd*0.12,2.40,0.25); g.add(kohl);
+  });
+  const brow=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.06,0.10), stoneDark); brow.position.set(0,2.54,0.24); g.add(brow);
+  const nose=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.16,0.10), stoneWorn); nose.position.set(0,2.38,0.26); g.add(nose);
+  // uraeus — the rearing cobra on the brow, a pharaoh's emblem
+  const uraeusBase=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.10,0.08), goldMat); uraeusBase.position.set(0,2.58,0.26); g.add(uraeusBase);
+  const uraeusHead=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.09,0.09), goldMat); uraeusHead.position.set(0,2.66,0.29); g.add(uraeusHead);
+  // false beard: the straight plaited beard, squared off at the bottom
+  const beard=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.26,0.13), goldMat); beard.position.set(0,2.16,0.22); g.add(beard);
+  const beardTip=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.06,0.15), goldMat); beardTip.position.set(0,2.02,0.22); g.add(beardTip);
+  // a crack splitting the face — this statue is broken, and the head is where it reads hardest
+  crack(0.04,0.30,0.06, 0.14,2.44,0.26, 0.22);
+
+  // ---- arms: heavy square masses. The right hand carries the channelled light the boss fires with. ----
+  const arms=[];
+  [-1,1].forEach(sd=>{
+    const arm=new THREE.Group(); arm.position.set(sd*0.56,1.94,0); g.add(arm); arms.push(arm);
+    const pauldron=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.26,0.46), stoneLit); pauldron.position.set(0,0.02,0); arm.add(pauldron);
+    const band    =new THREE.Mesh(new THREE.BoxGeometry(0.36,0.08,0.48), goldMat);  band.position.set(0,-0.13,0); arm.add(band);
+    const upper   =new THREE.Mesh(new THREE.BoxGeometry(0.28,0.36,0.30), stone);    upper.position.set(0,-0.34,0); arm.add(upper);
+    const elbow   =new THREE.Mesh(new THREE.BoxGeometry(0.30,0.10,0.32), stoneDark);elbow.position.set(0,-0.54,0); arm.add(elbow);
+    const fore    =new THREE.Mesh(new THREE.BoxGeometry(0.26,0.34,0.28), stone);    fore.position.set(0,-0.74,0.02); arm.add(fore);
+    const cuff    =new THREE.Mesh(new THREE.BoxGeometry(0.30,0.08,0.32), goldMat);  cuff.position.set(0,-0.92,0.02); arm.add(cuff);
+    const fist    =new THREE.Mesh(new THREE.BoxGeometry(0.30,0.26,0.30), stoneWorn);fist.position.set(0,-1.08,0.03); arm.add(fist);
+    // a crack down the forearm on both sides
+    const acr=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.28,0.30), crackMat); acr.position.set(sd*0.11,-0.74,0.02); arm.add(acr);
+    if(sd>0){
+      // the right fist is broken open and light is pouring out of it — this is the muzzle
+      const brk=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.20,0.24), voidMat);  brk.position.set(0,-1.16,0.12); arm.add(brk);
+      const orb=new THREE.Mesh(new THREE.SphereGeometry(0.13,10,8), coreMat);    orb.position.set(0,-1.22,0.16); arm.add(orb);
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(0.18,0.03,6,12), coreMat); ring.rotation.x=Math.PI/2; ring.position.set(0,-1.22,0.16); arm.add(ring);
+      const oL=new THREE.PointLight(0xffd873,1.8,6); oL.position.set(0,-1.22,0.16); arm.add(oL);
+    } else {
+      // the left hand is missing two fingers — asymmetry sells it as damaged rather than newly carved
+      [-1,1].forEach(f=>{ const fi=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.09), stoneWorn);
+        fi.position.set(f*0.09,-1.24,0.06); arm.add(fi); });
+    }
+  });
+  const armL=arms[0], armR=arms[1];
+  const botMuzzle = new THREE.Mesh(new THREE.PlaneGeometry(0.35,0.35),
+    new THREE.MeshBasicMaterial({color:0xffd873, transparent:true, opacity:0, fog:false, side:THREE.DoubleSide}));
+  botMuzzle.position.set(0,-1.35,0.16); botMuzzle.visible=false; armR.add(botMuzzle);
+
+  g.userData.legL=legL; g.userData.legR=legR; g.userData.armR=armR; g.userData.armL=armL;
+  g.userData.botMuzzle=botMuzzle;
+  g.userData.bodyMeshes=[]; g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  const marker=new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.position.set(0,3.2,0); marker.scale.set(1.2,1.2,1.2); marker.renderOrder=9999; marker.raycast=function(){};
+  g.add(marker); g.userData.marker=marker;
+  return g;
 }
 
 // ---- Pyramid era regular enemies (waves 1-3). Both were SKINS entries on the shared humanoid rig — a

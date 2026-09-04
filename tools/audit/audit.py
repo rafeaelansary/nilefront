@@ -74,6 +74,7 @@ globalThis.__builders = {
   makeCrossbow: typeof makeCrossbow==='function' ? makeCrossbow : null,
   makeScimitar: typeof makeScimitar==='function' ? makeScimitar : null,
   makeNaftPot: typeof makeNaftPot==='function' ? makeNaftPot : null,
+  makeColossus: typeof makeColossus==='function' ? makeColossus : null,
   makeMummy: typeof makeMummy==='function' ? makeMummy : null,
   makeJackal: typeof makeJackal==='function' ? makeJackal : null,
   makeScarab: typeof makeScarab==='function' ? makeScarab : null,
@@ -109,7 +110,7 @@ globalThis.__world = {
 # Scales and floor tops are read off spawnBossFight()/spawnWave() and the arena builders.
 ACTORS = [
     ("makeVoxelBot", "b=>b(0x808080,'pistol',null)",        1.00, 0.00, "grunt (town/pyramid)"),
-    ("makeVoxelBot", "b=>b(0xc9a671,'pistol','colossus')",  3.10, 0.00, "Colossus  (Boss I)"),
+    ("makeColossus", "b=>b()",                              3.10, 0.00, "Colossus  (Boss I)"),
     ("makeHydra",    "b=>b()",                              2.40, 0.00, "Hydra     (Boss II)"),
     ("makeChampion", "b=>b()",                              2.30, 0.00, "Champion  (Boss III)"),
     ("makeIfritKing","b=>b()",                              2.00, 0.00, "IfritKing (Boss IV)"),
