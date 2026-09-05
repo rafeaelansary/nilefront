@@ -47,6 +47,15 @@ PLAYER_ENTRY = {
 # overworld, and enterDungeon() only ever runs with dungeonWasPyramid true.
 DEAD_WORLDS = {"overworld", "dungeon", "greekDungeon"}
 
+# Which height-zone array belongs to which map, for the ramp-corridor check. Only maps with climbable
+# watchtowers have one.
+HEIGHT_ZONES = {
+    "pyramidOverworld": "heightZonesPyramid",
+    "greekOverworld": "heightZonesGreek",
+    "romanOverworld": "heightZonesRoman",
+    "islamicOverworld": "heightZonesIslamic",
+}
+
 
 def rect(b):
     return b["x1"], b["x2"], b["z1"], b["z2"]
@@ -217,8 +226,28 @@ def main():
                         bad_spawns.append((label, (sx, sz), b))
                         break
 
+        # ramp corridors running through buildings. A watchtower stair is a walkable corridor: if a
+        # building collider sits inside it the player climbs into a wall — the collider stops them while the
+        # height zone keeps lifting. Towers got taller once, their stairs got longer with them, and seven
+        # buildings ended up inside a flight before anyone noticed.
+        ramp_hits = []
+        zones = json.loads(ctx.eval(
+            "JSON.stringify(globalThis.__world['%s'] || [])" % HEIGHT_ZONES[name])) \
+            if name in HEIGHT_ZONES else []
+        for zn in zones:
+            if zn.get("type") != "ramp":
+                continue
+            for b in cols:
+                if b.get("roofY") is not None:
+                    continue        # the tower's own footprint legitimately abuts its ramp
+                ox = min(zn["x2"], b["x2"]) - max(zn["x1"], b["x1"])
+                oz = min(zn["z2"], b["z2"]) - max(zn["z1"], b["z1"])
+                if ox > 0.2 and oz > 0.2:
+                    ramp_hits.append((zn, b, round(ox, 2), round(oz, 2)))
+
         if not dead:
-            problems += bool(ov) + bool(bad_spawns) + bool(r["coplanarN"]) + bool(r["floatersN"])
+            problems += (bool(ov) + bool(bad_spawns) + bool(r["coplanarN"])
+                         + bool(r["floatersN"]) + bool(ramp_hits))
 
         def report(title, n, rows):
             if not n:
@@ -235,6 +264,9 @@ def main():
         report("near-coplanar world faces", r["coplanarN"],
                [f"{h['axis']} gap {h['gap']} at ({h['x']}, {h['y']}, {h['z']})"
                 for h in r["coplanar"]])
+        report("ramp corridors through buildings", len(ramp_hits),
+               [f"ramp x[{zn['x1']:.1f},{zn['x2']:.1f}] z[{zn['z1']:.1f},{zn['z2']:.1f}] "
+                f"hits ({desc(b)}) by {ox}x{oz}" for zn, b, ox, oz in ramp_hits])
         report("floating scenery", r["floatersN"],
                [f"underside y={f['y']} at ({f['x']}, {f['z']})" for f in r["floaters"]])
 

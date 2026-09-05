@@ -96,6 +96,8 @@ globalThis.__world = {
   pyramidColliders:typeof pyramidColliders!== 'undefined' ? pyramidColliders : null,
   hydraColliders:  typeof hydraColliders !== 'undefined' ? hydraColliders : null,
   nileColliders:   typeof nileColliders !== 'undefined' ? nileColliders : null,
+  romanColliders:  typeof romanColliders !== 'undefined' ? romanColliders : null,
+  islamicColliders:typeof islamicColliders!== 'undefined' ? islamicColliders : null,
   SPAWN_POINTS:    typeof SPAWN_POINTS !== 'undefined' ? SPAWN_POINTS : null,
   heightZonesGreek:   typeof heightZonesGreek   !== 'undefined' ? heightZonesGreek   : null,
   heightZonesPyramid: typeof heightZonesPyramid !== 'undefined' ? heightZonesPyramid : null,

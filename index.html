@@ -809,6 +809,68 @@ function cobbleTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   x.fillStyle='#6d6b66'; x.fillRect(0,0,P,P);
   for(let by=0;by<P;by+=5)for(let bx=0;bx<P;bx+=5){ const n=Math.abs(Math.sin(bx*4.1+by*9.3)*137%1); x.fillStyle=st[(n*4)|0]; x.fillRect(bx+1,by+1,4,4); }
   return c; }
+
+// ---- Roman-era surfaces. The Roman map previously ran on exactly two textures (terracottaTex for the
+// ground, romanBrickTex for trim) and voxMat flat-colour noise for everything else, which is why it read as
+// a set of tinted crates. These are the three facings the real city was actually built from, and together
+// they give the map a tonal range: pale dressed travertine, mid red-brown brickwork, and a dark tuff
+// diamond lattice, with painted stucco carrying the colour. ----
+
+// Travertine ashlar — the pale gold cut limestone of the Colosseum's outer order and every public facade.
+// Big drafted-margin blocks: each one gets its own tone and a recessed joint, so a large wall reads as
+// coursed masonry from a distance rather than a flat panel.
+function travertineTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#8d7f63'; x.fillRect(0,0,P,P);                 // mortar joint tone, showing between blocks
+  for(let by=0;by<P;by+=8){
+    const off=((by/8)|0)%2 ? 8 : 0;                            // alternating course offset
+    for(let bx=-16;bx<P;bx+=16){
+      const n=Math.abs(Math.sin(bx*4.7+by*8.3)*137%1);
+      const v=(196+n*34)|0;
+      x.fillStyle=`rgb(${v},${(v*0.90)|0},${(v*0.71)|0})`;
+      x.fillRect(bx+off+1,by+1,14,6);
+      // a lighter drafted margin along the block's top edge — this is the line that catches the sun and
+      // makes the coursing visible at range
+      x.fillStyle='rgba(255,248,226,0.22)'; x.fillRect(bx+off+1,by+1,14,1);
+    }
+  }
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*6.1+j*2.7)*4375.5%1);
+    if(n>0.94){ x.fillStyle='rgba(90,78,58,0.20)'; x.fillRect(i,j,1,1); }   // travertine's characteristic pitting
+  }
+  return c; }
+
+// Opus reticulatum — small pyramidal tuff blocks set point-up in a diamond net over a concrete core. There
+// is no other era in this game that can use it and nothing else looks remotely like it, so it is the single
+// cheapest way to make a Roman wall unmistakably Roman at a glance.
+function opusReticulatumTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#b9ab90'; x.fillRect(0,0,P,P);                 // pale lime mortar bed
+  const step=8;
+  for(let cy=0;cy<P+step;cy+=step)for(let cx=0;cx<P+step;cx+=step){
+    const ox=((cy/step)|0)%2 ? step/2 : 0;
+    const n=Math.abs(Math.sin(cx*3.3+cy*7.1)*137%1);
+    const v=(96+n*40)|0;
+    x.save(); x.translate(cx+ox,cy); x.rotate(Math.PI/4);
+    x.fillStyle=`rgb(${v},${(v*0.86)|0},${(v*0.70)|0})`;
+    x.fillRect(-2.6,-2.6,5.2,5.2);                            // a square turned 45deg = the diamond face
+    x.restore();
+  }
+  return c; }
+
+// Painted lime stucco — the wall finish of every Roman house and apartment front: a white-cream field over a
+// Pompeian-red dado, divided by a thin ochre line. The red band is what stops the insulae reading as beige
+// boxes stacked along the street.
+function romanStuccoTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#e6dcc4'; x.fillRect(0,0,P,P);
+  x.fillStyle='#8e2f22'; x.fillRect(0,22,P,10);               // dado
+  x.fillStyle='#c08b34'; x.fillRect(0,20,P,2);                // ochre divider line
+  x.fillStyle='rgba(120,100,70,0.16)'; x.fillRect(0,0,P,1);   // shadow under the cornice above
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*5.3+j*3.7)*4375.5%1);
+    if(n>0.90){ x.fillStyle='rgba(0,0,0,0.09)'; x.fillRect(i,j,1,1); }      // plaster grain
+    else if(n<0.035){ x.fillStyle='rgba(255,255,245,0.20)'; x.fillRect(i,j,1,1); } // flaked-away highlights
+  }
+  return c; }
+
 const GRASS_TOP=grassTopTex(), DIRT=dirtTex(), GSIDE=grassSideTex();
 const groundMats=[
   new THREE.MeshLambertMaterial({map:_finish(grassSideTex(),30)}), // +x
@@ -1171,7 +1233,11 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
     const sx=x+dx*along, sz=z+dz*along;
     const w = axisX ? rampLen/steps+0.08 : rampWidth;
     const d = axisX ? rampWidth : rampLen/steps+0.08;
-    block(w,0.45,d,woodCol,sx,y+0.22,sz,woodMat);                       // tread
+    // +0.26, not +0.22. At 0.22 a tread's underside lands at y-0.005, and the topmost tread (i=0) sits at
+    // y=height — which is exactly where the roof deck's own underside is. Those two faces were 5mm apart
+    // across the whole deck footprint, and since every map's watchtowers run this same code it was one
+    // z-fight reported four times over. Seating the tread ON its level instead of straddling it clears all of them.
+    block(w,0.45,d,woodCol,sx,y+0.26,sz,woodMat);                       // tread
     // riser behind each tread, so the flight is solid rather than a ladder of floating slabs
     if(i<steps){
       const ry=(1-(i+0.5)/steps)*height, ra=half+((i+0.5)/steps)*rampLen;
@@ -4157,203 +4223,622 @@ scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld || 
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
-// ===================== ROMAN OVERWORLD (map only, for now — no dungeon/boss/waves yet) =====================
-// Same swap architecture as the pyramid/Greek overworlds: its own collider/height-zone arrays, swept into its
-// own group below. Not yet added to `scene` anywhere and not yet wired into any wave/era-transition logic —
-// this is deliberately just the map itself, ahead of the boss/dungeon/enemy work that comes next.
+// ===================== ROMAN OVERWORLD — full remodel to the Cairo/Giza standard =====================
+// What stood here before was the map's first pass: a flat terracotta slab, four monuments parked around the
+// edges, tinted-noise crates for everything else, and — the real failure — nothing whatsoever down the
+// sightline the player actually spawns looking along. This is the same treatment Cairo and Giza got:
+//
+//   * a HERO LANDMARK on the spawn sightline. The player enters at (0,10) facing -Z, so the triumphal arch
+//     now stands on the road at z=-14 at monumental scale, framed by a deliberate break in the city wall
+//     behind it, with the aqueduct marching right across the horizon beyond that.
+//   * REAL MATERIALS instead of flat tinted noise — travertine ashlar, fired brick, opus reticulatum and
+//     painted stucco. Four distinct tones, so a wall has somewhere to go.
+//   * VERNACULAR BUILDINGS, not only monuments: insulae with shopfronts and balconies, tabernae, market
+//     stalls, a warehouse. Streets that read as a city people live in.
+//   * A PERIMETER that closes the map. Before this the player walked into an invisible clamp at +/-29 with
+//     open ground running on past it, exactly the "floating island" look the other maps already fixed.
+//
+// Same swap architecture as the other overworlds: its own collider/height-zone arrays, swept into its own
+// group below.
 addTarget = romanColliders;
 heightZoneTarget = heightZonesRoman;
 (function buildRomanOverworld(){
-  const bronzeMat = metalMatP(0x9a7f30,80,0xffe2a0);
-  const stoneMat = 0xc9a876;      // warm gold-tan travertine — nothing like the Greek era's cool grey gravel
-  const stoneMatLight = 0xe0c89a;
-  const brickMat = new THREE.MeshLambertMaterial({map:_finish(romanBrickTex(),6)}); // fired red brick — a material Greek never uses at all
+  // ---- materials ------------------------------------------------------------------------------------
+  // _finish() sets ONE uniform repeat on both UV axes, which squashes a texture badly on any surface far
+  // from square (the same bug that made the Nile's desert bank read as flat banding). `tiled` clones a
+  // finished texture with an explicit per-axis repeat instead, so tall thin piers and long low walls each
+  // get coursing at the right density.
+  const CV = { trav:travertineTex(), brick:romanBrickTex(), retic:opusReticulatumTex(),
+               stucco:romanStuccoTex(), tile:greekRoofTileTex(), cobble:cobbleTex(),
+               terra:terracottaTex(), flag:harbourFlagstoneTex(), check:checkerTex() };
+  function tiled(canvas, rx, ry, extra){
+    const t=_finish(canvas); t.repeat.set(rx,ry);
+    return new THREE.MeshLambertMaterial(Object.assign({map:t}, extra||{}));
+  }
+  const travMat    = tiled(CV.trav,3,3);
+  const travLight  = voxMat(0xe4d4ac,{noise:12});          // dressed pale trim: cornices, steps, capitals
+  const travDark   = voxMat(0x8a7a5a,{noise:14});          // shadowed plinths and recessed courses
+  const shadeMat   = voxMat(0x24201a,{noise:8});           // near-black, for openings and voids
+  const brickMat   = tiled(CV.brick,6,6);
+  const reticMat   = tiled(CV.retic,4,4);
+  const stuccoMat  = tiled(CV.stucco,1,1);
+  const tileMat    = tiled(CV.tile,3,3);
+  const bronzeMat  = metalMatP(0x9a7f30,80,0xffe2a0);
+  const patinaMat  = voxMat(0x4a6350,{noise:12});          // oxidized bronze — the statues
+  const marbleMat  = voxMat(0xe8e2d2,{noise:8});           // the one cool-white tone on the map
+  const woodMat    = voxMat(0x6b4a28,{noise:14});
+  const woodDark   = voxMat(0x3f2c17,{noise:12});
+  const purpleMat  = new THREE.MeshLambertMaterial({color:0x5a2d6e});   // Tyrian purple — imperial
+  const goldFlat   = new THREE.MeshBasicMaterial({color:0xd4af37,fog:false});
 
-  // ground: warm sun-baked terracotta dust, not the Greek era's grey gravel — plus a stone-paved Roman road
-  // (kept cooler than the ground on purpose, for contrast) forming the crossroads
-  const gravelMat = new THREE.MeshLambertMaterial({map:_finish(terracottaTex(),20)});
-  const ground = new THREE.Mesh(new THREE.BoxGeometry(62,1,62), gravelMat); ground.position.set(0,-0.5,0); scene.add(ground);
-  const roadMat = new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),18), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
-  function roadPath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),roadMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
-  roadPath(0,0,9,58);
-  roadPath(-17.25,0,25.5,9);
-  roadPath(17.25,0,25.5,9);
+  // box helper: every piece on this map is axis-aligned on purpose. Roman cities were grid-planned, and a
+  // grid also sidesteps the recurring class of bug where a rotated building's LOCAL width gets handed to
+  // addBox(), which wants WORLD extents, and the collider lands 90 degrees out of true.
+  function bx(w,h,d,mat,x,y,z){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m;
+  }
+  function slab(mat,x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),mat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); return m; }
 
-  // ---- triumphal arch straddling the road near spawn — the first thing seen, like the Greek pylon gate's
-  // role — two stone piers with engaged half-columns, a half-torus arch spanning the gap, a flat attic
-  // story, and a small bronze eagle on top (SPQR) ----
-  function triumphalArch(x,z){
-    const gap=3.2, pierW=1.8, pierH=6.2, pierD=1.7;
-    const pierMat = voxMat(stoneMat,{noise:16,pattern:'plate'});
-    [-1,1].forEach(side=>{
-      const px = x + side*(gap/2+pierW/2);
-      const pier = new THREE.Mesh(new THREE.BoxGeometry(pierW,pierH,pierD), pierMat); pier.position.set(px,pierH/2,z); scene.add(pier);
-      addBox(px,z,pierW,pierD);
-      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.34,pierH-1,10), voxMat(stoneMatLight,{noise:12}));
-      col.position.set(px, pierH/2-0.3, z+pierD/2+0.15); scene.add(col);
+  // ---- ground + paving ------------------------------------------------------------------------------
+  const ground = new THREE.Mesh(new THREE.BoxGeometry(62,1,62), tiled(CV.terra,20,20));
+  ground.position.set(0,-0.5,0); ground.receiveShadow=true; scene.add(ground);
+  // The cardo/decumanus crossroads, in cobble kept deliberately cooler than the terracotta dust so the
+  // street reads as paved rather than merely trodden. Built from three NON-overlapping slabs.
+  const roadMat = tiled(CV.cobble,18,18,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+  slab(roadMat,0,0,9,58);
+  slab(roadMat,-17.25,0,25.5,9);
+  slab(roadMat,17.25,0,25.5,9);
+  // the forum's dressed flagstone floor, filling the whole south-east quarter — a third ground tone, and
+  // the thing that makes that quarter read as a public square instead of more dust
+  slab(tiled(CV.flag,10,10,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}), 16,16, 20,20);
+
+  // ---- the city wall --------------------------------------------------------------------------------
+  // Brick-faced concrete on a travertine plinth with a crenellated parapet, plus square interval towers —
+  // the Aurelian walls, essentially. The north run is BROKEN between x=-5.5 and x=5.5 and flanked by two
+  // taller gate towers. That gap is the composition: it is what puts the triumphal arch, and the aqueduct
+  // out past it, in the player's view the instant they spawn.
+  const WH = 6.0, WT = 1.5;      // wall height / thickness
+  function wallRun(cx,cz,w,d){
+    bx(w+0.5,0.85,d+0.5, travDark, cx,0.425,cz);                       // battered plinth
+    bx(w,WH-1.55,d, brickMat, cx, 0.85+(WH-1.55)/2, cz);               // brick shaft
+    bx(w+0.35,0.3,d+0.35, travLight, cx, WH-0.55, cz);                 // travertine string course
+    bx(w+0.2,0.4,d+0.2, travMat, cx, WH-0.2, cz);                      // wall walk
+    // merlons along the top, with real embrasures between them
+    const along = w>d ? 'x' : 'z', len = Math.max(w,d);
+    const n = Math.max(2, Math.floor(len/2.4));
+    for(let i=0;i<n;i++){
+      const t = -len/2 + len*(i+0.5)/n;
+      const mx = along==='x' ? cx+t : cx, mz = along==='x' ? cz : cz+t;
+      bx(along==='x'?1.25:d+0.2, 0.95, along==='x'?d+0.2:1.25, travLight, mx, WH+0.475, mz);
+    }
+    addBox(cx,cz,w,d);
+  }
+  // A wall is a sequence of curtain runs BETWEEN its towers, not one long slab with towers dropped on top
+  // of it. Built the second way, every tower's collider sat inside the run's collider — 23 overlapping
+  // collider pairs on this map alone. `curtain` takes the two tower centres it spans and the collider
+  // half-widths they occupy, so each run stops exactly where the tower it butts against begins.
+  function curtain(axis, fixed, a0, a1) {
+    const c=(a0+a1)/2, len=a1-a0;
+    if(axis==='x') wallRun(c, fixed, len, WT); else wallRun(fixed, c, WT, len);
+  }
+  // tower centres, and the half-width each one's collider takes out of the run
+  const CH=2.55, IH=2.05, GH=2.35;     // corner / interval / gate half-widths
+  // north — broken between the gate towers at +/-7.5, which is the whole point of the composition
+  curtain('x',-28, -28+CH, -14-IH); curtain('x',-28, -14+IH, -7.5-GH);
+  curtain('x',-28, 7.5+GH, 14-IH);  curtain('x',-28, 14+IH, 28-CH);
+  // south
+  curtain('x', 28, -28+CH, -14-IH); curtain('x', 28, -14+IH, 14-IH); curtain('x', 28, 14+IH, 28-CH);
+  // west / east
+  [-28,28].forEach(wx=>{
+    curtain('z', wx, -28+CH, -14-IH); curtain('z', wx, -14+IH, 14-IH); curtain('z', wx, 14+IH, 28-CH);
+  });
+  function wallTower(x,z,size,h,flag){
+    bx(size+0.7,0.8,size+0.7, travDark, x,0.4,z);
+    bx(size,h-1.3,size, reticMat, x, 0.8+(h-1.3)/2, z);                // opus reticulatum shaft
+    bx(size+0.3,0.3,size+0.3, travLight, x, h-0.45, z);                // string course
+    bx(size+0.55,0.35,size+0.55, travMat, x, h-0.12, z);               // corbelled deck
+    for(let i=0;i<4;i++)for(let j=0;j<4;j++){
+      if(i>0&&i<3&&j>0&&j<3) continue;
+      if((i+j)%2) continue;                                            // alternating = the embrasures
+      const s=(size+0.55)/4;
+      bx(s*0.92,0.8,s*0.92, travLight, x-(size+0.55)/2+s*(i+0.5), h+0.45, z-(size+0.55)/2+s*(j+0.5));
+    }
+    // an arched window on each face, so the shaft is not a blank prism
+    [[0,-1],[0,1],[-1,0],[1,0]].forEach(([nx,nz])=>{
+      bx(nx?0.3:0.9,1.5,nz?0.3:0.9, travLight, x+nx*(size/2+0.02), h*0.6, z+nz*(size/2+0.02));
+      bx(nx?0.2:0.55,1.1,nz?0.2:0.55, shadeMat, x+nx*(size/2+0.1), h*0.58, z+nz*(size/2+0.1));
     });
-    const arch = new THREE.Mesh(new THREE.TorusGeometry(gap/2+0.35, 0.45, 8, 16, Math.PI), voxMat(stoneMat,{noise:14}));
-    arch.position.set(x, pierH, z); scene.add(arch);
-    const attic = new THREE.Mesh(new THREE.BoxGeometry(gap+pierW*2+0.6, 1.6, pierD+0.3), voxMat(stoneMatLight,{noise:12,pattern:'plate'}));
-    attic.position.set(x, pierH+1.72, z); scene.add(attic); // lifted clear of the arch torus's top, which it sat level with
-    // no collider for the attic itself — this collision system treats every addBox as an infinite-height
-    // wall unless the player has actually climbed to a matching height-zone, and there's no ramp up here to
-    // do that with, so a full-width attic collider would just permanently block the walk-through gap between
-    // the piers below it (the whole point of an arch) instead of ever actually doing anything useful
-    // small bronze eagle finial — a rounded body (sphere, not a cone) so it doesn't read as a spike again
-    const eagleBody=new THREE.Mesh(new THREE.SphereGeometry(0.22,8,6), bronzeMat); eagleBody.scale.set(0.8,1,1.3); eagleBody.position.set(x,pierH+2.7,z); scene.add(eagleBody);
-    [-1,1].forEach(side=>{ const wing=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.07,0.22), bronzeMat); wing.position.set(x+side*0.32,pierH+2.85,z); wing.rotation.z=side*0.35; scene.add(wing); });
-    // an imperial purple-and-gold banner draped under the arch — Tyrian purple was reserved for the emperor,
-    // a real splash of color Greek's blue/gold nemes stripes never used
-    const banner=new THREE.Mesh(new THREE.BoxGeometry(1.6,2.6,0.05), new THREE.MeshLambertMaterial({color:0x5a2d6e}));
-    banner.position.set(x,pierH-0.6,z+pierD/2+0.35); scene.add(banner);
-    const bannerGold=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.2,0.06), new THREE.MeshBasicMaterial({color:0xd4af37,fog:false}));
-    bannerGold.position.set(x,pierH-1.85,z+pierD/2+0.36); scene.add(bannerGold);
-  }
-  triumphalArch(0,-3);
-
-  // ---- aqueduct: a repeating row of arches along the south edge, carrying a raised water channel — the
-  // single most recognizable silhouette of Roman engineering, distinguishing this map at a glance ----
-  function aqueductArch(x,z,closing){
-    const pierW=1.1, pierH=5.2, pierD=1.4, gap=2.6;
-    // real Roman aqueducts were commonly brick-faced construction, not solid cut stone — a genuine use for
-    // the brick material, not just decoration
-    function pier(px){
-      const m=new THREE.Mesh(new THREE.BoxGeometry(pierW,pierH,pierD),brickMat); m.position.set(px,pierH/2,z); scene.add(m);
-      addBox(px,z,pierW,pierD);
+    if(flag){ // a purple vexillum on the gate towers only — colour where the player is looking
+      bx(0.14,2.6,0.14, woodDark, x, h+0.85+1.3, z);
+      const v=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.5,1.1), purpleMat); v.position.set(x+0.06,h+2.6,z+0.62); scene.add(v);
+      const vg=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.24,1.1), goldFlat); vg.position.set(x+0.07,h+1.9,z+0.62); scene.add(vg);
     }
-    // Only the LEFT pier per arch. Pier-to-pier spacing here is gap+pierW = 3.7, which is exactly the row's
-    // step — so when this drew both piers, each arch's right pier landed precisely on the next arch's left
-    // pier. Every interior pier was built twice, exactly co-located, and the whole arcade z-fought with
-    // itself down its entire length (it also registered two colliders per pier).
-    pier(x-(gap/2+pierW/2));
-    if(closing) pier(x+(gap/2+pierW/2));
-    const arch=new THREE.Mesh(new THREE.TorusGeometry(gap/2+0.25,0.3,10,14,Math.PI), brickMat); arch.position.set(x,pierH,z); scene.add(arch);
+    addBox(x,z,size+0.7,size+0.7);
   }
-  function aqueductRow(z0, x0, x1){
-    const span = 3.7; // pier-to-pier spacing (gap+pierW from aqueductArch)
-    for(let x=x0; x<=x1; x+=span) aqueductArch(x, z0, x+span > x1); // last arch closes the run
-    const channel=new THREE.Mesh(new THREE.BoxGeometry(x1-x0+2, 0.7, 1.6), voxMat(stoneMatLight,{noise:12}));
-    channel.position.set((x0+x1)/2, 5.2+0.55, z0); scene.add(channel);
-    // no collider for the channel — it sits at y~5.75, well above head height; a ground-level collider there
-    // (the game's collision system doesn't account for a mesh's actual height, only its XZ footprint) used
-    // to block the entire walkway under the arches, exactly where a player would expect to be able to pass
-    // through/take cover, for no visual reason at all
-  }
-  aqueductRow(-26, -24, 24);
+  [[-28,-28],[28,-28],[-28,28],[28,28]].forEach(([tx,tz])=> wallTower(tx,tz,4.4,8.6,false));
+  [[-14,28],[14,28],[-28,-14],[-28,14],[28,-14],[28,14]].forEach(([tx,tz])=> wallTower(tx,tz,3.4,7.4,false));
+  wallTower(-7.5,-28,4.0,10.0,true); wallTower(7.5,-28,4.0,10.0,true); // the gate towers, flanking the break
 
-  // ---- Capitoline temple: podium + front-only colonnade + pediment (Roman temples front onto a single
-  // grand staircase, not a full peristyle ring like the Greek temple) — distinguishes the two eras'
-  // architecture even though both reuse the same column-building technique ----
-  function capitolineTemple(x,z){
-    const w=13, d=10;
-    addBox(x,z,w,d+3); // podium footprint including the front stair apron
-    const podium=new THREE.Mesh(new THREE.BoxGeometry(w,2.4,d), voxMat(stoneMat,{noise:14,pattern:'plate'})); podium.position.set(x,1.2,z); scene.add(podium);
-    // steps up the full front face
-    for(let i=0;i<5;i++){ const sw=w-i*0.5, sy=0.24*i+0.12;
-      const step=new THREE.Mesh(new THREE.BoxGeometry(sw,0.24,0.5), voxMat(stoneMatLight,{noise:12})); step.position.set(x,sy,z-d/2-0.25-i*0.5); scene.add(step);
-    }
-    const cella=new THREE.Mesh(new THREE.BoxGeometry(w-2,5,d-2), voxMat(0xc9bfa8,{noise:14,pattern:'plate'})); cella.position.set(x,2.4+2.5,z); scene.add(cella);
-    const colMat=voxMat(0xe0d6be,{noise:10});
-    for(let i=0;i<6;i++){ const cx=-w/2+1+((i)/5)*(w-2);
-      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.38,0.42,5.6,10), colMat); col.position.set(x+cx,2.4+2.8,z-d/2-1); scene.add(col);
-    }
-    const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.6,0.65,0.45), voxMat(0xe0d6be,{noise:10})); pediment.position.set(x,2.4+5.9,z-d/2-1); scene.add(pediment);
-    const roofMat = voxMat(0xa8481f,{noise:14}); // vivid terracotta tile roof
-    const roofL=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofMat); roofL.position.set(x,2.4+6.4,z-d*0.19); roofL.rotation.x=0.4; scene.add(roofL);
-    const roofR=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofMat); roofR.position.set(x,2.4+6.4,z+d*0.19); roofR.rotation.x=-0.4; scene.add(roofR);
-  }
-  capitolineTemple(-17,12); // shifted 2 north of the original spot — it was overlapping the shared SPAWN_POINTS entry at (-20,4)
+  // ================= TRIUMPHAL ARCH — the map's hero landmark =================
+  // Straddling the cardo at z=-14, dead centre of the spawn sightline and framed by the wall break behind
+  // it. Built at real monumental proportion (12.4 to the top of the attic, 15 to the horses' heads) rather
+  // than the 6-tall garden ornament that used to sit here: engaged Corinthian columns on projecting podia,
+  // a coffered archivolt, victory roundels in the spandrels, an inscribed attic and a bronze quadriga.
+  (function triumphalArch(){
+    const AZ=-14, gap=6.0, pierW=3.0, pierD=3.2, pierH=8.6;
+    [-1,1].forEach(side=>{
+      const px = side*(gap/2+pierW/2);
+      bx(pierW+0.7,0.7,pierD+0.7, travDark, px,0.35,AZ);                       // podium
+      bx(pierW,pierH-0.7,pierD, travMat, px,0.7+(pierH-0.7)/2,AZ);             // pier
+      // two engaged fluted columns on the face the player approaches, each on its own projecting pedestal
+      [-0.85,0.85].forEach(ox=>{
+        const cx=px+ox, cz=AZ+pierD/2+0.28;
+        bx(0.86,0.75,0.72, travLight, cx,0.375+0.35,cz);                       // pedestal (sits on the podium)
+        const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.36,5.7,10), marbleMat); sh.position.set(cx,1.1+2.85,cz); scene.add(sh);
+        for(let f=0;f<6;f++){ const a=f/6*Math.PI*2;                            // flutes: thin ribs round the shaft
+          const fl=new THREE.Mesh(new THREE.BoxGeometry(0.07,5.5,0.07), travLight);
+          fl.position.set(cx+Math.cos(a)*0.33, 1.1+2.85, cz+Math.sin(a)*0.33); scene.add(fl); }
+        bx(0.86,0.28,0.86, travLight, cx,7.05,cz);                             // abacus
+        const bell=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.3,0.42,10), bronzeMat); bell.position.set(cx,6.7,cz); scene.add(bell); // acanthus bell
+      });
+      // a deep statue niche between the columns
+      bx(1.1,2.6,0.22, shadeMat, px, 4.4, AZ+pierD/2+0.04);
+      bx(1.4,0.24,0.3, travLight, px, 5.82, AZ+pierD/2+0.06);
+      bx(0.34,1.5,0.3, marbleMat, px, 4.0, AZ+pierD/2+0.1);                    // the figure in it
+      bx(0.24,0.24,0.24, marbleMat, px, 4.9, AZ+pierD/2+0.1);
+      addBox(px,AZ,pierW,pierD);
+    });
+    // the archivolt: an outer ring of voussoirs with a recessed inner ring, so the opening reads as built
+    const arcOuter=new THREE.Mesh(new THREE.TorusGeometry(3.5,0.62,8,20,Math.PI), travMat);
+    arcOuter.position.set(0,6.2,AZ); scene.add(arcOuter);
+    // 3.12, not 3.15: at 3.15 the ring's crown landed 5mm under the frieze band's top face.
+    const arcInner=new THREE.Mesh(new THREE.TorusGeometry(3.12,0.3,8,20,Math.PI), travLight);
+    arcInner.position.set(0,6.2,AZ+0.9); scene.add(arcInner);
+    const keystone=bx(0.7,0.95,pierD+0.5, travLight, 0,10.05,AZ);              // keystone breaking the cornice line
+    keystone.castShadow=true;
+    // victory roundels in the spandrels — a bronze disc with a wing, the standard Roman spandrel figure
+    [-1,1].forEach(side=>{
+      const rx=side*4.4;
+      const disc=new THREE.Mesh(new THREE.CylinderGeometry(0.78,0.78,0.16,12), patinaMat);
+      disc.rotation.x=Math.PI/2; disc.position.set(rx,9.3,AZ+pierD/2+0.18); scene.add(disc);
+      const wing=new THREE.Mesh(new THREE.BoxGeometry(0.9,0.16,0.1), bronzeMat);
+      wing.position.set(rx-side*0.2,9.5,AZ+pierD/2+0.3); wing.rotation.z=side*0.4; scene.add(wing);
+      const torso=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.6,0.1), bronzeMat);
+      torso.position.set(rx,9.25,AZ+pierD/2+0.3); scene.add(torso);
+    });
+    // entablature: architrave, frieze of triglyph-like blocks, then a projecting cornice
+    const W = gap+pierW*2;                                                     // 12.0 — the full arch width
+    bx(W+0.4,0.5,pierD+0.35, travLight, 0, pierH+0.25, AZ);
+    bx(W+0.3,0.55,pierD+0.25, brickMat, 0, pierH+0.78, AZ);
+    for(let i=0;i<11;i++) bx(0.34,0.5,pierD+0.4, travLight, -5.0+i, pierH+0.78, AZ);   // frieze uprights
+    bx(W+0.9,0.42,pierD+0.75, travMat, 0, pierH+1.27, AZ);                     // cornice, oversailing
+    // attic storey with a bronze dedication panel — the flat mass that gives the arch its bulk
+    const atticY = pierH+1.48;
+    bx(W+0.2,2.6,pierD+0.2, travMat, 0, atticY+1.3, AZ);
+    bx(6.4,1.5,0.16, bronzeMat, 0, atticY+1.35, AZ+pierD/2+0.14);
+    for(let i=0;i<7;i++) bx(0.5,0.14,0.06, goldFlat, -1.8+i*0.6, atticY+1.75, AZ+pierD/2+0.24);  // SPQR lettering
+    for(let i=0;i<5;i++) bx(0.5,0.14,0.06, goldFlat, -1.2+i*0.6, atticY+1.05, AZ+pierD/2+0.24);
+    bx(W+0.7,0.34,pierD+0.6, travLight, 0, atticY+2.77, AZ);                   // attic cornice
+    // ---- the quadriga. Four bronze horses abreast drawing a chariot, facing the player. This is the
+    // silhouette that carries the whole landmark from across the map, and the reason the arch is the first
+    // thing you look at rather than a rectangle with a hole in it.
+    const QY = atticY+2.94;
+    [-2.55,-0.85,0.85,2.55].forEach((hx,i)=>{
+      const lean = (i===0||i===3) ? 0.16 : 0;                                  // the outer pair rear slightly
+      bx(0.62,0.72,1.5, patinaMat, hx, QY+0.95, AZ+0.25);                      // barrel
+      bx(0.5,0.66,0.5, patinaMat, hx, QY+1.34, AZ+1.05);                       // chest
+      const neck=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.8,0.42), patinaMat);
+      neck.position.set(hx,QY+1.76,AZ+1.3); neck.rotation.x=-0.35-lean; scene.add(neck);
+      bx(0.32,0.34,0.66, patinaMat, hx, QY+2.14, AZ+1.72);                     // head
+      bx(0.26,0.16,0.24, bronzeMat, hx, QY+2.05, AZ+2.02);                     // muzzle
+      [-1,1].forEach(s=>bx(0.1,0.18,0.1, patinaMat, hx+s*0.11, QY+2.36, AZ+1.55)); // ears
+      const mane=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.86,0.34), bronzeMat);
+      mane.position.set(hx,QY+1.8,AZ+1.16); mane.rotation.x=-0.35-lean; scene.add(mane);
+      [[-0.2,0.62],[0.2,0.62],[-0.2,-0.42],[0.2,-0.42]].forEach(([lx,lz])=>
+        bx(0.18,0.98,0.2, patinaMat, hx+lx, QY+0.49, AZ+lz));                  // legs down to the attic top
+      bx(0.16,0.62,0.16, patinaMat, hx, QY+1.05, AZ-0.5);                      // tail, overlapping the barrel
+    });
+    bx(2.1,0.9,1.5, bronzeMat, 0, QY+0.75, AZ-1.35);                           // chariot body
+    bx(2.3,0.22,1.7, patinaMat, 0, QY+1.28, AZ-1.35);                          // chariot rail
+    [-1,1].forEach(s=>{ const wh=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.55,0.14,10), bronzeMat);
+      wh.rotation.z=Math.PI/2; wh.position.set(s*1.16,QY+0.55,AZ-1.5); scene.add(wh); });
+    bx(0.46,1.15,0.4, patinaMat, 0, QY+1.85, AZ-1.2);                          // the driver
+    bx(0.34,0.34,0.34, patinaMat, 0, QY+2.58, AZ-1.15);
+    bx(0.44,0.12,0.44, goldFlat, 0, QY+2.8, AZ-1.15);                          // laurel crown
+    // no collider on the arch span, attic or quadriga: this collision system treats every addBox as an
+    // infinite-height wall regardless of the mesh's actual height, so anything but the two piers would seal
+    // the road shut — which is the exact opposite of what an arch is for.
+  })();
 
-  // ---- amphitheater: a tiered circular drum, the era's centerpiece landmark ----
-  // ---- Roman theater (built from a real reference photo — the Odeon of Herodes Atticus): a semicircular
-  // tiered cavea, not a full Colosseum ring, facing a tall multi-level arched scaenae frons with a broken,
-  // ruined top edge, and a plain checkered orchestra floor (no colorful mosaic) ----
-  // no tiered seating bowl anymore — just the checkered orchestra floor and the scaenae frons wall
-  // ---- Colosseum: back to a full circular tiered ring, not the semicircular Odeon-style theater — a real
-  // travertine + brick band (like the actual building), a checkered floor inside, and — critically — an
-  // individual collider per wall segment instead of one big blocking square over the whole footprint. The
-  // segments are naturally spaced apart (radius 8, 16 of them) so there's already a walkable gap wide enough
-  // for the player between every one of them — the interior is fully enterable, no separate "door" needed.
-  function colosseum(cx,cz){
-    const wallMat = voxMat(stoneMat,{noise:16,pattern:'plate'});
-    const R1=8, segs=16;
-    // a flat square floor, not CircleGeometry — a circle's UV mapping is radial (polar coordinates from
-    // center to edge), which stretches a plain grid checker texture unevenly: compressed near the middle,
-    // stretched near the rim. A square gives the same uniform planar UVs every other floor in this game uses.
-    const floorSize=(R1-1)*2;
-    // polygonOffset for the same reason the crossroads paths use it: this sits 0.02 above the ground slab
-    // and covers 196 square units of it, which is a large field of z-fighting without a depth bias
-    const floor=new THREE.Mesh(new THREE.BoxGeometry(floorSize,0.05,floorSize), new THREE.MeshLambertMaterial({map:_finish(checkerTex(),9), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2}));
+  // ================= AQUEDUCT — the horizon =================
+  // Built OUTSIDE the playable area. The player is hard-clamped to +/-29, so out at z=-46 this takes no
+  // collider and can be built at something near real scale: two full tiers of arcading, 110 units across and
+  // 20 tall, running clean off both edges of view. It is the single most recognizable silhouette Roman
+  // engineering has, and it sits directly behind the arch in the wall break. Same technique the pyramid
+  // field uses on the Giza map.
+  (function aqueduct(){
+    const AZ=-46;
+    const aqStone = tiled(CV.trav,2,4), aqBrick = tiled(CV.brick,3,6);
+    // ---- lower tier: 11 piers on an 11-unit span, arches bedded into them
+    const lowH=12.4, lowSpan=11.0, lowPW=2.6, lowPD=3.2, x0=-55;
+    for(let i=0;i<11;i++){
+      const px=x0+i*lowSpan;
+      bx(lowPW+0.5,0.9,lowPD+0.5, travDark, px,0.45,AZ);
+      bx(lowPW,lowH-0.9,lowPD, aqStone, px, 0.9+(lowH-0.9)/2, AZ);
+      bx(lowPW+0.45,0.4,lowPD+0.45, travLight, px, lowH-0.2, AZ);              // impost block
+      if(i<10){
+        const arc=new THREE.Mesh(new THREE.TorusGeometry(4.2,0.62,6,14,Math.PI), aqStone);
+        arc.position.set(px+lowSpan/2, 7.4, AZ); scene.add(arc);
+      }
+    }
+    bx(115,0.9,lowPD+0.9, aqStone, 0, lowH+0.45, AZ);                          // lower deck
+    bx(115.6,0.3,lowPD+1.3, travLight, 0, lowH+1.05, AZ);                      // its cornice
+    // ---- upper tier: half the span, half the pier, on top of that deck
+    const upY=lowH+1.2, upH=5.2, upSpan=5.5, upPW=1.5, upPD=2.2;
+    for(let i=0;i<21;i++){
+      const px=x0+i*upSpan;
+      bx(upPW,upH,upPD, aqBrick, px, upY+upH/2, AZ);
+      if(i<20){
+        const arc=new THREE.Mesh(new THREE.TorusGeometry(2.0,0.34,6,12,Math.PI), aqBrick);
+        arc.position.set(px+upSpan/2, upY+2.7, AZ); scene.add(arc);
+      }
+    }
+    bx(115,0.7,upPD+0.7, aqStone, 0, upY+upH+0.35, AZ);                        // upper deck
+    // the specus — the covered water channel the whole structure exists to carry
+    bx(115,1.5,0.34, aqStone, 0, upY+upH+1.45, AZ-1.15);                       // channel walls, seen edge-on
+    bx(115,1.5,0.34, aqStone, 0, upY+upH+1.45, AZ+1.15);
+    bx(115,0.34,2.6, travLight, 0, upY+upH+2.37, AZ);                          // capstones over the channel
+  })();
+
+  // ================= COLOSSEUM =================
+  // Rebuilt from a 16-box hoop into the real thing's actual anatomy: three stacked arcaded storeys with
+  // engaged half-columns on the piers (Doric, then Ionic, then Corinthian — the order stacking is what makes
+  // a ring of boxes read as the Colosseum), statues standing in the second-storey arches, a pilastered attic
+  // with bronze shield medallions, and a travertine cornice ring capping each level. Every ground-storey
+  // pier gets its own collider and the bays between them are 2 units wide, so the interior stays fully
+  // enterable without needing a special door.
+  (function colosseum(){
+    const cx=17, cz=-17, R=8.0, segs=16;
+    // a square floor, not CircleGeometry — a circle's UVs are radial, which stretches a grid checker
+    // unevenly from centre to rim
+    const floor=new THREE.Mesh(new THREE.BoxGeometry(11,0.05,11),
+      tiled(CV.check,7,7,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
     floor.position.set(cx,-0.005,cz); scene.add(floor);
+    const storeys=[{y0:0,   h:3.4, mat:travMat,  col:0xe4d4ac, capH:0.18},   // Doric
+                   {y0:3.4, h:3.0, mat:travMat,  col:0xe4d4ac, capH:0.26},   // Ionic
+                   {y0:6.4, h:2.6, mat:brickMat, col:0xd8c8a0, capH:0.3 }];  // Corinthian
     for(let i=0;i<segs;i++){
-      const a=i/segs*Math.PI*2;
-      const px=cx+Math.cos(a)*R1, pz=cz+Math.sin(a)*R1;
-      const segLower=new THREE.Mesh(new THREE.BoxGeometry(1.6,2.6,1.3), brickMat); segLower.position.set(px,1.3,pz); segLower.rotation.y=-a; scene.add(segLower);
-      const segUpper=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.8,1.3), wallMat); segUpper.position.set(px,3.5,pz); segUpper.rotation.y=-a; scene.add(segUpper);
-      const arch=new THREE.Mesh(new THREE.BoxGeometry(0.8,2.6,0.3), voxMat(0x241f1a,{noise:10}));
-      arch.position.set(cx+Math.cos(a)*(R1+0.5), 2.0, cz+Math.sin(a)*(R1+0.5)); arch.rotation.y=-a; scene.add(arch);
-      addBox(px,pz,1.6,1.3); // this segment only — not one collider for the whole ring
+      const a=i/segs*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a);
+      const px=cx+ca*R, pz=cz+sa*R;
+      storeys.forEach((st,si)=>{
+        const pier=new THREE.Mesh(new THREE.BoxGeometry(1.3,st.h,1.5), st.mat);
+        pier.position.set(px, st.y0+st.h/2, pz); pier.rotation.y=-a; scene.add(pier);
+        // engaged half-column standing proud on the outer face
+        const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.29,st.h-st.capH-0.3, 8), voxMat(st.col,{noise:10}));
+        sh.position.set(cx+ca*(R+0.72), st.y0+0.15+(st.h-st.capH-0.3)/2, cz+sa*(R+0.72)); scene.add(sh);
+        const cap=new THREE.Mesh(new THREE.BoxGeometry(0.72,st.capH,0.72), travLight);
+        cap.position.set(cx+ca*(R+0.72), st.y0+st.h-st.capH/2-0.1, cz+sa*(R+0.72)); cap.rotation.y=-a; scene.add(cap);
+        // the upper storeys' bays are closed behind with a dark wall; the ground storey's are the entrances
+        if(si>0){
+          const back=new THREE.Mesh(new THREE.BoxGeometry(2.3,st.h-0.5,0.3), shadeMat);
+          const ba=a+Math.PI/segs;                                            // mid-bay
+          back.position.set(cx+Math.cos(ba)*(R-0.4), st.y0+(st.h-0.5)/2, cz+Math.sin(ba)*(R-0.4));
+          back.rotation.y=-ba; scene.add(back);
+          if(si===1 && i%2===0){                                              // statues in every other arch
+            const bx2=cx+Math.cos(ba)*(R-0.15), bz2=cz+Math.sin(ba)*(R-0.15);
+            const t=new THREE.Mesh(new THREE.BoxGeometry(0.34,1.3,0.3), marbleMat); t.position.set(bx2,st.y0+0.75,bz2); scene.add(t);
+            const h=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.24,0.24), marbleMat); h.position.set(bx2,st.y0+1.54,bz2); scene.add(h);
+          }
+        }
+      });
+      addBox(px,pz,1.7,1.7);   // ground-storey pier only, world extents
     }
-    // cornice ring capping the top of the wall
-    const capH=1.4;
-    const cap=new THREE.Mesh(new THREE.CylinderGeometry(R1-0.3,R1,capH,segs), voxMat(stoneMatLight,{noise:14}));
-    cap.position.set(cx,4.4+capH/2,cz); scene.add(cap);
+    // cornice rings dividing the storeys, and the attic above them
+    [3.4,6.4,9.0].forEach((y,k)=>{
+      const ring=new THREE.Mesh(new THREE.CylinderGeometry(R+1.15,R+0.95,0.42,segs), travLight);
+      ring.position.set(cx,y+0.21-(k===2?0:0.42),cz); scene.add(ring);
+    });
+    const attic=new THREE.Mesh(new THREE.CylinderGeometry(R+0.55,R+0.55,2.2,segs,1,true), travMat);
+    attic.position.set(cx,10.2,cz); scene.add(attic);
+    for(let i=0;i<segs;i++){
+      const a=(i+0.5)/segs*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a);
+      const pil=new THREE.Mesh(new THREE.BoxGeometry(0.42,2.2,0.24), travLight);
+      pil.position.set(cx+ca*(R+0.68), 10.2, cz+sa*(R+0.68)); pil.rotation.y=-a; scene.add(pil);
+      if(i%2===0){ // gilded bronze shield medallions between the pilasters, the attic's real decoration
+        const b=(i+1)/segs*Math.PI*2;
+        const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.62,0.62,0.16,10), bronzeMat);
+        sh.rotation.x=Math.PI/2; sh.rotation.z=-b;
+        sh.position.set(cx+Math.cos(b)*(R+0.66), 10.5, cz+Math.sin(b)*(R+0.66)); scene.add(sh);
+      }
+      // corbels for the velarium masts, jutting from the very top — the detail nothing else on the map has
+      const cb=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.8), travDark);
+      cb.position.set(cx+ca*(R+0.95), 11.45, cz+sa*(R+0.95)); cb.rotation.y=-a; scene.add(cb);
+    }
+    const crown=new THREE.Mesh(new THREE.CylinderGeometry(R+1.25,R+1.0,0.5,segs), travLight);
+    crown.position.set(cx,11.55,cz); scene.add(crown);
+  })();
+
+  // ================= TEMPLE OF JUPITER OPTIMUS MAXIMUS =================
+  // A Roman temple is frontal: one tall podium, one grand staircase, a deep porch of free-standing columns,
+  // and a solid cella behind. That is the whole difference from the Greek era's peristyle ring, and it now
+  // actually reads — a real stepped pediment built from courses rather than one flat plank, a tile roof with
+  // a ridge and acroteria, and a bronze cult door at the back of the porch.
+  (function capitolineTemple(){
+    const TX=-17, TZ=12, w=13, d=10, podH=2.6;
+    addBox(TX,TZ,w,13);                                                        // podium + stair apron
+    bx(w+0.6,0.4,d+0.6, travDark, TX,0.2,TZ);                                  // podium base moulding
+    bx(w,podH-0.75,d, travMat, TX,0.4+(podH-0.75)/2,TZ);
+    bx(w+0.5,0.35,d+0.5, travLight, TX,podH-0.175,TZ);                         // podium crown moulding
+    for(let i=0;i<7;i++){                                                      // the grand front staircase
+      const sw=w-0.6-i*0.35, sy=podH-0.2-i*0.34;
+      bx(sw,0.34,0.62, travLight, TX, sy-0.17, TZ-d/2-0.31-i*0.6);
+    }
+    bx(w-2.4,5.2,d-2.6, stuccoMat, TX, podH+2.6, TZ+0.7);                      // cella
+    bx(1.5,3.0,0.18, bronzeMat, TX, podH+1.5, TZ-0.7);                         // cult door, deep in the porch
+    bx(1.9,0.28,0.28, travLight, TX, podH+3.12, TZ-0.75);
+    // hexastyle porch — six across the front, plus a return pair down each flank
+    const colY=podH+2.9;
+    function column(x,z){
+      bx(0.98,0.34,0.98, travLight, x, podH+0.17, z);                          // base
+      const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.38,0.44,5.0,10), marbleMat); sh.position.set(x,podH+0.34+2.5,z); scene.add(sh);
+      for(let f=0;f<8;f++){ const a=f/8*Math.PI*2;
+        const fl=new THREE.Mesh(new THREE.BoxGeometry(0.06,4.8,0.06), travLight);
+        fl.position.set(x+Math.cos(a)*0.4, podH+0.34+2.5, z+Math.sin(a)*0.4); scene.add(fl); }
+      const bell=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.38,0.44,10), travLight); bell.position.set(x,podH+5.06,z); scene.add(bell);
+      bx(1.02,0.26,1.02, travLight, x, podH+5.41, z);                          // abacus
+    }
+    for(let i=0;i<6;i++) column(TX-w/2+1.2+i*(w-2.4)/5, TZ-d/2-0.9);
+    [-1,1].forEach(s=>{ column(TX+s*(w/2-1.2), TZ-d/2+1.6); column(TX+s*(w/2-1.2), TZ-d/2+4.1); });
+    // entablature over the porch, then the pediment built as stacked courses so it is a real triangle
+    bx(w+0.8,0.55,d+2.2, travLight, TX, podH+5.82, TZ-0.2);
+    bx(w+0.6,0.5,d+2.0, brickMat, TX, podH+6.35, TZ-0.2);                      // frieze band
+    bx(w+1.3,0.4,d+2.6, travMat, TX, podH+6.8, TZ-0.2);                        // raking cornice base
+    const pedZ=TZ-d/2-0.9;
+    for(let i=0;i<6;i++){                                                      // the tympanum, in courses
+      const pw=(w+0.9)*(1-i/6.4), py=podH+7.2+i*0.46;
+      bx(pw,0.46,1.1, i===0?travLight:travMat, TX, py, pedZ);
+    }
+    bx(2.0,0.5,1.2, patinaMat, TX, podH+7.5, pedZ+0.06);                       // the relief filling it
+    bx(0.5,0.9,0.24, patinaMat, TX, podH+7.9, pedZ+0.6);
+    [-1,1].forEach(s=>bx(0.34,0.6,0.2, patinaMat, TX+s*0.8, podH+7.7, pedZ+0.6));
+    // tile roof: two pitched planes and a ridge, with acroterion figures at the corners and apex
+    const roofY=podH+7.3;
+    [-1,1].forEach(s=>{ const r=new THREE.Mesh(new THREE.BoxGeometry(w+1.4,0.32,d*0.66), tileMat);
+      r.position.set(TX, roofY+1.2, TZ+s*(d*0.2)+0.3); r.rotation.x=s*0.42; scene.add(r); });
+    bx(w+1.5,0.32,0.5, travLight, TX, roofY+2.15, TZ+0.3);                     // ridge
+    [[0,pedZ,1.0],[-(w/2+0.45),pedZ,0.7],[(w/2+0.45),pedZ,0.7]].forEach(([ox,oz,hh])=>{
+      bx(0.34,hh,0.34, patinaMat, TX+ox, podH+10.2+hh/2, oz);                  // acroteria
+      bx(0.5,0.2,0.5, bronzeMat, TX+ox, podH+10.2+hh+0.1, oz);
+    });
+  })();
+
+  // ================= INSULAE — the buildings that make it a city =================
+  // The Roman apartment block: a brick ground floor pierced by taberna doorways, two or three stuccoed upper
+  // storeys with real window openings, a projecting timber balcony, and a tile roof. There was NOTHING of
+  // this kind on the map before — only monuments — which is why the streets read as empty ground with
+  // ornaments on it.
+  function insula(x,z,w,d,floors,face){
+    // `face` is which side (-1 = toward -Z, +1 = toward +Z) carries the shopfronts and balcony
+    const shopH=3.2, flH=2.6, H=shopH+floors*flH;
+    bx(w+0.3,0.35,d+0.3, travDark, x,0.175,z);                                 // kerb course
+    bx(w,shopH-0.35,d, brickMat, x, 0.35+(shopH-0.35)/2, z);                   // brick ground floor
+    const fz = z + face*(d/2+0.02);
+    const nShops = Math.max(2, Math.floor(w/2.6));
+    for(let i=0;i<nShops;i++){
+      const sx = x - w/2 + w*(i+0.5)/nShops;
+      bx(1.5,2.3,0.2, shadeMat, sx, 1.2, fz+face*0.06);                        // the doorway itself
+      bx(1.85,0.26,0.3, travLight, sx, 2.48, fz+face*0.08);                    // lintel
+      if(i%2===0){                                                             // a counter and an awning
+        bx(1.7,0.85,0.55, travMat, sx, 0.425, fz+face*0.36);
+        bx(1.9,0.1,0.16, travLight, sx, 0.87, fz+face*0.36);
+        const aw=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.1,1.0), i%4===0?purpleMat:new THREE.MeshLambertMaterial({color:0xb8683a}));
+        aw.position.set(sx, 2.9, fz+face*0.55); aw.rotation.x=face*0.22; scene.add(aw);
+        bx(0.09,3.05,0.09, woodDark, sx-0.85, 1.525, fz+face*1.0);
+        bx(0.09,3.05,0.09, woodDark, sx+0.85, 1.525, fz+face*1.0);
+      }
+    }
+    bx(w+0.4,0.3,d+0.4, travLight, x, shopH+0.15, z);                          // string course over the shops
+    for(let f=0;f<floors;f++){
+      const y0=shopH+0.3+f*flH;
+      bx(w-0.2,flH-0.3,d-0.2, stuccoMat, x, y0+(flH-0.3)/2, z);
+      const nWin=Math.max(2, Math.floor(w/2.2));
+      for(let i=0;i<nWin;i++){
+        const wx=x-w/2+w*(i+0.5)/nWin;
+        [-1,1].forEach(s=>{                                                    // windows on both long faces
+          const wz=z+s*(d/2-0.06);
+          bx(0.9,1.15,0.14, shadeMat, wx, y0+1.15, wz+s*0.04);
+          bx(1.15,0.16,0.2, travLight, wx, y0+1.79, wz+s*0.06);
+          if(i%2===f%2) bx(0.42,1.05,0.1, woodMat, wx+0.36, y0+1.12, wz+s*0.12);   // a shutter, half of them
+        });
+      }
+      bx(w+0.3,0.26,d+0.3, travLight, x, y0+flH-0.13, z);                      // floor band
+      if(f===0){                                                               // the balcony, on the shop face
+        const by=y0+0.2;
+        bx(w*0.72,0.18,1.1, woodMat, x, by, fz+face*0.55);
+        bx(w*0.72,0.5,0.12, woodMat, x, by+0.34, fz+face*1.04);                // its rail
+        for(let i=0;i<4;i++) bx(0.12,0.5,0.12, woodDark, x-w*0.3+i*(w*0.6/3), by+0.34, fz+face*1.04);
+        for(let i=0;i<3;i++) bx(0.14,0.85,0.14, woodDark, x-w*0.28+i*(w*0.28), by-0.5, fz+face*0.95); // brackets
+      }
+    }
+    // roof: a shallow pitch with rafter ends showing under the eaves
+    const rY=shopH+0.3+floors*flH;
+    bx(w+0.7,0.3,d+0.7, travDark, x, rY+0.15, z);                              // eaves course
+    [-1,1].forEach(s=>{ const r=new THREE.Mesh(new THREE.BoxGeometry(w+0.9,0.3,d*0.62), tileMat);
+      r.position.set(x, rY+0.85, z+s*(d*0.16)); r.rotation.x=s*0.34; scene.add(r); });
+    bx(w+1.0,0.3,0.44, travLight, x, rY+1.42, z);                              // ridge
+    for(let i=0;i<Math.floor(w/1.1);i++) bx(0.16,0.16,d+0.85, woodDark, x-w/2+0.5+i*1.1, rY+0.02, z);
+    addBox(x,z,w,d);
+    return H;
   }
-  colosseum(19,-8);
+  // Placement here is tight on purpose — a city street is tight — so every one of these was checked against
+  // the wall towers, the watchtower stair corridors, the Colosseum's pier ring and all ten shared spawn
+  // points rather than eyeballed.
+  insula(-20,-19, 10, 8, 2,  1);    // north-west block, shops facing the crossroads
+  insula(-10.5,-22, 8, 7, 3,  1);   // the tall one, on the road up to the arch
+  insula(6.6,-21.5, 4, 6, 2, 1);    // narrow: it fits between the cardo and the Colosseum's west piers
+  insula(23,21, 7, 6, 2, -1);       // south-east, fronting the forum
+  insula(-18,22.5, 10, 6, 2, -1);   // south-west
 
-  // ---- she-wolf and twins: the Capitoline Wolf, small but unmistakably Roman ----
-  function wolfStatue(x,z){
-    const plinth=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.7,1.2), voxMat(stoneMat,{noise:14})); plinth.position.set(x,0.35,z); scene.add(plinth);
-    const bronze=voxMat(0x4a6350,{noise:12}); // oxidized bronze-green patina
-    const body=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.5,0.4), bronze); body.position.set(x,0.95,z); scene.add(body);
-    const head=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.28,0.35), bronze); head.position.set(x,1.05,z+0.35); scene.add(head);
-    [-1,1].forEach(s=>{ const ear=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.12,0.05),bronze); ear.position.set(x+s*0.1,1.22,z+0.35); ear.rotation.z=s*0.3; scene.add(ear); });
-    [-0.22,0.22].forEach(ox=>{ const twin=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.24,0.14), voxMat(0xc9b48a,{noise:10})); twin.position.set(x+ox,0.82,z); scene.add(twin); });
-    addBox(x,z,1.6,1.2);
+  // ---- a taberna row and a warehouse: smaller vernacular fabric filling the gaps ----
+  function taberna(x,z,w,d,face){
+    bx(w+0.25,0.3,d+0.25, travDark, x,0.15,z);
+    bx(w,2.9,d, reticMat, x,1.75,z);
+    bx(w+0.35,0.28,d+0.35, travLight, x,3.34,z);
+    const fz=z+face*(d/2+0.03);
+    bx(w*0.55,2.1,0.18, shadeMat, x, 1.15, fz+face*0.06);
+    bx(w*0.7,0.24,0.28, travLight, x, 2.32, fz+face*0.08);
+    const aw=new THREE.Mesh(new THREE.BoxGeometry(w*0.9,0.1,1.2), new THREE.MeshLambertMaterial({color:0xb8683a}));
+    aw.position.set(x,2.75,fz+face*0.62); aw.rotation.x=face*0.2; scene.add(aw);
+    bx(0.1,2.95,0.1, woodDark, x-w*0.4, 1.475, fz+face*1.15);   // tall enough to meet the awning it holds up
+    bx(0.1,2.95,0.1, woodDark, x+w*0.4, 1.475, fz+face*1.15);
+    [-1,1].forEach(s=>{ const r=new THREE.Mesh(new THREE.BoxGeometry(w+0.5,0.26,d*0.62), tileMat);
+      r.position.set(x,3.9,z+s*(d*0.16)); r.rotation.x=s*0.34; scene.add(r); });
+    bx(w+0.6,0.26,0.4, travLight, x, 4.4, z);
+    addBox(x,z,w,d);
   }
-  wolfStatue(6,4);
+  taberna(-9,-12, 4, 7, 1);
+  taberna(-7,6.5, 3, 2.6, 1);
+  taberna(-25.5,19.5, 2.6, 5, 1);
 
-  // ---- SPQR eagle standards flanking the arch ----
-  // (the SPQR eagle standards — thin poles topped with a cone — were pulled: they just read as random
-  // pointed pillars stuck in the ground rather than a recognizable standard, not worth keeping)
+  // ================= THE FORUM =================
+  // A public square needs furniture, not just paving. Rostra, fountain, the Capitoline Wolf, market stalls
+  // and stacked amphorae — the pieces that say people trade here.
+  (function rostra(){
+    // (23.6, 10.6), not (24, 10): at the original spot its base slab's east face landed 5mm from the
+    // watchtower plinth's, and their colliders overlapped by 0.4 as well.
+    const x=22.8, z=10.6;
+    bx(5.4,0.4,4.4, travDark, x,0.2,z);
+    bx(5.0,1.5,4.0, travMat, x,1.15,z);
+    bx(5.4,0.3,4.4, travLight, x,2.05,z);
+    for(let i=0;i<4;i++){  // captured warship rams mounted on the face — literally what "rostra" means
+      const rz=z-2.0-0.06;
+      bx(0.7,0.4,0.5, bronzeMat, x-1.8+i*1.2, 1.0, rz);
+      bx(0.34,0.22,0.34, patinaMat, x-1.8+i*1.2, 1.0, rz-0.35);
+    }
+    [-1.8,1.8].forEach(ox=>{
+      const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.3,3.4,10), marbleMat); sh.position.set(x+ox,3.9,z+1.2); scene.add(sh);
+      bx(0.7,0.24,0.7, travLight, x+ox, 5.72, z+1.2);
+    });
+    bx(4.4,0.4,2.2, travLight, x, 6.04, z+1.2);                                // a small canopy over the platform
+    bx(0.4,1.6,0.4, travMat, x, 3.05, z);                                      // speaker's plinth
+    bx(0.3,0.9,0.28, patinaMat, x, 4.3, z);
+    addBox(x,z,5.4,4.4);
+  })();
 
-  // ---- 3 legion watchtowers — same proven climbable mechanic as the pyramid/Greek towers ----
-  sniperTower(25,6, 4.5, 6, 0xa89e8c, 'w');
+  (function fountain(){
+    const x=12, z=10;
+    bx(5.4,0.05,5.4, tiled(CV.check,7,7,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}), x,-0.005,z);
+    bx(3.0,0.7,3.0, travDark, x,0.35,z);                                       // basin, square-cut
+    bx(2.5,0.62,2.5, travLight, x,0.46,z);
+    const water=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.1,2.2), new THREE.MeshPhongMaterial({map:_finish(waterRippleTex(),4), color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52}));
+    water.position.set(x,0.78,z); water.userData.isWater=true; water.userData.baseY=0.78; scene.add(water); waterSurfaces.push(water);
+    const pil=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.3,1.5,10), travMat); pil.position.set(x,1.5,z); scene.add(pil);
+    bx(0.9,0.3,0.9, travLight, x,2.36,z);
+    // a lion-head spout on each face, which is what actually says "Roman fountain"
+    [[0,-1],[0,1],[-1,0],[1,0]].forEach(([nx,nz])=>{
+      bx(0.34,0.3,0.34, bronzeMat, x+nx*0.34, 2.05, z+nz*0.34);
+      bx(nx?0.24:0.14,0.12,nz?0.24:0.14, patinaMat, x+nx*0.52, 2.0, z+nz*0.52);
+    });
+    bx(0.34,0.6,0.34, patinaMat, x,2.81,z);
+    addBox(x,z,3.1,3.1);
+  })();
+
+  (function wolfStatue(){
+    const x=7, z=7;
+    bx(2.0,0.34,1.7, travDark, x,0.17,z);
+    bx(1.6,1.1,1.3, travMat, x,0.89,z);                                        // a proper tall plinth
+    bx(1.8,0.24,1.5, travLight, x,1.56,z);
+    bx(1.0,0.14,0.5, bronzeMat, x,0.95,z-0.66);                                // inscription plate
+    bx(1.15,0.5,0.42, patinaMat, x,1.95,z);                                    // the she-wolf's body
+    bx(0.4,0.34,0.36, patinaMat, x,2.1,z+0.38);                                // head, turned to the viewer
+    bx(0.22,0.16,0.24, patinaMat, x,2.02,z+0.6);                               // muzzle
+    [-1,1].forEach(s=>{
+      bx(0.09,0.16,0.06, patinaMat, x+s*0.12,2.32,z+0.36);                     // ears
+      bx(0.13,0.42,0.13, patinaMat, x+s*0.4,1.49,z+0.36);                      // legs, standing on the plinth
+      bx(0.13,0.42,0.13, patinaMat, x+s*0.4,1.49,z-0.36);
+    });
+    bx(0.1,0.1,0.62, patinaMat, x,2.02,z-0.45);                                // tail, reaching the body
+    [-0.26,0.26].forEach(ox=> bx(0.16,0.3,0.16, voxMat(0xc9b48a,{noise:10}), x+ox,1.75,z+0.1)); // the twins
+    addBox(x,z,2.0,1.7);
+  })();
+
+  function marketStall(x,z,col){
+    bx(2.6,0.75,1.9, woodMat, x,0.375,z);                                      // trestle table
+    bx(2.8,0.12,2.1, woodDark, x,0.79,z);
+    [[-1.2,-0.8],[1.2,-0.8],[-1.2,0.8],[1.2,0.8]].forEach(([ox,oz])=> bx(0.12,2.5,0.12, woodDark, x+ox,1.25,z+oz));
+    const aw1=new THREE.Mesh(new THREE.BoxGeometry(3.1,0.12,1.4), new THREE.MeshLambertMaterial({color:col}));
+    aw1.position.set(x,2.62,z-0.6); aw1.rotation.x=-0.3; scene.add(aw1);
+    const aw2=new THREE.Mesh(new THREE.BoxGeometry(3.1,0.12,1.4), new THREE.MeshLambertMaterial({color:col}));
+    aw2.position.set(x,2.62,z+0.6); aw2.rotation.x=0.3; scene.add(aw2);
+    // goods on the table, so it is a stall and not a bench
+    for(let i=0;i<4;i++) bx(0.3,0.26,0.3, voxMat([0xa8481f,0x6b8a3a,0xc9a02a,0x7a3a5a][i],{noise:10}), x-0.95+i*0.62, 0.98, z);
+    addBox(x,z,2.8,2.1);
+  }
+  marketStall(17,21,0xb8683a); marketStall(9,20,0x4a6f8a);
+
+  function amphoraStack(x,z){
+    const clay=voxMat(0xa8683a,{noise:14});
+    [[0,0,0],[0.42,0,0],[-0.42,0,0.24],[0.2,0.86,0.1]].forEach(([ox,oy,oz])=>{
+      bx(0.34,0.62,0.34, clay, x+ox, 0.31+oy, z+oz);
+      bx(0.18,0.24,0.18, clay, x+ox, 0.74+oy, z+oz);
+      bx(0.24,0.1,0.24, voxMat(0x6b4a28,{noise:10}), x+ox, 0.9+oy, z+oz);
+    });
+    bx(1.5,0.16,1.0, woodDark, x, 0.08, z+0.1);                                // the pallet under them
+  }
+  amphoraStack(13,19); amphoraStack(-5.6,-9.5); amphoraStack(21,6.5); amphoraStack(-12.5,-16.5);
+
+  function handcart(x,z){
+    bx(1.9,0.5,1.1, woodMat, x,0.72,z);
+    bx(2.0,0.16,1.2, woodDark, x,1.0,z);
+    [-1,1].forEach(s=>{ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.14,10), woodDark);
+      w.rotation.z=Math.PI/2; w.position.set(x+s*0.62,0.46,z); scene.add(w); });
+    bx(0.14,0.14,1.4, woodMat, x, 0.86, z-1.2);                                // the shafts
+    bx(0.5,0.34,0.14, woodDark, x, 0.86, z-1.86);
+    bx(0.34,0.3,0.34, voxMat(0xa8683a,{noise:12}), x-0.4, 1.22, z);
+    bx(0.34,0.3,0.34, voxMat(0xa8683a,{noise:12}), x+0.35, 1.22, z+0.2);
+    addBox(x,z,2.0,1.2);
+  }
+  handcart(-5.8,13.5);
+
+  // ---- 3 legion watchtowers — same proven climbable mechanic as the other maps' towers ----
+  sniperTower(24.5,6, 4.5, 6, 0xa89e8c, 'w');
   sniperTower(-24,-6, 4.5, 7, 0xb0a696, 'e');
-  sniperTower(9,-20, 4, 5.5, 0x9c927e, 's');
+  sniperTower(10,23.5, 4, 5.5, 0x9c927e, 'w');
 
-  // ---- a small forum fountain ----
-  function fountain(x,z){
-    // plain checkered stone paving under the fountain — a flat square, not CircleGeometry (a circle's radial
-    // UV mapping stretches a grid checker texture unevenly from center to rim — the same fix as the colosseum floor)
-    const mosaic=new THREE.Mesh(new THREE.BoxGeometry(5.2,0.05,5.2), new THREE.MeshLambertMaterial({map:_finish(checkerTex(),7), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2}));
-    mosaic.position.set(x,-0.005,z); scene.add(mosaic);
-    const basin=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.4,0.5,14), voxMat(stoneMatLight,{noise:12})); basin.position.set(x,0.25,z); scene.add(basin);
-    const water=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,0.1,14), new THREE.MeshPhongMaterial({map:_finish(waterRippleTex(),4), color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52}));
-    water.position.set(x,0.52,z); water.userData.isWater=true; water.userData.baseY=0.52; scene.add(water); waterSurfaces.push(water);
-    const pillar=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.24,1.1,10), voxMat(stoneMat,{noise:12})); pillar.position.set(x,1.1,z); scene.add(pillar);
-    addBox(x,z,2.9,2.9);
-  }
-  fountain(12,10); // pulled well clear of the road — it was close enough to the edge that the checkered mosaic wasn't reading clearly against it
-
-  // ---- Mediterranean dressing scattered toward the open edges ----
-  // (cypress trees — a tapered trunk under a cone tip — were pulled: from a distance that cone read as a
-  // tall dark green spike, not a tree. Olive trees only from here on, all rounded sphere foliage, no cones.)
+  // ---- planting. Olives and umbrella pines only — the cypresses that used to be here read as dark green
+  // spikes from any distance, which is why they were pulled. Rounded canopies from here on. ----
   function oliveTreeR(x,z){
     const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,2.2,6), voxMat(0x6b6048,{noise:14})); trunk.position.set(x,1.1,z); trunk.rotation.z=0.06; scene.add(trunk);
     const leafMat=voxMat(0x7a8a5a,{noise:16});
     // Each blob gets its own radius and height. All four used to be radius 0.7 at y=2.5, so their four
-    // squashed tops landed on exactly the same plane and fought across the whole canopy — on every olive
-    // tree in the map. Varying both also makes the canopy look less like a mechanical rosette.
+    // squashed tops landed on exactly the same plane and fought across the whole canopy. The modulo the
+    // radii used afterwards was no better: it happened to give blobs 0 and 1 undersides 1mm apart, which is
+    // the same z-fight one rung down. A plain arithmetic ramp keeps all four tops and all four undersides
+    // genuinely distinct.
     for(let i=0;i<4;i++){ const a=i/4*Math.PI*2;
-      const r=0.62+((i*0.17)%0.22);
+      const r=0.60+i*0.06;
       const leaf=new THREE.Mesh(new THREE.SphereGeometry(r,7,5),leafMat); leaf.scale.set(1,0.7,1);
-      leaf.position.set(x+Math.cos(a)*0.5, 2.36+i*0.12, z+Math.sin(a)*0.5); scene.add(leaf); }
+      leaf.position.set(x+Math.cos(a)*0.5, 2.30+i*0.13, z+Math.sin(a)*0.5); scene.add(leaf); }
     addBox(x,z,0.7,0.7);
   }
-  oliveTreeR(-27,-15); oliveTreeR(27,14); oliveTreeR(-27,20); oliveTreeR(27,-18);
-  oliveTreeR(-26,2); oliveTreeR(24,-20); oliveTreeR(-9,25); oliveTreeR(15,25);
+  // umbrella pine: a bare trunk carrying one broad flat canopy high up — the tree that reads as Rome from
+  // across a square, and a taller silhouette than the olives to break up the skyline
+  function umbrellaPine(x,z){
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.3,4.4,7), voxMat(0x6a5442,{noise:14}));
+    trunk.position.set(x,2.2,z); trunk.rotation.z=0.05; scene.add(trunk);
+    const needle=voxMat(0x3f5c33,{noise:14}), needleL=voxMat(0x55743f,{noise:14});
+    for(let i=0;i<7;i++){ const a=i/7*Math.PI*2, r=(i%2)?1.35:0.95;
+      const c=new THREE.Mesh(new THREE.SphereGeometry(0.95+((i*0.13)%0.2),7,5), i%3?needle:needleL);
+      c.scale.set(1,0.42,1);
+      c.position.set(x+Math.cos(a)*r, 4.55+((i*0.11)%0.3), z+Math.sin(a)*r); scene.add(c); }
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(1.15,8,6), needle); crown.scale.set(1,0.4,1);
+    crown.position.set(x,4.86,z); scene.add(crown);
+    addBox(x,z,0.9,0.9);
+  }
+  oliveTreeR(-26.5,-10); oliveTreeR(26.5,-4); oliveTreeR(-3.5,20.5);
+  oliveTreeR(-26,2.5); oliveTreeR(2.5,-25); oliveTreeR(20,-3.5);
+  umbrellaPine(-10,17); umbrellaPine(19.5,25); umbrellaPine(-25,-24.5); umbrellaPine(25,-25);
 })();
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
@@ -7781,16 +8266,52 @@ function makeTrident(){
 // historically a Byzantine-era weapon, so it fits the Roman arc better than the earlier Ptolemaic one anyway
 function makeGreekFire(){
   const g=new THREE.Group();
-  const bronze=metalMatP(0x9a7328,70,0xffdca0), dark=metalMatP(0x3a2a1a,40), wood=voxMat(0x4a3018,{noise:12});
-  part(g,0.15,0.16,0.36,bronze,0,0,-0.1);            // siphon tube body
-  part(g,0.11,0.11,0.14,dark,0,0,-0.34);             // narrow nozzle
-  const tank=part(g,0.18,0.18,0.18,bronze,0,-0.03,0.1); tank.rotation.x=Math.PI/2; // fuel reservoir
-  part(g,0.09,0.22,0.1,wood,0,-0.22,0.14).rotation.x=0.16; // grip
-  part(g,0.08,0.16,0.3,wood,0,-0.14,0.32);           // stock
-  const pilot=new THREE.Mesh(new THREE.ConeGeometry(0.035,0.09,6), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false}));
-  pilot.position.set(0,0.09,-0.36); g.add(pilot); // small pilot flame at the nozzle tip
-  const L=new THREE.PointLight(0xff8a2a,1.0,1.5); L.position.set(0,0.09,-0.36); g.add(L);
-  g.userData={muzzleZ:-0.42,muzzleY:0,pos:new THREE.Vector3(0.25,-0.27,-0.42),recoil:0.16,name:'Greek Fire',
+  // Rebuilt from six boxes into real cheirosiphon anatomy. The Byzantine hand-siphon was a force pump: a
+  // bronze barrel, a piston you drove home with a T-handle, a strapped fuel drum feeding it, a stopcock,
+  // and a flared nozzle you lit at the muzzle. All of that is now visible, and the barrel is banded and
+  // scorched so it reads as a pressure vessel rather than a length of pipe.
+  const bronze=metalMatP(0x9a7328,70,0xffdca0), bright=metalMatP(0xc4923a,95,0xfff0c0);
+  const dark=metalMatP(0x3a2a1a,40), soot=voxMat(0x211a14,{noise:10});
+  const wood=voxMat(0x4a3018,{noise:12}), leather=voxMat(0x6a4a2a,{noise:14});
+  const tube=(r1,r2,len,z,mat,seg)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,len,seg||10),mat);
+    m.rotation.x=Math.PI/2; m.position.set(0,0,z); g.add(m); return m; };
+  // ---- barrel: the pressure vessel, from the pump housing forward to the nozzle
+  tube(0.062,0.062,0.46,-0.16,bronze);
+  [0.02,-0.14,-0.3].forEach(z=> tube(0.075,0.075,0.035,z,bright));   // reinforcing bands
+  tube(0.052,0.078,0.12,-0.45,soot);                                  // flared nozzle, blackened by use
+  tube(0.084,0.084,0.03,-0.505,bright);                               // its lip ring
+  // stopcock: a valve body on top of the barrel with a lever you throw to open the fuel line
+  part(g,0.07,0.07,0.09,bright,0,0.075,-0.06);
+  const lever=part(g,0.03,0.16,0.03,dark,0,0.16,-0.06); lever.rotation.x=0.5;
+  // ---- pump housing + piston. The T-handle sticking out the back is the silhouette cue that says this is
+  // pumped rather than triggered, and nothing else in the game has one.
+  tube(0.085,0.085,0.2,0.16,bright);
+  tube(0.095,0.095,0.03,0.065,dark);                                  // gland nut where the rod enters
+  tube(0.022,0.022,0.2,0.34,dark,8);                                  // piston rod
+  part(g,0.16,0.032,0.032,dark,0,0,0.42);                             // the T-handle itself
+  [-1,1].forEach(sd=> part(g,0.03,0.03,0.05,dark,sd*0.07,0,0.4));
+  // ---- fuel drum slung under the barrel, with strap bands and a filler cap
+  const drum=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.075,0.3,10), bronze);
+  drum.rotation.x=Math.PI/2; drum.position.set(0,-0.105,0.0); g.add(drum);
+  [-0.09,0.09].forEach(z=>{ const b=new THREE.Mesh(new THREE.CylinderGeometry(0.083,0.083,0.03,10), leather);
+    b.rotation.x=Math.PI/2; b.position.set(0,-0.105,z); g.add(b); });
+  part(g,0.05,0.045,0.05,bright,0,-0.028,-0.09);                      // filler cap on top of the drum
+  part(g,0.03,0.09,0.03,bronze,0,-0.05,0.1);                          // feed pipe, drum up into the barrel
+  // ---- stock and grip
+  part(g,0.075,0.07,0.26,wood,0,-0.03,0.3);
+  const grip=part(g,0.075,0.2,0.09,wood,0,-0.16,0.2); grip.rotation.x=0.2;
+  const wrap=part(g,0.08,0.09,0.095,leather,0,-0.155,0.196); wrap.rotation.x=0.2;
+  part(g,0.085,0.035,0.1,dark,0,-0.255,0.222);                        // butt cap
+  // ---- pilot flame at the nozzle
+  const pilot=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.11,6), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false}));
+  pilot.position.set(0,0.085,-0.5); g.add(pilot);
+  const pilotCore=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.06,6), new THREE.MeshBasicMaterial({color:0xffe08a,fog:false}));
+  pilotCore.position.set(0,0.07,-0.5); g.add(pilotCore);
+  part(g,0.02,0.07,0.02,bright,0,0.03,-0.5);                          // the pilot's little standpipe
+  const L=new THREE.PointLight(0xff8a2a,1.0,1.6); L.position.set(0,0.09,-0.52); g.add(L);
+  // muzzleZ moved out past the nozzle lip (-0.52); at -0.42 the jar spawned inside the weapon's own barrel.
+  // Damage, splash, rate, magazine and reload are untouched.
+  g.userData={muzzleZ:-0.58,muzzleY:0,pos:new THREE.Vector3(0.25,-0.27,-0.42),recoil:0.16,name:'Greek Fire',
     damage:0, splashDamage:185, splashRadius:4.6, fireRate:1.15, auto:false, spread:0.0, tracer:0xff8a2a, grenade:true,
     magSize:5, ammo:5, reloadTime:2.0, reloading:false, reloadT:0};
   return g;
@@ -7800,15 +8321,46 @@ function makeGreekFire(){
 // and pyramidal head, meant for both mid-range stabs and being hurled at distant targets
 function makeJavelin(){
   const g=new THREE.Group();
-  const wood=metalMatP(0x5a3d22,25,0x332211), iron=metalMatP(0x6a6a6a,55,0xb0b0b0);
-  part(g,0.035,0.035,0.9,wood,0,0,-0.05); // long wooden shaft
-  const shank=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.4,6), iron); shank.rotation.x=Math.PI/2; shank.position.set(0,0,-0.68); g.add(shank);
-  const head=new THREE.Mesh(new THREE.ConeGeometry(0.035,0.16,4), iron); head.rotation.x=-Math.PI/2; head.position.set(0,0,-0.9); g.add(head);
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.05,0.22,8), wood); grip.rotation.x=Math.PI/2; grip.position.set(0,0,0.34); g.add(grip);
-  const binding=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.05,8), iron); binding.rotation.x=Math.PI/2; binding.position.set(0,0,0.02); g.add(binding);
-  // a real thrown-spear pace, not a rapid-fire gun: much slower between throws, a small handful carried
-  // (you don't rack a magazine of javelins), a bigger hit and a longer regroup when you run out
-  g.userData={muzzleZ:-0.9,muzzleY:0,pos:new THREE.Vector3(0.24,-0.22,-0.4),recoil:0.18,name:'Javelin',
+  // Five boxes before; this is the pilum's actual anatomy. What makes a pilum a pilum and not a stick with a
+  // point is the joint: a heavy ash shaft, an iron socket clamped over it by two rivets — one of them
+  // deliberately made of WOOD so it shears on impact and the shank bends, leaving the enemy's shield
+  // unusable — then a long thin soft-iron shank and a small pyramidal barbed head. The pale rivet is the
+  // one identifying cue, so it is built proud of the socket where it can actually be seen.
+  const wood=metalMatP(0x6a4826,25,0x332211), woodDark=metalMatP(0x3f2a14,20,0x1a1108);
+  const iron=metalMatP(0x6a6a6a,55,0xb0b0b0), ironDark=metalMatP(0x44464a,35,0x8a8f96);
+  const bronze=metalMatP(0x9a7328,70,0xffdca0), leather=voxMat(0x6a4a2a,{noise:14});
+  const pale=voxMat(0xc9ab76,{noise:8});   // the shear pin
+  const rod=(r1,r2,len,z,mat,seg)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,len,seg||8),mat);
+    m.rotation.x=Math.PI/2; m.position.set(0,0,z); g.add(m); return m; };
+  // ---- butt: a bronze spike counterweighting the head, and the collar that holds it on
+  const spike=new THREE.Mesh(new THREE.ConeGeometry(0.032,0.14,6), bronze);
+  spike.rotation.x=-Math.PI/2; spike.position.set(0,0,0.50); g.add(spike);
+  rod(0.042,0.042,0.06,0.43,bronze);
+  // ---- shaft: ash, swelling very slightly toward the grip
+  rod(0.033,0.037,0.88,0.0,wood);
+  rod(0.039,0.039,0.16,0.20,wood);                                    // the swell
+  // ---- grip: a leather wrap with three cord bindings over it
+  rod(0.05,0.05,0.24,0.30,leather);
+  [0.20,0.30,0.40].forEach(z=> rod(0.055,0.055,0.022,z,woodDark));
+  // amentum — the throwing thong looped round the shaft ahead of the hand
+  const thong=new THREE.Mesh(new THREE.TorusGeometry(0.055,0.012,5,10), leather);
+  thong.position.set(0,0,0.14); g.add(thong);
+  // ---- socket: the iron collet clamped over the shaft's front end, with its two rivets
+  rod(0.048,0.034,0.18,-0.50,ironDark);
+  rod(0.052,0.052,0.028,-0.435,iron);                                 // its rear reinforcing ring
+  part(g,0.115,0.018,0.018,iron,0,0,-0.46);                           // the iron rivet
+  part(g,0.115,0.02,0.02,pale,0,0,-0.545);                            // the wooden shear pin
+  [-1,1].forEach(sd=> part(g,0.022,0.026,0.026,pale,sd*0.056,0,-0.545)); // its heads, proud of the socket
+  // ---- shank: a long thin soft-iron rod, square in section like the real thing
+  part(g,0.024,0.024,0.4,iron,0,0,-0.755);
+  // ---- head: a small pyramidal point with two barbs behind it
+  const head=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.15,4), iron);
+  head.rotation.x=-Math.PI/2; head.rotation.z=Math.PI/4; head.position.set(0,0,-1.0); g.add(head);
+  [-1,1].forEach(sd=>{ const barb=new THREE.Mesh(new THREE.BoxGeometry(0.055,0.014,0.05), ironDark);
+    barb.position.set(sd*0.032,0,-0.935); barb.rotation.y=sd*0.55; g.add(barb); });
+  // muzzleZ pushed past the point (-1.075); at -0.9 the throw spawned inside the shank. Damage, rate,
+  // spread, magazine and reload are untouched — a real thrown-spear pace, not a rapid-fire gun.
+  g.userData={muzzleZ:-1.1,muzzleY:0,pos:new THREE.Vector3(0.24,-0.22,-0.4),recoil:0.18,name:'Javelin',
     damage:130, fireRate:1.1, auto:false, spread:0.003, tracer:0xb0a890,
     magSize:3, ammo:3, reloadTime:1.8, reloading:false, reloadT:0};
   return g;
@@ -7820,17 +8372,42 @@ function makeJavelin(){
 // blade, plain cylindrical grip) so the two eras' daggers/swords never read as reskins of each other
 function makePugio(){
   const g=new THREE.Group();
+  // The blade used to be one 4-sided cone, which gives a plain triangle — but the pugio's whole identity is
+  // its WAISTED leaf: it widens at the shoulder, pinches in at mid-blade, swells again, then runs to the
+  // point. That profile is built here as stacked plates, with a raised midrib down the middle and a ground
+  // bevel either side of it. The hilt gets the other half of the identity: a broad disc pommel, a waisted
+  // grip and the brass-and-niello inlay Roman daggers were decorated with.
   const steel=metalMatP(0x9aa0a6,90,0xffffff), steelDark=metalMatP(0x6a7076,60,0xc0c8d0);
-  const gripMat=voxMat(0x7a2020,{noise:10});
-  const pommel=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.02,0.045), steelDark); pommel.position.y=0; g.add(pommel);
-  const gripLow=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.024,0.05,8), gripMat); gripLow.position.y=0.05; g.add(gripLow);
-  const gripMid=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.04,8), gripMat); gripMid.position.y=0.095; g.add(gripMid);
-  const gripHigh=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.024,0.05,8), gripMat); gripHigh.position.y=0.14; g.add(gripHigh);
-  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.025,0.06), steelDark); guard.position.y=0.17; g.add(guard);
-  const bladeLen=0.24, bladeY=0.17+bladeLen/2;
-  const blade=new THREE.Mesh(new THREE.ConeGeometry(0.095, bladeLen, 4), steel);
-  blade.scale.set(1,1,0.5); blade.rotation.y=Math.PI/4; blade.position.set(0,bladeY,0); g.add(blade);
-  const midrib=new THREE.Mesh(new THREE.BoxGeometry(0.014,bladeLen*0.85,0.014), steelDark); midrib.position.set(0,bladeY,0); g.add(midrib);
+  const brass=metalMatP(0xb08a2e,85,0xffe6a8), niello=voxMat(0x22242a,{noise:8});
+  const gripMat=voxMat(0x7a2020,{noise:10}), gripDark=voxMat(0x501414,{noise:10});
+  // ---- pommel: a broad flat disc, the pugio's most distinctive hilt feature
+  const pommel=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.05,0.022,10), steelDark); pommel.position.y=0.011; g.add(pommel);
+  const pcap=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.016,8), brass); pcap.position.y=0.03; g.add(pcap);
+  const pstud=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,0.014,6), brass); pstud.position.y=-0.004; g.add(pstud);
+  // ---- grip: flare, waist, flare — with brass ferrules at each transition and a niello stripe down it
+  const gseg=(r1,r2,h,y,mat)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,8),mat); m.position.y=y; g.add(m); return m; };
+  gseg(0.026,0.034,0.05,0.058,gripMat);
+  gseg(0.021,0.021,0.045,0.104,gripDark);      // the waist
+  gseg(0.034,0.026,0.05,0.15,gripMat);
+  [0.036,0.128,0.174].forEach(y=> gseg(0.036,0.036,0.012,y,brass));
+  const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.13,0.05), niello); stripe.position.y=0.105; g.add(stripe);
+  // ---- guard: a wide bar with an arched underside, plus two rivet heads
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.155,0.026,0.062), steelDark); guard.position.y=0.192; g.add(guard);
+  const gtop=new THREE.Mesh(new THREE.BoxGeometry(0.115,0.02,0.05), brass); gtop.position.y=0.212; g.add(gtop);
+  [-1,1].forEach(sd=>{ const rv=new THREE.Mesh(new THREE.CylinderGeometry(0.011,0.011,0.07,6), brass);
+    rv.rotation.x=Math.PI/2; rv.position.set(sd*0.055,0.192,0); g.add(rv); });
+  // ---- blade: stacked plates cutting the waisted leaf. Each plate overlaps the one below by 0.004 so the
+  // run is continuous rather than a column of separately floating slices.
+  const plates=[{w:0.072,h:0.05,y:0.244},{w:0.098,h:0.05,y:0.290},{w:0.082,h:0.05,y:0.336},
+                {w:0.064,h:0.05,y:0.382},{w:0.074,h:0.05,y:0.428},{w:0.052,h:0.05,y:0.474}];
+  plates.forEach(p=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,0.026), steel); m.position.y=p.y; g.add(m); });
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.036,0.09,4), steel);
+  tip.rotation.y=Math.PI/4; tip.scale.set(1,1,0.62); tip.position.y=0.542; g.add(tip);
+  // raised midrib, and a darker ground bevel either side of it so the blade has three tones across its face
+  const midrib=new THREE.Mesh(new THREE.BoxGeometry(0.018,0.3,0.036), steelDark); midrib.position.y=0.36; g.add(midrib);
+  [-1,1].forEach(sd=>{ const bev=new THREE.Mesh(new THREE.BoxGeometry(0.016,0.27,0.03), steelDark);
+    bev.position.set(sd*0.028,0.35,0); g.add(bev); });
+  // balance untouched
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.1,name:'Pugio',
     melee:true, range:1.6, damage:95, fireRate:0.22};
   return g;
@@ -8091,7 +8668,12 @@ function enterHydraArena(){
   sky.visible = true;
   activeColliders = hydraColliders;
   activeHeightZones = heightZonesOriginal;   // flat platform, no climbable zones
-  scene.background.set(0x8a9c86); scene.fog.color.set(0x7f947c); scene.fog.near=26; scene.fog.far=110; // overcast marsh
+  // Neutral overcast, not a green one. This arena used to run a green cast on five things at once — a
+  // 0x8a9c86 sky, a 0x7f947c fog, a 0x93a894 sky tint, a 0xc3d3b4 hemisphere and a 0xb0c8a4 fill — and
+  // those multiply, so the whole fight rendered through a swamp filter rather than merely being set in a
+  // marsh. The reeds, moss and water are already green materials; the light does not need to be green too.
+  // Same call as the Giza daylight fix.
+  scene.background.set(0x9aa6ac); scene.fog.color.set(0x9fa8a4); scene.fog.near=26; scene.fog.far=110; // flat overcast
   distantGround.visible=false; // the arena's own 320x320 marsh water sits lower than this plane and would be hidden under it
   // This function set distantGround directly instead of going through setDistantGround(), which is also
   // where horizonHaze gets updated — so horizonHaze was never touched here at all. It kept whatever
@@ -8100,9 +8682,9 @@ function enterHydraArena(){
   // Boss arenas are enclosed spaces with their own real walls close to the player — the same reasoning
   // dungeons already use to disable it (see enterDungeon()) applies here.
   horizonHaze.visible=false;
-  skyTint(0x93a894); // sunless overcast — without this the dome renders bright midday blue over the marsh
-  hemi.intensity=0.7; hemi.color.set(0xc3d3b4); hemi.groundColor.set(0x384a2e);
-  sun.intensity=0.55; fill.intensity=0.2; fill.color.set(0xb0c8a4);
+  skyTint(0xb8bfc2); // sunless overcast — neutral grey, not green; without any tint the dome renders bright midday blue
+  hemi.intensity=0.72; hemi.color.set(0xd2dade); hemi.groundColor.set(0x3c4238);
+  sun.intensity=0.55; fill.intensity=0.2; fill.color.set(0xc8ced2);
   camera.position.set(0,1.7,17); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
 function enterColosseumArena(){
