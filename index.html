@@ -150,6 +150,12 @@ function addBox(cx,cz,w,d,roofY){ addTarget.push({x1:cx-w/2, z1:cz-d/2, x2:cx+w/
 let pyramidPhase = true; // waves 1-3 + Boss I use the pyramid map/loadout; reverts to the original after Boss I
 // height zones let the player climb onto rooftops via ramps (bots stay ground-level, unaffected)
 const heightZonesOriginal = [];
+// Deliberately empty and never written to. Both dungeons used to point activeHeightZones at
+// heightZonesOriginal on the reasoning that "neither dungeon has climbable rooftops" — but that array
+// holds the town map's three watchtower plateaus and ramps, and two of them (20,20) and (-6,-19) fall
+// inside the 46x46 boss chamber. Walking over those spots lifted the player onto a rooftop that is not
+// there. This is what that comment actually meant.
+const heightZonesNone = [];
 const heightZonesPyramid = [];
 const heightZonesGreek = [];
 const heightZonesRoman = [];
@@ -1462,9 +1468,106 @@ addTarget = pyramidDungeonColliders;
       pblock(1.35,0.45,1.35, goldMat,   px, 8.95, pz);
     }
   });
-  // solid ceiling backing flush under the beam strips — see the matching comment in buildDungeon for why
-  pblock(R*2,0.6,R*2,sandBrickMat,0,10.6,0);
-  for(let k=-2;k<=2;k++) pblock(2,1,R*2,sandBrickMat,k*8,11.4,0);
+  // ---- THE BREACH. This was a sealed room: a solid ceiling slab with five beam strips across it, lit by
+  // sconces, fog-dark in every direction. A box with torches in it. The chamber is now the inside of a
+  // COLLAPSED pyramid — the apex has fallen in, leaving a ragged hole open to the desert sky, with hard
+  // daylight coming down through it and sand pouring in where the corner gave way.
+  //
+  // The ceiling is built as a ring of intact roof around a central opening rather than one slab, so the
+  // player can see out and the room has a light source that is part of the architecture.
+  const HOLE = 13;                                   // half-width of the opening
+  const roofY = 10.6;
+  [[0,-1],[0,1],[-1,0],[1,0]].forEach(([nx,nz])=>{
+    const span = R - HOLE;
+    const cx = nx * (HOLE + span/2), cz = nz * (HOLE + span/2);
+    pblock(nx ? span : R*2, 0.6, nz ? span : R*2, sandBrickMat, cx, roofY, cz);
+  });
+  // ragged edge round the opening: blocks of varying size and drop, so the break reads as collapse rather
+  // than as a cut rectangle
+  for(let t=-HOLE; t<=HOLE; t+=2.6){
+    [[t,-HOLE,1],[t,HOLE,1],[-HOLE,t,0],[HOLE,t,0]].forEach(([bx,bz,alongX])=>{
+      const n = Math.abs(Math.sin(bx*3.1+bz*1.7)*4375.5%1);
+      if(n < 0.22) return;                            // gaps, so the rim is broken
+      // Height is derived from the drop so every rim block still reaches the roof slab it hangs from.
+      // At a fixed height the deeper-hanging ones cleared the roof underside entirely and floated.
+      const w = 1.4+n*1.6, drop = n*1.1;
+      pblock(alongX?w:1.8, 0.9+drop*2, alongX?1.8:w, sandBrickMat, bx, roofY-drop, bz);
+    });
+  }
+  // roof beams, now only over the intact ring
+  for(let k=-2;k<=2;k++){
+    if(Math.abs(k*8) < HOLE) continue;
+    pblock(2,1,R*2,sandBrickMat,k*8,11.4,0);
+  }
+  // fallen roof slabs lying on the floor under the breach, some tilted where they landed on each other
+  const rubbleMat = voxMat(0x9c8250,{noise:20,pattern:'plate'});
+  [[-7.5,4.2,0.35],[6.4,-2.8,-0.22],[2.1,7.9,0.12],[-4.6,-6.1,0.28],[9.2,3.1,-0.4],[-10.4,-1.2,0.18]]
+    .forEach(([bx,bz,tilt],i)=>{
+      const w=2.6+((i*0.9)%2.2), d=2.2+((i*0.7)%1.8);
+      const slab=new THREE.Mesh(new THREE.BoxGeometry(w,0.7,d), rubbleMat);
+      slab.position.set(bx,0.35,bz); slab.rotation.z=tilt*0.35; slab.rotation.y=i*0.7;
+      slab.castShadow=true; slab.receiveShadow=true; pyramidDungeon.add(slab);
+      addBox(bx,bz,w,d);
+      // smaller broken chunks scattered off each slab
+      for(let k=0;k<3;k++){
+        const cs=0.5+((i+k)*0.13)%0.6;
+        pblock(cs,cs*0.7,cs, rubbleMat, bx+Math.sin(i+k)*2.2, cs*0.35, bz+Math.cos(i+k*2)*2.0);
+      }
+    });
+
+  // ---- sand pouring in through the breach. Two dunes: one spilling down the north-west corner where the
+  // wall has given way, and a low drift under the opening itself. This is what makes it read as a buried
+  // ruin rather than a maintained room. ----
+  const duneMat = new THREE.MeshLambertMaterial({map:_finish(gizaSandTex(),10)});
+  function sandHeap(cx,cz,rad,peak){
+    for(let r=0;r<5;r++){
+      const t=r/4, w=rad*(1-t*0.72), h=peak*(0.30+t*0.72);
+      pblock(w, h, w*0.9, duneMat, cx+t*1.4, h/2-0.1, cz+t*1.1);
+    }
+    addBox(cx,cz,rad*0.8,rad*0.75);
+  }
+  sandHeap(-17.5,-17.5, 13, 6.5);      // the collapsed corner, sand right up the wall
+  sandHeap(18.5,-13.0, 9, 3.4);   // clear of the seated colossi and the pillar ring
+  // a low drift directly under the breach, walk-over so it never blocks the fight
+  for(let i=0;i<14;i++){
+    const a=i/14*Math.PI*2, r=4+((i*1.7)%5);
+    const s=1.4+((i*0.9)%1.9);
+    pblock(s, 0.30+((i*0.11)%0.35), s*0.85, duneMat, Math.cos(a)*r, 0.12, Math.sin(a)*r - 3);
+  }
+
+  // ---- the light shaft. A translucent cone standing in the opening, plus a bright patch on the floor
+  // where it lands. depthWrite off so it never occludes anything, fog off so it stays crisp. ----
+  const shaftMat = new THREE.MeshBasicMaterial({color:0xffe6a8, transparent:true, opacity:0.13,
+                                                depthWrite:false, fog:false, side:THREE.DoubleSide});
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(HOLE*0.55, HOLE*0.92, roofY+1.2, 14, 1, true), shaftMat);
+  shaft.position.set(0, (roofY+1.2)/2 - 0.6, -1); shaft.renderOrder = 3; pyramidDungeon.add(shaft);
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(HOLE*0.60, 20),
+    new THREE.MeshBasicMaterial({color:0xffe6a8, transparent:true, opacity:0.22, depthWrite:false, fog:false}));
+  pool.rotation.x = -Math.PI/2; pool.position.set(0,0.03,-1); pool.renderOrder = 2; pyramidDungeon.add(pool);
+  const sunLight = new THREE.DirectionalLight(0xffe0a0, 1.15); sunLight.position.set(6,26,-4);
+  sunLight.target.position.set(0,0,-1); pyramidDungeon.add(sunLight); pyramidDungeon.add(sunLight.target);
+
+  // ---- four colossal seated statues along the south wall, Abu Simbel style. A boss arena should have
+  // something watching the fight; a wall of brick does not. ----
+  function seatedColossus(sx,sz){
+    const st = voxMat(0xb99a63,{noise:16,pattern:'plate'});
+    const stD= voxMat(0x8f7548,{noise:18});
+    pblock(4.2,1.0,3.4, stD, sx,0.5,sz);                       // throne base
+    pblock(3.4,3.2,2.6, st,  sx,2.6,sz-0.2);                   // seat and lap
+    pblock(2.0,1.6,1.5, st,  sx,1.6,sz+1.3);                   // shins
+    pblock(2.2,0.5,1.9, stD, sx,0.9,sz+1.9);                   // feet on the plinth
+    pblock(2.8,3.0,2.0, st,  sx,5.7,sz-0.5);                   // torso
+    pblock(3.2,0.5,2.3, goldMat, sx,7.0,sz-0.5);               // usekh collar
+    pblock(1.5,1.4,1.4, st,  sx,8.0,sz-0.5);                   // head
+    pblock(2.1,0.9,1.8, goldMat, sx,8.9,sz-0.5);               // nemes
+    [-1,1].forEach(o=>{ pblock(0.55,1.3,1.1, goldMat, sx+o*0.95,7.7,sz-0.2); });   // lappets
+    pblock(0.45,0.9,0.45, goldMat, sx,7.1,sz+0.25);            // false beard
+    [-1,1].forEach(o=>{ pblock(0.35,0.22,0.16, glowGold, sx+o*0.35,8.15,sz+0.22); }); // lit eyes
+    // arms resting on the knees
+    [-1,1].forEach(o=>{ pblock(0.8,2.6,0.9, st, sx+o*1.7,5.2,sz+0.1); });
+    addBox(sx,sz,4.2,3.6);
+  }
+  [-15.5,-5.2,5.2,15.5].forEach(sx=> seatedColossus(sx, R-4.2));
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     pblock(2,10,2,sandBrickMat,x,5,z); addBox(x,z,2.3,2.3);
     pblock(2.3,0.5,2.3, i%2?glowTeal:glowGold, x, 8.6, z);
@@ -1516,7 +1619,9 @@ addTarget = pyramidDungeonColliders;
     const earL=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.5,4),dark); earL.position.set(-0.24,0.45,0); earL.rotation.z=0.3; g.add(earL);
     const earR=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.5,4),dark); earR.position.set(0.24,0.45,0); earR.rotation.z=-0.3; g.add(earR);
     const snout=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.25,0.4),dark); snout.position.set(0,-0.15,0.45); g.add(snout);
-    const eyes=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.05),glowGold); eyes.position.set(0,0.07,0.56); g.add(eyes);
+    // z=0.33, not 0.56: the head's front face is at 0.35 and the snout's top at -0.025, so at 0.56 these
+    // sat in the gap between the two, touching neither. Seated on the head's face now.
+    const eyes=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.06),glowGold); eyes.position.set(0,0.07,0.33); g.add(eyes);
     addBox(x,z,1.7,1.7);
   }
   anubisStatue(-9,13,Math.PI); anubisStatue(9,13,Math.PI);
@@ -1863,14 +1968,26 @@ function enterDungeon(){
   dungeonWasPyramid = pyramidPhase; // false during era 1 (Greek) — the only other era currently reachable
   clearWorldGroups();
   scene.add(dungeonWasPyramid ? pyramidDungeon : greekDungeon);
-  sky.visible=false;
   activeColliders = dungeonWasPyramid ? pyramidDungeonColliders : greekDungeonColliders;
-  activeHeightZones = heightZonesOriginal; // neither dungeon has climbable rooftops; keep this deterministic regardless of era
-  scene.background.set(0x141726); scene.fog.color.set(0x141726); scene.fog.near=14; scene.fog.far=58;
-  setDistantGround(0x1b1f30); // interior: an unlit void floor under the room, so this one really is fog-toned
-  horizonHaze.visible=false;  // no horizon inside a sealed room
-  hemi.intensity=0.35; hemi.color.set(0x4a6fbf); hemi.groundColor.set(0x1a1e26);
-  sun.intensity=0.0; fill.intensity=0.18; fill.color.set(0x6f8fdd);
+  activeHeightZones = heightZonesNone; // neither dungeon has climbable rooftops — see the note on heightZonesNone
+  horizonHaze.visible=false;           // still enclosed by its own walls in every horizontal direction
+  if(dungeonWasPyramid){
+    // The pyramid chamber is no longer a sealed room — its apex has collapsed and it is open to the desert
+    // sky, so it gets daylight coming down through the breach rather than the blue cave lighting the Greek
+    // dungeon still uses. Warm, high-contrast and directional: bright where the shaft lands, deep shadow
+    // in the corners, which is the whole point of opening the roof.
+    sky.visible=true; skyTint(0xffd9a0);
+    scene.background.set(0x2a2318); scene.fog.color.set(0x3a2f1e); scene.fog.near=26; scene.fog.far=95;
+    setDistantGround(0x2a2318);
+    hemi.intensity=0.55; hemi.color.set(0xffd9a0); hemi.groundColor.set(0x3a2c18);
+    sun.intensity=0.45; fill.intensity=0.20; fill.color.set(0xc9a877);
+  } else {
+    sky.visible=false;
+    scene.background.set(0x141726); scene.fog.color.set(0x141726); scene.fog.near=14; scene.fog.far=58;
+    setDistantGround(0x1b1f30); // interior: an unlit void floor under the room, so this one really is fog-toned
+    hemi.intensity=0.35; hemi.color.set(0x4a6fbf); hemi.groundColor.set(0x1a1e26);
+    sun.intensity=0.0; fill.intensity=0.18; fill.color.set(0x6f8fdd);
+  }
   camera.position.set(0,1.7,18); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
 // The two era daylight setups live here rather than inline, because more than one transition restores each

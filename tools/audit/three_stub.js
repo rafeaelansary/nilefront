@@ -306,8 +306,12 @@ class Light extends Object3D { constructor(color,intensity){ super(); this.color
 class AmbientLight extends Light {}
 class HemisphereLight extends Light {}
 class PointLight extends Light { constructor(c,i,d){ super(c,i); this.distance=d; } }
-class DirectionalLight extends Light {}
-class SpotLight extends Light {}
+class DirectionalLight extends Light {
+  constructor(c,i){ super(c,i); this.target = new Object3D(); }   // real three.js exposes .target
+}
+class SpotLight extends Light {
+  constructor(c,i){ super(c,i); this.target = new Object3D(); }
+}
 class Fog { constructor(c,n,f){ this.color=new Color(c); this.near=n; this.far=f; } }
 class FogExp2 { constructor(c,d){ this.color=new Color(c); this.density=d; } }
 class PerspectiveCamera extends Object3D {
@@ -695,9 +699,12 @@ global.__worldCoplanar = function(group, eps, omin, cell){
 
 // Scenery that floats: a mesh whose underside is well above the ground and which touches nothing else.
 global.__worldFloaters = function(group, groundY, minGap, eps){
+  // Exclude only the genuinely enormous: ground slabs (60-400 units) and the 1400-unit backing planes.
+  // The threshold was 40, which also excluded things that legitimately hold other things up — a boss
+  // chamber's 46-unit roof panels, for one — so everything hanging from them reported as floating.
   const boxes = global.__worldBoxes(group).filter(b=>{
     const s=b.box.max.x-b.box.min.x, t=b.box.max.z-b.box.min.z;
-    return s<40 && t<40;                       // ignore ground slabs and backing planes
+    return s<58 && t<58;
   });
   const out=[];
   for(let i=0;i<boxes.length;i++){
