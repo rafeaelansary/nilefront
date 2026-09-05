@@ -1995,12 +1995,15 @@ function enterDungeon(){
 // copy they drifted: switchToGreekWorld() set no lighting at all and handed Alexandria Giza's desert sky,
 // and exitNileWave() handed Giza back Alexandria's.
 function applyGizaDaylight(){
-  // Hot, low-ambient desert light. The original hemi 0.85 + near-white 0xbfe3ff tint lifted the sand and the
-  // limestone toward the same white, which was a real part of why the map read as washed out.
-  scene.background.set(0x8fd6f2); scene.fog.color.set(0xcbb388); scene.fog.near=48; scene.fog.far=210;
-  skyTint(0xffeed2); // sun-bleached desert sky
-  hemi.intensity=0.62; hemi.color.set(0xffe0aa); hemi.groundColor.set(0x6b5730);
-  sun.intensity=1.15; fill.intensity=0.2; fill.color.set(0xffd9a0);
+  // Neutral daylight. This used to run a warm cast on everything at once — a 0xffeed2 sky tint, a 0xffe0aa
+  // hemisphere, a 0xffd9a0 fill and a 0xcbb388 fog — and those multiply together, so the whole map came out
+  // washed orange rather than merely sunlit. The sand and limestone are already warm materials; they do not
+  // need the light to be warm as well. Sky tint is neutral now and the fills are near-white, which lets the
+  // ground colour itself read instead of everything sliding to the same amber.
+  scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8d3c6); scene.fog.near=48; scene.fog.far=210;
+  skyTint(0xffffff);
+  hemi.intensity=0.62; hemi.color.set(0xdce8f2); hemi.groundColor.set(0x6b6656);
+  sun.intensity=1.15; fill.intensity=0.2; fill.color.set(0xe8ecf0);
   setDistantGround(0xffffff, dgSandTex); // untinted: the map's own ground uses this texture unmodified
 }
 function applyGreekDaylight(){
