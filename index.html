@@ -856,6 +856,83 @@ function opusReticulatumTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
   }
   return c; }
 
+// Basalt sett paving (basoli) — the near-black volcanic polygons a Roman road was actually laid with. This
+// is the single strongest thing separating this era from the Greek one at a glance: Greek streets are pale
+// grey gravel and pale flagstone, and a Roman street underfoot is dark, irregular and hard.
+function basoliTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#8e887c'; x.fillRect(0,0,P,P);                 // pale lime mortar showing in the joints
+  // irregular polygons on a jittered lattice — a grid of squares reads as tile, which is exactly wrong
+  for(let by=0;by<P;by+=8)for(let bx=0;bx<P;bx+=8){
+    const n=Math.abs(Math.sin(bx*3.7+by*8.9)*137%1);
+    const m=Math.abs(Math.sin(bx*9.1+by*2.3)*137%1);
+    const v=(52+n*34)|0;
+    x.save();
+    x.translate(bx+4+(m-0.5)*1.6, by+4+(n-0.5)*1.6);
+    x.rotate((n-0.5)*0.9);
+    x.fillStyle=`rgb(${v},${(v*1.03)|0},${(v*1.08)|0})`;      // basalt runs faintly blue-grey, never brown
+    x.fillRect(-3.4-m*0.6,-3.4-n*0.6,6.8+m*1.2,6.8+n*1.2);
+    x.fillStyle='rgba(190,196,204,0.13)'; x.fillRect(-3.4,-3.4,6.8,1);   // the worn, polished upper edge
+    x.restore();
+  }
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*5.9+j*3.1)*4375.5%1);
+    if(n>0.955){ x.fillStyle='rgba(210,214,220,0.18)'; x.fillRect(i,j,1,1); }   // cart-polished sheen
+  }
+  return c; }
+
+// Roman roof tiling: flat tegulae with big semicircular imbrex cover tiles over the joints, in a deep
+// oxblood clay. The Greek map's tiles are a bright orange pan-and-cover; these are darker, heavier and
+// coarser-pitched, so two tiled roofs on two maps do not read as the same roof.
+function romanTileTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#7e3524'; x.fillRect(0,0,P,P);
+  for(let col=0;col<P;col+=10){
+    x.fillStyle='#8e3d27'; x.fillRect(col,0,7,P);             // the flat tegula pan
+    x.fillStyle='#6a2a1c'; x.fillRect(col+7,0,3,P);           // the imbrex ridge over the joint
+    x.fillStyle='rgba(190,120,86,0.28)'; x.fillRect(col+7,0,1,P);   // its lit crown
+    x.fillStyle='rgba(0,0,0,0.30)'; x.fillRect(col+6,0,1,P);        // and the shadow beside it
+  }
+  for(let row=0;row<P;row+=13){ x.fillStyle='rgba(0,0,0,0.20)'; x.fillRect(0,row,P,1); }  // course laps
+  for(let i=0;i<26;i++){                                      // moss and lime bloom in the channels
+    const px=Math.random()*P, py=Math.random()*P;
+    x.fillStyle = Math.random()<0.5 ? 'rgba(84,96,58,0.30)' : 'rgba(198,186,158,0.20)';
+    x.fillRect(px,py,1+Math.random()*2,1+Math.random());
+  }
+  return c; }
+
+// Imperial porphyry — the deep purple-red Egyptian stone reserved for the emperor, with its pale feldspar
+// flecks. Greece never built in it. Where the Greek map puts white Pentelic marble columns, this map puts
+// coloured imperial stone, which is both historically right and the fastest way to tell the two apart.
+function porphyryTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#6b2438'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*6.7+j*4.3)*4375.5%1);
+    const v=(112+(n-0.5)*36)|0;
+    x.fillStyle=`rgb(${v},${(v*0.36)|0},${(v*0.50)|0})`; x.fillRect(i,j,1,1);
+  }
+  for(let i=0;i<90;i++){                                      // the characteristic pale crystal flecks
+    const px=Math.random()*P, py=Math.random()*P;
+    x.fillStyle = Math.random()<0.6 ? 'rgba(224,200,206,0.62)' : 'rgba(158,110,124,0.55)';
+    x.fillRect(px,py,1,Math.random()<0.3?2:1);
+  }
+  return c; }
+
+// Giallo antico — the golden Numidian marble Rome quarried for its temple and portico columns, with rust
+// veining running through it. Warm gold against the porphyry's purple, and nothing like Pentelic white.
+function gialloAnticoTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#d8ac5c'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*3.3+j*7.9)*4375.5%1);
+    const v=(224+(n-0.5)*30)|0;
+    x.fillStyle=`rgb(${v},${(v*0.78)|0},${(v*0.42)|0})`; x.fillRect(i,j,1,1);
+  }
+  for(let k=0;k<5;k++){                                       // rust veins, drawn as broken diagonal runs
+    let vx=Math.random()*P, vy=Math.random()*P;
+    x.fillStyle=k%2?'rgba(150,60,34,0.45)':'rgba(196,132,62,0.40)';
+    for(let t=0;t<22;t++){ x.fillRect(vx,vy,1+Math.random(),1); vx+=0.9+Math.random()*0.9; vy+=(Math.random()-0.45)*1.7;
+      if(vx>P)vx-=P; if(vy>P)vy-=P; if(vy<0)vy+=P; }
+  }
+  return c; }
+
 // Painted lime stucco — the wall finish of every Roman house and apartment front: a white-cream field over a
 // Pompeian-red dado, divided by a thin ochre line. The red band is what stops the insulae reading as beige
 // boxes stacked along the street.
@@ -1180,9 +1257,12 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
   block(size, height-0.65, size, wallColor, x, 0.65+(height-0.65)/2, z, {noise:18,pattern:'plate'});
   // string course dividing the shaft, breaking up the flat run of wall
   block(size+0.28, 0.22, size+0.28, dark, x, height*0.52, z, {noise:12});
-  // corner pilasters, standing slightly proud so the tower has vertical articulation from every angle
+  // Corner pilasters, standing slightly proud so the tower has vertical articulation from every angle.
+  // They used to run the shaft's EXACT height — same top face, same bottom face, overlapping the shaft on
+  // both other axes — which is a total depth-buffer tie down all four corners of every watchtower on every
+  // map. They now die into the plinth below and the cornice above, which is also what a pilaster does.
   [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([sx,sz])=>{
-    block(0.5, height-0.65, 0.5, light, x+sx*(half-0.12), 0.65+(height-0.65)/2, z+sz*(half-0.12), {noise:14});
+    block(0.5, height-0.87, 0.5, light, x+sx*(half-0.12), 0.76+(height-0.87)/2, z+sz*(half-0.12), {noise:14});
   });
   // arrow slits on all four faces, at two levels
   const slitMat = {noise:6};
@@ -2017,7 +2097,7 @@ addTarget = colosseumColliders;
     bx(4.0,1.2,7.2, travMat, cx,5.2,cz);                             // its platform, out over the stands
     bx(4.4,0.3,7.6, stoneDark, cx,5.95,cz);
     bx(0.4,1.1,7.2, bronzeMat, cx+2.0,6.65,cz);                      // balustrade toward the pit
-    for(let i=0;i<6;i++) bx(0.34,1.0,0.34, marbleMat, cx+2.0,6.6,cz-3.0+i*1.2);
+    for(let i=0;i<6;i++) bx(0.34,1.0,0.34, marbleMat, cx+2.0,6.62,cz-3.0+i*1.2);  // 6.62: at 6.60 they bottomed out on exactly the balustrade rail's underside
     [-1,1].forEach(sd=>[-1,1].forEach(sd2=>{
       const px=cx+sd*1.5, pz=cz+sd2*3.0;
       const col=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.3,3.6,10), marbleMat);
@@ -2068,9 +2148,12 @@ addTarget = colosseumColliders;
   // you can advance cover-to-cover instead of standing exposed. Each wall has a short return for corner cover.
   function coverWall(x,z,w,rot){
     const wall=new THREE.Group(); wall.position.set(x,0,z); wall.rotation.y=rot||0; A.add(wall);
-    const main=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,0.7), stoneMat); main.position.set(0,1.7,0); wall.add(main);
-    // a travertine plinth and a string course, so a piece of cover is a built thing rather than a slab
-    const base=new THREE.Mesh(new THREE.BoxGeometry(w+0.3,0.45,0.95), travMat); base.position.set(0,0.225,0); wall.add(base);
+    // The main block, its plinth and its return all used to bottom out on exactly y=0, and the return's
+    // outer face sat on exactly the main block's — three depth-buffer ties per piece of cover. The plinth is
+    // bedded into the sand now, the wall stands a couple of centimetres on top of it, and the return is
+    // pulled in off the corner.
+    const main=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,0.7), stoneMat); main.position.set(0,1.72,0); wall.add(main);
+    const base=new THREE.Mesh(new THREE.BoxGeometry(w+0.3,0.5,0.95), travMat); base.position.set(0,0.19,0); wall.add(base);
     const band=new THREE.Mesh(new THREE.BoxGeometry(w+0.1,0.24,0.82), stoneDark); band.position.set(0,2.2,0); wall.add(band);
     // main's own top is at y=3.4 (1.7 + half its 3.4 height); the crenellation height is randomised (0.35-0.65)
     // but was placed at a fixed y=3.55, so its bottom face landed anywhere from 0.025 to 0.175 units below
@@ -2079,12 +2162,12 @@ addTarget = colosseumColliders;
     // each crenellation's own height so it sits flush on the wall's real top instead of sinking into it.
     for(let i=0;i<Math.floor(w/0.9);i++){ if(i%3===1) continue;
       const crH=0.35+Math.random()*0.3;
-      const cr=new THREE.Mesh(new THREE.BoxGeometry(0.7,crH,0.7), stoneDark); cr.position.set(-w/2+0.45+i*0.9,3.4+crH/2+0.02,0); wall.add(cr);
+      const cr=new THREE.Mesh(new THREE.BoxGeometry(0.7,crH,0.7), stoneDark); cr.position.set(-w/2+0.45+i*0.9,3.42+crH/2+0.02,0); wall.add(cr);
     }
-    const ret=new THREE.Mesh(new THREE.BoxGeometry(0.7,3.0,2.0), stoneMat); ret.position.set(w/2-0.35,1.5,1.0); wall.add(ret);
+    const ret=new THREE.Mesh(new THREE.BoxGeometry(0.7,3.0,2.0), stoneMat); ret.position.set(w/2-0.4,1.53,1.0); wall.add(ret);
     const c=Math.cos(rot||0), s=Math.sin(rot||0);
     const add=(lx,lz,bw,bd)=>{ addBox(x+lx*c-lz*s, z+lx*s+lz*c, bw, bd); };
-    add(0,0,w,0.9); add(w/2-0.35,1.0,0.9,2.0);
+    add(0,0,w,0.9); add(w/2-0.4,1.0,0.9,2.0);
   }
   // fewer walls than before (was 6 — too cluttered), just enough to give a real cover-to-cover path:
   // one row near the entry, one centred row partway to the boss
@@ -4416,9 +4499,15 @@ heightZoneTarget = heightZonesRoman;
   // from square (the same bug that made the Nile's desert bank read as flat banding). `tiled` clones a
   // finished texture with an explicit per-axis repeat instead, so tall thin piers and long low walls each
   // get coursing at the right density.
+  // Nothing here is shared with the Greek map any more. It used to borrow greekRoofTileTex for its roofs
+  // and harbourFlagstoneTex for its forum, and to put white marble columns everywhere — the same three
+  // surfaces Alexandria is built from — which is exactly why the two eras felt like one place. Roman now
+  // owns basalt setts underfoot, oxblood tegula-and-imbrex overhead, and COLOURED imperial stone for its
+  // columns (porphyry and giallo antico) where Greece uses Pentelic white.
   const CV = { trav:travertineTex(), brick:romanBrickTex(), retic:opusReticulatumTex(),
-               stucco:romanStuccoTex(), tile:greekRoofTileTex(), cobble:cobbleTex(),
-               terra:terracottaTex(), flag:harbourFlagstoneTex(), check:checkerTex() };
+               stucco:romanStuccoTex(), tile:romanTileTex(), basoli:basoliTex(),
+               terra:terracottaTex(), check:checkerTex(),
+               porph:porphyryTex(), giallo:gialloAnticoTex() };
   function tiled(canvas, rx, ry, extra){
     const t=_finish(canvas); t.repeat.set(rx,ry);
     return new THREE.MeshLambertMaterial(Object.assign({map:t}, extra||{}));
@@ -4433,7 +4522,9 @@ heightZoneTarget = heightZonesRoman;
   const tileMat    = tiled(CV.tile,3,3);
   const bronzeMat  = metalMatP(0x9a7f30,80,0xffe2a0);
   const patinaMat  = voxMat(0x4a6350,{noise:12});          // oxidized bronze — the statues
-  const marbleMat  = voxMat(0xe8e2d2,{noise:8});           // the one cool-white tone on the map
+  const porphMat   = tiled(CV.porph,2,3);                  // imperial purple-red — the arch's columns
+  const gialloMat  = tiled(CV.giallo,2,3);                 // golden Numidian — the temple's and rostra's
+  const marbleMat  = voxMat(0xe8e2d2,{noise:8});           // white marble, kept for STATUES ONLY
   const woodMat    = voxMat(0x6b4a28,{noise:14});
   const woodDark   = voxMat(0x3f2c17,{noise:12});
   const purpleMat  = new THREE.MeshLambertMaterial({color:0x5a2d6e});   // Tyrian purple — imperial
@@ -4453,13 +4544,13 @@ heightZoneTarget = heightZonesRoman;
   ground.position.set(0,-0.5,0); ground.receiveShadow=true; scene.add(ground);
   // The cardo/decumanus crossroads, in cobble kept deliberately cooler than the terracotta dust so the
   // street reads as paved rather than merely trodden. Built from three NON-overlapping slabs.
-  const roadMat = tiled(CV.cobble,18,18,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
+  const roadMat = tiled(CV.basoli,16,16,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
   slab(roadMat,0,0,9,58);
   slab(roadMat,-17.25,0,25.5,9);
   slab(roadMat,17.25,0,25.5,9);
-  // the forum's dressed flagstone floor, filling the whole south-east quarter — a third ground tone, and
-  // the thing that makes that quarter read as a public square instead of more dust
-  slab(tiled(CV.flag,10,10,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}), 16,16, 20,20);
+  // the forum floor: the same basalt, laid in larger setts, so the square reads as public paving rather
+  // than more dust — and never as the Greek agora's pale flagstone
+  slab(tiled(CV.basoli,7,7,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}), 16,16, 20,20);
 
   // ---- the city wall --------------------------------------------------------------------------------
   // Brick-faced concrete on a travertine plinth with a crenellated parapet, plus square interval towers —
@@ -4543,7 +4634,7 @@ heightZoneTarget = heightZonesRoman;
       [-0.85,0.85].forEach(ox=>{
         const cx=px+ox, cz=AZ+pierD/2+0.28;
         bx(0.86,0.75,0.72, travLight, cx,0.375+0.35,cz);                       // pedestal (sits on the podium)
-        const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.36,5.7,10), marbleMat); sh.position.set(cx,1.1+2.85,cz); scene.add(sh);
+        const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.36,5.7,10), porphMat); sh.position.set(cx,1.1+2.85,cz); scene.add(sh);
         for(let f=0;f<6;f++){ const a=f/6*Math.PI*2;                            // flutes: thin ribs round the shaft
           const fl=new THREE.Mesh(new THREE.BoxGeometry(0.07,5.5,0.07), travLight);
           fl.position.set(cx+Math.cos(a)*0.33, 1.1+2.85, cz+Math.sin(a)*0.33); scene.add(fl); }
@@ -4634,7 +4725,7 @@ heightZoneTarget = heightZonesRoman;
       const px=x0+i*lowSpan;
       bx(lowPW+0.5,0.9,lowPD+0.5, travDark, px,0.45,AZ);
       bx(lowPW,lowH-0.9,lowPD, aqStone, px, 0.9+(lowH-0.9)/2, AZ);
-      bx(lowPW+0.45,0.4,lowPD+0.45, travLight, px, lowH-0.2, AZ);              // impost block
+      bx(lowPW+0.45,0.4,lowPD+0.45, travLight, px, lowH-0.08, AZ);             // impost, standing proud of the pier top
       if(i<10){
         const arc=new THREE.Mesh(new THREE.TorusGeometry(4.2,0.62,6,14,Math.PI), aqStone);
         arc.position.set(px+lowSpan/2, 7.4, AZ); scene.add(arc);
@@ -4673,9 +4764,11 @@ heightZoneTarget = heightZonesRoman;
     const floor=new THREE.Mesh(new THREE.BoxGeometry(11,0.05,11),
       tiled(CV.check,7,7,{polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));
     floor.position.set(cx,-0.005,cz); scene.add(floor);
-    const storeys=[{y0:0,   h:3.4, mat:travMat,  col:0xe4d4ac, capH:0.18},   // Doric
-                   {y0:3.4, h:3.0, mat:travMat,  col:0xe4d4ac, capH:0.26},   // Ionic
-                   {y0:6.4, h:2.6, mat:brickMat, col:0xd8c8a0, capH:0.3 }];  // Corinthian
+    // The three orders stacked, each in a different imperial stone rather than three shades of the same
+    // pale one — travertine below, then giallo antico, then porphyry at the top
+    const storeys=[{y0:0,   h:3.4, mat:travMat,  colMat:travLight, capH:0.18},   // Doric
+                   {y0:3.4, h:3.0, mat:travMat,  colMat:gialloMat, capH:0.26},   // Ionic
+                   {y0:6.4, h:2.6, mat:brickMat, colMat:porphMat,  capH:0.3 }];  // Corinthian
     for(let i=0;i<segs;i++){
       const a=i/segs*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a);
       const px=cx+ca*R, pz=cz+sa*R;
@@ -4683,7 +4776,7 @@ heightZoneTarget = heightZonesRoman;
         const pier=new THREE.Mesh(new THREE.BoxGeometry(1.3,st.h,1.5), st.mat);
         pier.position.set(px, st.y0+st.h/2, pz); pier.rotation.y=-a; scene.add(pier);
         // engaged half-column standing proud on the outer face
-        const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.29,st.h-st.capH-0.3, 8), voxMat(st.col,{noise:10}));
+        const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.29,st.h-st.capH-0.3, 8), st.colMat);
         sh.position.set(cx+ca*(R+0.72), st.y0+0.15+(st.h-st.capH-0.3)/2, cz+sa*(R+0.72)); scene.add(sh);
         const cap=new THREE.Mesh(new THREE.BoxGeometry(0.72,st.capH,0.72), travLight);
         cap.position.set(cx+ca*(R+0.72), st.y0+st.h-st.capH/2-0.1, cz+sa*(R+0.72)); cap.rotation.y=-a; scene.add(cap);
@@ -4703,9 +4796,11 @@ heightZoneTarget = heightZonesRoman;
       addBox(px,pz,1.7,1.7);   // ground-storey pier only, world extents
     }
     // cornice rings dividing the storeys, and the attic above them
-    [3.4,6.4,9.0].forEach((y,k)=>{
+    // Each ring STRADDLES the joint between two storeys. Sitting it below the joint put its top face
+    // exactly on the storey top it capped, over the pier's whole footprint — a tie at every bay.
+    [3.4,6.4,9.0].forEach(y=>{
       const ring=new THREE.Mesh(new THREE.CylinderGeometry(R+1.15,R+0.95,0.42,segs), travLight);
-      ring.position.set(cx,y+0.21-(k===2?0:0.42),cz); scene.add(ring);
+      ring.position.set(cx,y,cz); scene.add(ring);
     });
     const attic=new THREE.Mesh(new THREE.CylinderGeometry(R+0.55,R+0.55,2.2,segs,1,true), travMat);
     attic.position.set(cx,10.2,cz); scene.add(attic);
@@ -4742,27 +4837,30 @@ heightZoneTarget = heightZonesRoman;
       const sw=w-0.6-i*0.35, sy=podH-0.2-i*0.34;
       bx(sw,0.34,0.62, travLight, TX, sy-0.17, TZ-d/2-0.31-i*0.6);
     }
-    bx(w-2.4,5.2,d-2.6, stuccoMat, TX, podH+2.6, TZ+0.7);                      // cella
+    bx(w-2.4,5.2,d-2.6, stuccoMat, TX, podH+2.6, TZ+1.2);                      // cella, set back to open up the porch
     bx(1.5,3.0,0.18, bronzeMat, TX, podH+1.5, TZ-0.7);                         // cult door, deep in the porch
     bx(1.9,0.28,0.28, travLight, TX, podH+3.12, TZ-0.75);
     // hexastyle porch — six across the front, plus a return pair down each flank
     const colY=podH+2.9;
     function column(x,z){
-      bx(0.98,0.34,0.98, travLight, x, podH+0.17, z);                          // base
-      const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.38,0.44,5.0,10), marbleMat); sh.position.set(x,podH+0.34+2.5,z); scene.add(sh);
+      bx(0.98,0.34,0.98, travLight, x, podH+0.13, z);                          // base, bedded into the podium
+      const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.38,0.44,5.0,10), gialloMat); sh.position.set(x,podH+0.34+2.5,z); scene.add(sh);
       for(let f=0;f<8;f++){ const a=f/8*Math.PI*2;
         const fl=new THREE.Mesh(new THREE.BoxGeometry(0.06,4.8,0.06), travLight);
         fl.position.set(x+Math.cos(a)*0.4, podH+0.34+2.5, z+Math.sin(a)*0.4); scene.add(fl); }
       const bell=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.38,0.44,10), travLight); bell.position.set(x,podH+5.06,z); scene.add(bell);
       bx(1.02,0.26,1.02, travLight, x, podH+5.41, z);                          // abacus
     }
-    for(let i=0;i<6;i++) column(TX-w/2+1.2+i*(w-2.4)/5, TZ-d/2-0.9);
-    [-1,1].forEach(s=>{ column(TX+s*(w/2-1.2), TZ-d/2+1.6); column(TX+s*(w/2-1.2), TZ-d/2+4.1); });
+    // The porch stands ON the podium. It used to sit 0.9 in FRONT of the podium's face — over the
+    // staircase — so six column bases hung in open air above the top step.
+    const porchZ = TZ-d/2+0.7;
+    for(let i=0;i<6;i++) column(TX-w/2+1.2+i*(w-2.4)/5, porchZ);
+    [-1,1].forEach(s=>{ column(TX+s*(w/2-1.2), porchZ+1.9); column(TX+s*(w/2-1.2), porchZ+3.8); });
     // entablature over the porch, then the pediment built as stacked courses so it is a real triangle
-    bx(w+0.8,0.55,d+2.2, travLight, TX, podH+5.82, TZ-0.2);
-    bx(w+0.6,0.5,d+2.0, brickMat, TX, podH+6.35, TZ-0.2);                      // frieze band
-    bx(w+1.3,0.4,d+2.6, travMat, TX, podH+6.8, TZ-0.2);                        // raking cornice base
-    const pedZ=TZ-d/2-0.9;
+    bx(w+0.8,0.55,d+0.6, travLight, TX, podH+5.82, TZ+0.3);
+    bx(w+0.6,0.5,d+0.4, brickMat, TX, podH+6.35, TZ+0.3);                      // frieze band
+    bx(w+1.3,0.4,d+1.0, travMat, TX, podH+6.8, TZ+0.3);                        // raking cornice base
+    const pedZ=porchZ;
     for(let i=0;i<6;i++){                                                      // the tympanum, in courses
       const pw=(w+0.9)*(1-i/6.4), py=podH+7.2+i*0.46;
       bx(pw,0.46,1.1, i===0?travLight:travMat, TX, py, pedZ);
@@ -4885,7 +4983,7 @@ heightZoneTarget = heightZonesRoman;
       bx(0.34,0.22,0.34, patinaMat, x-1.8+i*1.2, 1.0, rz-0.35);
     }
     [-1.8,1.8].forEach(ox=>{
-      const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.3,3.4,10), marbleMat); sh.position.set(x+ox,3.9,z+1.2); scene.add(sh);
+      const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.3,3.4,10), gialloMat); sh.position.set(x+ox,3.9,z+1.2); scene.add(sh);
       bx(0.7,0.24,0.7, travLight, x+ox, 5.72, z+1.2);
     });
     bx(4.4,0.4,2.2, travLight, x, 6.04, z+1.2);                                // a small canopy over the platform
@@ -4947,12 +5045,13 @@ heightZoneTarget = heightZonesRoman;
 
   function amphoraStack(x,z){
     const clay=voxMat(0xa8683a,{noise:14});
+    bx(1.5,0.16,1.0, woodDark, x, 0.08, z+0.1);                                // the pallet
+    // +0.08 on every jar: standing them at y=0 put their bases on exactly the pallet's own underside plane
     [[0,0,0],[0.42,0,0],[-0.42,0,0.24],[0.2,0.86,0.1]].forEach(([ox,oy,oz])=>{
-      bx(0.34,0.62,0.34, clay, x+ox, 0.31+oy, z+oz);
-      bx(0.18,0.24,0.18, clay, x+ox, 0.74+oy, z+oz);
-      bx(0.24,0.1,0.24, voxMat(0x6b4a28,{noise:10}), x+ox, 0.9+oy, z+oz);
+      bx(0.34,0.62,0.34, clay, x+ox, 0.39+oy, z+oz);
+      bx(0.18,0.24,0.18, clay, x+ox, 0.82+oy, z+oz);
+      bx(0.24,0.1,0.24, voxMat(0x6b4a28,{noise:10}), x+ox, 0.98+oy, z+oz);
     });
-    bx(1.5,0.16,1.0, woodDark, x, 0.08, z+0.1);                                // the pallet under them
   }
   amphoraStack(13,19); amphoraStack(-5.6,-9.5); amphoraStack(21,6.5); amphoraStack(-12.5,-16.5);
 
@@ -5004,9 +5103,30 @@ heightZoneTarget = heightZonesRoman;
     crown.position.set(x,4.86,z); scene.add(crown);
     addBox(x,z,0.9,0.9);
   }
-  oliveTreeR(-26.5,-10); oliveTreeR(26.5,-4); oliveTreeR(-3.5,20.5);
-  oliveTreeR(-26,2.5); oliveTreeR(2.5,-25); oliveTreeR(20,-3.5);
+  // No olive trees. Scattered olives are what the Greek map is planted with, and repeating them here was a
+  // real part of why the two read as one place. Rome planted formally: clipped box and laurel in straight
+  // runs, under umbrella pines. Straight lines of dark green are about as un-Greek as planting gets.
+  function boxHedge(x,z,len,axis){
+    const dark=voxMat(0x2f4a2a,{noise:14}), lit=voxMat(0x44633a,{noise:12});
+    const n=Math.max(2,Math.round(len/1.1));
+    for(let i=0;i<n;i++){
+      const t=-len/2+len*(i+0.5)/n;
+      const bxp=axis==='x'?x+t:x, bzp=axis==='x'?z:z+t;
+      const h=0.92+((i*0.07)%0.14);
+      const m=new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?len/n+0.06:0.86,h,axis==='x'?0.86:len/n+0.06), i%2?dark:lit);
+      m.position.set(bxp,h/2,bzp); m.castShadow=true; scene.add(m);
+      // a clipped top course, sitting proud, so the run has a lit edge instead of being a green slab
+      const cap=new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?len/n-0.04:0.7,0.14,axis==='x'?0.7:len/n-0.04), lit);
+      cap.position.set(bxp,h+0.02,bzp); scene.add(cap);
+    }
+    addBox(x, z, axis==='x'?len:0.9, axis==='x'?0.9:len);
+  }
   umbrellaPine(-10,17); umbrellaPine(19.5,25); umbrellaPine(-25,-24.5); umbrellaPine(25,-25);
+  umbrellaPine(-26.5,-10); umbrellaPine(26.5,-4); umbrellaPine(-3.5,20.5); umbrellaPine(-26,2.5);
+  // placed clear of every building collider, both watchtower stair corridors and all ten shared spawns
+  boxHedge(16,13,6,'x');  boxHedge(16,17,6,'x');   // a formal walk through the middle of the forum
+  boxHedge(24,15.5,4,'z');                         // closing its east side
+  boxHedge(-17,-9.5,6,'x');                        // and one off the decumanus in the north-west
 })();
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
@@ -5555,7 +5675,7 @@ function makeVoxelBot(color, weaponType, skinName){
 
   // layered torso
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.66,0.32), voxMat(armorDark,{noise:12})); torso.position.y=1.08; g.add(torso);
-  const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.42,0.36), voxMat(armor,{noise:16,pattern:'plate'})); chestPlate.position.y=1.2; g.add(chestPlate);
+  const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.42,0.36), voxMat(armor,{noise:16,pattern:'plate'})); chestPlate.position.y=1.195; g.add(chestPlate);   // 1.195: at 1.2 its top face landed on exactly the torso's
   const belt = new THREE.Mesh(new THREE.BoxGeometry(0.58,0.12,0.34), voxMat(0x2b2b2b,{noise:8})); belt.position.y=0.82; g.add(belt);
   const padGeo = new THREE.BoxGeometry(0.18,0.18,0.36); const padMat = voxMat(armor,{noise:10,pattern:'plate'});
   const padL = new THREE.Mesh(padGeo, padMat); padL.position.set(-0.38,1.4,0); g.add(padL);
@@ -5783,8 +5903,10 @@ function makeColossus(){
 
   // ---- usekh collar: the broad banded pectoral, the single most identifying Egyptian statue element ----
   const collar1=new THREE.Mesh(new THREE.BoxGeometry(0.98,0.13,0.66), goldMat);  collar1.position.set(0,2.05,0.01); g.add(collar1);
-  const collar2=new THREE.Mesh(new THREE.BoxGeometry(0.90,0.09,0.62), lapisMat); collar2.position.set(0,1.95,0.01); g.add(collar2);
-  const collar3=new THREE.Mesh(new THREE.BoxGeometry(0.80,0.07,0.58), goldMat);  collar3.position.set(0,1.88,0.01); g.add(collar3);
+  // z 0.02 / 0.025, not 0.01: at 0.01 collar2's back face and collar3's front face each landed on exactly
+  // one of the chest's, right across its whole width
+  const collar2=new THREE.Mesh(new THREE.BoxGeometry(0.90,0.09,0.62), lapisMat); collar2.position.set(0,1.95,0.02); g.add(collar2);
+  const collar3=new THREE.Mesh(new THREE.BoxGeometry(0.80,0.07,0.58), goldMat);  collar3.position.set(0,1.88,0.025); g.add(collar3);
 
   // ---- head: nemes headdress with its striped lappets falling either side, false beard, uraeus ----
   const neck=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.14,0.30), stoneDark); neck.position.set(0,2.16,0); g.add(neck);
@@ -6037,7 +6159,7 @@ function makeJackal(){
   // ---- head: the whole identity. A long wedge snout carried FORWARD on an angled neck, tall ears. ----
   const neck=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.20,0.22), furMat); neck.position.set(0,1.52,0.03); neck.rotation.x=0.25; g.add(neck);
   const skull=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.28,0.34), furMat); skull.position.set(0,1.76,0.06); g.add(skull);
-  const cheeks=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.16,0.20), furLit); cheeks.position.set(0,1.70,0.14); g.add(cheeks);
+  const cheeks=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.16,0.20), furLit); cheeks.position.set(0,1.71,0.14); g.add(cheeks);   // 1.71: at 1.70 its underside met the skull's
   // snout in three tapering stages, so it narrows to a point instead of ending as a blunt box
   const snout1=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.17,0.20), furMat); snout1.position.set(0,1.70,0.30); g.add(snout1);
   const snout2=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.13,0.18), furMat); snout2.position.set(0,1.68,0.45); g.add(snout2);
@@ -6368,7 +6490,7 @@ function makeHippo(){
 
   // ---- legs: short, thick pillars, barely clearing the belly — a hippo is almost comically stumpy ----
   [[-0.36,0.52],[0.36,0.52],[-0.36,-0.60],[0.36,-0.60]].forEach(([lx,lz])=>{
-    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.28,0.36), hide);     upper.position.set(lx,0.30,lz); g.add(upper);
+    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.28,0.34), hide);     upper.position.set(lx,0.30,lz); g.add(upper);   // 0.34 deep: at 0.36 the front pair shared a z face with both the chest and the belly
     const lower=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.22,0.32), hideDark); lower.position.set(lx,0.13,lz); g.add(lower);
     const foot =new THREE.Mesh(new THREE.BoxGeometry(0.34,0.10,0.38), hideDark); foot.position.set(lx,0.05,lz+0.02); g.add(foot);
     [-1,0,1].forEach(t=>{ const toe=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.06,0.08), bellyMat);
@@ -6933,7 +7055,7 @@ function makeWarHoundUnit(){
   bx(0.58,0.54,0.46, furDark, 0, 0.86,-0.58);                        // haunch
   bx(0.42,0.16,0.94, furPale, 0, 0.66,-0.06);                        // pale belly
   bx(0.62,0.36,0.40, furDark, 0, 1.06, 0.32);                        // shoulder mass, standing above the ribs
-  bx(0.34,0.30,0.26, furPale, 0, 0.86, 0.56);                        // chest blaze
+  bx(0.34,0.28,0.26, furPale, 0, 0.85, 0.56);                        // chest blaze (0.85/0.28: at 0.86/0.30 its top sat 5mm from the collar's lower rim)
   // brindle: thin mid-tone stripes standing proud of each flank
   [-1,1].forEach(sd=> [[0.30,0.295],[0.06,0.295],[-0.22,0.265],[-0.48,0.305]].forEach(([sz,sx],i)=>
     bx(0.05,0.34-i*0.03,0.07, furMid, sd*sx, 0.92, sz)));
@@ -6968,13 +7090,13 @@ function makeWarHoundUnit(){
 
   // ---- the war-collar: a broad bronze band with eight spikes radiating off it. This is the piece that
   // says "Roman military dog" rather than "big dog", so it is deliberately oversized.
-  bx(0.52,0.22,0.48, bronze, 0, 1.10, 0.60);
-  bx(0.54,0.06,0.50, bronzeD, 0, 1.22, 0.60);                        // its rim (1.22: at 1.205 its top face landed 5mm under the shoulder mass's)
-  bx(0.54,0.06,0.50, bronzeD, 0, 0.995,0.60);
+  bx(0.52,0.22,0.48, bronze, 0, 1.11, 0.60);                         // 1.11: at 1.10 its top face landed on exactly the ribcage's
+  bx(0.54,0.06,0.50, bronzeD, 0, 1.235,0.60);                        // its rim
+  bx(0.54,0.06,0.50, bronzeD, 0, 0.985,0.60);
   for(let i=0;i<8;i++){
     const a=i/8*Math.PI*2, cx=Math.sin(a), cy=Math.cos(a);
     const sp=new THREE.Mesh(new THREE.ConeGeometry(0.045,0.19,4), bronze);
-    sp.position.set(cx*0.30, 1.10+cy*0.24, 0.60); sp.rotation.z=-a; body.add(sp);
+    sp.position.set(cx*0.30, 1.11+cy*0.24, 0.60); sp.rotation.z=-a; body.add(sp);
   }
   bx(0.10,0.14,0.09, bronzeD, 0, 0.94, 0.74);                        // hanging ring at the throat
   bx(0.16,0.05,0.08, bronze,  0, 0.86, 0.74);
@@ -7037,7 +7159,8 @@ function makeManticore(){
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.54,0.44), furMat2); chest.position.set(0,0.82,0.3); body.add(chest);
   const neck = new THREE.Mesh(new THREE.BoxGeometry(0.36,0.4,0.34), furMat2); neck.position.set(0,0.98,0.52); body.add(neck);
   // haunch and shoulder muscle, so the flanks are not two flat slabs
-  const haunch = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.5,0.42), furMat); haunch.position.set(0,0.7,-0.58); body.add(haunch);
+  // y 0.72 / height 0.52, not 0.70 / 0.50: at those the haunch's underside landed on exactly the torso's
+  const haunch = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.52,0.42), furMat); haunch.position.set(0,0.72,-0.58); body.add(haunch);
   [-1,1].forEach(sd=>{
     const sh=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.3), furMat2); sh.position.set(sd*0.29,0.82,0.24); body.add(sh);
   });
@@ -7051,15 +7174,38 @@ function makeManticore(){
   const inkMat = new THREE.MeshLambertMaterial({color:0x14100a});
   const HY = 1.24, HZ = 0.62;   // head centre — pushed up and forward, clear of the chest
 
-  // mane as CHUNKY big distinct cubes (the reference reads as ~8 big blocks across, not a fuzzy ball).
-  // A solid dark backing mass for volume, then ONE clean ring of large cubes — no noisy double-ring.
-  const maneMass = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.98,0.5), maneMat); maneMass.position.set(0,HY-0.05,HZ-0.06); body.add(maneMass);
-  // 0.76 wide, not 0.72: at 0.72 its side faces landed 3mm from four of the ring cubes' outer faces.
-  const maneMassW = new THREE.Mesh(new THREE.BoxGeometry(0.76,1.12,0.46), maneMat); maneMassW.position.set(0,HY-0.05,HZ-0.06); body.add(maneMassW); // taller narrow → oval
-  for(let i=0;i<14;i++){ const a=(i/14)*Math.PI*2;
-    const mat = i%3===0 ? maneMatLight : maneMat;
-    const t=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.28,0.26), mat);   // big chunky cubes
-    t.position.set(Math.sin(a)*0.5, HY-0.05+Math.cos(a)*0.58, HZ+0.04); body.add(t); }
+  // ---- the mane. This was ONE flat ring of 14 identical cubes, all sitting on a single z-plane in front
+  // of a flat backing box whose front face was at exactly that same z. Ten of the fourteen therefore had a
+  // total depth-buffer tie with the mass behind them across their whole front faces — which in game is the
+  // flickering halo around the head. It also just looked like a rosette stuck on a face rather than a lion.
+  //
+  // A mane is a VOLUME, so it is built as a shell now: three rings at different radii and different depths,
+  // every cube its own size, its own distance out and its own small turn, plus locks hanging below the jaw
+  // and a mass carried back over the shoulders. No two cubes can share a plane, and the silhouette has
+  // depth from every angle instead of only head-on.
+  const maneMass = new THREE.Mesh(new THREE.BoxGeometry(0.86,0.94,0.54), maneMat); maneMass.position.set(0,HY-0.06,HZ-0.12); body.add(maneMass);
+  const maneMassW = new THREE.Mesh(new THREE.BoxGeometry(0.66,1.08,0.44), maneMat); maneMassW.position.set(0,HY-0.03,HZ-0.16); body.add(maneMassW); // taller narrow → oval
+  [{n:9, rx:0.56, ry:0.62, z:HZ+0.02, s:0.30, twist:0.34},
+   {n:8, rx:0.45, ry:0.51, z:HZ+0.17, s:0.24, twist:-0.28},
+   {n:7, rx:0.38, ry:0.44, z:HZ-0.26, s:0.29, twist:0.20}].forEach((ring,r)=>{
+    for(let i=0;i<ring.n;i++){
+      const a=(i/ring.n)*Math.PI*2 + r*0.42;
+      const sz=ring.s + ((i*0.041)%0.07);                    // no two cubes the same size
+      const dz=ring.z + ((i*0.027)%0.055) - r*0.012;         // and none at the same depth
+      const t=new THREE.Mesh(new THREE.BoxGeometry(sz,sz,sz*0.9), (i+r)%3===0 ? maneMatLight : maneMat);
+      t.position.set(Math.sin(a)*ring.rx, HY-0.05+Math.cos(a)*ring.ry, dz);
+      t.rotation.z=a*ring.twist; body.add(t);                // each turned a little — a mane is not a grid
+    }
+  });
+  // locks hanging below the jaw, and the mane running back over the shoulders
+  [[-0.30,-0.52,0.22],[0.02,-0.60,0.18],[0.31,-0.53,0.20]].forEach(([lx,ly,ls],i)=>{
+    const t=new THREE.Mesh(new THREE.BoxGeometry(ls,ls*1.5,ls*0.85), i%2?maneMatLight:maneMat);
+    t.position.set(lx, HY+ly, HZ+0.02-i*0.015); t.rotation.z=lx*0.5; body.add(t);
+  });
+  [[-0.26,0.34,0.26],[0.26,0.34,0.24],[0,0.46,0.30]].forEach(([lx,ly,ls],i)=>{
+    const t=new THREE.Mesh(new THREE.BoxGeometry(ls,ls*0.8,ls*1.3), i%2?maneMat:maneMatLight);
+    t.position.set(lx, HY+ly-0.16, HZ-0.42-i*0.03); body.add(t);
+  });
 
   // BIGGER solid tan head in the middle of the mane, with a LONG protruding snout below-center
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.58,0.36), furMat); head.position.set(0,HY+0.02,HZ+0.2); body.add(head);
@@ -7282,7 +7428,7 @@ function makeBasilisk(){
   // ---- head
   const HY=1.22, HZ=0.72;
   bx(0.36,0.30,0.44, scaleMat,  0, HY, HZ);                        // skull
-  bx(0.40,0.11,0.22, scaleMat2, 0, HY+0.17, HZ+0.10);              // heavy brow ridge
+  bx(0.42,0.11,0.22, scaleMat2, 0, HY+0.18, HZ+0.10);              // heavy brow ridge
   [-1,1].forEach(sd=> bx(0.07,0.22,0.32, scaleMat3, sd*0.20, HY-0.02, HZ+0.04));   // cheek plates
   bx(0.28,0.22,0.28, scaleMat,  0, HY-0.08, HZ+0.34);              // snout
   bx(0.30,0.08,0.30, scaleMat2, 0, HY-0.17, HZ+0.33);              // upper lip
@@ -7302,8 +7448,11 @@ function makeBasilisk(){
 
   // ---- the crown. Five gold points rising off a banded circlet, tallest in the middle, with a crest of
   // plates running back over the neck. This is the silhouette cue: nothing else in the game wears one.
-  bx(0.40,0.07,0.46, goldMat, 0, HY+0.15, HZ);                     // circlet
-  bx(0.42,0.04,0.48, goldDark, 0, HY+0.19, HZ);
+  // The circlet's underside used to land on EXACTLY the brow ridge's, across the whole width of the skull —
+  // a total depth-buffer tie right on top of the head, which is the flicker that was visible up there. Its
+  // width, its height and its depth are all off the brow's now, and the dark band above it is off both.
+  bx(0.44,0.08,0.46, goldMat, 0, HY+0.15, HZ);                     // circlet
+  bx(0.42,0.05,0.50, goldDark, 0, HY+0.225, HZ);
   [{x:-0.15,h:0.16},{x:-0.08,h:0.25},{x:0,h:0.34},{x:0.08,h:0.25},{x:0.15,h:0.16}].forEach(pt=>{
     bx(0.06,pt.h,0.06, goldMat, pt.x, HY+0.19+pt.h/2, HZ-0.02);
     bx(0.045,0.045,0.045, goldDark, pt.x, HY+0.19+pt.h, HZ-0.02);  // a bead finishing each point
@@ -7638,8 +7787,9 @@ function makeIfritKing(){
   // Each cone's y is its CENTRE, so a cone of height h centred at y reaches down to y-h/2. The innermost
   // core was centred at -0.02 with h=0.4, i.e. its point dipped to -0.22 — 0.44 below the floor once the
   // boss is scaled to 2.0. The Ifrit hovers, so the flame should meet the ground, not pass through it.
+  // the hot core's base is at 0.22, not 0.20: at 0.20 it and the cone above it both bottomed out on y=0
   [{y:0.9,r:0.66,h:0.9,m:flameOuter},{y:0.5,r:0.48,h:0.75,m:flameMid},
-   {y:0.3,r:0.3,h:0.6,m:flameHot},{y:0.20,r:0.15,h:0.4,m:flameCore}].forEach(c=>{
+   {y:0.3,r:0.3,h:0.6,m:flameHot},{y:0.22,r:0.15,h:0.4,m:flameCore}].forEach(c=>{
     const cone=new THREE.Mesh(new THREE.ConeGeometry(c.r,c.h,8), c.m); cone.position.set(0,c.y,0); g.add(cone);
   });
   // licking side flames, so the base is ragged rather than a clean cone stack
@@ -7731,7 +7881,9 @@ function makeHydra(){
     const mat = i%2 ? scaleMat2 : scaleMat;
     const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,0.66), mat); seg.position.set(0,s.y,s.z); g.add(seg); trunkMeshes.push(seg);
     // pale belly plates along the underside
-    const belly=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.6,s.h*0.26,0.62), bellyMat); belly.position.set(0,s.y-s.h*0.42,s.z); g.add(belly);
+    // depth scaled off the segment rather than a flat 0.62, and the drop scaled off the segment too:
+    // with one shared depth and one shared ratio, two neighbouring plates' undersides landed 1mm apart
+    const belly=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.6,s.h*0.26,s.w*0.50), bellyMat); belly.position.set(0,s.y-s.h*0.42,s.z); g.add(belly);
     // dorsal scute ridge along the spine, so the top edge isn't a flat run
     const scute=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.3,s.h*0.22,0.34), crestMat); scute.position.set(0,s.y+s.h*0.5,s.z); g.add(scute);
   });
@@ -7766,7 +7918,10 @@ function makeHydra(){
   // boxes at identical angles whose faces land 2.5mm apart fight in the depth buffer. Different arcs also
   // make the five necks read as five separate animals rather than one shape drawn five times.
   function neck(baseX, spread, height, dt){
-    let x=baseX, y=1.05, z=0.4;
+    // Each neck emerges from a different point on the trunk. They all used to start at the same y and z,
+    // so every neck's first segment was an identical box at an identical height — the inner and outer pairs
+    // overlapped in x and shared both their y and z faces exactly.
+    let x=baseX, y=1.05-Math.abs(baseX)*0.22, z=0.4-Math.abs(baseX)*0.42;
     // theta = forward arc, phi = outward fan. theta used to start at -1.05, which meant each neck first
     // leaned BACKWARD before curving over, so the heads finished low and drooping. Starting much closer to
     // vertical makes the necks rear up and then strike forward.
@@ -7788,7 +7943,7 @@ function makeHydra(){
       m.rotation.x=theta; m.rotation.z=phi; g.add(m);
       // dorsal crest fin, parented to the segment so it inherits both rotations and can't drift off
       const fin=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.2,0.12), crestMat);
-      fin.position.set(0,0,-0.09); m.add(fin);
+      fin.position.set(0,0,-0.105); m.add(fin);   // -0.105, not -0.09: at -0.09 its back face was flush with the segment's
       x+=dx*len; y+=dy*len; z+=dz*len; theta+=dt; phi+=dphi;
     }
     // Head, seated ON the neck tip. x/y/z hold the neck's accumulated end point, but the old code offset
@@ -7889,7 +8044,7 @@ function makeChampion(){
   bx(0.9,0.44,0.52, tunicMat, 0,0.72,0);                          // tunic skirt below the armour
   for(let i=0;i<6;i++) bx(0.13,0.4,0.06, tunicMat, -0.36+i*0.145,0.62,0.28);   // pteruges
   for(let i=0;i<5;i++) bx(0.11,0.34,0.06, leatherMat, -0.28+i*0.14,0.60,-0.29); // and at the back
-  bx(0.92,0.14,0.54, bronzeMat, 0,0.92,0);                        // belt
+  bx(0.92,0.14,0.54, bronzeMat, 0,0.93,0);                        // belt (0.93: at 0.92 its underside landed on the lowest girdle band's)
   for(let i=0;i<5;i++) bx(0.08,0.09,0.07, bronzeDark, -0.3+i*0.15,0.92,0.29);  // cingulum studs
   // phalerae — the bronze medallions a decorated soldier wore across the chest
   [[-0.26,1.66],[0.26,1.66],[0,1.44]].forEach(([px,py])=>{
@@ -7922,11 +8077,13 @@ function makeChampion(){
     bx(0.07,0.09,0.09, inkMat, sd*0.1,2.2,0.25);                  // eyes burning in the helmet's shadow
   });
   bx(0.5,0.13,0.14, armorMat, 0,2.09,-0.23);                      // neck flange at the back
-  bx(0.5,0.06,0.16, armorDark, 0,2.02,-0.235);
+  bx(0.5,0.06,0.16, armorDark, 0,2.015,-0.235);   // 2.015: at 2.02 its top face landed on exactly the gorget collar's
   // transverse red crest (centurion style) running side-to-side
   const crestRidge = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.1,0.14), crestMat); crestRidge.position.set(0,2.6,0.02); g.add(crestRidge);
-  for(let i=0;i<7;i++){ const plume=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.18+((i*0.05)%0.09),0.05), crestMat);
-    plume.position.set(-0.3+i*0.1,2.70,0.02); g.add(plume); }
+  // Every plume its own depth and its own z. Built to one shared thickness at one shared z they all shared
+  // both z faces with their neighbours, which is six depth-buffer ties straight down the crest.
+  for(let i=0;i<7;i++){ const plume=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.18+((i*0.05)%0.09),0.05+((i*0.017)%0.03)), crestMat);
+    plume.position.set(-0.3+i*0.1,2.70,0.02+((i*0.013)%0.024)); g.add(plume); }
   [-1,1].forEach(sd=> bx(0.07,0.14,0.09, bronzeMat, sd*0.32,2.60,0.02));   // the crest box's end mounts
 
   // ---- shoulders: three-lame pauldrons, not a single pad
@@ -7943,8 +8100,10 @@ function makeChampion(){
   [[-0.36,0.06,0.30],[0,0,0.36],[0.36,-0.06,0.30]].forEach(([oz,dz,pw],i)=>{
     const p=abx(armL,0.1,1.02,pw, tunicMat, -0.12+dz,-0.5,0.26+oz*0.5); p.rotation.x=oz*0.55;
   });
-  abx(armL,0.12,0.09,0.94, bronzeMat, -0.13,-0.02,0.26);          // rim binding, top and bottom
-  abx(armL,0.12,0.09,0.94, bronzeMat, -0.13,-0.98,0.26);
+  // 0.21 wide, not 0.12: at 0.12 the binding's outer face landed on exactly the middle shield panel's, all
+  // the way along the shield. It now oversails all three panels, which is what a rim binding does anyway.
+  abx(armL,0.21,0.09,0.94, bronzeMat, -0.135,-0.05,0.26);         // rim binding, top and bottom (-0.05: higher up it met the pauldron, at -0.035 the shield panel's own top)
+  abx(armL,0.21,0.09,0.94, bronzeMat, -0.135,-0.98,0.26);
   const boss=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,0.1,10), bronzeMat);
   boss.rotation.z=Math.PI/2; boss.position.set(-0.21,-0.5,0.26); armL.add(boss);
   const bossCap=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.05,8), bronzeDark);
@@ -7989,7 +8148,7 @@ function makeChampion(){
     leg.position.set(sd*0.24, 0.92, 0);
     const lbx=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); leg.add(m); return m; };
     lbx(0.28,0.5,0.28, skinMat, 0,-0.25,0);                       // thigh
-    lbx(0.29,0.14,0.29, bronzeMat, 0,-0.40,0.03);                 // knee cop
+    lbx(0.32,0.14,0.32, bronzeMat, 0,-0.40,0.03);                 // knee cop, standing clear of the thigh's own width
     lbx(0.26,0.4,0.26, armorMat, 0,-0.61,0.02);                   // greave
     lbx(0.235,0.36,0.06, armorLit, 0,-0.61,0.155);                // its raised shin ridge
     lbx(0.28,0.14,0.4, voxMat(0x5a4020,{noise:10}), 0,-0.85,0.08); // caliga sole
@@ -8030,7 +8189,7 @@ function makeTiger(){
   // shoulder blade and a lighter dorsal line so the back is not one flat tone
   bx(0.46,0.46,0.6, furMat,  0,0.58,0.05);        // ribcage
   bx(0.5,0.5,0.5,   furMat,  0,0.6,-0.5);         // haunch
-  bx(0.44,0.14,0.5, furMat3, 0,0.79,-0.5);        // sunlit top of the haunch
+  bx(0.44,0.14,0.44, furMat3, 0,0.79,-0.5);       // sunlit top of the haunch (0.44 deep: at 0.5 it shared both the haunch's z faces)
   bx(0.4,0.14,0.58, furMat3, 0,0.77,0.05);        // and of the ribs
   bx(0.36,0.14,0.9, bellyMat,0,0.36,-0.05);       // belly
   bx(0.4,0.4,0.3,   furMat,  0,0.56,0.44);        // chest
@@ -9109,11 +9268,17 @@ function enterRomanWorld(banner){
   sky.visible = true;
   activeColliders = romanColliders;
   activeHeightZones = heightZonesRoman;
-  scene.background.set(0x8fd6f2); scene.fog.color.set(0x9fdcf0); scene.fog.near=40; scene.fog.far=220;
-  setDistantGround(0x9a9384); // dry grass and stony verge beyond the paving
-  skyTint(0xffffff); // clear neutral daylight
-  hemi.intensity=0.85; hemi.color.set(0xbfe3ff); hemi.groundColor.set(0x55603f);
-  sun.intensity=0.95; fill.intensity=0.25; fill.color.set(0xaecbe0);
+  // This used to be Alexandria's lighting copied verbatim — same sky, same tint, same hemisphere, same sun,
+  // same fill — with only the fog distance changed, which is a real part of why the two eras felt like one
+  // place. Rome gets its own air: a deeper, hotter sky, a DRY dust haze on the horizon instead of a blue
+  // marine one, and ground bounce off red terracotta rather than off Greek olive scrub. The sky tint stays
+  // neutral on purpose — the difference is in the sky's own colour and in what the ground throws back up,
+  // not in a wash laid over everything (the mistake the Giza map had to be dug out of).
+  scene.background.set(0x63a9e0); scene.fog.color.set(0xc6bda6); scene.fog.near=34; scene.fog.far=185;
+  setDistantGround(0xa8815c); // sun-baked red dust running out past the walls
+  skyTint(0xffffff);
+  hemi.intensity=0.74; hemi.color.set(0xd6e2ec); hemi.groundColor.set(0x6e4a2e);
+  sun.intensity=1.08; fill.intensity=0.22; fill.color.set(0xd8ccb8);
   camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);

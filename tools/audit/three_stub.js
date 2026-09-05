@@ -628,7 +628,16 @@ function frameBox(mesh, F){
   return {min:{x:p.x-hx,y:p.y-hy,z:p.z-hz}, max:{x:p.x+hx,y:p.y+hy,z:p.z+hz}};
 }
 // The comparable pair of boxes for a coplanarity test, or null when the two can never share a face plane.
+// Geometries whose bounding-box faces are not surfaces of the mesh at all. A LatheGeometry ring is hollow,
+// so its AABB is a solid block filling the whole arena and every object standing inside it reports as
+// sharing that block's floor plane. A torus and a sphere touch their AABB at a point or a line, never over
+// an area. Comparing AABB faces only says anything for shapes that actually HAVE a flat face there: boxes
+// always do, and a cylinder or cone does on its cap axis.
+const NON_PLANAR = {LatheGeometry:1, TorusGeometry:1, SphereGeometry:1};
+
 global.__comparableBoxes = function(meshA, boxA, meshB, boxB){
+  const ta = meshA.geometry && meshA.geometry.type, tb = meshB.geometry && meshB.geometry.type;
+  if(NON_PLANAR[ta] || NON_PLANAR[tb]) return null;
   if(isAxisAligned(meshA) && isAxisAligned(meshB)) return [boxA, boxB];
   if(orientKey(meshA) !== orientKey(meshB)) return null;
   const F = refFrame(meshA);
@@ -680,7 +689,11 @@ global.__coplanar = function(root, scale, eps, omin){
       const pairs = [[a.min[ax],c.min[ax]],[a.max[ax],c.max[ax]]];
       for(const [p,q] of pairs){
         const d = Math.abs(p-q);
-        if(d > 1e-9 && d < eps){
+        // d === 0 counts. Two faces at EXACTLY the same coordinate are the worst case there is — the depth
+        // buffer has nothing at all to separate them and the flicker is total — and this check used to skip
+        // them, requiring d > 1e-9. That hole is why a 14-cube mane ring sharing one front plane with the
+        // mass behind it, and a crown circlet sharing its underside with a brow ridge, both passed.
+        if(d < eps){
           hits.push({axis:ax, gap:Math.round(d*10000)/10000,
                      y:Math.round(a.min.y*1000)/1000,
                      ta:boxes[i].mesh.geometry.type, tb:boxes[j].mesh.geometry.type});
@@ -742,7 +755,7 @@ global.__worldCoplanar = function(group, eps, omin, cell){
         if(oa<=0) continue;
         for(const [pp,qq] of [[A.min[ax],B.min[ax]],[A.max[ax],B.max[ax]]]){
           const d=Math.abs(pp-qq);
-          if(d>1e-9 && d<eps){
+          if(d<eps){                     // d === 0 counts — see the note in __coplanar
             hits.push({axis:ax, gap:Math.round(d*10000)/10000,
                        x:Math.round((A.min.x+A.max.x)/2*10)/10,
                        y:Math.round((A.min.y+A.max.y)/2*10)/10,
