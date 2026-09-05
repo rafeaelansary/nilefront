@@ -2331,6 +2331,97 @@ function waterRippleTex(){
     }
   }
   bankStrip(20,1); bankStrip(-20,-1);
+
+  // ---- extra sand and planting along both banks. The terraces gave the bank a profile, but between them
+  // it was still bare ground: a river bank is the most fertile strip in Egypt, and it should read as
+  // choked with growth at the water and drifting into loose sand above it. ----
+  function bankGreenery(nearX, dir){
+    const RIVER_LEN = 260;
+    const sandMat  = new THREE.MeshLambertMaterial({map:_finish(gizaSandTex(),6), color:0xffe2a0});
+    const siltMat  = new THREE.MeshLambertMaterial({map:_finish(nileSiltTex(),5)});
+    const reedMat  = voxMat(0x4a7a4a,{noise:14});
+    const reedDry  = voxMat(0x8a8a4a,{noise:14});
+    const papyrus  = voxMat(0x5f9a52,{noise:14});
+    const bushMat  = voxMat(0x3f6b34,{noise:16});
+    const bushDark = voxMat(0x2c4d24,{noise:16});
+    const grassMat = voxMat(0x6b8a3a,{noise:14});
+
+    // loose wind-blown sand drifts scattered over the terraces, breaking up the flat tops
+    for(let i=0;i<70;i++){
+      const n=Math.abs(Math.sin(i*4.3+nearX)*4375.5%1), m=Math.abs(Math.cos(i*2.9+nearX)*911%1);
+      const z=-RIVER_LEN/2+i*3.7+(n-0.5)*4;
+      const off=6+m*20;
+      const w=1.6+n*3.4, h=0.25+m*0.7;
+      const dm=new THREE.Mesh(new THREE.BoxGeometry(w,h,w*0.8), (n>0.5?sandMat:siltMat));
+      dm.position.set(nearX+dir*off, h/2-0.08, z); dm.rotation.y=n*1.4;
+      dm.receiveShadow=true; nileWorld.add(dm);
+      // a smaller crest riding on about a third of them, so the drifts have a windward face
+      if(n>0.66){
+        const cm=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,h*0.6,w*0.42), sandMat);
+        cm.position.set(nearX+dir*(off+0.6), h*0.9-0.08, z+0.4); cm.rotation.y=n*1.4; nileWorld.add(cm);
+      }
+    }
+
+    // papyrus stands in the shallows — the plant the whole Nile reads by. Tall triangular stems with the
+    // burst of thin rays at the top, clumped rather than evenly spaced.
+    for(let c=0;c<22;c++){
+      const n=Math.abs(Math.sin(c*6.1+nearX)*733%1);
+      const cz=-RIVER_LEN/2+c*11.6+(n-0.5)*7;
+      const cx=nearX-dir*(0.5+n*2.2);
+      for(let k=0;k<7;k++){
+        const a=(k/7)*Math.PI*2, r=0.5+n*0.9;
+        const px=cx+Math.cos(a)*r, pz=cz+Math.sin(a)*r;
+        const h=1.6+((k*0.31+n)%1.5);
+        const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.06,h,5), papyrus);
+        stem.position.set(px,h/2-0.1,pz); stem.rotation.z=(k%2?1:-1)*0.05; nileWorld.add(stem);
+        // the umbel: a ring of short rays fanning off the stem top
+        for(let u=0;u<5;u++){
+          const ua=(u/5)*Math.PI*2;
+          const ray=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.045,0.045), papyrus);
+          ray.position.set(px+Math.cos(ua)*0.16, h-0.06, pz+Math.sin(ua)*0.16);
+          ray.rotation.y=ua; ray.rotation.z=-0.35; nileWorld.add(ray);
+        }
+      }
+    }
+
+    // reed beds along the mud flat — dense, low, and dry-tipped further up the bank
+    for(let i=0;i<40;i++){
+      const n=Math.abs(Math.sin(i*8.7+nearX)*577%1), m=Math.abs(Math.cos(i*3.3+nearX)*281%1);
+      const z=-RIVER_LEN/2+i*6.4+(n-0.5)*5;
+      const off=2.5+m*5;
+      for(let k=0;k<5;k++){
+        const h=0.9+((k*0.23+n)%1.0);
+        const blade=new THREE.Mesh(new THREE.BoxGeometry(0.07,h,0.07), (off>5?reedDry:reedMat));
+        blade.position.set(nearX+dir*(off+(k-2)*0.28), h/2-0.08, z+((k*0.4+m)%1.6)-0.8);
+        blade.rotation.z=(k-2)*0.11; nileWorld.add(blade);
+      }
+    }
+
+    // scrub bushes and grass tussocks on the silt terrace, thinning out as the bank rises into sand
+    for(let i=0;i<34;i++){
+      const n=Math.abs(Math.sin(i*5.7+nearX)*911%1), m=Math.abs(Math.cos(i*7.1+nearX)*433%1);
+      const z=-RIVER_LEN/2+i*7.5+(n-0.5)*6;
+      const off=9+m*11;
+      const bx=nearX+dir*off;
+      if(n>0.45){
+        // a bush: a couple of overlapping masses plus a darker core, not one cube
+        const bs=0.8+n*0.9;
+        const b1=new THREE.Mesh(new THREE.BoxGeometry(bs,bs*0.75,bs*0.9), bushMat);
+        b1.position.set(bx,bs*0.36,z); b1.rotation.y=n*1.2; b1.castShadow=true; nileWorld.add(b1);
+        const b2=new THREE.Mesh(new THREE.BoxGeometry(bs*0.7,bs*0.6,bs*0.66), bushDark);
+        b2.position.set(bx+0.3,bs*0.62,z+0.25); b2.rotation.y=-n; nileWorld.add(b2);
+      } else {
+        // a grass tussock: a fan of short blades
+        for(let k=0;k<5;k++){
+          const h=0.4+((k*0.17+m)%0.5);
+          const bl=new THREE.Mesh(new THREE.BoxGeometry(0.06,h,0.06), grassMat);
+          bl.position.set(bx+(k-2)*0.13, h/2-0.05, z+((k*0.3+n)%0.7)-0.35);
+          bl.rotation.z=(k-2)*0.19; nileWorld.add(bl);
+        }
+      }
+    }
+  }
+  bankGreenery(20,1); bankGreenery(-20,-1);
   for(let i=0;i<12;i++) bankReeds(20-4-Math.random()*3, -50+i*9+(Math.random()-0.5)*4, 5);
   for(let i=0;i<12;i++) bankReeds(-20+4+Math.random()*3, -50+i*9+(Math.random()-0.5)*4, 5);
   for(let i=0;i<5;i++) bankPalm(17, -40+i*20);
