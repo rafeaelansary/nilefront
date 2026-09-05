@@ -83,6 +83,7 @@ globalThis.__builders = {
   makeHippo: typeof makeHippo==='function' ? makeHippo : null,
   makeCrocodile: typeof makeCrocodile==='function' ? makeCrocodile : null,
   makeWarHoundPack: typeof makeWarHoundPack==='function' ? makeWarHoundPack : null,
+  makeWarHoundUnit: typeof makeWarHoundUnit==='function' ? makeWarHoundUnit : null,
   makeManticore: typeof makeManticore==='function' ? makeManticore : null,
   makeBasilisk: typeof makeBasilisk==='function' ? makeBasilisk : null,
   makeIfrit: typeof makeIfrit==='function' ? makeIfrit : null,
@@ -144,6 +145,10 @@ ACTORS = [
     ("makeGriffin",  "b=>b()",                              1.00, 0.00, "Griffin"),
     ("makeMedusa",   "b=>b()",                              1.25, 0.00, "Medusa (wave-6 elite)"),
     ("makeTiger",    "b=>b()",                              1.15, 0.00, "Tiger (Champion add)"),
+    # Roman-era regular roster. All three spawn through spawnBot() with no opts.scale, so they run at 1.0.
+    ("makeWarHoundPack","b=>b()",                           1.00, 0.00, "War hound pack"),
+    ("makeManticore","b=>b()",                              1.00, 0.00, "Manticore"),
+    ("makeBasilisk", "b=>b()",                              1.00, 0.00, "Basilisk"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor

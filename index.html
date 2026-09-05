@@ -871,6 +871,27 @@ function romanStuccoTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
   }
   return c; }
 
+// Arena sand — the harena the Colosseum is named for. Pale raked sand, dragged into parallel rake lines,
+// stained dark in patches. A flat orange field (which is what terracottaTex gave the pit) reads as nothing
+// at all underfoot; the rake lines are what make a floor look like a surface someone prepared.
+function arenaSandTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  x.fillStyle='#cbb287'; x.fillRect(0,0,P,P);
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*4.3+j*8.1)*4375.5%1);
+    const v=(198+(n-0.5)*30)|0;
+    x.fillStyle=`rgb(${v},${(v*0.87)|0},${(v*0.66)|0})`; x.fillRect(i,j,1,1);
+  }
+  for(let row=0;row<P;row+=4){                                    // rake lines: a light crest and its shadow
+    x.fillStyle='rgba(255,246,224,0.20)'; x.fillRect(0,row,P,1);
+    x.fillStyle='rgba(112,92,62,0.20)';   x.fillRect(0,row+1,P,1);
+  }
+  for(let i=0;i<12;i++){                                          // trodden and stained patches
+    const px=Math.random()*P, py=Math.random()*P, w=2+Math.random()*5, h=1.5+Math.random()*3.5;
+    x.fillStyle = Math.random()<0.55 ? 'rgba(96,72,48,0.24)' : 'rgba(255,250,232,0.16)';
+    x.fillRect(px-w/2,py-h/2,w,h);
+  }
+  return c; }
+
 const GRASS_TOP=grassTopTex(), DIRT=dirtTex(), GSIDE=grassSideTex();
 const groundMats=[
   new THREE.MeshLambertMaterial({map:_finish(grassSideTex(),30)}), // +x
@@ -1858,15 +1879,36 @@ addTarget = hydraColliders;
 const colosseumArena = new THREE.Group();
 addTarget = colosseumColliders;
 (function buildColosseumArena(){
-  const sandMat = new THREE.MeshLambertMaterial({map:_finish(terracottaTex(),18)});
+  const A = colosseumArena;
+  const sandMat = new THREE.MeshLambertMaterial({map:_finish(arenaSandTex(),16)});
   const stoneMat = voxMat(0xb8a888,{noise:12,pattern:'plate'});
   const stoneDark = voxMat(0x8a7a5c,{noise:12});
+  const travMat = new THREE.MeshLambertMaterial({map:_finish(travertineTex(),6)});
+  const marbleMat = voxMat(0xe6e0d0,{noise:8});
   const brickMat = new THREE.MeshLambertMaterial({map:_finish(romanBrickTex(),3)});
+  const ironMat = metalMatP(0x3f4348,45,0x9aa2ac);
+  const bronzeMat = metalMatP(0xad8730,85,0xfff2c8);
+  const goldMat = metalMatP(0xe0b040,85,0xfff2c8);
+  const purpleMat = new THREE.MeshLambertMaterial({color:0x5a2d82});
+  const canvasMat = new THREE.MeshLambertMaterial({color:0xd8cbb0});
+  const woodMat = voxMat(0x5a4028,{noise:14});
   const R=22, segs=32, tiers=6;
+  const bx=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; A.add(m); return m; };
+
   // the pit floor — sand, reaching just past the barrier wall
   // -0.2, not -0.1: a 0.4-tall floor centred at -0.1 tops out at +0.1, and spawnBot() places every actor
   // at y=0 regardless, so the Champion and its tigers stood inside the sand.
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(R*2.1,0.4,R*2.1), sandMat); floor.position.set(0,-0.2,0); colosseumArena.add(floor);
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(R*2.1,0.4,R*2.1), sandMat); floor.position.set(0,-0.2,0); A.add(floor);
+  // ---- the hypogeum. Four iron grates flush in the sand, where the lifts brought the beasts up. Nothing
+  // else in the game has them and they are the detail that says this pit has machinery under it.
+  [[-9,-9],[9,-9],[-9,9],[9,9]].forEach(([gx,gz])=>{
+    bx(3.4,0.16,3.4, stoneDark, gx,-0.02,gz);                        // the stone-kerbed opening
+    bx(3.0,0.1,3.0, voxMat(0x1a1610,{noise:8}), gx,0.02,gz);         // the dark beneath
+    for(let i=0;i<6;i++) bx(0.14,0.1,2.9, ironMat, gx-1.25+i*0.5,0.06,gz);   // the bars
+    for(let i=0;i<2;i++) bx(2.9,0.1,0.14, ironMat, gx,0.07,gz-0.9+i*1.8);
+    bx(0.5,0.14,0.5, ironMat, gx+1.35,0.07,gz+1.35);                 // its lifting ring boss
+  });
+
   const aisles = [0, Math.PI/2, Math.PI, Math.PI*1.5]; // 4 stairway aisles cutting through the seats
   const aisleHalf = 0.16; // half-width of each aisle gap, radians
   // The wall/seats used to be built from ~28 individually rotated, deliberately-OVERSIZED boxes per ring
@@ -1877,9 +1919,17 @@ addTarget = colosseumColliders;
   // faces. Real fix: build each ring as ONE continuous revolved mesh (LatheGeometry) instead of N
   // overlapping boxes — there is no seam to glitch because there's no second overlapping mesh at all.
   const wallProfile = [ new THREE.Vector2(R-0.8,0), new THREE.Vector2(R-0.8,4.2), new THREE.Vector2(R+0.8,4.2), new THREE.Vector2(R+0.8,0) ];
-  const wallMesh = new THREE.Mesh(new THREE.LatheGeometry(wallProfile, segs), stoneMat); colosseumArena.add(wallMesh);
+  const wallMesh = new THREE.Mesh(new THREE.LatheGeometry(wallProfile, segs), stoneMat); A.add(wallMesh);
+  // a marble dado facing the pit — the podium wall was faced in marble precisely so nothing could climb it
+  const dadoProfile = [ new THREE.Vector2(R-0.9,0.3), new THREE.Vector2(R-0.9,3.4), new THREE.Vector2(R-0.82,3.4), new THREE.Vector2(R-0.82,0.3) ];
+  A.add(new THREE.Mesh(new THREE.LatheGeometry(dadoProfile, segs), marbleMat));
+  // an inscribed cornice band above it, and the bronze anti-clawing rail on top of the wall
+  const inscProfile = [ new THREE.Vector2(R-0.92,3.5), new THREE.Vector2(R-0.92,3.95), new THREE.Vector2(R-0.84,3.95), new THREE.Vector2(R-0.84,3.5) ];
+  A.add(new THREE.Mesh(new THREE.LatheGeometry(inscProfile, segs), travMat));
   const railProfile = [ new THREE.Vector2(R-0.85,4.2), new THREE.Vector2(R-0.85,4.5), new THREE.Vector2(R+0.85,4.5), new THREE.Vector2(R+0.85,4.2) ];
-  const railMesh = new THREE.Mesh(new THREE.LatheGeometry(railProfile, segs), stoneDark); colosseumArena.add(railMesh);
+  const railMesh = new THREE.Mesh(new THREE.LatheGeometry(railProfile, segs), stoneDark); A.add(railMesh);
+  const guardProfile = [ new THREE.Vector2(R-0.9,4.5), new THREE.Vector2(R-0.9,4.85), new THREE.Vector2(R-0.78,4.85), new THREE.Vector2(R-0.78,4.5) ];
+  A.add(new THREE.Mesh(new THREE.LatheGeometry(guardProfile, segs), bronzeMat));
   // colliders still come from a per-segment box ring — that's collision math, not rendering, so it was
   // never the source of the glitch and stays as-is
   for(let i=0;i<segs;i++){ const a=i/segs*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a); addBox(ca*R,sa*R, 2*Math.PI*R/segs*1.08, 1.8); }
@@ -1896,24 +1946,120 @@ addTarget = colosseumColliders;
       const phiLen = endA - startA;
       const arcSegs = Math.max(3, Math.round(phiLen/(Math.PI*2)*segs));
       const seatArc = new THREE.Mesh(new THREE.LatheGeometry(seatProfile, arcSegs, startA, phiLen), mat);
-      colosseumArena.add(seatArc);
+      A.add(seatArc);
+      // a lighter nosing along the front edge of each tier, so the stands read as ranks of benches rather
+      // than a smooth ramp when seen from the pit
+      const nose = [ new THREE.Vector2(rad-halfD-0.12,yTop-0.3), new THREE.Vector2(rad-halfD-0.12,yTop),
+                     new THREE.Vector2(rad-halfD+0.05,yTop), new THREE.Vector2(rad-halfD+0.05,yTop-0.3) ];
+      A.add(new THREE.Mesh(new THREE.LatheGeometry(nose, arcSegs, startA, phiLen), travMat));
     }
     aisles.forEach(al=>{ const ca=Math.cos(al), sa=Math.sin(al);
-      const step=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.5,2.1), stoneDark); step.position.set(ca*rad,yTop-2.35,sa*rad); step.rotation.y=-al; colosseumArena.add(step); });
+      const step=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.5,2.1), stoneDark); step.position.set(ca*rad,yTop-2.35,sa*rad); step.rotation.y=-al; A.add(step); });
+  }
+  // ---- the vaulting under each aisle. The seat arcs deliberately STOP at the aisles, which left every
+  // aisle step above the third tier hanging in mid-air with nothing beside or beneath it. A real cavea's
+  // stairs run up a solid concrete rake; this is that rake — one sloping slab per aisle whose top surface
+  // follows the step tops exactly, so the flight reads as built into the stands rather than levitating.
+  {
+    const rise=(tiers-1)*1.5, run=(tiers-1)*2.1;
+    const pitch=Math.atan2(rise,run);                       // 0.62 rad at the current tier spacing
+    const cRad=28.6, cY=4.91;                               // derived so the slab's top face meets step tops
+    aisles.forEach(al=>{
+      const rake=new THREE.Mesh(new THREE.BoxGeometry(17,1.2,2.6), stoneDark);
+      rake.position.set(Math.cos(al)*cRad, cY, Math.sin(al)*cRad);
+      // three.js' XYZ Euler order applies Z first, then Y — so rotation.z pitches the slab up along its own
+      // length and rotation.y then swings that length onto the aisle's radial line
+      rake.rotation.z=pitch; rake.rotation.y=-al; A.add(rake);
+    });
   }
   // top cornice cap ring crowning the stands
   const outR = R + 2.2 + tiers*2.1;
-  const cap=new THREE.Mesh(new THREE.CylinderGeometry(outR+1.2,outR+0.8,1.4,segs,1,true), stoneDark); cap.position.set(0, 4.6+(tiers-1)*1.5+0.7, 0); colosseumArena.add(cap);
+  const capY = 4.6+(tiers-1)*1.5+0.7;
+  const cap=new THREE.Mesh(new THREE.CylinderGeometry(outR+1.2,outR+0.8,1.4,segs,1,true), stoneDark); cap.position.set(0, capY, 0); A.add(cap);
+
+  // ---- the velarium. Masts standing off the top cornice with awning panels angled in over the stands —
+  // the great retractable sun-shade, and the piece that stops the arena's skyline being a bare ring.
+  for(let i=0;i<16;i++){
+    const a=i/16*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a);
+    const mast=bx(0.45,7.0,0.45, woodMat, ca*(outR+1.0), capY+3.5, sa*(outR+1.0)); mast.rotation.y=-a;
+    bx(0.7,0.5,0.7, bronzeMat, ca*(outR+1.0), capY+7.15, sa*(outR+1.0));            // mast cap
+    // The corbel carries its length on local +X, which rotation.y=-a swings onto the RADIAL line — so it
+    // actually bridges from the cornice out to the mast it supports. Carried on local +Z it ran tangentially
+    // instead, and the four masts standing on the cardinal axes had a corbel that reached nothing.
+    const corbel=bx(1.9,0.5,0.5, stoneDark, ca*(outR+0.55), capY+0.5, sa*(outR+0.55)); corbel.rotation.y=-a;
+    // the awning panel, sloping in and down toward the pit
+    const b=(i+0.5)/16*Math.PI*2;
+    const panel=new THREE.Mesh(new THREE.BoxGeometry(2*Math.PI*(outR)/16*1.1,0.12,7.0), canvasMat);
+    panel.position.set(Math.cos(b)*(outR-2.6), capY+5.4, Math.sin(b)*(outR-2.6));
+    panel.rotation.y=-b; panel.rotation.x=-0.32; A.add(panel);
+    // rigging: a rope from each mast head down to the panel it carries
+    const rope=bx(0.1,0.1,4.4, woodMat, (ca+Math.cos(b))*0.5*(outR-0.6), capY+6.4, (sa+Math.sin(b))*0.5*(outR-0.6));
+    rope.rotation.y=-(a+b)/2; rope.rotation.x=0.5;
+  }
+
+  // ---- statues standing on the podium rail between the banners: the Colosseum's arcades and podium were
+  // full of them, and they give the ring above the wall something other than blank stone
+  for(let i=0;i<8;i++){
+    const a=(i+0.5)/8*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a), rr=R-0.1;
+    bx(0.9,0.45,0.9, travMat,  ca*rr,5.07,sa*rr);                    // plinth on the rail
+    bx(0.42,1.5,0.36, marbleMat, ca*rr,6.05,sa*rr);                  // body
+    bx(0.28,0.28,0.28, marbleMat, ca*rr,6.94,sa*rr);                 // head
+    bx(0.62,0.16,0.2, marbleMat, ca*rr,6.5,sa*rr);                   // an outflung arm
+    bx(0.34,0.12,0.34, goldMat, ca*rr,7.12,sa*rr);                   // gilded laurel
+  }
+
+  // ---- the imperial box (pulvinar): a canopied tribune set into the stands on the west side, with a
+  // gilded throne under a purple awning. The one place a player's eye can land that is unmistakably about
+  // WHO the fight is for.
+  (function pulvinar(){
+    const a=Math.PI, ca=Math.cos(a), sa=Math.sin(a), rr=R+1.6;
+    const cx=ca*rr, cz=sa*rr;
+    bx(4.0,1.2,7.2, travMat, cx,5.2,cz);                             // its platform, out over the stands
+    bx(4.4,0.3,7.6, stoneDark, cx,5.95,cz);
+    bx(0.4,1.1,7.2, bronzeMat, cx+2.0,6.65,cz);                      // balustrade toward the pit
+    for(let i=0;i<6;i++) bx(0.34,1.0,0.34, marbleMat, cx+2.0,6.6,cz-3.0+i*1.2);
+    [-1,1].forEach(sd=>[-1,1].forEach(sd2=>{
+      const px=cx+sd*1.5, pz=cz+sd2*3.0;
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.3,3.6,10), marbleMat);
+      col.position.set(px,7.9,pz); A.add(col);
+      bx(0.7,0.3,0.7, goldMat, px,9.85,pz);
+    }));
+    bx(4.6,0.4,7.8, purpleMat, cx,10.2,cz);                          // the canopy
+    bx(4.8,0.22,8.0, goldMat, cx,10.45,cz);
+    for(let i=0;i<7;i++) bx(0.5,0.5,0.16, goldMat, cx-1.9+i*0.63,9.9,cz+3.95);   // its fringe
+    bx(1.1,1.4,1.1, goldMat, cx-0.6,6.8,cz);                         // the throne
+    bx(1.2,0.3,1.2, bronzeMat, cx-0.6,7.6,cz);
+    bx(1.3,0.28,1.3, purpleMat, cx-0.6,6.25,cz);                     // its cushion
+  })();
+
   // imperial purple-and-gold banners draped over the barrier at the cardinal points
   [0.4,Math.PI-0.4,Math.PI+0.4,Math.PI*2-0.4].forEach(a=>{
     const ca=Math.cos(a), sa=Math.sin(a);
-    const banner=new THREE.Mesh(new THREE.BoxGeometry(2,4,0.2), new THREE.MeshLambertMaterial({color:0x5a2d82})); banner.position.set(ca*(R-0.9),3,sa*(R-0.9)); banner.rotation.y=-a; colosseumArena.add(banner);
-    const trim=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.4,0.26), metalMatP(0xe0b040,85,0xfff2c8)); trim.position.set(ca*(R-0.9),1.4,sa*(R-0.9)); trim.rotation.y=-a; colosseumArena.add(trim);
+    const banner=new THREE.Mesh(new THREE.BoxGeometry(2,4,0.2), purpleMat); banner.position.set(ca*(R-0.95),3,sa*(R-0.95)); banner.rotation.y=-a; A.add(banner);
+    const trim=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.4,0.26), goldMat); trim.position.set(ca*(R-0.95),1.4,sa*(R-0.95)); trim.rotation.y=-a; A.add(trim);
+    const wreath=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.0,0.24), goldMat); wreath.position.set(ca*(R-0.95),3.4,sa*(R-0.95)); wreath.rotation.y=-a; A.add(wreath);
+    const wcen=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.28), purpleMat); wcen.position.set(ca*(R-0.95),3.4,sa*(R-0.95)); wcen.rotation.y=-a; A.add(wcen);
   });
-  // two gladiator gates (dark arched tunnels) set into the barrier on the near/far axis
-  [1,-1].forEach(s=>{
-    const gate=new THREE.Mesh(new THREE.BoxGeometry(4.2,3.6,0.6), voxMat(0x201810,{noise:10})); gate.position.set(0,1.8,s*(R-0.7)); colosseumArena.add(gate);
-    const arch=new THREE.Mesh(new THREE.BoxGeometry(4.8,0.6,0.7), stoneMat); arch.position.set(0,3.7,s*(R-0.7)); colosseumArena.add(arch);
+  // ---- the two gates. They are not the same door: the Porta Triumphalis on the player's side is a grand
+  // bronze-leaved arch you enter through, and the Porta Libitinaria opposite — the one the dead left by —
+  // is deliberately plain, dark and barred.
+  [{s:1,grand:true},{s:-1,grand:false}].forEach(({s,grand})=>{
+    const gz=s*(R-0.7);
+    bx(4.2,3.6,0.6, voxMat(0x201810,{noise:10}), 0,1.8,gz);          // the tunnel mouth
+    bx(5.2,0.7,0.8, grand?travMat:stoneDark, 0,3.75,gz);             // lintel
+    [-1,1].forEach(sd=> bx(0.75,4.2,0.85, grand?travMat:stoneDark, sd*2.35,2.1,gz));   // jambs
+    if(grand){
+      // 2.26, not 2.3: at 2.3 the archivolt's outer edge landed 5mm from the gate jamb's own outer face.
+      const arch=new THREE.Mesh(new THREE.TorusGeometry(2.26,0.42,8,14,Math.PI), travMat);
+      arch.position.set(0,3.9,gz+0.1); arch.rotation.y=s>0?0:Math.PI; A.add(arch);
+      [-1,1].forEach(sd=> bx(1.9,3.2,0.22, bronzeMat, sd*1.0,1.7,gz-s*0.34));          // bronze door leaves
+      for(let i=0;i<4;i++)for(let j=0;j<2;j++) bx(0.26,0.26,0.1, goldMat, -1.5+j*3.0,0.7+i*0.8,gz-s*0.48);
+      bx(3.4,0.7,0.24, goldMat, 0,4.6,gz-s*0.3);                     // a gilded dedication panel
+    } else {
+      for(let i=0;i<7;i++) bx(0.18,3.4,0.18, ironMat, -1.8+i*0.6,1.7,gz-s*0.34);       // portcullis bars
+      bx(4.0,0.24,0.26, ironMat, 0,3.3,gz-s*0.34);
+      bx(4.0,0.24,0.26, ironMat, 0,0.2,gz-s*0.34);
+    }
   });
 
   // ---- cover in the pit. The Champion fires fast from chest height (y≈2.9), so cover is BROAD (wide
@@ -1921,8 +2067,11 @@ addTarget = colosseumColliders;
   // to fully break line of sight. Staggered rows from the player's entry (z≈17) toward the boss (0,-8) so
   // you can advance cover-to-cover instead of standing exposed. Each wall has a short return for corner cover.
   function coverWall(x,z,w,rot){
-    const wall=new THREE.Group(); wall.position.set(x,0,z); wall.rotation.y=rot||0; colosseumArena.add(wall);
+    const wall=new THREE.Group(); wall.position.set(x,0,z); wall.rotation.y=rot||0; A.add(wall);
     const main=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,0.7), stoneMat); main.position.set(0,1.7,0); wall.add(main);
+    // a travertine plinth and a string course, so a piece of cover is a built thing rather than a slab
+    const base=new THREE.Mesh(new THREE.BoxGeometry(w+0.3,0.45,0.95), travMat); base.position.set(0,0.225,0); wall.add(base);
+    const band=new THREE.Mesh(new THREE.BoxGeometry(w+0.1,0.24,0.82), stoneDark); band.position.set(0,2.2,0); wall.add(band);
     // main's own top is at y=3.4 (1.7 + half its 3.4 height); the crenellation height is randomised (0.35-0.65)
     // but was placed at a fixed y=3.55, so its bottom face landed anywhere from 0.025 to 0.175 units below
     // that top and shared main's own side-face planes across the overlap — this is the Colosseum's own copy
@@ -1944,18 +2093,37 @@ addTarget = colosseumColliders;
   // a couple of broken columns + toppled blocks filling the gaps, for varied cover heights
   function pitColumn(x,z,h){
     const n=Math.ceil(h/1.2);
-    for(let s=0;s<n;s++){ const d=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.6,1.2,10), stoneMat); d.position.set(x,0.6+s*1.2,z); d.rotation.y=s*0.3; colosseumArena.add(d); }
-    const capBlk=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.4,1.5), stoneDark); capBlk.position.set(x,0.6+n*1.2,z); colosseumArena.add(capBlk);
+    bx(1.7,0.3,1.7, travMat, x,0.15,z);                              // its base block
+    for(let s=0;s<n;s++){ const d=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.6,1.2,10), stoneMat); d.position.set(x,0.9+s*1.2,z); d.rotation.y=s*0.3; A.add(d); }
+    // a broken, uneven top rather than a flat cap — this is a ruin, and a flat lid reads as a bollard
+    bx(1.5,0.4,1.5, stoneDark, x,0.9+n*1.2,z);
+    bx(0.9,0.34,1.1, stoneDark, x-0.2,0.9+n*1.2+0.35,z+0.15);
     addBox(x,z,1.4,1.4);
   }
   pitColumn(-13,3,3.4); pitColumn(13,3,3.4);
   function pitBlock(x,z){
-    const b1=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.6,2.0), stoneMat); b1.position.set(x,0.8,z); b1.rotation.y=Math.random()*0.4; colosseumArena.add(b1);
+    const b1=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.6,2.0), stoneMat); b1.position.set(x,0.8,z); b1.rotation.y=Math.random()*0.4; A.add(b1);
+    const b2=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.7,1.2), travMat); b2.position.set(x+0.3,1.9,z-0.2); b2.rotation.y=Math.random()*0.5; A.add(b2);
     addBox(x,z,2.7,2.1);
   }
   pitBlock(-2,10); pitBlock(2,-6);
+  // a gladiator's arms rack against the wall on the entry side — a trident, a net weight and two spears in
+  // a wooden stand. Small, but it is the thing that says people fight here for a living.
+  (function armsRack(){
+    const x=-16, z=14;
+    bx(2.6,0.3,0.7, woodMat, x,0.15,z);
+    bx(2.6,0.22,0.24, woodMat, x,1.7,z);
+    [-1,1].forEach(sd=> bx(0.22,1.8,0.22, woodMat, x+sd*1.15,0.9,z));
+    bx(0.14,2.6,0.14, woodMat, x-0.8,1.3,z);                         // trident haft
+    bx(0.7,0.16,0.16, ironMat, x-0.8,2.6,z);
+    for(let i=0;i<3;i++) bx(0.12,0.5,0.12, ironMat, x-1.1+i*0.3,2.9,z);
+    [0.1,0.6].forEach(ox=>{ const sp=bx(0.1,2.4,0.1, woodMat, x+ox,1.2,z); sp.rotation.z=0.12;
+      bx(0.16,0.34,0.16, ironMat, x+ox+0.16,2.5,z); });
+    bx(0.9,0.5,0.5, voxMat(0x6a5a3a,{noise:14}), x+1.0,0.55,z+0.2);  // the folded net
+    addBox(x,z,2.8,1.0);
+  })();
 
-  colosseumArena.add(new THREE.AmbientLight(0xffe6c0, 0.5));
+  A.add(new THREE.AmbientLight(0xffe6c0, 0.5));
 })();
 
 // ===== IFRIT ARENA (Boss IV) — the Citadel's inner courtyard: a walled, crenellated square, open sky,
@@ -6723,40 +6891,106 @@ function makeMedusa(){
 }
 
 
-// war hound (single unit): a monstrous armored guard-dog, not a person in armor — low, muscular
-// quadruped body, bared fangs, glowing eyes, studded bronze war-gear (collar + spine plates) instead
-// of held weapons. The shared AI loop turns bots with mesh.lookAt(), which — for a plain Object3D (not
-// a camera) — points local +Z at the target, so this is built facing +Z directly with no flip, same as
-// griffin/medusa (minotaur is the one exception: it bypasses lookAt() and sets rotation.y directly,
-// which needs the opposite convention, hence its own flip). Only ever used as a building block for the
-// pack below — never spawned alone.
+// war hound: a Molossian war dog — the mastiff Rome actually fielded, not a wolf. Low, enormously heavy
+// through the chest and shoulders, with a blunt brachycephalic skull, hanging jowls and an undershot jaw.
+// The identifying silhouette cue is the SPIKED BRONZE WAR-COLLAR: eight spikes radiating off a broad band,
+// big enough to read from across the map, plus a studded leather back-plate with hanging scale skirts.
+//
+// The shared AI loop turns bots with mesh.lookAt(), which — for a plain Object3D (not a camera) — points
+// local +Z at the target, so this is built facing +Z directly with no flip, same as griffin/medusa
+// (minotaur is the one exception: it bypasses lookAt() and sets rotation.y directly, which needs the
+// opposite convention, hence its own flip). Only ever a building block for the pack below.
 function makeWarHoundUnit(){
   const g = new THREE.Group();
   const body = g;
-  const furMat = voxMat(0x201d19,{noise:16});
-  const furMat2 = voxMat(0x4a453d,{noise:14});
-  const bronzeMat = metalMatP(0xad8730,85,0xfff2c8);
+  const furDark = voxMat(0x241f1a,{noise:16});      // the coat
+  const furMid  = voxMat(0x473f34,{noise:14});      // brindle, muzzle, jowls
+  const furPale = voxMat(0x8c7e68,{noise:12});      // chest blaze, brows, socks — the light end of the range
+  const bronze  = metalMatP(0xad8730,85,0xfff2c8);
+  const bronzeD = metalMatP(0x6f5620,55,0xc8a860);
+  const leather = voxMat(0x4a3320,{noise:14});
   const fangMat = new THREE.MeshLambertMaterial({color:0xe8e4d4});
-  const eyeMat = new THREE.MeshBasicMaterial({color:0xff3a1a,fog:false});
+  const gumMat  = new THREE.MeshLambertMaterial({color:0x8a2a2a});
+  const noseMat = new THREE.MeshLambertMaterial({color:0x14100c});
+  const eyeMat  = new THREE.MeshBasicMaterial({color:0xff3a1a,fog:false});
+  const bx=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); body.add(m); return m; };
 
-  const bodyBox = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.85), furMat); bodyBox.position.set(0,0.58,0); body.add(bodyBox);
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.36,0.3,0.3), furMat2); chest.position.set(0,0.55,0.42); body.add(chest);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.3,0.28,0.32), furMat); head.position.set(0,0.78,0.62); body.add(head);
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.16,0.24), furMat2); snout.position.set(0,0.68,0.85); body.add(snout);
-  [-1,1].forEach(side=>{
-    const fang=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.1,4), fangMat); fang.position.set(side*0.08,0.6,0.94); fang.rotation.x=Math.PI; body.add(fang);
-    const ear=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.2,4), furMat); ear.position.set(side*0.13,0.98,0.55); ear.rotation.z=side*0.25; body.add(ear);
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.05,0.04), eyeMat); eye.position.set(side*0.1,0.82,0.78); body.add(eye);
+  // ---- legs. Upper and lower segments so the stance has a visible bend, and the paw's underside is the
+  // model's y=0 — spawnBot() drops every actor at y=0 with no terrain sampling, so this has to be exact.
+  [[-0.21,0.36,1],[0.21,0.36,1],[-0.23,-0.44,0],[0.23,-0.44,0]].forEach(([lx,lz,front])=>{
+    bx(0.21,0.40,0.23, furDark, lx, 0.58, lz);                       // upper
+    bx(0.17,0.34,0.18, furDark, lx, 0.29, lz);                       // lower
+    bx(0.175,0.09,0.185, furPale, lx, 0.20, lz);                     // pale sock
+    bx(0.22,0.13,0.30, furMid, lx, 0.065, lz+0.03);                  // paw, underside on 0
+    for(let i=0;i<3;i++) bx(0.05,0.05,0.07, furPale, lx-0.06+i*0.06, 0.045, lz+0.20);   // toes
+    if(front) bx(0.09,0.14,0.09, furMid, lx+(lx>0?0.09:-0.09), 0.24, lz-0.02);          // dewclaw
   });
-  // spiked bronze war-collar + armored spine plates — the studded military gear that reads as "Roman" at a glance
-  const collar = new THREE.Mesh(new THREE.BoxGeometry(0.36,0.12,0.34), bronzeMat); collar.position.set(0,0.68,0.42); body.add(collar);
-  for(let i=0;i<3;i++){ const spike=new THREE.Mesh(new THREE.ConeGeometry(0.035,0.1,4), bronzeMat); spike.position.set(-0.12+i*0.12,0.76,0.42); body.add(spike); }
-  for(let i=0;i<3;i++){ const plate=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.08,0.14), bronzeMat); plate.position.set(0,0.82,0.1-i*0.24); body.add(plate); }
-  [[-0.16,0.28],[0.16,0.28],[-0.16,-0.3],[0.16,-0.3]].forEach(([lx,lz])=>{
-    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.4,0.14),furMat); leg.position.set(lx,0.24,lz); body.add(leg);
-    const paw=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.1,0.18), furMat2); paw.position.set(lx,0.06,lz); body.add(paw);
+
+  // ---- body: deep chest, tucked loin, heavy haunch. Widths deliberately stepped (0.60 / 0.50 / 0.58) so
+  // no two adjacent masses share a side plane.
+  bx(0.56,0.58,0.64, furDark, 0, 0.92, 0.24);                        // ribcage
+  bx(0.50,0.48,0.52, furDark, 0, 0.88,-0.24);                        // loin
+  bx(0.58,0.54,0.46, furDark, 0, 0.86,-0.58);                        // haunch
+  bx(0.42,0.16,0.94, furPale, 0, 0.66,-0.06);                        // pale belly
+  bx(0.62,0.36,0.40, furDark, 0, 1.06, 0.32);                        // shoulder mass, standing above the ribs
+  bx(0.34,0.30,0.26, furPale, 0, 0.86, 0.56);                        // chest blaze
+  // brindle: thin mid-tone stripes standing proud of each flank
+  [-1,1].forEach(sd=> [[0.30,0.295],[0.06,0.295],[-0.22,0.265],[-0.48,0.305]].forEach(([sz,sx],i)=>
+    bx(0.05,0.34-i*0.03,0.07, furMid, sd*sx, 0.92, sz)));
+
+  // ---- neck and head. A Molossian skull is short, broad and deep — the muzzle is a stub, not a snout.
+  bx(0.44,0.40,0.36, furDark, 0, 1.12, 0.62);                        // neck
+  bx(0.46,0.40,0.44, furDark, 0, 1.24, 0.88);                        // skull
+  bx(0.48,0.11,0.20, furMid,  0, 1.42, 0.96);                        // heavy brow ridge
+  [-1,1].forEach(sd=> bx(0.14,0.06,0.10, furPale, sd*0.14, 1.44, 1.02));  // pale brow spots
+  bx(0.32,0.22,0.32, furMid,  0, 1.16, 1.14);                        // muzzle
+  bx(0.26,0.06,0.24, furDark, 0, 1.28, 1.16);                        // wrinkled bridge
+  bx(0.22,0.05,0.20, furDark, 0, 1.335,1.13);
+  [-1,1].forEach(sd=> bx(0.13,0.20,0.24, furMid, sd*0.18, 1.06, 1.06));  // jowls, hanging either side
+  const jaw=bx(0.28,0.14,0.32, furMid, 0, 1.00, 1.14); jaw.rotation.x=0.18;  // undershot lower jaw, open
+  bx(0.22,0.05,0.20, gumMat, 0, 1.05, 1.20);                         // gums showing between the jaws
+  bx(0.16,0.05,0.20, gumMat, 0, 1.03, 1.22);                         // tongue
+  bx(0.18,0.11,0.10, noseMat, 0, 1.245,1.315);                       // nose
+  [-1,1].forEach(sd=>{
+    const f1=new THREE.Mesh(new THREE.ConeGeometry(0.033,0.13,4), fangMat);   // upper canines, pointing down
+    f1.position.set(sd*0.10,1.075,1.24); f1.rotation.x=Math.PI; body.add(f1);
+    const f2=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.10,4), fangMat);   // lower canines, pointing up
+    f2.position.set(sd*0.11,1.06,1.27); body.add(f2);
+    bx(0.05,0.04,0.05, fangMat, sd*0.045, 1.115, 1.27);              // incisors
+    bx(0.09,0.07,0.06, eyeMat, sd*0.155, 1.335, 1.10);               // eyes
   });
-  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.4),furMat); tail.position.set(0,0.62,-0.55); tail.rotation.x=0.5; body.add(tail);
+  // cropped ears — war dogs were docked and cropped so nothing could be grabbed. The right one is torn
+  // through, a small asymmetry that stops the model reading as a mirrored template.
+  bx(0.10,0.16,0.12, furDark, -0.19, 1.50, 0.86);
+  bx(0.10,0.09,0.12, furDark,  0.19, 1.465,0.86);
+  bx(0.04,0.07,0.12, furMid,   0.205,1.545,0.86);                    // the torn remnant
+  bx(0.07,0.03,0.05, furPale, -0.13, 1.29, 1.05);                    // an old scar across the muzzle
+
+  // ---- the war-collar: a broad bronze band with eight spikes radiating off it. This is the piece that
+  // says "Roman military dog" rather than "big dog", so it is deliberately oversized.
+  bx(0.52,0.22,0.48, bronze, 0, 1.10, 0.60);
+  bx(0.54,0.06,0.50, bronzeD, 0, 1.22, 0.60);                        // its rim (1.22: at 1.205 its top face landed 5mm under the shoulder mass's)
+  bx(0.54,0.06,0.50, bronzeD, 0, 0.995,0.60);
+  for(let i=0;i<8;i++){
+    const a=i/8*Math.PI*2, cx=Math.sin(a), cy=Math.cos(a);
+    const sp=new THREE.Mesh(new THREE.ConeGeometry(0.045,0.19,4), bronze);
+    sp.position.set(cx*0.30, 1.10+cy*0.24, 0.60); sp.rotation.z=-a; body.add(sp);
+  }
+  bx(0.10,0.14,0.09, bronzeD, 0, 0.94, 0.74);                        // hanging ring at the throat
+  bx(0.16,0.05,0.08, bronze,  0, 0.86, 0.74);
+
+  // ---- barding: a studded leather back-plate with bronze scale skirts hanging down each flank
+  bx(0.54,0.10,0.50, leather, 0, 1.28, 0.16);
+  for(let i=0;i<3;i++)for(let j=0;j<2;j++)
+    bx(0.07,0.05,0.07, bronze, -0.16+i*0.16, 1.345, 0.02+j*0.24);    // studs
+  [-1,1].forEach(sd=> { for(let i=0;i<4;i++){
+    bx(0.05,0.13,0.11, bronze,  sd*0.30, 1.15, 0.30-i*0.14);
+    bx(0.05,0.11,0.11, bronzeD, sd*0.30, 1.02, 0.30-i*0.14);
+  }});
+
+  // docked tail — short and carried high, the way a cropped working dog's is
+  const tail=bx(0.15,0.15,0.28, furDark, 0, 1.02,-0.86); tail.rotation.x=0.6;
+  bx(0.12,0.12,0.10, furPale, 0, 1.08,-0.955);
   return g;
 }
 // war hound pack: 3 hound units in one formation, sharing a single hitbox/HP/AI — same "one pack entity"
@@ -6764,7 +6998,9 @@ function makeWarHoundUnit(){
 // regular roster (see spawnWave), so hounds read as a themed pack encounter, not filler grunts.
 function makeWarHoundPack(){
   const g = new THREE.Group();
-  const formation = [ {x:-0.55, z:0.18, ry:-0.3, s:1.0}, {x:0.5, z:0.05, ry:0.35, s:0.95}, {x:0.0, z:-0.4, ry:0.05, s:1.05} ];
+  // spread wider than before: the units are considerably heavier now and at the old offsets they stood
+  // inside one another
+  const formation = [ {x:-0.86, z:0.34, ry:-0.30, s:1.0}, {x:0.82, z:0.12, ry:0.34, s:0.93}, {x:-0.04, z:-0.78, ry:0.05, s:1.07} ];
   formation.forEach(f=>{
     const unit = makeWarHoundUnit();
     unit.position.set(f.x,0,f.z); unit.rotation.y=f.ry; unit.scale.setScalar(f.s);
@@ -6773,7 +7009,7 @@ function makeWarHoundPack(){
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.35, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
+  marker.position.set(0, 1.95, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
   marker.raycast = function(){};
   g.add(marker); g.userData.marker = marker;
   return g;
@@ -6791,7 +7027,8 @@ function makeManticore(){
   const furMat2 = voxMat(0x9a622a,{noise:9});
   const maneMat = voxMat(0x5a3216,{noise:8});    // deep russet mane — lower noise so the cubes read clean/chunky, not fuzzy
   const chitinMat = voxMat(0x2e1c14,{noise:14}); // dark, matte chitin for the tail — reads as insect armor, not dragon scale
-  const wingMat = voxMat(0x241010,{noise:12});
+  const wingMat = voxMat(0x3a1a14,{noise:12});
+  const wingMat2 = voxMat(0x2a1010,{noise:10});
   const stingerMat = new THREE.MeshBasicMaterial({color:0xff5a1a,fog:false});
 
   // bigger lion body — a longer, heavier torso with a shoulder/chest hump at the front and a neck that
@@ -6799,6 +7036,11 @@ function makeManticore(){
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.54,0.58,1.2), furMat); torso.position.set(0,0.74,-0.2); body.add(torso);
   const chest = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.54,0.44), furMat2); chest.position.set(0,0.82,0.3); body.add(chest);
   const neck = new THREE.Mesh(new THREE.BoxGeometry(0.36,0.4,0.34), furMat2); neck.position.set(0,0.98,0.52); body.add(neck);
+  // haunch and shoulder muscle, so the flanks are not two flat slabs
+  const haunch = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.5,0.42), furMat); haunch.position.set(0,0.7,-0.58); body.add(haunch);
+  [-1,1].forEach(sd=>{
+    const sh=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.3), furMat2); sh.position.set(sd*0.29,0.82,0.24); body.add(sh);
+  });
 
   // ==== manticore head: clean voxel lion from the reference portrait ====
   // Built around HY/HZ so the whole head sits FORWARD of the body on the neck, not buried in the chest.
@@ -6812,7 +7054,8 @@ function makeManticore(){
   // mane as CHUNKY big distinct cubes (the reference reads as ~8 big blocks across, not a fuzzy ball).
   // A solid dark backing mass for volume, then ONE clean ring of large cubes — no noisy double-ring.
   const maneMass = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.98,0.5), maneMat); maneMass.position.set(0,HY-0.05,HZ-0.06); body.add(maneMass);
-  const maneMassW = new THREE.Mesh(new THREE.BoxGeometry(0.72,1.12,0.46), maneMat); maneMassW.position.set(0,HY-0.05,HZ-0.06); body.add(maneMassW); // taller narrow → oval
+  // 0.76 wide, not 0.72: at 0.72 its side faces landed 3mm from four of the ring cubes' outer faces.
+  const maneMassW = new THREE.Mesh(new THREE.BoxGeometry(0.76,1.12,0.46), maneMat); maneMassW.position.set(0,HY-0.05,HZ-0.06); body.add(maneMassW); // taller narrow → oval
   for(let i=0;i<14;i++){ const a=(i/14)*Math.PI*2;
     const mat = i%3===0 ? maneMatLight : maneMat;
     const t=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.28,0.26), mat);   // big chunky cubes
@@ -6846,21 +7089,86 @@ function makeManticore(){
     const ear=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.15,0.12), maneMat); ear.position.set(side*0.34,HY+0.36,HZ+0.02); body.add(ear);
     const earIn=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.04), furMat2); earIn.position.set(side*0.34,HY+0.35,HZ+0.09); body.add(earIn);
   });
-  // bat wings — more detail: a two-part leathery membrane, four finger-bones fanning across it, and a
-  // clawed hook at the leading edge. Angled up more (steeper rotation.z + raised root) so they sweep
-  // upward off the shoulders instead of sitting out flat.
-  [-1,1].forEach(side=>{
-    const wingRoot=new THREE.Group(); wingRoot.position.set(side*0.34,1.08,-0.1); wingRoot.rotation.z=side*0.5; wingRoot.rotation.y=side*0.35; body.add(wingRoot);
-    const mem1=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.05,0.46), wingMat); mem1.position.set(side*0.28,0,-0.02); wingRoot.add(mem1);
-    const mem2=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.045,0.32), wingMat); mem2.position.set(side*0.66,-0.09,-0.08); wingRoot.add(mem2);
-    for(let i=0;i<4;i++){ const bone=new THREE.Mesh(new THREE.BoxGeometry(0.92,0.03,0.03), furMat2); bone.position.set(side*0.42,0.03,-0.18+i*0.11); bone.rotation.y=side*(i-1.5)*0.12; wingRoot.add(bone); }
-    const wclaw=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.13,4), inkMat); wclaw.position.set(side*0.88,-0.02,-0.18); wclaw.rotation.z=side*1.2; wingRoot.add(wclaw);
+
+  // ---- bat wings, rebuilt. The previous pair was two flat membrane slabs with four identical bones laid
+  // across them: every bone shared the same two horizontal planes, which is eight z-fighting pairs per
+  // model, and the outer membrane and the wing claw touched nothing at all and rendered as loose shards.
+  // This is real wing anatomy instead — humerus, radius, then four fingers fanning from the wrist with the
+  // membrane strung BETWEEN consecutive fingers. Each finger and each membrane panel sits at its own depth
+  // and its own angle, so no two share a plane, and every piece is placed by walking out from the joint
+  // before it, so nothing can end up disconnected.
+  [-1,1].forEach(sd=>{
+    const wing=new THREE.Group();
+    wing.position.set(sd*0.30,1.06,-0.06);
+    // Both wings are built from IDENTICAL local geometry running out along local +X; the left one is simply
+    // swung round by pi. Mirroring with a negative scale instead would flip face winding.
+    wing.rotation.y = sd>0 ? 0.34 : Math.PI-0.34;
+    wing.rotation.z = 0.46;                       // sweeps the whole wing up off the shoulder
+    body.add(wing);
+    let px=0.05, py=0;
+    // a box carrying its length on local +X and rotated by rotation.z = t runs along (cos t, sin t); the
+    // walk below steps along exactly that vector, which is the pairing the Hydra's neck bug got wrong
+    function bone(len,th,dep,ang,mat,zc){
+      const dx=Math.cos(ang), dy=Math.sin(ang);
+      const m=new THREE.Mesh(new THREE.BoxGeometry(len,th,dep), mat);
+      m.position.set(px+dx*len/2, py+dy*len/2, zc||0); m.rotation.z=ang; wing.add(m);
+      px+=dx*len*0.88; py+=dy*len*0.88;           // 0.88 = the next piece starts inside this one
+      return m;
+    }
+    bone(0.30,0.11,0.14, 0.34, furMat2, 0);        // humerus
+    bone(0.32,0.085,0.11,-0.12, furMat2, 0);       // radius
+    const wx=px, wy=py;                            // the wrist — every finger fans from here
+    // A wrist block deep enough to span every finger's depth. Without it the outermost fingers, set back
+    // and forward of the radius, touched nothing at all and rendered as loose shards.
+    // 0.38 deep, comfortably past the outermost finger and past every membrane panel — at 0.30 its own
+    // bounding faces kept landing a few thousandths from theirs.
+    const wrist=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.17,0.38), furMat2);
+    wrist.position.set(wx,wy,0); wing.add(wrist);
+    // Angles, lengths, thicknesses AND depths all differ per finger. Any two of them built to the same
+    // pattern end up with bounding faces a few thousandths apart once the wing's own rotation is applied.
+    const fingers=[{a:-0.66,l:0.40,t:0.050,z:-0.105},{a:-0.28,l:0.50,t:0.044,z:-0.035},
+                   {a: 0.05,l:0.53,t:0.038,z: 0.035},{a: 0.37,l:0.44,t:0.033,z: 0.105}];
+    fingers.forEach(f=>{
+      const m=new THREE.Mesh(new THREE.BoxGeometry(f.l,f.t,f.t), wingMat2);
+      m.position.set(wx+Math.cos(f.a)*f.l/2, wy+Math.sin(f.a)*f.l/2, f.z); m.rotation.z=f.a; wing.add(m);
+    });
+    // Membranes hang between consecutive fingers, and are deliberately INSET well short of the fingertips:
+    // partly because a monster's wing reading as torn and ragged is better than a clean sail, and partly
+    // because a panel run out to the same radius as the finger beside it lands its bounding faces
+    // thousandths away from that finger's, which is a z-fight. Each bay also gets its own reach and slack.
+    const bay=[{k:0.62,r:0.36,dz:-0.05},{k:0.70,r:0.42,dz:0.03},{k:0.58,r:0.34,dz:-0.06}];
+    for(let i=0;i<3;i++){
+      const a=(fingers[i].a+fingers[i+1].a)/2 + bay[i].dz, l=Math.min(fingers[i].l,fingers[i+1].l);
+      const spread=Math.abs(fingers[i+1].a-fingers[i].a)*l*(1.0+i*0.08);
+      const m=new THREE.Mesh(new THREE.BoxGeometry(l*bay[i].k,spread,0.022), i%2?wingMat:wingMat2);
+      m.position.set(wx+Math.cos(a)*l*bay[i].r, wy+Math.sin(a)*l*bay[i].r, (fingers[i].z+fingers[i+1].z)/2);
+      // each panel sags by its own amount. A slack membrane is not in the same plane as the bones it hangs
+      // between, which is both what a real wing does and what stops these panels' faces settling parallel
+      // and a few thousandths away from a finger's.
+      m.rotation.z=a; m.rotation.x=0.20+i*0.11; wing.add(m);
+    }
+    // the membrane sheet running back from the wrist to the flank, and the alula claw at the wrist
+    const inner=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.30,0.02), wingMat);
+    inner.position.set(wx*0.55, wy*0.55-0.09, 0.0); inner.rotation.z=0.1; wing.add(inner);
+    const claw=new THREE.Mesh(new THREE.ConeGeometry(0.042,0.14,4), inkMat);
+    claw.position.set(wx+0.03, wy+0.07, 0.0); claw.rotation.z=-0.5; wing.add(claw);
+    // a ruff of mane cubes covering the joint where the wing meets the shoulder
+    for(let i=0;i<3;i++){
+      const r=new THREE.Mesh(new THREE.BoxGeometry(0.17-i*0.02,0.17-i*0.02,0.17-i*0.02), i%2?maneMat:maneMatLight);
+      r.position.set(-0.02+i*0.05, -0.06+i*0.07, -0.05+i*0.05); wing.add(r);
+    }
   });
-  // round, padded lion paws with visible toes — not clawed dragon feet — spread wider for the bigger body
-  [[-0.2,0.4],[0.2,0.4],[-0.2,-0.46],[0.2,-0.46]].forEach(([lx,lz])=>{
-    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.5,0.22),furMat2); leg.position.set(lx,0.42,lz); body.add(leg);
-    const paw=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.14,0.28),furMat2); paw.position.set(lx,0.18,lz); body.add(paw);
-    const toe=new THREE.Mesh(new THREE.BoxGeometry(0.23,0.05,0.09), furMat); toe.position.set(lx,0.12,lz+0.13); body.add(toe);
+  // round, padded lion paws with visible toes — not clawed dragon feet. Widths stepped 0.24 / 0.30 / small
+  // so the leg, the pad and the toes never line their side faces up, and the pad's underside is exactly 0:
+  // spawnBot() places every actor at y=0, and the old pads floated 0.095 clear of the ground.
+  [[-0.21,0.42],[0.21,0.42],[-0.21,-0.48],[0.21,-0.48]].forEach(([lx,lz])=>{
+    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.58,0.24),furMat2); leg.position.set(lx,0.45,lz); body.add(leg);
+    const pad=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.18,0.34),furMat2); pad.position.set(lx,0.09,lz); body.add(pad);
+    for(let i=0;i<3;i++){
+      const toe=new THREE.Mesh(new THREE.BoxGeometry(0.085,0.085,0.11), furMat); toe.position.set(lx-0.085+i*0.085,0.05,lz+0.19); body.add(toe);
+      const cl=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.08,4), creamMat);
+      cl.position.set(lx-0.085+i*0.085,0.05,lz+0.26); cl.rotation.x=-Math.PI/2; body.add(cl);
+    }
   });
   // segmented scorpion tail in dark chitin (not the body's fur color), chain-built like the bow-limb
   // code (heldLimb) — each segment's start is the previous segment's actual end point, with a touch of
@@ -6870,17 +7178,22 @@ function makeManticore(){
   {
     let ty=0.85, tz=-0.5, theta=-1.9;
     const overlap=0.015;
-    [{s:0.16,len:0.26,dt:0.5},{s:0.14,len:0.24,dt:0.6},{s:0.12,len:0.22,dt:0.7},{s:0.1,len:0.19,dt:0.8},{s:0.08,len:0.15,dt:0.7}].forEach(seg=>{
+    [{s:0.18,len:0.26,dt:0.5},{s:0.155,len:0.24,dt:0.6},{s:0.13,len:0.22,dt:0.7},{s:0.105,len:0.19,dt:0.8},{s:0.085,len:0.15,dt:0.7}].forEach((seg,i)=>{
       const thetaMid = theta + seg.dt/2;
       const dy=Math.cos(thetaMid), dz=Math.sin(thetaMid);
       const cy = ty + (seg.len/2)*dy, cz = tz + (seg.len/2)*dz;
       const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.len,seg.s), chitinMat);
       m.position.set(0,cy,cz); m.rotation.x = thetaMid; body.add(m);
+      // a raised ridge plate on each segment, so the tail is armoured rather than a smooth taper
+      const pl=new THREE.Mesh(new THREE.BoxGeometry(seg.s*0.5,seg.len*0.6,seg.s*0.5), wingMat2);
+      pl.position.set(0,cy,cz); pl.rotation.x=thetaMid; body.add(pl);
       const tipY = ty+seg.len*dy, tipZ = tz+seg.len*dz;
       ty = tipY - overlap*dy; tz = tipZ - overlap*dz;
       theta += seg.dt;
     });
-    const stinger = new THREE.Mesh(new THREE.ConeGeometry(0.055,0.16,4), stingerMat); stinger.position.set(0,ty,tz); stinger.rotation.x = theta; body.add(stinger);
+    const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.14,0.12), chitinMat);
+    bulb.position.set(0,ty-0.02,tz); body.add(bulb);                       // the venom bulb behind the barb
+    const stinger = new THREE.Mesh(new THREE.ConeGeometry(0.055,0.18,4), stingerMat); stinger.position.set(0,ty+0.05,tz); stinger.rotation.x = theta; body.add(stinger);
     const glow = new THREE.PointLight(0xff5a1a,0.5,2.2); glow.position.copy(stinger.position); body.add(glow);
   }
 
@@ -6893,54 +7206,136 @@ function makeManticore(){
   return g;
 }
 
-// basilisk: a rearing serpent-king with a flared cobra hood and a golden crest — the Roman era's ranged
-// monster, redesigned for more presence (bigger raised head/hood, 4 clawed legs instead of 2, spine
-// frills, fangs, a more saturated toxic-yellow-green scale color that no longer reads close to the Greek
-// medusa's blue-green). Distinct from medusa (humanoid torso + arms) — no torso or arms at all, just a
-// long low coiled body. Built facing +Z directly (lookAt() points a plain Object3D's +Z at the target),
-// same as griffin/medusa/manticore/warhound.
+// basilisk: the crowned serpent-king — the Roman era's ranged monster. Rebuilt: the old one was a stack of
+// five hand-placed coil blocks with a small head on top, which sank 24mm into the floor and left the crest
+// spikes and two hood pieces floating clear of anything. Now the body is a single CHAINED run walked along
+// an explicit S-curve — each segment's box is centred on the midpoint between two path points and rotated
+// to face along them, with a fifth of its length of overlap either side, so it cannot come apart the way
+// the Hydra's necks and the Tiger's tail both did. On top of that: belly scutes protruding under the whole
+// length, a dorsal spine ridge, four clawed legs derived from the segments they actually grow out of, a
+// flared cobra hood with gold rims and eye-spots on the back, and a real crowned head with an open jaw,
+// fangs and a forked tongue. Built facing +Z directly (lookAt() points a plain Object3D's +Z at the
+// target), same as griffin/medusa/manticore/warhound.
 function makeBasilisk(){
   const g = new THREE.Group();
   const body = g;
-  const scaleMat = voxMat(0x6b7a1e,{noise:16});
-  const scaleMat2 = voxMat(0x424e12,{noise:14});
-  const bellyMat = voxMat(0x9a9a5a,{noise:10});
-  const goldMat = metalMatP(0xad8730,80,0xffe9b0);
-  const eyeMat = new THREE.MeshBasicMaterial({color:0x9aff3a,fog:false});
-  const fangMat = new THREE.MeshLambertMaterial({color:0xe8e4d4});
+  const scaleMat  = voxMat(0x6b7a1e,{noise:16});   // toxic yellow-green, deliberately nowhere near the Greek medusa's blue-green
+  const scaleMat2 = voxMat(0x3d4810,{noise:14});
+  const scaleMat3 = voxMat(0x8d9c40,{noise:12});   // the light end — hood backs and cheek plates
+  const bellyMat  = voxMat(0xc9c489,{noise:10});
+  const goldMat   = metalMatP(0xad8730,80,0xffe9b0);
+  const goldDark  = metalMatP(0x6e5518,55,0xc0a050);
+  const inkMat    = new THREE.MeshLambertMaterial({color:0x15150c});
+  const eyeMat    = new THREE.MeshBasicMaterial({color:0x9aff3a,fog:false});
+  const fangMat   = new THREE.MeshLambertMaterial({color:0xe8e4d4});
+  const tongueMat = new THREE.MeshBasicMaterial({color:0x8a1a1a,fog:false});
+  const bx=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); body.add(m); return m; };
 
-  const coilSegs = [{s:0.5,y:0.26,z:-0.1},{s:0.44,y:0.24,z:-0.42},{s:0.34,y:0.28,z:-0.68},{s:0.24,y:0.36,z:-0.86},{s:0.15,y:0.46,z:-0.98}];
-  coilSegs.forEach((seg,i)=>{
-    const coil=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s*0.7,seg.s*1.3), i%2?scaleMat2:scaleMat); coil.position.set(0,seg.y,seg.z); coil.rotation.y=i*0.3; body.add(coil);
-    const plate=new THREE.Mesh(new THREE.BoxGeometry(seg.s*0.4,seg.s*0.45,0.04), bellyMat); plate.position.set(0,seg.y-seg.s*0.08,seg.z+seg.s*0.62); body.add(plate);
-    if(i<3){ const frill=new THREE.Mesh(new THREE.ConeGeometry(seg.s*0.22,seg.s*0.4,3), scaleMat2); frill.position.set(0,seg.y+seg.s*0.42,seg.z); frill.rotation.x=-1.6; body.add(frill); }
+  // ---- body: an S-curve walked segment by segment. Widths taper from the shoulders down to the tail tip.
+  const path=[{x:0.00,z: 0.22,w:0.46},{x: 0.14,z:-0.06,w:0.46},{x: 0.26,z:-0.38,w:0.44},
+              {x: 0.18,z:-0.70,w:0.40},{x:-0.04,z:-0.96,w:0.35},{x:-0.26,z:-1.14,w:0.29},
+              {x:-0.34,z:-1.36,w:0.22},{x:-0.20,z:-1.54,w:0.15},{x: 0.00,z:-1.62,w:0.10}];
+  const BELLY=0.04;                                   // the body's underside; the feet reach y=0 below it
+  const segs=[];
+  for(let i=0;i<path.length-1;i++){
+    const a=path[i], b=path[i+1];
+    const dx=b.x-a.x, dz=b.z-a.z, L=Math.hypot(dx,dz);
+    // a box carrying its length on local +Z and rotated by rotation.y = ang runs along (sin ang, 0, cos ang)
+    const ang=Math.atan2(dx,dz);
+    const w=(a.w+b.w)/2, h=w*0.78;
+    const cx=(a.x+b.x)/2, cz=(a.z+b.z)/2, cy=BELLY+h/2;
+    const m=bx(w,h,L*1.2, i%2?scaleMat2:scaleMat, cx,cy,cz); m.rotation.y=ang;   // 1.2 = a tenth of overlap at each end
+    // belly scutes, protruding slightly BELOW the segment (a real snake's scutes stand proud) — and
+    // deliberately narrower and shorter than the segment so no two of their faces line up
+    const sc=bx(w*0.55,0.09,L*1.05, bellyMat, cx,BELLY+0.02,cz); sc.rotation.y=ang;
+    // a dorsal spine spike standing on the segment's back
+    if(i<7){ const fr=new THREE.Mesh(new THREE.ConeGeometry(w*0.16,w*0.42,4), scaleMat2);
+      fr.position.set(cx, BELLY+h, cz); fr.rotation.y=ang; body.add(fr); }
+    segs.push({cx,cz,ang,w,h});
+  }
+  // tail tip: a flattened spade, not a blunt stop
+  const tip=bx(0.08,0.05,0.16, scaleMat2, path[8].x, BELLY+0.03, path[8].z-0.06); tip.rotation.y=0.3;
+
+  // ---- four clawed legs, placed off the segments they grow out of so they land on the body's real
+  // centreline rather than at hand-guessed coordinates
+  [{k:0,front:1},{k:3,front:0}].forEach(({k,front})=>{
+    const sg=segs[k], px=Math.cos(sg.ang), pz=-Math.sin(sg.ang);   // the segment's own sideways direction
+    [-1,1].forEach(sd=>{
+      const lx=sg.cx+px*sd*sg.w*0.48, lz=sg.cz+pz*sd*sg.w*0.48;
+      bx(0.12,0.18,0.12, scaleMat2, lx,0.14,lz);                   // thigh, up inside the body
+      bx(0.095,0.13,0.095, scaleMat,  lx,0.065,lz);                // shin
+      bx(0.14,0.07,0.17, scaleMat2, lx,0.035,lz+(front?0.02:-0.02)); // foot, underside exactly on 0
+      for(let t=0;t<3;t++) bx(0.035,0.035,0.06, goldMat, lx-0.04+t*0.04, 0.03, lz+(front?0.11:-0.11));
+    });
   });
-  // reared-up neck and head, higher and more upright than before, for a striking-cobra posture
-  const neck = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.4,0.3), scaleMat); neck.position.set(0,0.5,0.24); neck.rotation.x=-0.25; body.add(neck);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.28,0.38), scaleMat); head.position.set(0,0.68,0.5); body.add(head);
-  const snout = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.17,0.22), scaleMat2); snout.position.set(0,0.62,0.72); body.add(snout);
-  [-1,1].forEach(side=>{ const fang=new THREE.Mesh(new THREE.ConeGeometry(0.025,0.09,4), fangMat); fang.position.set(side*0.06,0.55,0.78); fang.rotation.x=Math.PI; body.add(fang); });
-  // gold serpent-king crest, taller now that the head is reared up
-  for(let i=0;i<4;i++){ const spike=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.18-i*0.02,4), goldMat); spike.position.set(0,0.84+i*0.02,0.62-i*0.13); spike.rotation.x=-0.3; body.add(spike); }
-  // a wide flared cobra hood behind the head — the single biggest new silhouette piece, giving the
-  // basilisk real presence instead of just being a thin coiled tail with a small head
-  [-1,1].forEach(side=>{
-    const hood=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.34,0.4), scaleMat2); hood.position.set(side*0.24,0.66,0.38); hood.rotation.y=side*0.55; body.add(hood);
-    const hoodEdge=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.06,0.4), goldMat); hoodEdge.position.set(side*0.32,0.8,0.38); hoodEdge.rotation.y=side*0.55; body.add(hoodEdge);
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.06,0.04), eyeMat); eye.position.set(side*0.11,0.72,0.64); body.add(eye);
+
+  // ---- neck, reared up and forward. A box carrying its length on local +Y and rotated by rotation.x = t
+  // points that length along (0, cos t, sin t); the walk below steps along exactly that vector.
+  let ny=0.34, nz=0.26;
+  [{t:0.72,len:0.34,w:0.34},{t:0.42,len:0.32,w:0.30},{t:0.12,len:0.30,w:0.27}].forEach((sg,i)=>{
+    const dy=Math.cos(sg.t), dz=Math.sin(sg.t);
+    const m=bx(sg.w,sg.len,sg.w*0.92, i%2?scaleMat:scaleMat2, 0, ny+dy*sg.len/2, nz+dz*sg.len/2);
+    m.rotation.x=sg.t;
+    ny += dy*sg.len*0.9; nz += dz*sg.len*0.9;                      // 0.9 = the next piece starts inside this one
   });
-  // 4 small clawed legs (front + back pair) instead of the old single pair, so it reads as a real
-  // creature dragging its coils along rather than a snake with two stray legs
-  [[-0.16,0.14],[0.16,0.14],[-0.16,-0.5],[0.16,-0.5]].forEach(([lx,lz])=>{
-    const leg=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.2,0.1), scaleMat2); leg.position.set(lx,0.12,lz); body.add(leg);
-    const claw=new THREE.Mesh(new THREE.ConeGeometry(0.045,0.11,4), goldMat); claw.position.set(lx,0.03,lz+0.08); claw.rotation.x=1.4; body.add(claw);
+
+  // ---- head
+  const HY=1.22, HZ=0.72;
+  bx(0.36,0.30,0.44, scaleMat,  0, HY, HZ);                        // skull
+  bx(0.40,0.11,0.22, scaleMat2, 0, HY+0.17, HZ+0.10);              // heavy brow ridge
+  [-1,1].forEach(sd=> bx(0.07,0.22,0.32, scaleMat3, sd*0.20, HY-0.02, HZ+0.04));   // cheek plates
+  bx(0.28,0.22,0.28, scaleMat,  0, HY-0.08, HZ+0.34);              // snout
+  bx(0.30,0.08,0.30, scaleMat2, 0, HY-0.17, HZ+0.33);              // upper lip
+  bx(0.22,0.06,0.24, inkMat,    0, HY-0.21, HZ+0.31);              // the dark of the open mouth
+  const jaw=bx(0.26,0.12,0.28, scaleMat2, 0, HY-0.26, HZ+0.30); jaw.rotation.x=-0.28;
+  [-1,1].forEach(sd=>{
+    const f=new THREE.Mesh(new THREE.ConeGeometry(0.032,0.13,4), fangMat);
+    f.position.set(sd*0.085,HY-0.24,HZ+0.40); f.rotation.x=Math.PI; body.add(f);
+    bx(0.09,0.09,0.05, inkMat, sd*0.135, HY+0.03, HZ+0.20);        // eye socket
+    bx(0.055,0.075,0.04, eyeMat, sd*0.135, HY+0.03, HZ+0.225);     // green eye
+    bx(0.016,0.05,0.035, inkMat, sd*0.135, HY+0.03, HZ+0.242);     // its vertical slit pupil
+    bx(0.035,0.03,0.03, inkMat, sd*0.055, HY-0.06, HZ+0.47);       // nostrils
   });
-  const tongue=new THREE.Mesh(new THREE.BoxGeometry(0.015,0.015,0.12), new THREE.MeshBasicMaterial({color:0x8a1a1a,fog:false})); tongue.position.set(0,0.6,0.85); body.add(tongue);
+  // forked tongue flicking out of the open jaw
+  bx(0.022,0.022,0.16, tongueMat, 0, HY-0.22, HZ+0.52);
+  [-1,1].forEach(sd=>{ const t=bx(0.02,0.02,0.10, tongueMat, sd*0.03, HY-0.22, HZ+0.63); t.rotation.y=sd*0.45; });
+
+  // ---- the crown. Five gold points rising off a banded circlet, tallest in the middle, with a crest of
+  // plates running back over the neck. This is the silhouette cue: nothing else in the game wears one.
+  bx(0.40,0.07,0.46, goldMat, 0, HY+0.15, HZ);                     // circlet
+  bx(0.42,0.04,0.48, goldDark, 0, HY+0.19, HZ);
+  [{x:-0.15,h:0.16},{x:-0.08,h:0.25},{x:0,h:0.34},{x:0.08,h:0.25},{x:0.15,h:0.16}].forEach(pt=>{
+    bx(0.06,pt.h,0.06, goldMat, pt.x, HY+0.19+pt.h/2, HZ-0.02);
+    bx(0.045,0.045,0.045, goldDark, pt.x, HY+0.19+pt.h, HZ-0.02);  // a bead finishing each point
+  });
+  // crest down the nape. Three plates, not four: the neck leans forward, so a fourth stepped back and down
+  // on the same ramp hung in open air behind the throat with nothing to attach to.
+  [[1.24,0.52],[1.14,0.50],[1.04,0.52]].forEach(([cy,cz],i)=> bx(0.09,0.13-i*0.02,0.10, goldDark, 0, cy, cz));
+
+  // ---- the flared hood. Both sides are built from IDENTICAL local geometry running out along local +X;
+  // the left one is simply swung round by pi, which avoids mirroring with a negative scale.
+  [-1,1].forEach(sd=>{
+    const hood=new THREE.Group();
+    hood.position.set(0,0.95,0.50);
+    hood.rotation.y = sd>0 ? 0.58 : Math.PI-0.58;
+    body.add(hood);
+    const panel=(w,h,d,x,y,mat)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,0); hood.add(m); return m; };
+    panel(0.32,0.46,0.07, 0.15, 0.00, scaleMat2);
+    panel(0.28,0.38,0.06, 0.40,-0.06, scaleMat2);
+    panel(0.22,0.27,0.05, 0.61,-0.14, scaleMat2);
+    // gold rim along the leading edge, in three pieces following the same fan
+    panel(0.32,0.06,0.075, 0.15, 0.25, goldMat);
+    panel(0.28,0.055,0.065,0.40, 0.15, goldMat);
+    panel(0.22,0.05,0.055, 0.61, 0.01, goldMat);
+    // the eye-spot on the back of the hood — the marking that makes a flared cobra read instantly
+    const ring=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.02), scaleMat3); ring.position.set(0.26,0.02,-0.045); hood.add(ring);
+    const dot =new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.03), inkMat);    dot.position.set(0.26,0.02,-0.052); hood.add(dot);
+  });
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
   const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.05, 0); marker.scale.set(0.9,0.9,0.9); marker.renderOrder = 9999;
+  marker.position.set(0, 1.85, 0); marker.scale.set(0.95,0.95,0.95); marker.renderOrder = 9999;
   marker.raycast = function(){};
   g.add(marker); g.userData.marker = marker;
   return g;
@@ -7366,7 +7761,11 @@ function makeHydra(){
   // lateral spread is a real rotation instead: with three.js' XYZ Euler order a box's local +Y ends up
   // along (-sin phi, cos theta*cos phi, sin theta*cos phi), so the walk steps along exactly that vector
   // and consecutive segments always meet.
-  function neck(baseX, spread, height){
+  // `dt` (the per-segment forward arc step) is passed in rather than fixed, and every neck gets a slightly
+  // different one. Sharing it meant two necks could reach the same (theta, phi) on some segment, and two
+  // boxes at identical angles whose faces land 2.5mm apart fight in the depth buffer. Different arcs also
+  // make the five necks read as five separate animals rather than one shape drawn five times.
+  function neck(baseX, spread, height, dt){
     let x=baseX, y=1.05, z=0.4;
     // theta = forward arc, phi = outward fan. theta used to start at -1.05, which meant each neck first
     // leaned BACKWARD before curving over, so the heads finished low and drooping. Starting much closer to
@@ -7374,7 +7773,7 @@ function makeHydra(){
     let theta=-0.4, phi=0;
     // negated so a NEGATIVE `spread` argument fans the neck to the player's left (-X), matching how the
     // call sites below read: with rotation.z=phi a box's top tilts toward -X for positive phi.
-    const len=0.4, dt=0.25, dphi=-spread/height;
+    const len=0.4, dphi=-spread/height;
     // direction of the LAST DRAWN segment. The loop increments theta/phi on its way out, so reading them
     // after it ends gives the angles of a segment that was never built — placing the head along that
     // over-stepped direction is part of why the heads sat off the ends of the necks.
@@ -7401,7 +7800,9 @@ function makeHydra(){
     const hx=x+edx*0.12, hy=y+edy*0.12, hz=z+edz*0.12;
     // a chunky collar straddling the joint (half behind the tip, half ahead of it) so neck and skull
     // physically overlap no matter which way the neck ended up pointing
-    const collar=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.3,0.3), scaleMat2); collar.position.set(x,y,z); g.add(collar);
+    // 0.34 tall, not 0.30: as a plain cube its underside landed 1.3mm from the topmost neck segment's,
+    // which is a z-fight on both inner necks.
+    const collar=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.34,0.3), scaleMat2); collar.position.set(x,y,z); g.add(collar);
     // Every part of the head hangs off this one group, pivoted at the neck tip, so the whole skull can be
     // angled as a unit. Tipped DOWN: the necks rear up and the heads used to sit level on top of them,
     // staring straight ahead over the player's head. A striking snake drops its skull to aim along the
@@ -7440,11 +7841,11 @@ function makeHydra(){
   // four of the five necks well outside the body, so they rose out of thin air beside it with a visible
   // gap. All five now root in the mound and the FAN does the spreading as they rise, which is also how a
   // hydra's necks actually converge.
-  neck( 0,    0.00, 7);   // centre head, tallest, straight up the middle
-  neck(-0.32,-0.75, 6);   // inner left / right pair
-  neck( 0.32, 0.75, 6);
-  neck(-0.56,-1.15, 5);   // outermost pair, splayed clear of their neighbours
-  neck( 0.56, 1.15, 5);
+  neck( 0,    0.00, 7, 0.25);   // centre head, tallest, straight up the middle
+  neck(-0.32,-0.75, 6, 0.29);   // inner left / right pair
+  neck( 0.32, 0.75, 6, 0.29);
+  neck(-0.56,-1.15, 5, 0.34);   // outermost pair, splayed clear of their neighbours
+  neck( 0.56, 1.15, 5, 0.34);
 
   // the AI loop undulates these while the Hydra moves — it has no legs, so this is its walk
   g.userData.hydraTrunk = trunkMeshes.map(m=>({mesh:m, baseY:m.position.y, z:m.position.z}));
@@ -7464,58 +7865,108 @@ function makeChampion(){
   const g = new THREE.Group();
   const skinMat = voxMat(0xc98a5a,{noise:12});
   const armorMat = voxMat(0x8a9299,{noise:10,pattern:'plate'});   // iron lorica
-  const armorDark = voxMat(0x5a6068,{noise:10});
+  const armorLit = voxMat(0xb4bcc4,{noise:8});                    // the lit edge of a plate
+  const armorDark = voxMat(0x545a62,{noise:10});
   const bronzeMat = metalMatP(0xad8730,85,0xfff2c8);
+  const bronzeDark = metalMatP(0x6f5620,55,0xc8a860);
   const tunicMat = voxMat(0x8a1f1f,{noise:14});                   // deep red tunic
+  const cloakMat = voxMat(0x6d1616,{noise:16});                   // darker sagum
   const crestMat = new THREE.MeshLambertMaterial({color:0xc4271a});
   const steelMat = new THREE.MeshPhongMaterial({color:0xd8dde3, shininess:110, specular:0xffffff});
+  const leatherMat = voxMat(0x4a3320,{noise:14});
   const inkMat = new THREE.MeshBasicMaterial({color:0xff5a2a,fog:false});
+  const bx=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
 
-  // torso: iron cuirass over a red tunic skirt
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.8,0.5), armorMat); chest.position.set(0,1.5,0); g.add(chest);
-  const abs = new THREE.Mesh(new THREE.BoxGeometry(0.82,0.4,0.46), armorDark); abs.position.set(0,1.05,0); g.add(abs);
-  const skirt = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.44,0.52), tunicMat); skirt.position.set(0,0.72,0); g.add(skirt);
-  for(let i=0;i<6;i++){ const strip=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.4,0.06), tunicMat); strip.position.set(-0.36+i*0.145,0.62,0.28); g.add(strip); } // pteruges
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(0.92,0.14,0.54), bronzeMat); belt.position.set(0,0.92,0); g.add(belt);
+  // ---- torso in LORICA SEGMENTATA: the banded iron girdle plates that are the single most recognizable
+  // piece of Roman military kit. The old version was one flat chest box, which read as a grey slab; the
+  // whole point of the armour is the horizontal banding, so it is built as real overlapping lames.
+  bx(0.9,0.34,0.5, armorMat, 0,1.74,0);                           // upper chest / collarbone plate
+  for(let i=0;i<4;i++){                                           // four girdle bands down the trunk
+    const y=1.52-i*0.19, w=0.92-i*0.02;
+    bx(w,0.20,0.52-i*0.012, i%2?armorMat:armorLit, 0,y,0);
+    bx(w+0.02,0.045,0.545-i*0.012, armorDark, 0,y-0.105,0);       // the shadow line under each lame
+  }
+  bx(0.9,0.44,0.52, tunicMat, 0,0.72,0);                          // tunic skirt below the armour
+  for(let i=0;i<6;i++) bx(0.13,0.4,0.06, tunicMat, -0.36+i*0.145,0.62,0.28);   // pteruges
+  for(let i=0;i<5;i++) bx(0.11,0.34,0.06, leatherMat, -0.28+i*0.14,0.60,-0.29); // and at the back
+  bx(0.92,0.14,0.54, bronzeMat, 0,0.92,0);                        // belt
+  for(let i=0;i<5;i++) bx(0.08,0.09,0.07, bronzeDark, -0.3+i*0.15,0.92,0.29);  // cingulum studs
+  // phalerae — the bronze medallions a decorated soldier wore across the chest
+  [[-0.26,1.66],[0.26,1.66],[0,1.44]].forEach(([px,py])=>{
+    const d=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.05,10), bronzeMat);
+    d.rotation.x=Math.PI/2; d.position.set(px,py,0.27); g.add(d);
+    bx(0.05,0.05,0.06, bronzeDark, px,py,0.29);
+  });
   // short neck + a bronze gorget collar. The old collar shared the chest's exact depth/z (both 0.5 deep,
   // centred at z=0), so their front faces coincided and z-fought. This neck is narrower and the collar is
   // proud of the chest (deeper, lifted above the chest top at y=1.9) so no faces overlap.
   const neck = new THREE.Mesh(new THREE.BoxGeometry(0.34,0.22,0.34), skinMat); neck.position.set(0,1.96,0.02); g.add(neck);
   const collar = new THREE.Mesh(new THREE.BoxGeometry(0.52,0.14,0.56), bronzeMat); collar.position.set(0,1.98,0.02); g.add(collar);
 
-  // head + crested galea helmet
+  // ---- red sagum cloak hanging off the shoulders, pinned at the collar
+  bx(0.86,1.1,0.1, cloakMat, 0,1.34,-0.30);
+  bx(0.7,0.42,0.09, cloakMat, 0,0.76,-0.325);                     // the ragged lower hem, narrower
+  [-1,1].forEach(sd=> bx(0.16,0.9,0.09, cloakMat, sd*0.5,1.42,-0.26));
+  [-1,1].forEach(sd=>{ const pin=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.05,8), bronzeMat);
+    pin.rotation.x=Math.PI/2; pin.position.set(sd*0.3,1.9,-0.2); g.add(pin); });
+
+  // ---- head + crested galea. Cheek pieces, a brow guard with rivets and a neck flange at the back — the
+  // helmet's real parts, instead of a plain dome with a stripe on it.
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.44,0.44), skinMat); head.position.set(0,2.2,0.02); g.add(head);
-  const helm = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.28,0.5), armorMat); helm.position.set(0,2.4,0.02); g.add(helm);
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.1,0.06), armorDark); visor.position.set(0,2.22,0.24); g.add(visor);
-  [-1,1].forEach(s=>{ const eye=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.05,0.04), inkMat); eye.position.set(s*0.1,2.2,0.25); g.add(eye); });
-  const cheek = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.2,0.06), armorMat); cheek.position.set(0,2.08,0.23); g.add(cheek); // face guard
+  bx(0.5,0.3,0.5, armorMat, 0,2.42,0.02);                         // skull bowl
+  bx(0.53,0.08,0.53, armorLit, 0,2.28,0.02);                      // its rim
+  bx(0.48,0.11,0.1, bronzeMat, 0,2.30,0.26);                      // brow guard
+  for(let i=0;i<5;i++) bx(0.045,0.045,0.05, bronzeDark, -0.16+i*0.08,2.30,0.315);   // its rivets
+  [-1,1].forEach(sd=>{
+    bx(0.09,0.30,0.34, armorMat, sd*0.235,2.10,0.10);             // cheek pieces
+    bx(0.07,0.09,0.09, inkMat, sd*0.1,2.2,0.25);                  // eyes burning in the helmet's shadow
+  });
+  bx(0.5,0.13,0.14, armorMat, 0,2.09,-0.23);                      // neck flange at the back
+  bx(0.5,0.06,0.16, armorDark, 0,2.02,-0.235);
   // transverse red crest (centurion style) running side-to-side
   const crestRidge = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.1,0.14), crestMat); crestRidge.position.set(0,2.6,0.02); g.add(crestRidge);
-  for(let i=0;i<7;i++){ const plume=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.05), crestMat); plume.position.set(-0.3+i*0.1,2.68,0.02); g.add(plume); }
+  for(let i=0;i<7;i++){ const plume=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.18+((i*0.05)%0.09),0.05), crestMat);
+    plume.position.set(-0.3+i*0.1,2.70,0.02); g.add(plume); }
+  [-1,1].forEach(sd=> bx(0.07,0.14,0.09, bronzeMat, sd*0.32,2.60,0.02));   // the crest box's end mounts
 
-  // shoulders
-  [-1,1].forEach(s=>{ const pad=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.26,0.5), armorMat); pad.position.set(s*0.56,1.72,0); g.add(pad); });
+  // ---- shoulders: three-lame pauldrons, not a single pad
+  [-1,1].forEach(sd=>{ for(let i=0;i<3;i++)
+    bx(0.34-i*0.03,0.13,0.52-i*0.03, i%2?armorLit:armorMat, sd*(0.55+i*0.01),1.83-i*0.135,0); });
 
-  // LEFT arm holds a big round scutum shield
+  // LEFT arm holds the scutum
   const armL=new THREE.Group(); armL.position.set(-0.62,1.6,0); g.add(armL);
   const upL=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.5,0.24), skinMat); upL.position.y=-0.28; armL.add(upL);
   const foreL=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.42,0.22), skinMat); foreL.position.y=-0.66; armL.add(foreL);
-  const shield=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.0,0.9), tunicMat); shield.position.set(-0.12,-0.5,0.26); armL.add(shield);
-  const shieldTrim1=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.08,0.9), bronzeMat); shieldTrim1.position.set(-0.12,-0.02,0.26); armL.add(shieldTrim1);
-  const shieldTrim2=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.08,0.9), bronzeMat); shieldTrim2.position.set(-0.12,-0.98,0.26); armL.add(shieldTrim2);
-  const boss=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.12,0.08,10), bronzeMat); boss.rotation.z=Math.PI/2; boss.position.set(-0.19,-0.5,0.26); armL.add(boss);
+  const abx=(grp,w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); grp.add(m); return m; };
+  // The scutum is CURVED — a legionary's shield wraps round him. Built as three panels stepped forward and
+  // angled, which is what makes it read as a shield rather than a door.
+  [[-0.36,0.06,0.30],[0,0,0.36],[0.36,-0.06,0.30]].forEach(([oz,dz,pw],i)=>{
+    const p=abx(armL,0.1,1.02,pw, tunicMat, -0.12+dz,-0.5,0.26+oz*0.5); p.rotation.x=oz*0.55;
+  });
+  abx(armL,0.12,0.09,0.94, bronzeMat, -0.13,-0.02,0.26);          // rim binding, top and bottom
+  abx(armL,0.12,0.09,0.94, bronzeMat, -0.13,-0.98,0.26);
+  const boss=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,0.1,10), bronzeMat);
+  boss.rotation.z=Math.PI/2; boss.position.set(-0.21,-0.5,0.26); armL.add(boss);
+  const bossCap=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.05,8), bronzeDark);
+  bossCap.rotation.z=Math.PI/2; bossCap.position.set(-0.27,-0.5,0.26); armL.add(bossCap);
+  // the winged-thunderbolt blazon every scutum carried
+  abx(armL,0.03,0.1,0.62, bronzeMat, -0.19,-0.5,0.26);
+  [-1,1].forEach(sd=>{ const w=abx(armL,0.03,0.3,0.24, bronzeMat, -0.19,-0.5+sd*0.26,0.26); w.rotation.x=sd*0.5; });
+  [[-0.26,0.5],[0.26,-0.5]].forEach(([oy,rot])=>{ const b=abx(armL,0.03,0.34,0.1, bronzeDark, -0.19,-0.5+oy,0.26); b.rotation.x=rot; });
 
-  // RIGHT arm raises a huge gladius
+  // RIGHT arm raises a huge gladius, with a segmented manica down the forearm
   const armR=new THREE.Group(); armR.position.set(0.62,1.6,0); g.add(armR);
   const upR=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.5,0.24), skinMat); upR.position.y=-0.28; armR.add(upR);
+  for(let i=0;i<4;i++) abx(armR,0.27-i*0.006,0.09,0.27-i*0.006, i%2?armorLit:armorMat, 0,-0.12-i*0.115,0);
   const foreR=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.42,0.22), skinMat); foreR.position.set(0,-0.6,0.1); foreR.rotation.x=-0.7; armR.add(foreR);
   const grip=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.22,0.1), voxMat(0x3a2a1a,{noise:10})); grip.position.set(0,-0.78,0.28); armR.add(grip);
+  const pommel=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.08,0.08,8), bronzeDark); pommel.position.set(0,-0.9,0.26); armR.add(pommel);
   const guard=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.06,0.12), bronzeMat); guard.position.set(0,-0.66,0.32); armR.add(guard);
   // The blade and its tip disagreed about which way the sword pointed. rotation.x = -0.4 sends a box's
   // local +Y along (0, cos-0.4, sin-0.4) = up and BACKWARD, but the blade was positioned forward of the
   // guard and the tip further forward still — so the blade floated clear of the hilt with a 0.42 gap and
   // the tip floated clear of the blade. Both now use +0.4 (up and forward) and are placed by walking that
-  // same direction out from the guard, so hilt, blade and tip form one continuous run.
+  // same direction out from the guard, so hilt, blade and tip form one continuous run. DO NOT re-derive.
   const bladeDir = {y:Math.cos(0.4), z:Math.sin(0.4)};
   const guardY = -0.66, guardZ = 0.32, bladeLen = 1.0;
   const blade=new THREE.Mesh(new THREE.BoxGeometry(0.12,bladeLen,0.05), steelMat);
@@ -7536,10 +7987,13 @@ function makeChampion(){
   function championLeg(sd){
     const leg = new THREE.Group();
     leg.position.set(sd*0.24, 0.92, 0);
-    const thigh =new THREE.Mesh(new THREE.BoxGeometry(0.28,0.5,0.28), skinMat);   thigh.position.set(0,-0.25,0); leg.add(thigh);
-    const greave=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.4,0.26), armorMat);  greave.position.set(0,-0.61,0.02); leg.add(greave);
-    const knee  =new THREE.Mesh(new THREE.BoxGeometry(0.29,0.14,0.29), bronzeMat); knee.position.set(0,-0.40,0.03); leg.add(knee);
-    const foot  =new THREE.Mesh(new THREE.BoxGeometry(0.28,0.14,0.4), voxMat(0x5a4020,{noise:10})); foot.position.set(0,-0.85,0.08); leg.add(foot);
+    const lbx=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); leg.add(m); return m; };
+    lbx(0.28,0.5,0.28, skinMat, 0,-0.25,0);                       // thigh
+    lbx(0.29,0.14,0.29, bronzeMat, 0,-0.40,0.03);                 // knee cop
+    lbx(0.26,0.4,0.26, armorMat, 0,-0.61,0.02);                   // greave
+    lbx(0.235,0.36,0.06, armorLit, 0,-0.61,0.155);                // its raised shin ridge
+    lbx(0.28,0.14,0.4, voxMat(0x5a4020,{noise:10}), 0,-0.85,0.08); // caliga sole
+    for(let i=0;i<3;i++) lbx(0.24,0.045,0.06, leatherMat, 0,-0.74+i*0.07,0.11);   // its lacing straps
     g.add(leg); return leg;
   }
   const champLegL = championLeg(-1), champLegR = championLeg(1);
@@ -7564,44 +8018,74 @@ function makeTiger(){
   const g = new THREE.Group();
   const furMat = voxMat(0xdb8228,{noise:10});
   const furMat2 = voxMat(0xb56a1e,{noise:10});
+  const furMat3 = voxMat(0xf0a04a,{noise:8});     // the sunlit top of the coat
   const bellyMat = voxMat(0xf0e6c8,{noise:6});
   const stripeMat = new THREE.MeshLambertMaterial({color:0x1c1108});
   const eyeMat = new THREE.MeshBasicMaterial({color:0xffe23a,fog:false});
   const fangMat = new THREE.MeshLambertMaterial({color:0xf0ece0});
+  const noseMat = new THREE.MeshLambertMaterial({color:0x8a4a44});
+  const bx=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
 
-  // lean muscular body: separate ribcage + haunch sections instead of one long box
-  const ribs=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.46,0.6), furMat); ribs.position.set(0,0.58,0.05); g.add(ribs);
-  const haunch=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), furMat); haunch.position.set(0,0.6,-0.5); g.add(haunch);
-  const belly=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.14,0.9), bellyMat); belly.position.set(0,0.36,-0.05); g.add(belly);
-  const chest=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.3), furMat); chest.position.set(0,0.56,0.44); g.add(chest);
+  // lean muscular body: separate ribcage + haunch sections instead of one long box, with a raised
+  // shoulder blade and a lighter dorsal line so the back is not one flat tone
+  bx(0.46,0.46,0.6, furMat,  0,0.58,0.05);        // ribcage
+  bx(0.5,0.5,0.5,   furMat,  0,0.6,-0.5);         // haunch
+  bx(0.44,0.14,0.5, furMat3, 0,0.79,-0.5);        // sunlit top of the haunch
+  bx(0.4,0.14,0.58, furMat3, 0,0.77,0.05);        // and of the ribs
+  bx(0.36,0.14,0.9, bellyMat,0,0.36,-0.05);       // belly
+  bx(0.4,0.4,0.3,   furMat,  0,0.56,0.44);        // chest
+  bx(0.3,0.22,0.26, bellyMat,0,0.44,0.5);         // white chest bib
+  [-1,1].forEach(sd=> bx(0.1,0.26,0.3, furMat2, sd*0.24,0.68,0.22));   // shoulder blades
 
-  // thin stripes sitting proud of the body surface — a saddle stripe over the back plus flank marks
-  [{x:0,y:0.78,z:0.15,w:0.3,h:0.05,d:0.5},{x:0,y:0.78,z:-0.35,w:0.32,h:0.05,d:0.4}].forEach(s=>{
-    const m=new THREE.Mesh(new THREE.BoxGeometry(s.w,s.h,s.d), stripeMat); m.position.set(s.x,s.y,s.z); g.add(m); });
-  [-1,1].forEach(side=>{
-    [0.1,-0.4].forEach(fz=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.3,0.06), stripeMat); m.position.set(side*0.25,0.58,fz); g.add(m); });
+  // Real tiger banding: vertical bars down each flank at irregular spacing, a set over the spine, and
+  // shorter marks on the haunch — thin and standing proud of the coat, never body-width blocks (the old
+  // version's "stripes" encased the whole animal and it read as a striped sausage).
+  [0.30,0.16,-0.02,-0.22,-0.40,-0.58].forEach((sz,i)=>{
+    const h=0.30-((i*0.05)%0.09);
+    [-1,1].forEach(sd=> bx(0.05,h,0.055+((i*0.03)%0.04), stripeMat, sd*0.255,0.60,sz));
+  });
+  [0.26,0.02,-0.28,-0.54].forEach((sz,i)=>
+    bx(0.30-((i*0.06)%0.1),0.05,0.06, stripeMat, 0,0.845-((i*0.01)%0.02),sz));
+
+  // head: brow ridge, pale muzzle, dark nose, fangs, cheek ruff
+  bx(0.38,0.36,0.34, furMat,  0,0.76,0.68);
+  bx(0.36,0.07,0.11, furMat2, 0,0.90,0.79);       // brow ridge
+  bx(0.28,0.22,0.2,  bellyMat,0,0.655,0.885);     // muzzle
+  bx(0.11,0.07,0.05, noseMat, 0,0.735,0.975);     // nose
+  bx(0.06,0.03,0.05, stripeMat,0,0.715,0.982);    // its dark underline
+  bx(0.2,0.05,0.16,  stripeMat,0,0.60,0.90);      // the dark of the open mouth
+  bx(0.24,0.09,0.18, bellyMat,0,0.565,0.885);     // chin
+  [-1,1].forEach(sd=>{
+    bx(0.13,0.14,0.06, furMat, sd*0.14,0.98,0.63);          // ear
+    bx(0.13,0.05,0.05, stripeMat, sd*0.14,1.03,0.625);      // black ear back
+    bx(0.06,0.05,0.04, bellyMat, sd*0.14,0.995,0.655);      // the white ocellus spot behind it
+    bx(0.075,0.065,0.045, eyeMat, sd*0.115,0.80,0.855);     // eye
+    bx(0.028,0.05,0.04, stripeMat, sd*0.115,0.80,0.868);    // slit pupil
+    bx(0.09,0.03,0.05, stripeMat, sd*0.13,0.845,0.85);      // eye liner above it
+    const fang=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.14,4), fangMat);
+    fang.position.set(sd*0.075,0.585,0.955); fang.rotation.x=Math.PI; g.add(fang);
+    bx(0.055,0.16,0.05, stripeMat, sd*0.115,0.90,0.71);     // forehead bars
+    bx(0.045,0.13,0.05, stripeMat, sd*0.055,0.925,0.70);
+    bx(0.04,0.11,0.14, stripeMat, sd*0.185,0.73,0.78);      // cheek bars
+    bx(0.04,0.08,0.12, stripeMat, sd*0.19,0.63,0.73);
+    bx(0.09,0.20,0.16, bellyMat, sd*0.20,0.66,0.72);        // the pale cheek ruff a tiger's face carries
+    for(let i=0;i<3;i++){                                   // whiskers
+      const wk=bx(0.16,0.012,0.012, bellyMat, sd*0.19,0.655+i*0.03,0.88); wk.rotation.z=sd*(0.2+i*0.15);
+    }
   });
 
-  // head: brow ridge, pale muzzle, dark nose, fangs
-  const head=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.34,0.32), furMat); head.position.set(0,0.76,0.68); g.add(head);
-  const brow=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.06,0.1), furMat2); brow.position.set(0,0.89,0.78); brow.rotation.x=0.2; g.add(brow);
-  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.2,0.18), bellyMat); muzzle.position.set(0,0.66,0.88); g.add(muzzle);
-  const nose=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.06,0.04), stripeMat); nose.position.set(0,0.73,0.97); g.add(nose);
-  [-1,1].forEach(s=>{
-    const ear=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.12,0.05), furMat); ear.position.set(s*0.13,0.96,0.62); g.add(ear);
-    const earIn=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.03), stripeMat); earIn.position.set(s*0.13,0.95,0.65); g.add(earIn);
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.06,0.04), eyeMat); eye.position.set(s*0.11,0.79,0.86); g.add(eye);
-    const fang=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.13,4), fangMat); fang.position.set(s*0.07,0.58,0.97); fang.rotation.x=Math.PI; g.add(fang);
-    const fstripe=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.16,0.04), stripeMat); fstripe.position.set(s*0.11,0.85,0.7); fstripe.rotation.z=s*0.15; g.add(fstripe);
-    const cheekstripe=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.1,0.14), stripeMat); cheekstripe.position.set(s*0.17,0.7,0.78); g.add(cheekstripe);
-  });
-
-  // legs with upper/lower segments for a bit of visible bend, plus a leg stripe and clear paws
+  // legs with upper/lower segments for a bit of visible bend, leg bars, and real claws
   [[-0.17,0.32],[0.17,0.32],[-0.19,-0.5],[0.19,-0.5]].forEach(([lx,lz])=>{
-    const upper=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.26,0.16),furMat); upper.position.set(lx,0.42,lz); g.add(upper);
-    const lower=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.24,0.13),furMat); lower.position.set(lx,0.19,lz); g.add(lower);
-    const paw=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.09,0.19), bellyMat); paw.position.set(lx,0.045,lz+0.02); g.add(paw); // 0.045: at 0.07 the pads floated clear of the sand
-    const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.05,0.04), stripeMat); stripe.position.set(lx,0.34,lz+0.08); g.add(stripe);
+    bx(0.17,0.28,0.17, furMat,  lx,0.42,lz);
+    bx(0.135,0.24,0.14, furMat, lx,0.19,lz);
+    bx(0.17,0.10,0.20, bellyMat, lx,0.05,lz+0.02);          // paw, underside on 0
+    for(let i=0;i<3;i++){
+      bx(0.045,0.05,0.06, bellyMat, lx-0.045+i*0.045,0.035,lz+0.14);
+      const cl=new THREE.Mesh(new THREE.ConeGeometry(0.018,0.06,4), fangMat);
+      cl.position.set(lx-0.045+i*0.045,0.035,lz+0.19); cl.rotation.x=-Math.PI/2; g.add(cl);
+    }
+    bx(0.18,0.05,0.045, stripeMat, lx,0.34,lz+0.075);       // leg bars
+    bx(0.15,0.045,0.04, stripeMat, lx,0.22,lz+0.06);
   });
 
   // longer, chain-built tail (each segment starts where the last ended, so it flows instead of floating)
@@ -7610,12 +8094,14 @@ function makeTiger(){
   // (0, -sin t, cos t). The walk stepped along (0, cos t, sin t) instead: the wrong pairing entirely, so
   // the segments marched one way while facing another and the tail rendered as five floating blocks.
   { let ty=0.62, tz=-0.75, theta=3.0;   // 3.0 = pointing back and very slightly down, under the new pairing
-    [{s:0.09,len:0.22},{s:0.075,len:0.2},{s:0.06,len:0.18},{s:0.05,len:0.16},{s:0.045,len:0.14}].forEach((seg,i)=>{
+    [{s:0.1,len:0.22},{s:0.085,len:0.2},{s:0.07,len:0.18},{s:0.06,len:0.16},{s:0.052,len:0.14},{s:0.05,len:0.13}].forEach((seg,i)=>{
       const dy=-Math.sin(theta), dz=Math.cos(theta);
       const cy=ty+(seg.len/2)*dy, cz=tz+(seg.len/2)*dz;
       const m=new THREE.Mesh(new THREE.BoxGeometry(seg.s,seg.s,seg.len), i%2?stripeMat:furMat);
       m.position.set(0,cy,cz); m.rotation.x=theta; g.add(m);
       ty+=seg.len*dy*0.92; tz+=seg.len*dz*0.92; theta-=0.22;   // 0.92 = segments overlap; tail droops as it runs
+      if(i===5){ const tuft=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.075,0.1), stripeMat);
+        tuft.position.set(0,ty,tz); tuft.rotation.x=theta; g.add(tuft); }   // black tail tip
     });
   }
 

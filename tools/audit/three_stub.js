@@ -581,6 +581,60 @@ global.__pointInMesh = function(mesh, p, eps){
   return Math.abs(q.x-o.x) <= h.x+eps && Math.abs(q.y-o.y) <= h.y+eps && Math.abs(q.z-o.z) <= h.z+eps;
 };
 
+// ---------- orientation gating for the coplanarity checks ----------
+// Two boxes can only produce the coincident-plane flicker this check hunts for if their FACES are
+// parallel — that is, if their world bases are the same up to permutation and sign. Where they are not,
+// the faces meet at an angle and can never fight, no matter how close they come.
+//
+// This matters because the check compares AABBs, and a rotated box's AABB faces are not its own faces. A
+// wing membrane sagging at one angle beside a finger bone at another would report as z-fighting purely
+// because their bounding boxes happened to end at the same coordinate. Everything below either compares
+// two genuinely world-axis-aligned boxes (where the AABB IS the box), or re-expresses a same-orientation
+// pair in that shared frame first, where their faces are axis-aligned again.
+function refFrame(mesh){
+  const m=mesh.matrixWorld;
+  const a=[m[0],m[1],m[2]], b=[m[4],m[5],m[6]], c=[m[8],m[9],m[10]];
+  const na=Math.hypot(a[0],a[1],a[2])||1, nb=Math.hypot(b[0],b[1],b[2])||1, nc=Math.hypot(c[0],c[1],c[2])||1;
+  return [[a[0]/na,a[1]/na,a[2]/na],[b[0]/nb,b[1]/nb,b[2]/nb],[c[0]/nc,c[1]/nc,c[2]/nc]];
+}
+function isAxisAligned(mesh){
+  const F=refFrame(mesh);
+  for(const v of F){
+    let ok=false;
+    for(let k=0;k<3;k++) if(Math.abs(Math.abs(v[k])-1) < 1e-4) ok=true;
+    if(!ok) return false;
+  }
+  return true;
+}
+// permutation- and sign-invariant, so a box turned 90 degrees about Y still matches one that is not
+function orientKey(mesh){
+  return refFrame(mesh).map(v=>{
+    let s=1;
+    for(let k=0;k<3;k++){ if(Math.abs(v[k])>1e-6){ s = v[k]<0 ? -1 : 1; break; } }
+    return v.map(x=>Math.round(x*s*1024)).join(',');
+  }).sort().join('|');
+}
+// a mesh's box expressed in some reference frame's axes, in world-scale units
+function frameBox(mesh, F){
+  const h=(mesh.geometry&&mesh.geometry._half)||{x:0,y:0,z:0};
+  const o=(mesh.geometry&&mesh.geometry._offset)||{x:0,y:0,z:0};
+  const m=mesh.matrixWorld;
+  const c=applyMat(m,o.x,o.y,o.z);
+  const sx=Math.hypot(m[0],m[1],m[2]), sy=Math.hypot(m[4],m[5],m[6]), sz=Math.hypot(m[8],m[9],m[10]);
+  const p={x:c.x*F[0][0]+c.y*F[0][1]+c.z*F[0][2],
+           y:c.x*F[1][0]+c.y*F[1][1]+c.z*F[1][2],
+           z:c.x*F[2][0]+c.y*F[2][1]+c.z*F[2][2]};
+  const hx=h.x*sx, hy=h.y*sy, hz=h.z*sz;
+  return {min:{x:p.x-hx,y:p.y-hy,z:p.z-hz}, max:{x:p.x+hx,y:p.y+hy,z:p.z+hz}};
+}
+// The comparable pair of boxes for a coplanarity test, or null when the two can never share a face plane.
+global.__comparableBoxes = function(meshA, boxA, meshB, boxB){
+  if(isAxisAligned(meshA) && isAxisAligned(meshB)) return [boxA, boxB];
+  if(orientKey(meshA) !== orientKey(meshB)) return null;
+  const F = refFrame(meshA);
+  return [frameBox(meshA,F), frameBox(meshB,F)];
+};
+
 // Meshes that genuinely intersect: at least one of A's surface samples lies inside B, or vice versa.
 global.__connectivity = function(root, scale, eps){
   const boxes = global.__modelBoxes(root, scale);
@@ -612,7 +666,9 @@ global.__coplanar = function(root, scale, eps, omin){
   const AX = ['x','y','z'];
   const hits = [];
   for(let i=0;i<boxes.length;i++) for(let j=i+1;j<boxes.length;j++){
-    const a = boxes[i].box, c = boxes[j].box;
+    const cmp = global.__comparableBoxes(boxes[i].mesh, boxes[i].box, boxes[j].mesh, boxes[j].box);
+    if(!cmp) continue;              // faces meet at an angle — cannot fight, whatever the AABBs say
+    const a = cmp[0], c = cmp[1];
     for(let k=0;k<3;k++){
       const ax=AX[k], u=AX[(k+1)%3], v=AX[(k+2)%3];
       const ou = Math.min(a.max[u],c.max[u]) - Math.max(a.min[u],c.min[u]);
@@ -674,7 +730,9 @@ global.__worldCoplanar = function(group, eps, omin, cell){
       const ia=bucket[a], ib=bucket[b];
       const pk = ia<ib ? ia+':'+ib : ib+':'+ia;
       if(seen.has(pk)) continue; seen.add(pk);
-      const A=boxes[ia].box, B=boxes[ib].box;
+      const cmp = global.__comparableBoxes(boxes[ia].mesh, boxes[ia].box, boxes[ib].mesh, boxes[ib].box);
+      if(!cmp) continue;
+      const A=cmp[0], B=cmp[1];
       for(let k=0;k<3;k++){
         const ax=AX[k], u=AX[(k+1)%3], v=AX[(k+2)%3];
         const ou=Math.min(A.max[u],B.max[u])-Math.max(A.min[u],B.min[u]);

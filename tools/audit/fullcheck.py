@@ -204,13 +204,23 @@ def main():
                 oz = min(az1, bz1) - max(az0, bz0)
                 if ox <= 0.05 or oz <= 0.05:
                     continue
-                # Two long thin walls meeting at a right angle overlap by design at the corner.
-                # Every dungeon and arena is built that way, so it is not a defect.
+                # Two thin walls meeting at a right angle lap by design at the corner — every dungeon,
+                # arena and L-shaped piece of cover is built that way. Judged by aspect ratio rather than
+                # by an absolute length, so a 5-unit cover wall with a 2-unit return counts as well as a
+                # 46-unit chamber wall, and only when the lap is no bigger than the walls' own thickness.
                 aw, ad = ax1 - ax0, az1 - az0
                 bw, bd = bx1 - bx0, bz1 - bz0
-                a_wall = (aw > 20 and ad < 2) or (ad > 20 and aw < 2)
-                b_wall = (bw > 20 and bd < 2) or (bd > 20 and bw < 2)
-                if a_wall and b_wall and ox < 2.0 and oz < 2.0:
+                def thin(w, d):
+                    return max(w, d) / max(min(w, d), 1e-6) >= 2.2
+                if thin(aw, ad) and thin(bw, bd):
+                    thick = max(min(aw, ad), min(bw, bd)) + 0.05
+                    if ox <= thick and oz <= thick:
+                        continue
+                # A tiled run of IDENTICAL panels laid deliberately over-wide so their footprints lap and
+                # the seam cannot be walked through. Every arena's barrier ring is built that way (see the
+                # `*1.08` in the Colosseum's collider loop) — the overlap is the point, not a defect.
+                if (abs(aw - bw) < 1e-6 and abs(ad - bd) < 1e-6
+                        and ox < aw * 0.4 and oz < ad * 0.9):
                     continue
                 ov.append((round(ox, 2), round(oz, 2), cols[i], cols[j]))
 
