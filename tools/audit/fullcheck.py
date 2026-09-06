@@ -15,6 +15,7 @@ Exit code is 0 only when nothing is reported.
 """
 import argparse
 import json
+import math
 import pathlib
 import sys
 
@@ -194,11 +195,51 @@ def main():
         cols = json.loads(ctx.eval(
             f"JSON.stringify((globalThis.__worlds['{name}'].colliders)||[])"))
 
+        # A RING BARRIER: N collider boxes whose centres all sit on one circle, each covering its own arc
+        # of a curved wall. Axis-aligned boxes cannot tile a circle without lapping at the diagonals — the
+        # lap is forced by the geometry, not a mistake — so overlaps BETWEEN TWO MEMBERS of the same ring
+        # are structural and exempt. This replaces an older rule that exempted only byte-identical boxes,
+        # which silently stopped applying the moment a ring was built correctly: sizing every segment the
+        # same is exactly the bug that left 2.5-unit walk-through holes in the Colosseum's barrier, because
+        # a segment's true footprint depends on the angle it sits at. Rings are found geometrically rather
+        # than hard-coded per map; every arena in this project is built concentric with the origin.
+        # A ring has to actually BE a ring: at least 8 boxes sharing one radius to within 0.2, whose
+        # bearings run the whole way round with no gap wider than 3x the mean spacing. A looser test
+        # (radius buckets alone) silently swallowed 20 scattered buildings in the town map as a "ring"
+        # and hid four genuine overlaps with them, which is exactly the kind of false negative that
+        # makes a checker worse than none.
+        def ring_ids(boxes):
+            pts = []
+            for k, b in enumerate(boxes):
+                x0, x1, z0, z1 = rect(b)
+                cx, cz = (x0 + x1) / 2, (z0 + z1) / 2
+                pts.append((k, math.hypot(cx, cz), math.atan2(cz, cx)))
+            members = set()
+            order = sorted(pts, key=lambda q: q[1])
+            i = 0
+            while i < len(order):
+                j = i
+                while j + 1 < len(order) and order[j + 1][1] - order[i][1] <= 0.2:
+                    j += 1
+                grp = order[i:j + 1]
+                if len(grp) >= 8 and order[i][1] > 1.0:
+                    angs = sorted(q[2] for q in grp)
+                    gaps = [angs[t + 1] - angs[t] for t in range(len(angs) - 1)]
+                    gaps.append(angs[0] + 2 * math.pi - angs[-1])
+                    if max(gaps) <= (2 * math.pi / len(angs)) * 3.0:
+                        members.update(q[0] for q in grp)
+                i = j + 1
+            return members
+
+        ring = ring_ids(cols)
+
         # collider overlaps
         ov = []
         for i in range(len(cols)):
             ax0, ax1, az0, az1 = rect(cols[i])
             for j in range(i + 1, len(cols)):
+                if i in ring and j in ring:
+                    continue
                 bx0, bx1, bz0, bz1 = rect(cols[j])
                 ox = min(ax1, bx1) - max(ax0, bx0)
                 oz = min(az1, bz1) - max(az0, bz0)
