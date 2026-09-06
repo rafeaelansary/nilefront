@@ -2373,7 +2373,13 @@ addTarget = colosseumColliders;
   // the stands rather than resting on them.
   const outR = R + 2.4 + (tiers-1)*2.1;
   const capY = 4.6+(tiers-1)*1.5+0.7;
-  const cap=new THREE.Mesh(new THREE.CylinderGeometry(outR+1.2,outR+0.8,1.4,segs,1,true), stoneDark); cap.position.set(0, capY, 0); A.add(cap);
+  // openEnded:true means this ring has no end caps, so from inside the pit you are looking at its INNER
+  // surface — whose normals point outward, away from you — and a default FrontSide material culls it.
+  // The cornice the whole velarium stands on was therefore invisible from the one place the player ever
+  // stands, which is why the masts read as floating no matter how the radii were tuned. DoubleSide on a
+  // clone (stoneDark is shared with half the arena, so it must not be mutated).
+  const capMat = stoneDark.clone(); capMat.side = THREE.DoubleSide;
+  const cap=new THREE.Mesh(new THREE.CylinderGeometry(outR+1.2,outR+0.8,1.4,segs,1,true), capMat); cap.position.set(0, capY, 0); A.add(cap);
 
   // ---- the velarium. Masts standing off the top cornice with awning panels angled in over the stands —
   // the great retractable sun-shade, and the piece that stops the arena's skyline being a bare ring.
@@ -2396,6 +2402,20 @@ addTarget = colosseumColliders;
     // 1.5 units into the tier at 35.7; the lower step sits wholly inside the tier.
     const cons =bx(2.0,0.68,0.62, stoneDark, ca*(outR+0.3), capY-1.0, sa*(outR+0.3)); cons.rotation.y=-a;
     const cons2=bx(0.9,0.45,0.50, travMat,  ca*(outR-0.2), capY-1.5, sa*(outR-0.2)); cons2.rotation.y=-a;
+    // ---- and a PILLAR under each mast, standing on the stands themselves, so the load is visibly carried
+    // all the way down instead of disappearing into a corbel the player cannot see from the pit.
+    // Four of the sixteen masts sit exactly on an aisle (masts step 2pi/16, aisles are at 0, pi/2, pi and
+    // 3pi/2 — every fourth mast lands on one) where the seat arcs deliberately stop, so there is no tier
+    // beneath them. Those pillars run further down onto the aisle's sloping rake instead: solving
+    //   radialOffset = dx*cos(p) - 0.6*sin(p)  for dx at radius outR+0.1, then y = 4.91 + dx*sin(p) + 0.6*cos(p)
+    // with the rake's own pitch p puts its top surface at 10.22 there, against the seat tops' 12.10.
+    const pr = outR+0.1;
+    const onAisle = aisles.some(al=>{ let d=Math.abs(a-al); if(d>Math.PI) d=Math.PI*2-d; return d < aisleHalf+0.06; });
+    const pierFoot = onAisle ? 10.15 : 12.05;      // both start just INSIDE what they land on
+    const pierTop = 13.45, pierH = pierTop-pierFoot, pierY = (pierFoot+pierTop)/2;
+    const pBase =bx(1.05,0.24,0.95, stoneDark, ca*pr, pierFoot+0.12, sa*pr); pBase.rotation.y=-a;
+    const pShaft=bx(0.80,pierH-0.30,0.70, travMat, ca*pr, pierY+0.02, sa*pr); pShaft.rotation.y=-a;
+    const pCap  =bx(1.00,0.24,0.90, stoneDark, ca*pr, pierTop-0.12, sa*pr); pCap.rotation.y=-a;
     // the awning panel, sloping in and down toward the pit. Same local-X-is-radial rule as the corbel above
     // applies here too, and this box had it backwards: BoxGeometry's first arg (~13.4, the tangential arc
     // width meant to cover this panel's 22.5deg slice) was radial, and the third arg (7.0, meant to be how
