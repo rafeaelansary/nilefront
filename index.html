@@ -1073,8 +1073,8 @@ function block(w,h,d,color,x,y,z,opts){
 // ---- perimeter walls (2x taller) with corner watchtowers ----
 block(60,8,1,0x86847e, 0,4,-30,{noise:26});
 block(60,8,1,0x86847e, 0,4,30,{noise:26});
-block(1,8,60,0x86847e, -30,4,0,{noise:26});
-block(1,8,60,0x86847e, 30,4,0,{noise:26});
+block(1,8,60,0x86847e, -30,3.97,0,{noise:26});
+block(1,8,60,0x86847e, 30,3.97,0,{noise:26});
 function tower(x,z){
   block(2,12,2,0x76746e,x,6,z,{noise:26});
   block(2.6,0.4,2.6,0x4a4038,x,12.2,z);
@@ -1637,7 +1637,7 @@ function marbleFloorTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // floor + high stone-brick walls (enclosed room)
   dblock(R*2,1,R*2,floorMat,0,-0.5,0);
   dblock(R*2,12,1,stoneMat,0,6,-R); dblock(R*2,12,1,stoneMat,0,6,R);
-  dblock(1,12,R*2,stoneMat,-R,6,0); dblock(1,12,R*2,stoneMat,R,6,0);
+  dblock(1,12,R*2,stoneMat,-R,5.97,0); dblock(1,12,R*2,stoneMat,R,5.97,0);
   // the perimeter walls above only ever had visual meshes — no collider, so the player could walk straight
   // through them into the empty void beyond (only the pillars got addBox() calls). Fixed.
   addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
@@ -1650,7 +1650,7 @@ function marbleFloorTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     dblock(2,10,2,stoneMat,x,5,z); addBox(x,z,2.3,2.3);
     dblock(2.3,0.5,2.3, i%2?glowOrange:glowBlue, x, 8.6, z);
-    dblock(0.7,10,0.7, i%2?glowOrange:glowBlue, x, 5, z+1.05); // glowing vertical strip down the pillar face
+    dblock(0.7,9.4,0.7, i%2?glowOrange:glowBlue, x, 5, z+1.05); // glow strip stops short of floor and ceiling: at a full 10 it shared BOTH end faces with the pillar it lies on
     const L=new THREE.PointLight(i%2?0xffa63a:0x4fb0ff, 2.4, 22); L.position.set(x,7,z); dungeon.add(L);
   });
   // glowing floor rune strips (brighter, tighter spacing)
@@ -1684,7 +1684,11 @@ addTarget = pyramidDungeonColliders;
   const R=23;
   pblock(R*2,1,R*2,sandFloorMat,0,-0.5,0);
   pblock(R*2,12,1,sandBrickMat,0,6,-R); pblock(R*2,12,1,sandBrickMat,0,6,R);
-  pblock(1,12,R*2,sandBrickMat,-R,6,0); pblock(1,12,R*2,sandBrickMat,R,6,0);
+  // Z runs dropped 0.03 so their top and bottom faces cannot share a plane with the X runs' where
+  // the two overlap at each corner. At equal heights both faces coincided exactly over the corner
+  // square — a z-fight along the top of every corner of every wall. Same technique the Islamic
+  // wall's cornice already used; shortening the runs instead opens a visible sliver at the corner.
+  pblock(1,12,R*2,sandBrickMat,-R,5.97,0); pblock(1,12,R*2,sandBrickMat,R,5.97,0);
   // same missing-collider bug as the original dungeon — the perimeter walls were purely visual
   addBox(0,-R,R*2,1); addBox(0,R,R*2,1); addBox(-R,0,1,R*2); addBox(R,0,1,R*2);
 
@@ -1697,10 +1701,10 @@ addTarget = pyramidDungeonColliders;
   [[0,-R,1],[0,R,1],[-R,0,0],[R,0,0]].forEach(([wx,wz,alongX])=>{
     const len = R*2;
     // battered plinth running the base of every wall
-    pblock(alongX?len:1.5, 1.2, alongX?1.5:len, dadoMat, wx + (alongX?0:(wx>0?-0.3:0.3)), 0.6, wz + (alongX?(wz>0?-0.3:0.3):0));
+    pblock(alongX?len:1.5, 1.2, alongX?1.5:len, dadoMat, wx + (alongX?0:(wx>0?-0.3:0.3)), alongX?0.6:0.57, wz + (alongX?(wz>0?-0.3:0.3):0));
     // cavetto cornice under the ceiling — the flared Egyptian moulding
-    pblock(alongX?len:1.6, 0.5, alongX?1.6:len, corniceMat, wx + (alongX?0:(wx>0?-0.35:0.35)), 9.5, wz + (alongX?(wz>0?-0.35:0.35):0));
-    pblock(alongX?len:1.2, 0.35, alongX?1.2:len, goldMat,   wx + (alongX?0:(wx>0?-0.2:0.2)), 9.05, wz + (alongX?(wz>0?-0.2:0.2):0));
+    pblock(alongX?len:1.6, 0.5, alongX?1.6:len, corniceMat, wx + (alongX?0:(wx>0?-0.35:0.35)), alongX?9.5:9.47, wz + (alongX?(wz>0?-0.35:0.35):0));
+    pblock(alongX?len:1.2, 0.35, alongX?1.2:len, goldMat,   wx + (alongX?0:(wx>0?-0.2:0.2)), alongX?9.05:9.02, wz + (alongX?(wz>0?-0.2:0.2):0));
     // engaged pilasters dividing the run into bays
     for(let t=-R+5; t<=R-5; t+=7.5){
       const px = alongX ? t : wx + (wx>0?-0.45:0.45);
@@ -1812,7 +1816,7 @@ addTarget = pyramidDungeonColliders;
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     pblock(2,10,2,sandBrickMat,x,5,z); addBox(x,z,2.3,2.3);
     pblock(2.3,0.5,2.3, i%2?glowTeal:glowGold, x, 8.6, z);
-    pblock(0.7,10,0.7, i%2?glowTeal:glowGold, x, 5, z+1.05);
+    pblock(0.7,9.4,0.7, i%2?glowTeal:glowGold, x, 5, z+1.05);   // glow strip stops short of floor and ceiling: at a full 10 it shared BOTH end faces with the pillar it lies on
     pblock(2.5,0.3,2.5, goldMat, x, 10.15, z); // gold capital atop each pillar, so they read as carved columns, not plain brick posts
     // shorter falloff — see the matching comment in buildGreekDungeon for why (this room shares the same
     // column+sconce light layout, and the same overlap-flicker bug)
@@ -1893,7 +1897,7 @@ addTarget = greekDungeonColliders;
   [[-10,-6],[10,-6],[-13,7],[13,7],[-5,13],[5,13],[0,-12]].forEach(([x,z],i)=>{
     gblock(2,10,2,marbleWallMat,x,5,z); addBox(x,z,2.3,2.3);
     gblock(2.3,0.5,2.3, i%2?glowPurple:glowBronze, x, 8.6, z);
-    gblock(0.7,10,0.7, i%2?glowPurple:glowBronze, x, 5, z+1.05);
+    gblock(0.7,9.4,0.7, i%2?glowPurple:glowBronze, x, 5, z+1.05); // glow strip stops short of floor and ceiling: at a full 10 it shared BOTH end faces with the pillar it lies on
     gblock(2.5,0.3,2.5, bronzeMat, x, 10.15, z); // bronze capital atop each column
     // shorter falloff (was 22, almost half the ~46-wide room) — with 7 of these plus up to 16 sconce
     // lights below, the old radius meant many lights overlapped everywhere at once. Three.js recompiles
@@ -1998,7 +2002,7 @@ addTarget = hydraColliders;
   // ---- the bog bed and its water. The water surface sits at -0.55, so the platform stands 0.55 proud of
   // it and its lower steps are already under. Both are boxes, and every reed, stump and drowned stone out
   // in the marsh roots into one of them, so nothing out there is floating.
-  hb(320,0.5,320, bogMat, 0,-1.90,0);
+  hb(330,0.5,330, bogMat, 0,-1.90,0);   // 330, not 320: at equal size its side faces coincided with the water's
   const waterMat = new THREE.MeshPhongMaterial({map:_finish(swampWaterTex(),26), color:0x9fb894,
     shininess:18, specular:0x44523c, transparent:true, opacity:0.94, emissive:0x0a1408});
   const water = new THREE.Mesh(new THREE.BoxGeometry(320,1.2,320), waterMat);
@@ -2064,7 +2068,7 @@ addTarget = hydraColliders;
     }
     // entablature and pediment, broken away over the gap where the missing column stood
     tb(19.4,0.85,1.9, ashlarBig, -1.2,8.62,4.6);
-    tb(19.4,0.44,2.2, stoneDark, -1.2,9.24,4.6);
+    tb(19.6,0.44,2.2, stoneDark, -1.2,9.24,4.6);   // oversails the course below rather than matching its width
     for(let i=0;i<7;i++){                                // triglyph rhythm along the frieze
       const gx=-8.4+i*2.8; if(gx>7.0) continue;
       tb(0.55,0.62,0.30, stoneDark, gx,8.62,5.62);
@@ -2072,8 +2076,8 @@ addTarget = hydraColliders;
     // raking pediment: stacked courses stepping in, snapped off short on the right
     for(let i=0;i<5;i++){
       const w=16.2-i*3.3; if(w<=0) continue;
-      tb(w,0.68,1.6, ashlarBig, -2.0-i*0.35,9.78+i*0.62,4.6);   // 0.68 tall on a 0.62 step: every
-    }                                                           // course laps the one beneath it
+      tb(w,0.68,1.60-i*0.06, ashlarBig, -2.0-i*0.35,9.78+i*0.62,4.6);  // 0.68 tall on a 0.62 step, and
+    }                                          // each course shallower than the last, so no two share a z face
     tb(2.2,0.68,1.7, ashlarBig, 5.6,9.74,4.6);           // the one surviving fragment of the far side
     // roof slabs left on the cella, some slipped
     for(let i=0;i<5;i++){
@@ -2415,7 +2419,7 @@ addTarget = colosseumColliders;
     const pierTop = 13.45, pierH = pierTop-pierFoot, pierY = (pierFoot+pierTop)/2;
     const pBase =bx(1.05,0.24,0.95, stoneDark, ca*pr, pierFoot+0.12, sa*pr); pBase.rotation.y=-a;
     const pShaft=bx(0.80,pierH-0.30,0.70, travMat, ca*pr, pierY+0.02, sa*pr); pShaft.rotation.y=-a;
-    const pCap  =bx(1.00,0.24,0.90, stoneDark, ca*pr, pierTop-0.12, sa*pr); pCap.rotation.y=-a;
+    const pCap  =bx(0.96,0.24,0.90, stoneDark, ca*pr, pierTop-0.12, sa*pr); pCap.rotation.y=-a;   // 0.96: at 1.00 its radial face sat on exactly the corbel's
     // the awning panel, sloping in and down toward the pit. Same local-X-is-radial rule as the corbel above
     // applies here too, and this box had it backwards: BoxGeometry's first arg (~13.4, the tangential arc
     // width meant to cover this panel's 22.5deg slice) was radial, and the third arg (7.0, meant to be how
@@ -2455,7 +2459,9 @@ addTarget = colosseumColliders;
     bx(4.0,1.2,7.2, travMat, cx,5.2,cz);                             // its platform, out over the stands
     bx(4.4,0.3,7.6, stoneDark, cx,5.95,cz);
     bx(0.4,1.1,7.2, bronzeMat, cx+2.0,6.65,cz);                      // balustrade toward the pit
-    for(let i=0;i<6;i++) bx(0.34,1.0,0.34, marbleMat, cx+2.0,6.62,cz-3.0+i*1.2);  // 6.62: at 6.60 they bottomed out on exactly the balustrade rail's underside
+    // 0.52 proud of the rail's own 0.4 depth: at 0.34 every post was completely swallowed by the rail
+    // in front of it, so six meshes were being drawn that could never be seen from anywhere.
+    for(let i=0;i<6;i++) bx(0.52,1.0,0.34, marbleMat, cx+2.0,6.62,cz-3.0+i*1.2);  // 6.62: at 6.60 they bottomed out on exactly the balustrade rail's underside
     [-1,1].forEach(sd=>[-1,1].forEach(sd2=>{
       const px=cx+sd*1.5, pz=cz+sd2*3.0;
       const col=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.3,3.6,10), marbleMat);
@@ -2492,7 +2498,7 @@ addTarget = colosseumColliders;
     const gz=s*(R-0.7);
     bx(4.2,3.6,0.6, voxMat(0x201810,{noise:10}), 0,1.8,gz);          // the tunnel mouth
     bx(5.2,0.7,0.8, grand?travMat:stoneDark, 0,3.75,gz);             // lintel
-    [-1,1].forEach(sd=> bx(0.75,4.2,0.85, grand?travMat:stoneDark, sd*2.35,2.1,gz));   // jambs
+    [-1,1].forEach(sd=> bx(0.75,4.28,0.85, grand?travMat:stoneDark, sd*2.35,2.06,gz));  // jambs (sunk 0.04: at 0 they shared the tunnel mouth's base plane)
     if(grand){
       // 2.26, not 2.3: at 2.3 the archivolt's outer edge landed 5mm from the gate jamb's own outer face.
       const arch=new THREE.Mesh(new THREE.TorusGeometry(2.26,0.42,8,14,Math.PI), travMat);
@@ -2501,7 +2507,7 @@ addTarget = colosseumColliders;
       for(let i=0;i<4;i++)for(let j=0;j<2;j++) bx(0.26,0.26,0.1, goldMat, -1.5+j*3.0,0.7+i*0.8,gz-s*0.48);
       bx(3.4,0.7,0.24, goldMat, 0,4.6,gz-s*0.3);                     // a gilded dedication panel
     } else {
-      for(let i=0;i<7;i++) bx(0.18,3.4,0.18, ironMat, -1.8+i*0.6,1.7,gz-s*0.34);       // portcullis bars
+      for(let i=0;i<7;i++) bx(0.18,3.48,0.18, ironMat, -1.8+i*0.6,1.66,gz-s*0.34);     // portcullis bars, likewise sunk
       bx(4.0,0.24,0.26, ironMat, 0,3.3,gz-s*0.34);
       bx(4.0,0.24,0.26, ironMat, 0,0.2,gz-s*0.34);
     }
@@ -2565,8 +2571,8 @@ addTarget = colosseumColliders;
     const x=-14.4, z=12.6;
     bx(2.6,0.3,0.7, woodMat, x,0.15,z);
     bx(2.6,0.22,0.24, woodMat, x,1.7,z);
-    [-1,1].forEach(sd=> bx(0.22,1.8,0.22, woodMat, x+sd*1.15,0.9,z));
-    bx(0.14,2.6,0.14, woodMat, x-0.8,1.3,z);                         // trident haft
+    [-1,1].forEach(sd=> bx(0.22,1.88,0.22, woodMat, x+sd*1.15,0.86,z));   // sunk into the base rather than sharing its underside
+    bx(0.14,2.68,0.14, woodMat, x-0.8,1.26,z);                       // trident haft, sunk into the rack base
     bx(0.7,0.16,0.16, ironMat, x-0.8,2.6,z);
     for(let i=0;i<3;i++) bx(0.12,0.5,0.12, ironMat, x-1.1+i*0.3,2.9,z);
     [0.1,0.6].forEach(ox=>{ const sp=bx(0.1,2.4,0.1, woodMat, x+ox,1.2,z); sp.rotation.z=0.12;
@@ -2593,7 +2599,7 @@ addTarget = ifritColliders;
   // The two Z runs are shortened by the wall thickness at each end so they BUTT against the X runs instead
   // of overlapping them: at equal lengths all four met in a 1.4x1.4 doubled block at each corner.
   [[0,-R,R*2+2,1.4],[0,R,R*2+2,1.4],[-R,0,1.4,R*2+2-2.8],[R,0,1.4,R*2+2-2.8]].forEach(([x,z,w,d])=>{
-    iblock(w,4.4,d, wallMat, x,2.2,z); addBox(x,z,w,d);
+    iblock(w,4.4,d, wallMat, x, x===0?2.2:2.17, z); addBox(x,z,w,d);
   });
   const merlonSpacing=1.8;
   for(let x=-R;x<=R;x+=merlonSpacing){
@@ -3355,8 +3361,12 @@ heightZoneTarget = heightZonesPyramid;
   // it rests between, and the two fought across the whole 2.2x2.2 jamb footprint at each end
   const gateLintel=new THREE.Mesh(new THREE.BoxGeometry(13.4,1.4,2.2), graniteMat); gateLintel.position.set(0,8.1,-30); scene.add(gateLintel);
   block(60,8,1,0xc9a671,0,4,30,{noise:24});
-  block(1,8,60,0xc9a671,-30,4,0,{noise:24});
-  block(1,8,60,0xc9a671,30,4,0,{noise:24});
+  // Z runs dropped 0.03 so their top and bottom faces cannot share a plane with the X runs' where
+  // the two overlap at each corner. At equal heights both faces coincided exactly over the corner
+  // square — a z-fight along the top of every corner of every wall. Same technique the Islamic
+  // wall's cornice already used; shortening the runs instead opens a visible sliver at the corner.
+  block(1,8,60,0xc9a671,-30,3.97,0,{noise:24});
+  block(1,8,60,0xc9a671,30,3.97,0,{noise:24});
   function obeliskPost(x,z){
     block(1.6,10,1.6,0xb99a63,x,5,z,{noise:22});
     const cap=new THREE.Mesh(new THREE.BoxGeometry(0.9,1.6,0.9), goldMat); // shiny gold cap
@@ -5292,7 +5302,9 @@ heightZoneTarget = heightZonesRoman;
         const by=y0+0.2;
         bx(w*0.72,0.18,1.1, woodMat, x, by, fz+face*0.55);
         bx(w*0.72,0.5,0.12, woodMat, x, by+0.34, fz+face*1.04);                // its rail
-        for(let i=0;i<4;i++) bx(0.12,0.5,0.12, woodDark, x-w*0.3+i*(w*0.6/3), by+0.34, fz+face*1.04);
+        // The balusters were built to the rail's EXACT height, depth, y and z, so all four were entirely
+        // swallowed by it — invisible geometry that also fought it on both faces. Taller and proud of it now.
+        for(let i=0;i<4;i++) bx(0.12,0.62,0.2, woodDark, x-w*0.3+i*(w*0.6/3), by+0.34, fz+face*1.06);
         for(let i=0;i<3;i++) bx(0.14,0.85,0.14, woodDark, x-w*0.28+i*(w*0.28), by-0.5, fz+face*0.95); // brackets
       }
     }
@@ -5481,12 +5493,16 @@ heightZoneTarget = heightZonesRoman;
     for(let i=0;i<n;i++){
       const t=-len/2+len*(i+0.5)/n;
       const bxp=axis==='x'?x+t:x, bzp=axis==='x'?z:z+t;
-      const h=0.92+((i*0.07)%0.14);
-      const m=new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?len/n+0.06:0.86,h,axis==='x'?0.86:len/n+0.06), i%2?dark:lit);
-      m.position.set(bxp,h/2,bzp); m.castShadow=true; scene.add(m);
+      // Consecutive blocks deliberately LAP by 0.06 so the run has no seam — which means they really do
+      // interpenetrate, so their remaining faces must not line up. At one shared depth (0.86) and one
+      // shared underside (0) every neighbouring pair fought on three faces at once. Depth and burial
+      // depth now alternate with the height that already did.
+      const h=0.92+((i*0.07)%0.14), dep=0.86-(i%2)*0.05, sink=0.04-(i%2)*0.015;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?len/n+0.06:dep,h,axis==='x'?dep:len/n+0.06), i%2?dark:lit);
+      m.position.set(bxp,h/2-sink,bzp); m.castShadow=true; scene.add(m);
       // a clipped top course, sitting proud, so the run has a lit edge instead of being a green slab
       const cap=new THREE.Mesh(new THREE.BoxGeometry(axis==='x'?len/n-0.04:0.7,0.14,axis==='x'?0.7:len/n-0.04), lit);
-      cap.position.set(bxp,h+0.02,bzp); scene.add(cap);
+      cap.position.set(bxp,h-sink+0.01,bzp); scene.add(cap);
     }
     addBox(x, z, axis==='x'?len:0.9, axis==='x'?0.9:len);
   }
@@ -5543,7 +5559,7 @@ heightZoneTarget = heightZonesIslamic;
   // Z runs shortened by the wall thickness at both ends so the four runs butt rather than overlap — at a
   // uniform 58 they doubled up in a 1.4x1.4 block at each corner, cap included.
   [[0,-28,58,1.4],[0,28,58,1.4],[-28,0,1.4,55.2],[28,0,1.4,55.2]].forEach(([wx,wz,ww,wd])=>{
-    const seg=new THREE.Mesh(new THREE.BoxGeometry(ww,5.2,wd), wallMat); seg.position.set(wx,2.6,wz); scene.add(seg);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(ww,5.2,wd), wallMat); seg.position.set(wx, wx===0?2.6:2.57, wz); scene.add(seg);
     // The Z runs' cornice is dropped fractionally so the four cornices can't share a top plane where they
     // meet. Shortening them instead would open a visible sliver at each corner of the wall.
     const isZ = wd > ww;
