@@ -7984,14 +7984,21 @@ function makeBasilisk(){
     // a box carrying its length on local +Z and rotated by rotation.y = ang runs along (sin ang, 0, cos ang)
     const ang=Math.atan2(dx,dz);
     const w=(a.w+b.w)/2, h=w*0.78;
-    const cx=(a.x+b.x)/2, cz=(a.z+b.z)/2, cy=BELLY+h/2;
+    // Every segment used one shared BELLY, and consecutive segments overlap by design (L*1.2 over a
+    // 1.0 spacing) — so all nine undersides sat on exactly the same plane and fought each other the whole
+    // length of the body. Alternating by 7mm is more than the 5mm that fights and less than anything the
+    // eye will read as a step; it also gives the belly a faint undulation, which a snake has anyway.
+    const belly = BELLY + (i%2)*0.018;   // 0.018, not 0.007: the segment heights taper by ~0.008 per
+                                         // step, so a 0.007 lift cancelled the taper and moved the
+                                         // clash from the undersides to the tops
+    const cx=(a.x+b.x)/2, cz=(a.z+b.z)/2, cy=belly+h/2;
     const m=bx(w,h,L*1.2, i%2?scaleMat2:scaleMat, cx,cy,cz); m.rotation.y=ang;   // 1.2 = a tenth of overlap at each end
     // belly scutes, protruding slightly BELOW the segment (a real snake's scutes stand proud) — and
     // deliberately narrower and shorter than the segment so no two of their faces line up
-    const sc=bx(w*0.55,0.09,L*1.05, bellyMat, cx,BELLY+0.02,cz); sc.rotation.y=ang;
+    const sc=bx(w*0.55,0.09,L*1.05, bellyMat, cx,belly+0.02,cz); sc.rotation.y=ang;
     // a dorsal spine spike standing on the segment's back
     if(i<7){ const fr=new THREE.Mesh(new THREE.ConeGeometry(w*0.16,w*0.42,4), scaleMat2);
-      fr.position.set(cx, BELLY+h, cz); fr.rotation.y=ang; body.add(fr); }
+      fr.position.set(cx, belly+h, cz); fr.rotation.y=ang; body.add(fr); }
     segs.push({cx,cz,ang,w,h});
   }
   // tail tip: a flattened spade, not a blunt stop
@@ -8026,7 +8033,7 @@ function makeBasilisk(){
   bx(0.42,0.11,0.22, scaleMat2, 0, HY+0.18, HZ+0.10);              // heavy brow ridge
   [-1,1].forEach(sd=> bx(0.07,0.22,0.32, scaleMat3, sd*0.20, HY-0.02, HZ+0.04));   // cheek plates
   bx(0.28,0.22,0.28, scaleMat,  0, HY-0.08, HZ+0.34);              // snout
-  bx(0.30,0.08,0.30, scaleMat2, 0, HY-0.17, HZ+0.33);              // upper lip
+  bx(0.30,0.08,0.28, scaleMat2, 0, HY-0.17, HZ+0.32);              // upper lip, stopping short of the snout's own front face
   bx(0.22,0.06,0.24, inkMat,    0, HY-0.21, HZ+0.31);              // the dark of the open mouth
   const jaw=bx(0.26,0.12,0.28, scaleMat2, 0, HY-0.26, HZ+0.30); jaw.rotation.x=-0.28;
   [-1,1].forEach(sd=>{
@@ -8038,8 +8045,14 @@ function makeBasilisk(){
     bx(0.035,0.03,0.03, inkMat, sd*0.055, HY-0.06, HZ+0.47);       // nostrils
   });
   // forked tongue flicking out of the open jaw
-  bx(0.022,0.022,0.16, tongueMat, 0, HY-0.22, HZ+0.52);
-  [-1,1].forEach(sd=>{ const t=bx(0.02,0.02,0.10, tongueMat, sd*0.03, HY-0.22, HZ+0.63); t.rotation.y=sd*0.45; });
+  // The forks were 0.02 square at +-0.03 against a 0.022-square stem, all three centred on the same y and
+  // reaching the same z: their top and bottom faces sat 0.001 apart and their z faces coincided outright,
+  // and the two forks' own boxes overlapped across the centre line as well. The whole tongue fought itself
+  // every frame, which is what read as the "moustache" flickering. The forks are now clearly thinner than
+  // the stem, set inside its height rather than level with it, and splayed wide enough (+-0.04 at 0.5 rad)
+  // that their boxes clear each other entirely.
+  bx(0.026,0.026,0.17, tongueMat, 0, HY-0.22, HZ+0.525);
+  [-1,1].forEach(sd=>{ const t=bx(0.014,0.014,0.11, tongueMat, sd*0.04, HY-0.22, HZ+0.63); t.rotation.y=sd*0.5; });
 
   // ---- the crown. Five gold points rising off a banded circlet, tallest in the middle, with a crest of
   // plates running back over the neck. This is the silhouette cue: nothing else in the game wears one.
@@ -8060,7 +8073,9 @@ function makeBasilisk(){
   // the left one is simply swung round by pi, which avoids mirroring with a negative scale.
   [-1,1].forEach(sd=>{
     const hood=new THREE.Group();
-    hood.position.set(0,0.95,0.50);
+    // +-0.005 in z: the two hoods are mirror images about the centre line and their innermost panels
+    // overlap across it, so at one shared z every panel pair had two coincident faces.
+    hood.position.set(0,0.95+sd*0.004,0.50+sd*0.005);
     hood.rotation.y = sd>0 ? 0.58 : Math.PI-0.58;
     body.add(hood);
     const panel=(w,h,d,x,y,mat)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,0); hood.add(m); return m; };
