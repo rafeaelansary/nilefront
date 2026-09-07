@@ -3580,8 +3580,37 @@ heightZoneTarget = heightZonesPyramid;
     mB(1.32*S,0.16*S,1.22*S, goldMat, x, 3.22*S+0.4, z+1.75*S);
     // uraeus (rearing cobra) on the brow — the one gold glint at eye level
     const ur=new THREE.Mesh(new THREE.BoxGeometry(0.2*S,0.34*S,0.2*S), goldMat); ur.position.set(x,3.55*S+0.4,z+2.26*S); scene.add(ur);
-    // eyes + the broken-off ceremonial beard, so the face actually reads at distance
-    [-1,1].forEach(side=>{ mB(0.17*S,0.14*S,0.06*S, voxMat(0x2a2118,{noise:6}), x+side*0.25*S, 3.05*S+0.4, z+2.26*S); });
+    // ---- THE FACE. It used to be two flat dark squares stuck on a blank box, which is why it read as a
+    // blob: there was no nose at all, so there was nothing for a BROKEN nose to be. The missing nose is
+    // the Sphinx's single most recognisable feature, and it is not a smooth absence — the bridge still
+    // stands down from the brow and then stops at a chiselled scar with a ragged edge where the rest came
+    // away. Everything here is built off the head's own front plane (FZ) and its centre height (FY), and
+    // every piece straddles or stands proud of that plane by its own amount so none of them share a face.
+    const FZ = 1.8*S + 0.45*S, FY = 2.95*S + 0.4;
+    const shadeMat = voxMat(0x8a6c42,{noise:10});   // stone lying in its own shadow
+    const breakMat = voxMat(0x5e482c,{noise:8});    // the depth of the break itself
+    const fB=(w,h,d,mat,fx,fy,fz)=>mB(w,h,d,mat, x+fx, FY+fy, z+fz);
+    // brow and cheekbones: the planes that give the light something to break across
+    fB(0.88*S,0.130*S,0.124*S, faceMat, 0,        0.270*S, FZ+0.016*S);
+    [-1,1].forEach(sd=> fB(0.21*S,0.340*S,0.090*S, faceMat, sd*0.33*S, -0.080*S, FZ-0.012*S));
+    // eye sockets, with the eyes set down into them rather than painted on the surface
+    [-1,1].forEach(sd=>{
+      fB(0.27*S,0.210*S,0.052*S, shadeMat, sd*0.25*S, 0.110*S, FZ+0.032*S);
+      fB(0.17*S,0.130*S,0.048*S, voxMat(0x2a2118,{noise:6}), sd*0.25*S, 0.100*S, FZ+0.062*S);
+    });
+    // the nose: bridge surviving from the brow down to about halfway, then the break
+    fB(0.170*S,0.200*S,0.140*S, faceMat, 0,  0.060*S, FZ+0.050*S);
+    fB(0.130*S,0.070*S,0.116*S, faceMat, 0, -0.050*S, FZ+0.030*S);
+    fB(0.300*S,0.260*S,0.046*S, breakMat, 0, -0.150*S, FZ+0.006*S);   // the scar face
+    fB(0.100*S,0.090*S,0.030*S, shadeMat, -0.09*S, -0.070*S, FZ+0.020*S);  // ragged edges of the break
+    fB(0.080*S,0.070*S,0.026*S, shadeMat,  0.10*S, -0.105*S, FZ+0.024*S);
+    fB(0.120*S,0.060*S,0.040*S, shadeMat,  0.02*S, -0.240*S, FZ+0.018*S);
+    // mouth and chin
+    fB(0.400*S,0.075*S,0.066*S, faceMat,  0, -0.320*S, FZ+0.008*S);
+    fB(0.330*S,0.048*S,0.050*S, breakMat, 0, -0.372*S, FZ+0.026*S);
+    fB(0.360*S,0.070*S,0.056*S, faceMat,  0, -0.425*S, FZ+0.002*S);
+    fB(0.440*S,0.130*S,0.080*S, faceMat,  0, -0.460*S, FZ-0.022*S);
+    // the broken-off ceremonial beard, hanging from the chin onto the chest
     mB(0.34*S,0.44*S,0.22*S, voxMat(0xb08d58,{noise:12}), x, 2.42*S+0.4, z+2.2*S);
     // granite dream stele set between the paws (Thutmose IV's, historically) — a red accent at the focal
     // point, kept low and pushed well forward so it never sits in front of the chest and flattens the pose
