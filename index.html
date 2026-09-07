@@ -4948,7 +4948,13 @@ heightZoneTarget = heightZonesRoman;
     for(let i=0;i<n;i++){
       const t = -len/2 + len*(i+0.5)/n;
       const mx = along==='x' ? cx+t : cx, mz = along==='x' ? cz : cz+t;
-      bx(along==='x'?1.25:d+0.2, 0.95, along==='x'?d+0.2:1.25, travLight, mx, WH+0.475, mz);
+      // The cross-wall dimension is the run's THICKNESS, which is d on an east-west run but w on a
+      // north-south one. Both used d, so every merlon on the two N-S runs was built d+0.2 = 24.1 units
+      // wide — a 24-unit slab lying across a 1.5-unit wall and sticking 11 units out either side of it,
+      // at y 6.0..6.95. That is head height over the sniper towers' stairs at x=+-24, which is what the
+      // ramps appeared to run "into": nine of these crossing each staircase.
+      const mThick = (along==='x' ? d : w) + 0.2;
+      bx(along==='x'?1.25:mThick, 0.95, along==='x'?mThick:1.25, travLight, mx, WH+0.475, mz);
     }
     addBox(cx,cz,w,d);
   }
