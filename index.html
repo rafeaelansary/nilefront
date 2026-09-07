@@ -10097,27 +10097,6 @@ document.addEventListener('keydown', e => {
     camera.position.y = playerHeight + 1.7; vel.set(0,0,0); stuckTimer = 0;
     setBanner('↺ repositioned'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='↺ repositioned') setBanner(''); }, 900);
   }
-  // ==================== DEBUG — REMOVE BEFORE SHIPPING ====================
-  // H: jumps straight to Cairo for testing. Cairo is enemy-free by design (spawnWave() early-returns for
-  // n>=9), so this is just a map preview — pending='wave' resolves to a no-op spawn, no combat starts.
-  if (e.code==='KeyH' && player.alive){
-    clearBots();
-    enterIslamicWorld('🕌 Jumped to Mamluk Cairo');
-    // bossNum MUST match the era (era 3 is reached by beating bosses I+II+III) — without this a stray
-    // future boss trigger would do bossNum++ from 0→1 and wrongly spawn Boss I with mismatched era/wave state.
-    currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3]; pending='wave'; betweenTimer=1.2;
-  }
-  // L: instantly kills every living enemy on screen (wave, boss, Nile wave — whatever's active), for testing.
-  if (e.code==='KeyL' && player.alive){
-    bots.forEach(b=>{ if(b.alive) damageBot(b, 99999, b.mesh.position); });
-  }
-  // G: toggles infinite health — damagePlayer() no-ops while godMode is true. For testing/exploring maps
-  // without dying, not meant to persist across a real playthrough.
-  if (e.code==='KeyG'){
-    godMode = !godMode;
-    setBanner(godMode ? '🛡 GOD MODE ON' : '🛡 god mode off'); setTimeout(()=>{ if(bannerEl && (bannerEl.textContent.includes('GOD MODE') || bannerEl.textContent.includes('god mode'))) setBanner(''); },1200);
-  }
-  // ==========================================================================
 });
 document.addEventListener('keyup', e => {
   keys[e.code]=false;
@@ -10431,7 +10410,7 @@ function onAllDead(){
     if(bossNum===2){
       // Hydra down → cross into the Roman frontier (wave 7)
       enterRomanWorld('🏆 The Hydra falls! The Roman frontier awaits…');
-      currentEra=2; waveIdx=ERA_START_WAVE[2]; pending='wave'; betweenTimer=2.4;
+      currentEra=2; waveIdx=ERA_START_WAVE[2]; pending='wave'; betweenTimer=4.4;
       return;
     }
     if(bossNum===3){
@@ -10459,24 +10438,24 @@ function onAllDead(){
     exitDungeon();
     const enteringGreekEra = pyramidPhase; // about to flip below — capture it now for the banner text
     if(pyramidPhase){ pyramidPhase=false; switchToGreekWorld(); switchToGreekLoadout(); currentEra=1; }
-    waveIdx++; pending='wave'; betweenTimer=2.6;
+    waveIdx++; pending='wave'; betweenTimer=4.6;
     setBanner(enteringGreekEra ? 'Boss down! Now entering the Greek period…' : 'Boss down! Back to the surface…');
     return;
   }
   if(inNileArea){
     // Nile Wave cleared — return to the pyramid map/loadout and continue straight on to wave 3
     exitNileWave();
-    waveIdx++; pending='wave'; betweenTimer=2.5; setBanner('WAVE '+(waveIdx+1)+' incoming…');
+    waveIdx++; pending='wave'; betweenTimer=4.5; setBanner('WAVE '+(waveIdx+1)+' incoming…');
     return;
   }
   // a normal wave was cleared: a boss follows wave 3 (idx 2), wave 6 (idx 5), and wave 9 (idx 8 — the
   // last Roman wave, triggering the Colosseum Champion, now the run's actual final boss — see onAllDead()'s
   // bossNum===3 branch). Waves 10-12 (Islamic/Cairo) never spawn enemies, so waveIdx never reaches 11 in
   // normal play. The Nile Wave follows wave 2 (idx 1)
-  if(waveIdx===2 || waveIdx===5 || waveIdx===8){ pending='boss'; betweenTimer=2.2;
+  if(waveIdx===2 || waveIdx===5 || waveIdx===8){ pending='boss'; betweenTimer=4.2;
     setBanner(waveIdx===5?'The Lernaean Hydra rises from the marsh…':waveIdx===8?'The Champion of the arena strides forth…':'A boss awaits below…'); }
-  else if(waveIdx===1 && pyramidPhase){ pending='nile'; betweenTimer=2.2; setBanner('The Nile stirs…'); }
-  else { waveIdx++; pending='wave'; betweenTimer=2.5; setBanner('WAVE '+(waveIdx+1)+' incoming…'); }
+  else if(waveIdx===1 && pyramidPhase){ pending='nile'; betweenTimer=4.2; setBanner('The Nile stirs…'); }
+  else { waveIdx++; pending='wave'; betweenTimer=4.5; setBanner('WAVE '+(waveIdx+1)+' incoming…'); }
 }
 function updateWaves(dt){
   if(pending){
@@ -10865,9 +10844,8 @@ function damageBot(bd, dmg, point){
     setHUD(); setEnemyCount(bossActive?'☠':undefined); SFX.death();
   }
 }
-let godMode = false; // debug: toggled by KeyG, see the DEBUG block near the keydown listener
 function damagePlayer(dmg){
-  if(!player.alive || godMode) return;
+  if(!player.alive) return;
   player.hp -= dmg; player.lastHit = performance.now()*0.001; showDamage(); setHUD(); SFX.hurt();
   if(player.hp <= 0){
     player.alive = false; player.respawn = 2.5;
