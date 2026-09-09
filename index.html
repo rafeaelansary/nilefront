@@ -74,6 +74,33 @@
   #adsbtn{position:absolute;right:30px;bottom:172px;width:74px;height:74px;border-radius:50%;background:rgba(40,90,150,0.55);border:3px solid rgba(255,255,255,0.85);color:#fff;font-weight:800;font-size:12px;display:none;align-items:center;justify-content:center;pointer-events:auto;user-select:none;text-align:center}
   #adsbtn.show{display:flex}
   #adsbtn.active{background:rgba(80,160,255,0.85)}
+  /* ---- interact prompt: sits just under the crosshair so it reads as "the thing you are looking at" ---- */
+  #prompt{position:absolute;left:50%;top:58%;transform:translateX(-50%);z-index:6;padding:7px 18px;border-radius:9px;
+    background:rgba(10,8,4,0.62);border:2px solid rgba(232,200,138,0.85);color:#ffe9b8;font-size:16px;font-weight:700;
+    letter-spacing:0.5px;opacity:0;transition:opacity 0.12s;pointer-events:none;white-space:nowrap}
+  body:not(.playing) #prompt{display:none !important}
+  /* ---- ticket booth panel ---- */
+  #boothoverlay{position:absolute;inset:0;z-index:11;display:none;align-items:center;justify-content:center;background:rgba(6,4,2,0.78)}
+  body.booth #boothoverlay{display:flex}
+  body.booth #crosshair,body.booth #prompt{display:none !important}
+  #boothpanel{width:min(560px,92vw);max-height:86vh;overflow-y:auto;background:linear-gradient(#2a1d10,#1a1209);
+    border:3px solid #c9a13a;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,0.7);padding:22px 24px;color:#f0e0c0}
+  #boothtitle{font-size:26px;font-weight:900;letter-spacing:2px;color:#ffd978;text-align:center}
+  #boothsub{font-size:13px;text-align:center;opacity:0.75;margin-top:4px}
+  #boothbal{margin:16px 0;padding:10px;text-align:center;font-size:19px;font-weight:800;color:#ffe9b8;
+    background:rgba(0,0,0,0.3);border:1px solid rgba(201,161,58,0.5);border-radius:9px}
+  .dest{display:flex;align-items:center;gap:12px;padding:11px 13px;margin-bottom:9px;border-radius:9px;
+    background:rgba(255,255,255,0.045);border:1px solid rgba(201,161,58,0.32)}
+  .dest.buyable{border-color:#c9a13a;background:rgba(201,161,58,0.14);cursor:pointer}
+  .dest.buyable:hover{background:rgba(201,161,58,0.26)}
+  .dest.short{opacity:0.62}
+  .dest.done{opacity:0.72;border-color:rgba(90,200,120,0.5)}
+  .dflag{font-size:26px;line-height:1}
+  .dmain{flex:1;min-width:0}
+  .dname{font-size:16px;font-weight:800;color:#ffe9b8}
+  .dera{font-size:12px;opacity:0.72;margin-top:2px}
+  .dprice{font-size:15px;font-weight:800;white-space:nowrap}
+  #boothhint{margin-top:14px;font-size:13px;text-align:center;opacity:0.7}
 </style>
 </head>
 <body>
@@ -89,6 +116,14 @@
 <div id="banner"></div>
 <div id="hpbar"><div id="hpfill"></div><div id="hptext">100</div></div>
 <div id="scopeoverlay"><div id="scopering"></div></div>
+<div id="prompt"></div>
+<div id="boothoverlay"><div id="boothpanel">
+  <div id="boothtitle">🎟 TRAVEL BOOTH</div>
+  <div id="boothsub">Khan al-Khalili · passage sold to any land, any age</div>
+  <div id="boothbal"></div>
+  <div id="destlist"></div>
+  <div id="boothhint">Click a destination to buy passage · [E] or [Esc] to leave</div>
+</div></div>
 <div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button></div>
 <div id="mobile">
   <div id="stick"><div id="knob"></div></div>
@@ -132,6 +167,9 @@ sun.shadow.camera.top = 45;
 sun.shadow.camera.bottom = -45;
 sun.shadow.bias = -0.0004;
 scene.add(sun);
+// World position of Cairo's travel booth, filled in by travelBooth() when the Islamic map is built. The
+// hub's interact check reads it, so it lives out here rather than inside that map's IIFE.
+const BOOTH_POS = {x:0, z:0};
 // ---- collision registry (top-down AABB rectangles; buildings/props are full-height blockers) ----
 const colliders = [];            // original overworld colliders
 const pyramidColliders = [];     // pyramid overworld colliders (waves 1-3)
@@ -5755,6 +5793,49 @@ heightZoneTarget = heightZonesIslamic;
   }
   marketStall(11,7,0,awningMat); marketStall(17,7,0.15,awningGreen); marketStall(14,12,1.5708,awningMat);
   marketStall(19,12,1.5708,awningGreen);
+  // ---- travel booth: the one stall you can actually use. It has to read as different from the four
+  // goods stalls from across the square, so it gets the map's only lapis-and-gold awning, a raised
+  // destination board, a brass globe on the counter and two lit lanterns — a taller, brighter silhouette
+  // among low red/green ones. Registered as an interactable below (see the hub section). ----
+  function travelBooth(x,z,rot){
+    const B=new THREE.Group(); B.position.set(x,0,z); B.rotation.y=rot||0; scene.add(B);
+    const bb=(w,h,d,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(px,py,pz); m.castShadow=true; m.receiveShadow=true; B.add(m); return m; };
+    // four brass posts, run long through the awning so no post cap ties with the roof's underside
+    [[-1.25,-0.9],[1.25,-0.9],[-1.25,0.9],[1.25,0.9]].forEach(([px,pz])=>{
+      const p=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.09,2.7,8), brassMat); p.position.set(px,1.30,pz); B.add(p);
+    });
+    bb(2.86,0.16,2.12, blueTile, 0,2.53,0);                    // lapis awning — the only one in the market
+    bb(2.94,0.07,2.20, brassMat, 0,2.44,0);                    // gold rim just under it
+    // destination board sitting on the awning, its base sunk 0.02 into the roof rather than resting on it
+    bb(2.30,0.56,0.13, timberMat, 0,2.88,-0.86);
+    bb(2.42,0.10,0.16, brassMat,  0,3.19,-0.86);               // gilt cap
+    for(let i=0;i<5;i++)                                        // route plaques, alternating brass and lapis
+      bb(0.34,0.30,0.05, i%2?blueTile:brassMat, -0.82+i*0.41, 2.88, -0.945);
+    bb(2.10,0.62,1.44, timberMat, 0,0.31,0);                   // counter
+    bb(2.18,0.09,1.52, woodMat,   0,0.66,0);                   // counter lip, overlapping the top by 0.03
+    // brass globe: the single cue that says "travel" from a distance
+    const globe=new THREE.Mesh(new THREE.SphereGeometry(0.30,12,9), brassMat); globe.position.set(-0.62,1.02,0.02); B.add(globe);
+    const meridian=new THREE.Mesh(new THREE.TorusGeometry(0.34,0.035,6,16), goldMat); meridian.position.set(-0.62,1.02,0.02); meridian.rotation.y=0.5; B.add(meridian);
+    bb(0.34,0.12,0.34, timberMat, -0.62,0.76,0.02);            // globe stand
+    // ticket rolls and a stamped ledger heaped on the counter
+    for(let i=0;i<4;i++){ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.075,0.30,7), voxMat(0xe8dcc0,{noise:8}));
+      r.position.set(0.35+ (i%2)*0.22, 0.79+Math.floor(i/2)*0.16, -0.20+(i%2)*0.26); r.rotation.z=Math.PI/2; B.add(r); }
+    bb(0.52,0.09,0.38, blueTile, 0.86,0.775,0.30);             // ledger
+    // two hanging lanterns — warm light so the booth reads as open for business at any hour
+    [-1.05,1.05].forEach(lx=>{
+      const chain=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.42,5), brassMat); chain.position.set(lx,2.23,0.62); B.add(chain);
+      bb(0.24,0.30,0.24, goldMat, lx,1.90,0.62);
+      const glow=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.19,0.15), new THREE.MeshBasicMaterial({color:0xffcf72,fog:false}));
+      glow.position.set(lx,1.90,0.62); B.add(glow);
+      const L=new THREE.PointLight(0xffcf72,0.55,6); L.position.set(lx,1.86,0.62); B.add(L);
+    });
+    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=2.86, d=2.20;
+    addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
+    BOOTH_POS.x=x; BOOTH_POS.z=z;
+  }
+  // (11,16) fronts the bazaar square from the south — verified clear of all 40 Cairo colliders and of
+  // every entry in SPAWN_POINTS. rot=PI turns its open front and counter toward the square.
+  travelBooth(11,16,Math.PI);
   tilePlaza(14.5,9.5,13,11);
   // crates, barrels and a rolled carpet stack filling the square
   function crateStack(x,z){
@@ -9982,6 +10063,27 @@ function enterIslamicWorld(banner){
   selectWeapon(0);
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
+// Cairo as the between-countries hub: the Islamic map with no wave queued and the wave/enemy counters
+// retitled, because "Wave 10/12  👾 0" is meaningless in a city with nothing to fight. Egypt's campaign
+// ends here; the travel booth in the bazaar is what leads onward.
+function enterHub(banner){
+  inHub = true;
+  enterIslamicWorld(banner);
+  pending = null; betweenTimer = 0;
+  setHubStats(true);
+}
+// The stats bar is relabelled rather than rebuilt: spawnWave() and setEnemyCount() look #wave and
+// #enemies up by id with no null guard, so every id has to survive the swap or the next wave throws.
+const STATS_HTML_DEFAULT = (document.getElementById('stats')||{}).innerHTML || '';
+function setHubStats(on){
+  const st=document.getElementById('stats'); if(!st) return;
+  st.innerHTML = on
+    ? '🔫 <span id="weap"></span> &nbsp; ⭐ <span id="score">0</span> &nbsp; 🕌 <span id="wave">Cairo</span> &nbsp; 🎟 <span id="enemies">booth in the bazaar</span>'
+    : STATS_HTML_DEFAULT;
+  const wv=document.getElementById('weap');
+  if(wv && weapons[currentWeapon]) wv.textContent = weapons[currentWeapon].userData.name;
+  setHUD();
+}
 // Boss arenas are open-air (sky visible), unlike the pyramid/greek dungeons — the player keeps the era's
 // loadout (no weapon swap), only the world group + lighting change. Used by spawnBossFight().
 function enterHydraArena(){
@@ -10063,8 +10165,10 @@ startBtn.addEventListener('click', pressStart);
 startBtn.addEventListener('touchstart', pressStart, {passive:false});
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === renderer.domElement;
-  lockEl.style.display = locked ? 'none' : 'flex';
-  if(locked && (!gameStarted || gameWon)) startGame();
+  // The booth releases pointer lock on purpose. Without this guard that would raise the START overlay
+  // over the panel, and the click that dismissed it would land as a fresh startGame().
+  lockEl.style.display = (locked || boothOpen) ? 'none' : 'flex';
+  if(locked && !boothOpen && (!gameStarted || gameWon)) startGame();
 });
 
 let yaw = 0, pitch = 0;              // actual (smoothed) camera angles
@@ -10094,6 +10198,100 @@ function setScope(on){
   const adsBtn = document.getElementById('adsbtn'); if(adsBtn) adsBtn.classList.toggle('active', scoped);
 }
 document.addEventListener('contextmenu', e => e.preventDefault());
+
+// ===================== CAIRO HUB: INTERACT + TRAVEL BOOTH =====================
+// Cairo is no longer the end of the run. Beating the Colosseum Champion used to set gameWon=true, which
+// disables firing and turns the next pointer-lock click into a full restart — you cannot rest somewhere
+// that restarts the game when you click. Cairo is now a hub state instead: peaceful (spawnWave() already
+// early-returns for n>=9, so no waves come), weapons kept, and a booth you can actually walk up to.
+let inHub = false;
+let boothOpen = false;
+
+// ---- currency ----
+// player.score is the existing kill counter (+1 per enemy, +10 per boss, set in the bot-death path). It
+// already survives death — respawnPlayer() never clears it, only startGame() does — so it is a per-run
+// bank, which is exactly what a ticket price wants. Purchases now draw it down.
+function balance(){ return player.score|0; }
+function canAfford(n){ return balance() >= n; }
+function spendScore(n){
+  if(!canAfford(n)) return false;
+  player.score -= n; setHUD();
+  return true;
+}
+
+// ---- destinations ----
+// One era per country (Egypt is the exception — it is the campaign you played to get here). Nothing but
+// Egypt is built yet, so every other entry is priced and listed but not travellable; `ready:false` is the
+// single flag that gates that. Adding a country later means flipping ready and pointing `go` at its
+// enter*World() function — no UI work.
+const DESTINATIONS = [
+  {flag:'🇪🇬', name:'Egypt',  era:'Pharaohs to Mamluks', price:0,  ready:true,  done:true},
+  {flag:'🏯', name:'Japan',  era:'Sengoku period · 1467–1615', price:60, ready:false},
+  {flag:'🗿', name:'Mexico', era:'Aztec empire · 1345–1521',   price:75, ready:false},
+  {flag:'🐉', name:'China',  era:'Qin dynasty · 221–206 BC',   price:90, ready:false},
+];
+
+const promptEl = document.getElementById('prompt');
+const boothOverlay = document.getElementById('boothoverlay');
+const destListEl = document.getElementById('destlist');
+const boothBalEl = document.getElementById('boothbal');
+
+// Distance at which the booth offers itself. 3.2 clears the booth's own 2.86x2.20 collider by about a
+// metre, so the prompt appears as you walk up to the counter rather than only when you are wedged in it.
+const BOOTH_RADIUS = 3.2;
+function nearBooth(){
+  if(!inHub || !player.alive) return false;
+  const dx = camera.position.x - BOOTH_POS.x, dz = camera.position.z - BOOTH_POS.z;
+  return (dx*dx + dz*dz) < BOOTH_RADIUS*BOOTH_RADIUS;
+}
+// Called once per frame from the animate loop.
+function updateInteract(){
+  if(!promptEl) return;
+  const show = nearBooth() && !boothOpen && !paused;
+  promptEl.textContent = show ? '🎟 Travel Booth — press [E]' : '';
+  promptEl.style.opacity = show ? '1' : '0';
+}
+
+function renderBooth(){
+  if(boothBalEl) boothBalEl.textContent = '⭐ ' + balance() + '  in hand';
+  if(!destListEl) return;
+  destListEl.innerHTML = '';
+  DESTINATIONS.forEach(d => {
+    const row = document.createElement('div');
+    const buyable = d.ready && !d.done && canAfford(d.price);
+    row.className = 'dest' + (d.done ? ' done' : buyable ? ' buyable' : !d.ready ? '' : ' short');
+    const price = d.done ? '✓ COMPLETED'
+                : !d.ready ? '— COMING SOON —'
+                : canAfford(d.price) ? '⭐ ' + d.price
+                : '⭐ ' + d.price + ' (short ' + (d.price - balance()) + ')';
+    row.innerHTML = '<div class="dflag">' + d.flag + '</div>'
+      + '<div class="dmain"><div class="dname">' + d.name + '</div>'
+      + '<div class="dera">' + d.era + '</div></div>'
+      + '<div class="dprice">' + price + '</div>';
+    if(buyable) row.addEventListener('click', () => buyTicket(d));
+    destListEl.appendChild(row);
+  });
+}
+function buyTicket(d){
+  if(!d.ready || d.done || !spendScore(d.price)) return;
+  closeBooth();
+  setBanner('🎟 Passage bought — ' + d.name);
+  if(typeof d.go === 'function') d.go();
+}
+function openBooth(){
+  if(boothOpen || paused) return;
+  boothOpen = true; firing = false;
+  document.body.classList.add('booth');
+  if(document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+  renderBooth();
+}
+function closeBooth(){
+  if(!boothOpen) return;
+  boothOpen = false;
+  document.body.classList.remove('booth');
+  if(!isTouch) renderer.domElement.requestPointerLock();
+}
+if(boothOverlay) boothOverlay.addEventListener('click', e => { if(e.target === boothOverlay) closeBooth(); });
 document.addEventListener('mousedown', e => {
   if (paused) return;
   if (e.button===2 && document.pointerLockElement===renderer.domElement) setScope(true);
@@ -10102,11 +10300,17 @@ document.addEventListener('mouseup', e => { if(e.button===2) setScope(false); })
 
 const keys = {};
 document.addEventListener('keydown', e => {
+  // the booth panel owns Esc/E while it is open, so closing it can't also toggle pause
+  if (boothOpen){
+    if (e.code==='Escape' || e.code==='KeyE'){ e.preventDefault(); closeBooth(); }
+    return;
+  }
   if (e.code==='KeyP' || e.code==='Escape' || e.code==='Space'){
     if (e.code==='Space') e.preventDefault(); // stop the page from scrolling / re-clicking a focused button
     if (gameStarted && !gameWon){ paused?resumeGame():pauseGame(); }
   }
   if (paused) return;
+  if (e.code==='KeyE' && nearBooth()){ openBooth(); return; }
   keys[e.code]=true;
   if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && document.pointerLockElement===renderer.domElement) setScope(true);
   if (e.code==='Digit1') selectWeapon(0);
@@ -10407,6 +10611,7 @@ function startGame(){
   document.body.classList.add('playing');
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
+  inHub=false; closeBooth(); setHubStats(false);   // a fresh run leaves the hub and restores the wave HUD
   // drain any leftover fire meteors from a previous run so one can't fire into the fresh game (quakeEffects,
   // the older analogous VFX-effect array, has this same gap on restart — out of scope here, only fixing
   // fireMeteors, this feature's own code)
@@ -10443,8 +10648,9 @@ function onAllDead(){
       // Cairo itself is enemy-free by design (no wave spawns, no Ifrit King fight — see spawnWave()'s
       // early return for n>=9) so the Champion's defeat is the actual end of the run: walk into a quiet
       // Cairo as the win state, rather than queuing up combat that will never come.
-      currentEra=3; gameWon=true;
-      enterIslamicWorld('🏆 The Champion falls! Cairo opens its gates in peace — you have conquered Egypt! 🕌');
+      // Cairo is the hub, not the credits. gameWon stays false so firing still works, clicking does not
+      // restart the run, and the banked ⭐ stays spendable at the travel booth.
+      currentEra=3; enterHub('🏆 Egypt is yours! Rest in Cairo — the booth in the bazaar sells passage onward 🎟');
       return;
     }
     if(bossNum>=4){
@@ -10889,6 +11095,7 @@ function respawnPlayer(){
   bossNum = currentEra; // keep credit for any boss(es) already defeated in earlier eras
   // exitDungeon() only knows the pyramid/greek pairing (dungeonWasPyramid) — there's no Roman/Islamic
   // dungeon, so eras 2 and 3 each get their own reset here instead of routing through that
+  if(inHub){ enterHub('💀 you wake in Cairo'); const sp0=pickSpawnPoint(); camera.position.copy(sp0); playerHeight=0; stuckTimer=0; vel.set(0,0,0); setHUD(); return; }
   if(currentEra >= 3) enterIslamicWorld('💀 back to Wave 10');
   else if(currentEra >= 2) enterRomanWorld('💀 back to Wave 7');
   else exitDungeon();
@@ -10945,6 +11152,10 @@ function animate(){
   const t = performance.now()*0.001;
 
   if (paused){ renderer.render(scene, camera); return; } // freeze the whole world — just keep showing the last frame
+  // The booth panel freezes the world the same way pause does, but AFTER the interact prompt is cleared —
+  // otherwise the prompt stays burned on screen behind the panel.
+  if (boothOpen){ updateInteract(); renderer.render(scene, camera); return; }
+  updateInteract();
 
   // drifting chimney smoke
   smokePuffs.forEach(p => {
