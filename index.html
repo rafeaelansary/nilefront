@@ -79,27 +79,62 @@
     background:rgba(10,8,4,0.62);border:2px solid rgba(232,200,138,0.85);color:#ffe9b8;font-size:16px;font-weight:700;
     letter-spacing:0.5px;opacity:0;transition:opacity 0.12s;pointer-events:none;white-space:nowrap}
   body:not(.playing) #prompt{display:none !important}
-  /* ---- ticket booth panel ---- */
-  #boothoverlay{position:absolute;inset:0;z-index:11;display:none;align-items:center;justify-content:center;background:rgba(6,4,2,0.78)}
+  /* ---- waypoint marker: tracks the booth on screen, and pins to the edge when it is off-view ---- */
+  #boothmarker{position:absolute;left:0;top:0;z-index:6;transform:translate(-50%,-50%);display:flex;
+    align-items:center;gap:6px;padding:5px 12px;border-radius:20px;background:rgba(10,8,4,0.66);
+    border:2px solid rgba(255,207,114,0.9);color:#ffe9b8;font-size:14px;font-weight:800;white-space:nowrap;
+    opacity:0;transition:opacity 0.15s;pointer-events:none;box-shadow:0 0 14px rgba(255,180,74,0.45)}
+  #bmarrow{display:none;font-size:13px;line-height:1}
+  #boothmarker.edge #bmarrow{display:inline-block}
+  #bmdist{opacity:0.85;font-weight:700}
+  body:not(.playing) #boothmarker{display:none !important}
+  /* hub: weapons are holstered, so the aiming chrome goes with them */
+  body.hub #crosshair, body.hub #ammoBig, body.hub #bossbar, body.hub #hitmark{ display:none !important; }
+  /* ---- travel booth: a full-screen world map you look at and click ---- */
+  #boothoverlay{position:absolute;inset:0;z-index:11;display:none;align-items:center;justify-content:center;
+    background:radial-gradient(120% 130% at 50% 40%, rgba(14,10,5,0.90) 0%, rgba(5,4,2,0.96) 100%)}
   body.booth #boothoverlay{display:flex}
-  body.booth #crosshair,body.booth #prompt{display:none !important}
-  #boothpanel{width:min(560px,92vw);max-height:86vh;overflow-y:auto;background:linear-gradient(#2a1d10,#1a1209);
-    border:3px solid #c9a13a;border-radius:14px;box-shadow:0 10px 40px rgba(0,0,0,0.7);padding:22px 24px;color:#f0e0c0}
-  #boothtitle{font-size:26px;font-weight:900;letter-spacing:2px;color:#ffd978;text-align:center}
-  #boothsub{font-size:13px;text-align:center;opacity:0.75;margin-top:4px}
-  #boothbal{margin:16px 0;padding:10px;text-align:center;font-size:19px;font-weight:800;color:#ffe9b8;
-    background:rgba(0,0,0,0.3);border:1px solid rgba(201,161,58,0.5);border-radius:9px}
-  .dest{display:flex;align-items:center;gap:12px;padding:11px 13px;margin-bottom:9px;border-radius:9px;
-    background:rgba(255,255,255,0.045);border:1px solid rgba(201,161,58,0.32)}
-  .dest.buyable{border-color:#c9a13a;background:rgba(201,161,58,0.14);cursor:pointer}
-  .dest.buyable:hover{background:rgba(201,161,58,0.26)}
-  .dest.short{opacity:0.62}
-  .dest.done{opacity:0.72;border-color:rgba(90,200,120,0.5)}
-  .dflag{font-size:26px;line-height:1}
-  .dmain{flex:1;min-width:0}
-  .dname{font-size:16px;font-weight:800;color:#ffe9b8}
-  .dera{font-size:12px;opacity:0.72;margin-top:2px}
-  .dprice{font-size:15px;font-weight:800;white-space:nowrap}
+  body.booth #crosshair,body.booth #prompt,body.booth #boothmarker{display:none !important}
+  #worldview{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;width:100%;height:100%;
+    padding:16px 20px;box-sizing:border-box;color:#f0e0c0}
+  #worldhead{display:flex;align-items:center;justify-content:center;gap:22px;flex-wrap:wrap}
+  #boothtitle{font-size:24px;font-weight:900;letter-spacing:3px;color:#ffd978;
+    text-shadow:0 2px 0 #3a2508,0 0 18px rgba(255,190,90,0.35)}
+  #boothbal{padding:6px 16px;font-size:17px;font-weight:800;color:#ffe9b8;
+    background:rgba(0,0,0,0.4);border:2px solid rgba(201,161,58,0.65);border-radius:20px}
+  /* the map keeps a strict 2:1 equirectangular aspect, so pin percentages line up with the canvas */
+  #worldwrap{position:relative;aspect-ratio:512/285;width:min(100%, calc((100vh - 150px) * 1.796));
+    max-height:calc(100vh - 150px);border:3px solid #c9a13a;border-radius:10px;overflow:hidden;
+    box-shadow:0 12px 46px rgba(0,0,0,0.75), inset 0 0 70px rgba(0,0,0,0.55)}
+  #worldcanvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+  #worldpins{position:absolute;inset:0}
+  .pin{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;
+    gap:3px;background:none;border:none;padding:0;font-family:inherit;color:#ffe9b8;cursor:default}
+  .pdot{width:26px;height:26px;border-radius:50%;border:4px solid #ffe9b8;background:#8a6a2a;
+    box-shadow:0 0 0 3px rgba(0,0,0,0.55);transition:transform 0.1s}
+  .plabel{font-size:13px;font-weight:800;white-space:nowrap;padding:3px 10px;border-radius:12px;
+    background:rgba(8,6,3,0.82);border:1px solid rgba(201,161,58,0.5);text-shadow:0 1px 2px #000}
+  .pin.buyable{cursor:pointer}
+  .pin.buyable .pdot{background:#ffcf5e;border-color:#fff;animation:pinpulse 1.5s ease-in-out infinite}
+  .pin.buyable .plabel{border-color:#ffcf5e;color:#fff3d0}
+  .pin.buyable:hover .pdot{transform:scale(1.35)}
+  .pin.buyable:hover .plabel{background:#c9a13a;color:#1a1209}
+  .pin.done .pdot{background:#4fbf73;border-color:#d8f5e2}
+  .pin.soon{opacity:0.72}
+  .pin.soon .pdot{background:#5a4a34}
+  .pin.short .pdot{background:#8a3a2a}
+  @keyframes pinpulse{0%,100%{box-shadow:0 0 0 3px rgba(0,0,0,0.55),0 0 0 0 rgba(255,207,94,0.65)}
+                      50%{box-shadow:0 0 0 3px rgba(0,0,0,0.55),0 0 0 17px rgba(255,207,94,0)}}
+  /* the dashed leg of a two-part journey, e.g. the Yuan crossing from China to Kyushu */
+  .pleg{position:absolute;height:0;border-top:2px dashed rgba(255,207,94,0.75);transform-origin:0 0;pointer-events:none}
+  .plegend{position:absolute;transform:translate(-50%,-50%);width:15px;height:15px;border-radius:50%;
+    border:3px solid rgba(255,207,94,0.85);background:rgba(20,14,6,0.9);pointer-events:none}
+  #worldcard{position:absolute;left:12px;bottom:12px;max-width:min(330px,52%);padding:11px 14px;border-radius:10px;
+    background:rgba(8,6,3,0.92);border:2px solid #c9a13a;pointer-events:none;opacity:0;transition:opacity 0.12s}
+  #worldcard.on{opacity:1}
+  #wcname{font-size:16px;font-weight:900;color:#ffe9b8}
+  #wcera{font-size:12px;opacity:0.78;margin-top:3px}
+  #wcstate{font-size:14px;font-weight:800;margin-top:7px}
   #boothhint{margin-top:14px;font-size:13px;text-align:center;opacity:0.7}
 </style>
 </head>
@@ -117,12 +152,18 @@
 <div id="hpbar"><div id="hpfill"></div><div id="hptext">100</div></div>
 <div id="scopeoverlay"><div id="scopering"></div></div>
 <div id="prompt"></div>
-<div id="boothoverlay"><div id="boothpanel">
-  <div id="boothtitle">🎟 TRAVEL BOOTH</div>
-  <div id="boothsub">Khan al-Khalili · passage sold to any land, any age</div>
-  <div id="boothbal"></div>
-  <div id="destlist"></div>
-  <div id="boothhint">Click a destination to buy passage · [E] or [Esc] to leave</div>
+<div id="boothmarker"><span id="bmarrow">▲</span><span id="bmicon">🎟</span><span id="bmdist"></span></div>
+<div id="boothoverlay"><div id="worldview">
+  <div id="worldhead">
+    <div id="boothtitle">🎟 WHERE TO?</div>
+    <div id="boothbal"></div>
+  </div>
+  <div id="worldwrap">
+    <canvas id="worldcanvas" width="512" height="285"></canvas>
+    <div id="worldpins"></div>
+    <div id="worldcard"><div id="wcname"></div><div id="wcera"></div><div id="wcstate"></div></div>
+  </div>
+  <div id="boothhint">Hover a destination · click to buy passage · [E] or [Esc] to leave</div>
 </div></div>
 <div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button></div>
 <div id="mobile">
@@ -170,6 +211,12 @@ scene.add(sun);
 // World position of Cairo's travel booth, filled in by travelBooth() when the Islamic map is built. The
 // hub's interact check reads it, so it lives out here rather than inside that map's IIFE.
 const BOOTH_POS = {x:0, z:0};
+// Hub state. Declared up here rather than beside the rest of the hub code because selectWeapon() reads
+// inHub and runs during initial weapon setup, long before that section — a `let` further down puts it in
+// the temporal dead zone at load time and throws.
+let inHub = false;
+let boothOpen = false;
+let boothBeacon = null;   // the crystal at the head of the booth's light shaft; spun by the animate loop
 // ---- collision registry (top-down AABB rectangles; buildings/props are full-height blockers) ----
 const colliders = [];            // original overworld colliders
 const pyramidColliders = [];     // pyramid overworld colliders (waves 1-3)
@@ -5617,305 +5664,517 @@ scene.children.slice().forEach(o=>{ if(o===sky || o.isLight || o===overworld || 
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
-// ===================== ISLAMIC OVERWORLD (Mamluk Cairo) — waves 10-12, the final arc =====================
-// Same swap architecture as every prior overworld: its own collider/height-zone arrays, swept into its own
-// group below. Not yet wired into any wave/era-transition logic in this task — see Task 2/4 for that.
+// ===================== ISLAMIC OVERWORLD (Mamluk Cairo) — the hub =====================
+// Rebuilt as a HUB, not an arena. The previous layout was combat furniture: three climbable lookout
+// towers, landmarks shoved to the map edges to leave open firing ground in the middle, and the travel
+// booth sitting behind the player's back at spawn. A city you visit between campaigns wants the
+// opposite — a street you walk down, buildings close enough to feel enclosing, and the one thing you
+// came here to use placed where you cannot miss it.
+//
+// The spine is a single cobbled street running north from Bab Zuwayla (behind you at spawn) to the
+// sultan's mosque that terminates the view. The covered bazaar straddles the middle of that walk, and
+// the travel booth stands in it, lit, facing the street. Everything else — the citadel terrace, the
+// wikala, the residential quarter — hangs off that spine.
+//
+// Every ground-standing base is sunk 0.06 below y=0 rather than resting on it. The ground slab's top
+// face IS y=0, so a base placed exactly at 0 shares that plane across its whole footprint.
 addTarget = islamicColliders;
 heightZoneTarget = heightZonesIslamic;
 (function buildIslamicOverworld(){
-  const sandstone = 0xc9a876;      // warm Citadel sandstone
+  const sandstone      = 0xc9a876;   // warm Citadel sandstone
   const sandstoneLight = 0xe0c89a;
-  const domeMat = voxMat(0x1f7a72,{noise:10});   // turquoise-glazed tile, ties back to zellijeTex's palette
-  const goldMat = metalMatP(0xc9a13a,80,0xffe8a0);
-  const woodMat = voxMat(0x6b4a28,{noise:16});
-  const awningMat = voxMat(0xb5342a,{noise:10}); // deep red-and-cream market awnings
+  const sandstoneDark  = 0x9a7c52;
+  const domeMat    = voxMat(0x1f7a72,{noise:10});  // turquoise-glazed tile
+  const goldMat    = metalMatP(0xc9a13a,80,0xffe8a0);
+  const brassMat   = metalMatP(0xc9a13a,80,0xffe8a0);
+  const woodMat    = voxMat(0x6b4a28,{noise:16});
+  const timberMat  = voxMat(0x4a3018,{noise:16});  // dark mashrabiya timber, the map's darkest note
+  const awningMat  = voxMat(0xb5342a,{noise:10});  // deep red market awnings
+  const awningGreen= voxMat(0x2e6b4a,{noise:10});
+  const blueTile   = voxMat(0x2a4a8a,{noise:10});  // deep lapis — the cool accent in a warm map
+  const creamMat   = voxMat(0xe0d6be,{noise:10});
+  const stoneMat   = new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),5)});
+  const wallMat    = new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),10)});
+  const lightMat   = voxMat(sandstoneLight,{noise:12});
+  const darkMat    = voxMat(sandstoneDark,{noise:14});
 
-  const blueTile = voxMat(0x2a4a8a,{noise:10});      // deep lapis tile panels — a cool accent in an otherwise warm map
-  const timberMat = voxMat(0x4a3018,{noise:16});     // dark mashrabiya timber, the map's darkest note
-  const awningGreen = voxMat(0x2e6b4a,{noise:10});
-  const brassMat = metalMatP(0xc9a13a,80,0xffe8a0);
+  // ---- shared primitives ----
+  const ib=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  const icyl=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  // a warm point light with a visible bulb — used everywhere a lantern hangs
+  const lamp=(x,y,z,range)=>{
+    const glow=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.2,0.16), new THREE.MeshBasicMaterial({color:0xffcf72,fog:false}));
+    glow.position.set(x,y,z); scene.add(glow);
+    const L=new THREE.PointLight(0xffb84a, 0.6, range||8); L.position.set(x,y-0.05,z); scene.add(L);
+  };
 
-  // ---- ground: warm dust everywhere, tile only where it is a deliberate plaza, cobble for the streets.
-  // Paving the whole 62x62 in bright zellige tile is what made this map read as a giant loud quilt. ----
+  // ---- ground: warm dust everywhere, cobble only where a street actually runs, tile only where a
+  // plaza is deliberate. Paving the whole 62x62 in bright zellige is what made this map read as a
+  // giant loud quilt in its first version. ----
   const groundMat = new THREE.MeshLambertMaterial({map:_finish(cairoDustTex(),42)});
   const ground = new THREE.Mesh(new THREE.BoxGeometry(62,1,62), groundMat); ground.position.set(0,-0.5,0); scene.add(ground);
   const roadMat = new THREE.MeshLambertMaterial({map:_finish(cobbleTex(),18), polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
   function roadPath(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d),roadMat); m.position.set(x,0.07,z); m.receiveShadow=true; scene.add(m); }
-  // The cross street is drawn as the full N-S run plus two E-W ARMS that stop at the N-S road's edge
-  // (x=+/-4), instead of two full-length slabs. Two full slabs both sat at y=0.07 with identical geometry
-  // height and the same polygon offset, so they were exactly coplanar across the central 8x8 square — a
-  // guaranteed z-fight, which is the flickering patch that showed up in the middle of the crossroads.
-  roadPath(0,0,8,58);
-  roadPath(-16.5,0,25,8); roadPath(16.5,0,25,8);
   const tileMat = new THREE.MeshLambertMaterial({map:_finish(zellijeTex(),6), polygonOffset:true, polygonOffsetFactor:-3, polygonOffsetUnits:-3});
   function tilePlaza(x,z,w,d){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,0.16,d),tileMat); m.position.set(x,0.08,z); m.receiveShadow=true; scene.add(m); }
+  // The spine, then two side streets drawn as ARMS that stop at the spine's edge (x=+/-4.5) rather
+  // than crossing it. Two full-length slabs at the same y with the same polygon offset are exactly
+  // coplanar over the crossing square, which is a guaranteed z-fight.
+  roadPath(0, 2.5, 9, 47);                      // Qasaba: the main street, z from -21 to 26
+  roadPath(-14.75, 1, 20.5, 7); roadPath(14.75, 1, 20.5, 7);   // east-west cross street at z=1
+  roadPath(-14.75, 17, 20.5, 6); roadPath(14.75, 17, 20.5, 6); // second cross street at z=17
 
-  // ---- perimeter city wall: encloses the map so it reads as a walled city instead of an open plain,
-  // and gives the horizon something other than empty sand ----
-  const wallMat = new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),10)});
-  // Z runs shortened by the wall thickness at both ends so the four runs butt rather than overlap — at a
-  // uniform 58 they doubled up in a 1.4x1.4 block at each corner, cap included.
-  [[0,-28,58,1.4],[0,28,58,1.4],[-28,0,1.4,55.2],[28,0,1.4,55.2]].forEach(([wx,wz,ww,wd])=>{
-    const seg=new THREE.Mesh(new THREE.BoxGeometry(ww,5.2,wd), wallMat); seg.position.set(wx, wx===0?2.6:2.57, wz); scene.add(seg);
-    // The Z runs' cornice is dropped fractionally so the four cornices can't share a top plane where they
-    // meet. Shortening them instead would open a visible sliver at each corner of the wall.
+  // ---- perimeter city wall ----
+  // Z runs shortened by the wall thickness at both ends so the four runs butt rather than overlap. The
+  // N and S runs are built as two 29-unit lengths rather than one 58 — a 58-unit box is over the audit's
+  // "too big to count as support" threshold, which made every merlon standing on them read as floating.
+  [[-14.5,-28,29,1.4],[14.5,-28,29,1.4],[-14.5,28,29,1.4],[14.5,28,29,1.4],
+   [-28,0,1.4,55.2],[28,0,1.4,55.2]].forEach(([wx,wz,ww,wd])=>{
+    // Z runs sit a hair lower than the N/S runs so the two can't share a top plane where they meet at
+    // the corners. isZ, not wx===0 — the N/S runs are no longer centred on the axis.
     const isZ = wd > ww;
-    const cornice=new THREE.Mesh(new THREE.BoxGeometry(ww+0.3,0.4,wd+0.3), voxMat(sandstoneLight,{noise:12}));
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(ww,5.2,wd), wallMat); seg.position.set(wx, isZ?2.57:2.6, wz); scene.add(seg);
+    // the cornice oversails only ACROSS the run, never along it: at ww+0.3 the two N segments' cornices
+    // overlapped by 0.3 at x=0 with identical top and bottom faces -- an exact tie down the whole join
+    const cornice=new THREE.Mesh(new THREE.BoxGeometry(isZ?ww+0.3:ww, 0.4, isZ?wd:wd+0.3), lightMat);
     cornice.position.set(wx, isZ ? 5.32 : 5.4, wz); scene.add(cornice);
     addBox(wx,wz,ww,wd);
   });
-  // merlons along the wall the player faces from spawn — the one that actually fills their view
-  for(let mx=-27;mx<=27;mx+=2.6){
-    const m=new THREE.Mesh(new THREE.BoxGeometry(1.0,1.0,1.2), voxMat(sandstoneLight,{noise:12})); m.position.set(mx,6.1,-28); scene.add(m);
+  // Merlons on all four walls now, not just the one the player used to face. The hub is walked around,
+  // so every wall ends up in view; a bare parapet on three sides was a giveaway that the old map was
+  // only ever composed for one sightline.
+  for(let m=-26.5;m<=26.5;m+=2.6){
+    ib(1.0,1.0,1.15, lightMat, m,6.05,-28);
+    ib(1.0,1.0,1.15, lightMat, m,6.05, 28);
+    ib(1.15,1.0,1.0, lightMat, -28,5.98, m);
+    ib(1.15,1.0,1.0, lightMat,  28,5.98, m);
   }
 
-  // ================= THE GREAT GATE (Bab) — the map's hero landmark =================
-  // The player enters this map at (0,10) looking down -Z, and previously every single landmark sat behind
-  // them or far off to one side, so the opening view was bare ground to the horizon. That empty sightline
-  // is the main reason the map read as unfinished. This puts a tall, colourful, unmistakably Cairene gate
-  // straight down the main street, framed by the twin towers, as the first thing they see.
-  (function greatGate(){
-    const GZ=-14, towerW=4, towerH=9.5, gap=5.5;   // gap leaves the 8-wide street fully walkable between the piers
+  // ================= BAB ZUWAYLA — the south gate, at the player's back on arrival =================
+  // You spawn at (0,21) having just come through it. Two round-shafted towers carrying minarets, which
+  // is the real Bab Zuwayla's identifying silhouette and nothing else on the map repeats.
+  (function babZuwayla(){
+    const GZ=24, gap=4.6, towerW=5;
     [-1,1].forEach(side=>{
       const tx=side*(gap+towerW/2);
-      const tower=new THREE.Mesh(new THREE.BoxGeometry(towerW,towerH,towerW), wallMat); tower.position.set(tx,towerH/2,GZ); scene.add(tower);
+      ib(towerW,10.5,towerW, wallMat, tx,5.19,GZ);              // base -0.06 .. 10.44
       addBox(tx,GZ,towerW,towerW);
-      // banded stonework + a corbelled cornice
-      [3.2,6.4].forEach(by=>{ const band=new THREE.Mesh(new THREE.BoxGeometry(towerW+0.25,0.45,towerW+0.25), voxMat(sandstoneLight,{noise:12})); band.position.set(tx,by,GZ); scene.add(band); });
-      const cornice=new THREE.Mesh(new THREE.BoxGeometry(towerW+0.7,0.6,towerW+0.7), voxMat(sandstoneLight,{noise:12})); cornice.position.set(tx,towerH+0.3,GZ); scene.add(cornice);
-      for(let i=0;i<4;i++)for(let j=0;j<4;j++){
-        if(i>0&&i<3&&j>0&&j<3) continue;           // ring of merlons around the tower top
-        const m=new THREE.Mesh(new THREE.BoxGeometry(0.85,0.95,0.85), voxMat(sandstoneLight,{noise:12}));
-        m.position.set(tx-1.5+i, towerH+1.1, GZ-1.5+j); scene.add(m);
-      }
-      // deep-set arched niches with lapis tile backing, the gate's main colour accent
-      [2.4,5.6].forEach(ny=>{
-        const niche=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.0,0.16), blueTile); niche.position.set(tx,ny,GZ+towerW/2+0.02); scene.add(niche);
-        const arch=new THREE.Mesh(new THREE.TorusGeometry(0.78,0.16,6,10,Math.PI), voxMat(sandstone,{noise:12})); arch.position.set(tx,ny+1.0,GZ+towerW/2+0.04); scene.add(arch);
+      ib(towerW+0.34,0.5,towerW+0.34, darkMat, tx,3.3,GZ);      // banded stonework
+      ib(towerW+0.34,0.5,towerW+0.34, darkMat, tx,7.1,GZ);
+      ib(towerW+0.8,0.62,towerW+0.8, lightMat, tx,10.6,GZ);     // corbelled cornice
+      // half-round bastion bellying out of the street face — the gate's read from head-on
+      icyl(1.7,1.9,9.2,12, wallMat, tx+side*0.4, 4.55, GZ-2.3);
+      // lapis niche with a pointed arch, twice up the face
+      [3.0,6.6].forEach(ny=>{
+        ib(1.6,2.1,0.18, blueTile, tx,ny,GZ-towerW/2-0.05);
+        const arch=new THREE.Mesh(new THREE.TorusGeometry(0.84,0.17,6,10,Math.PI), lightMat);
+        arch.position.set(tx,ny+1.05,GZ-towerW/2-0.08); arch.rotation.y=Math.PI; scene.add(arch);
       });
-      // brass lantern hanging on a bracket beside each niche
-      const bracket=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.6), brassMat); bracket.position.set(tx,7.4,GZ+towerW/2+0.3); scene.add(bracket);
-      const lantern=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.5,0.34), brassMat); lantern.position.set(tx,7.05,GZ+towerW/2+0.55); scene.add(lantern);
-      const glow=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.3,0.22), new THREE.MeshBasicMaterial({color:0xffcf6a,fog:false})); glow.position.set(tx,7.05,GZ+towerW/2+0.55); scene.add(glow);
-      const lampLight=new THREE.PointLight(0xffb84a,0.7,9); lampLight.position.set(tx,7.0,GZ+towerW/2+0.8); scene.add(lampLight);
+      // minaret rising off the tower top
+      icyl(0.62,0.78,5.4,10, creamMat, tx,13.5,GZ);
+      ib(1.5,0.3,1.5, blueTile, tx,15.2,GZ);
+      icyl(0.95,0.95,0.3,10, lightMat, tx,16.3,GZ);             // balcony ring
+      icyl(0.44,0.5,1.3,10, creamMat, tx,17.1,GZ);
+      const cap=new THREE.Mesh(new THREE.ConeGeometry(0.62,1.5,10), domeMat); cap.position.set(tx,18.5,GZ); scene.add(cap);
+      const fin=new THREE.Mesh(new THREE.ConeGeometry(0.1,0.46,6), goldMat); fin.position.set(tx,19.5,GZ); scene.add(fin);
+      lamp(tx+side*0.2, 7.6, GZ-3.1, 10);
     });
-    // span over the street: a lintel + a pointed arch + a crenellated parapet. No collider — the whole
-    // point is to walk under it, and this collision system treats a box as full-height regardless of its
-    // mesh, so a collider here would seal the street shut (same reasoning as the Roman arch's attic).
-    const lintel=new THREE.Mesh(new THREE.BoxGeometry(gap*2+0.5,1.1,3.2), wallMat); lintel.position.set(0,7.2,GZ); scene.add(lintel);
-    const archOuter=new THREE.Mesh(new THREE.TorusGeometry(gap-0.6,0.5,8,16,Math.PI), voxMat(sandstoneLight,{noise:12})); archOuter.position.set(0,5.6,GZ+1.4); scene.add(archOuter);
-    const archInner=new THREE.Mesh(new THREE.TorusGeometry(gap-1.3,0.34,8,16,Math.PI), blueTile); archInner.position.set(0,5.6,GZ+1.5); scene.add(archInner);
-    const parapet=new THREE.Mesh(new THREE.BoxGeometry(gap*2+0.5,0.5,3.4), voxMat(sandstoneLight,{noise:12})); parapet.position.set(0,7.9,GZ); scene.add(parapet);
-    for(let i=0;i<7;i++){ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.9,0.9), voxMat(sandstoneLight,{noise:12})); m.position.set(-4.5+i*1.5,8.6,GZ); scene.add(m); }
-    // green-and-gold banners hung either side of the opening
+    // the span over the street: lintel, pointed arch, parapet. No collider — the point is to walk under
+    // it, and this collision system treats a box as full-height regardless of the mesh's own height.
+    ib(gap*2+towerW+0.4,1.2,3.4, wallMat, 0,7.9,GZ);
+    const archOuter=new THREE.Mesh(new THREE.TorusGeometry(gap+0.1,0.52,8,16,Math.PI), lightMat);
+    archOuter.position.set(0,6.1,GZ-1.55); archOuter.rotation.y=Math.PI; scene.add(archOuter);
+    const archInner=new THREE.Mesh(new THREE.TorusGeometry(gap-0.6,0.32,8,16,Math.PI), blueTile);
+    archInner.position.set(0,6.1,GZ-1.68); archInner.rotation.y=Math.PI; scene.add(archInner);
+    ib(gap*2+towerW+0.4,0.55,3.6, lightMat, 0,8.72,GZ);
+    for(let i=0;i<9;i++) ib(0.8,0.95,0.95, lightMat, -6.4+i*1.6, 9.45, GZ);
+    // green-and-gold banners either side of the opening
     [-1,1].forEach(side=>{
-      const banner=new THREE.Mesh(new THREE.BoxGeometry(1.3,3.0,0.08), awningGreen); banner.position.set(side*3.6,4.6,GZ+1.75); scene.add(banner);
-      const trim=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.3,0.1), brassMat); trim.position.set(side*3.6,3.2,GZ+1.78); scene.add(trim);
+      ib(1.35,3.1,0.09, awningGreen, side*3.5,5.0,GZ-1.85);
+      ib(1.4,0.32,0.12, brassMat,    side*3.5,3.5,GZ-1.89);
     });
-    tilePlaza(0,GZ+5,14,8);
+    tilePlaza(0,GZ-5.5,15,8);
   })();
 
-  // ---- Citadel: a walled compound with crenellated (merlon) walls and two climbable corner towers ----
-  function citadel(cx,cz){
-    const w=16,d=14;
-    addBox(cx,cz,w,d);
-    const podium=new THREE.Mesh(new THREE.BoxGeometry(w,3.4,d), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),8)})); podium.position.set(cx,1.7,cz); scene.add(podium);
-    const merlonMat = voxMat(sandstoneLight,{noise:12});
-    for(let x=-w/2;x<=w/2;x+=1.6){
-      [cz-d/2,cz+d/2].forEach(z=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), merlonMat); m.position.set(cx+x,3.8,z); scene.add(m); });
-    }
-    for(let z=-d/2;z<=d/2;z+=1.6){
-      if(z===-d/2 || z===d/2) continue; // the four corners are already placed by the x-direction loop above — skip them here to avoid coincident/z-fighting cubes
-      [cx-w/2,cx+w/2].forEach(x=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), merlonMat); m.position.set(x,3.8,cz+z); scene.add(m); });
-    }
-    const gate=new THREE.Mesh(new THREE.BoxGeometry(3.2,3,0.6), voxMat(0x241c14,{noise:10})); gate.position.set(cx,1.5,cz-d/2-0.35); scene.add(gate);
-    const gateArch=new THREE.Mesh(new THREE.TorusGeometry(1.6,0.3,8,14,Math.PI), voxMat(sandstone,{noise:12})); gateArch.position.set(cx,3,cz-d/2-0.35); scene.add(gateArch);
-  }
-  citadel(-19,17);
-  // Citadel's climbable corner towers, same proven mechanic as every prior era. Both moved off their original
-  // spots (-25,10) and (-13,24): the Citadel's own addBox(-19,17,16,14) footprint (x∈[-27,-11], z∈[10,24]) is
-  // a full-height collider with no roofY, so it was silently swallowing roughly half of each tower's roof
-  // plateau/ramp corridor as an invisible wall — and the second tower's 's' ramp used to run off the far edge
-  // of the reachable map entirely (z up to 37, past the z∈[-29,29] movement clamp). Verified by hand below.
-  sniperTower(-25,6, 4.5, 7, 0xb8a074, 'e');   // roof x[-27.25,-22.75] z[3.75,8.25], ramp x[-22.75,-10.85] z[4.6,7.4] — z stays <10, clear of the Citadel box regardless of x
-  sniperTower(-6,25, 4, 6.5, 0xc0a878, 'e');   // roof x[-8,-4] z[23,27], ramp x[-4,7.05] z[23.6,26.4] — x stays >-11, clear of the Citadel box regardless of z; ramp lands well inside z<29
+  // ================= THE SULTAN'S MOSQUE — hero landmark, terminating the street =================
+  // Sultan-Hassan massing: one enormous slab of a facade with a deeply recessed portal, twin minarets,
+  // and the dome sitting behind. Placed dead on the street axis at the far end so it is the first thing
+  // in view at spawn and the thing you walk toward. Its footprint stops at z=-21.4, which keeps the
+  // shared SPAWN_POINTS entry at (-4,-20) on open ground.
+  (function sultanMosque(){
+    const MZ=-24.2, MD=5.6, MW=17.4;   // 17.4 not 17: at 17 the facade's side faces landed exactly on the minaret bands'
+    ib(MW,12.5,MD, stoneMat, 0,6.19,MZ);                        // -0.06 .. 12.44
+    addBox(0,MZ,MW,MD);
+    ib(MW+0.5,0.55,MD+0.5, lightMat, 0,12.6,MZ);                // crowning cornice
+    for(let i=0;i<11;i++) ib(0.9,0.85,0.9, lightMat, -7.5+i*1.5, 13.3, MZ);   // crenellation
+    // the pishtaq: a tall recessed portal, its reveals stepped so the recess reads as deep
+    ib(7.4,10.2,0.9, darkMat,  0,5.07,MZ+MD/2-0.3);   // bottom -0.03, clear of the facade's own -0.06
+    // each reveal bottoms out at its own y: at 4.60/4.15 the lapis and stone layers both had their
+    // underside at exactly -0.05 while interpenetrating, which is an exact tie down the whole portal
+    ib(6.2,9.3,0.55, blueTile, 0,4.63,MZ+MD/2+0.10);   // -0.02: the dark reveal already owns -0.03
+    ib(5.0,8.4,0.30, stoneMat, 0,4.19,MZ+MD/2+0.34);
+    // muqarnas hood: five stepped courses corbelling out of the portal head
+    for(let i=0;i<5;i++) ib(4.6-i*0.72, 0.42, 0.44+i*0.16, i%2?lightMat:creamMat, 0, 7.05+i*0.44, MZ+MD/2+0.30+i*0.08);
+    ib(3.0,4.4,0.34, timberMat, 0,2.14,MZ+MD/2+0.48);           // the bronze-bound doors
+    for(let i=0;i<4;i++) ib(2.7,0.1,0.12, brassMat, 0, 0.85+i*1.05, MZ+MD/2+0.66);
+    // banded flanks: alternating ablaq courses, the Mamluk stripe
+    for(let i=0;i<6;i++) ib(MW+0.16,0.42,MD+0.16, i%2?darkMat:lightMat, 0, 1.4+i*1.85, MZ);
+    // twin minarets, taller than anything else in the city so they carry the skyline
+    [-1,1].forEach(side=>{
+      const nx=side*7.6;
+      icyl(0.78,1.0,11,10, creamMat, nx,5.49,MZ+0.4);   // bottom -0.01, clear of the facade's -0.06
+      // no collider: the minaret stands wholly inside the mosque's own 17x5.6 box
+      [3.4,7.0].forEach(by=> icyl(0.9,0.9,0.36,10, blueTile, nx,by,MZ+0.4));
+      icyl(1.2,1.2,0.34,10, lightMat, nx,11.2,MZ+0.4);          // first balcony
+      icyl(0.56,0.66,3.2,10, creamMat, nx,12.9,MZ+0.4);
+      icyl(0.92,0.92,0.28,10, lightMat, nx,14.6,MZ+0.4);        // second balcony
+      icyl(0.4,0.48,1.6,8, creamMat, nx,15.5,MZ+0.4);
+      const cap=new THREE.Mesh(new THREE.ConeGeometry(0.6,1.7,10), domeMat); cap.position.set(nx,17.1,MZ+0.4); scene.add(cap);
+      const fin=new THREE.Mesh(new THREE.ConeGeometry(0.11,0.5,6), goldMat); fin.position.set(nx,18.2,MZ+0.4); scene.add(fin);
+      lamp(nx, 11.5, MZ+1.6, 9);
+    });
+    // dome on a windowed drum, sitting above and behind the facade
+    icyl(3.4,3.6,1.8,16, lightMat, 0,13.4,MZ-0.7);
+    for(let i=0;i<10;i++){ const a=i/10*Math.PI*2;
+      const w=ib(0.42,0.78,0.34, blueTile, Math.cos(a)*3.45, 13.5, MZ-0.7+Math.sin(a)*3.45); w.rotation.y=-a; }
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(3.55,16,9,0,Math.PI*2,0,Math.PI/2), domeMat);
+    dome.position.set(0,14.2,MZ-0.7); scene.add(dome);
+    const dfin=new THREE.Mesh(new THREE.ConeGeometry(0.2,0.9,6), goldMat); dfin.position.set(0,18.1,MZ-0.7); scene.add(dfin);
+    tilePlaza(0,-17.5,18,8);   // forecourt: no collider, so the spawn point at (-4,-20) stays walkable
+    // a pair of free-standing lamp columns marking the forecourt edge
+    [-6.5,6.5].forEach(lx=>{
+      ib(0.9,0.28,0.9, darkMat, lx,0.08,-14.5);
+      icyl(0.16,0.22,2.9,8, creamMat, lx,1.6,-14.5);
+      ib(0.5,0.5,0.5, brassMat, lx,3.25,-14.5);
+      lamp(lx,3.25,-14.5,8);
+    });
+  })();
 
-  // ---- Mosque: arcaded base with lapis tile panels, a drum-raised dome, and a tall minaret. Moved from
-  // the far corner (19,-22) to the left of the main street so it is actually in view from the spawn. ----
-  function mosque(cx,cz){
-    const base=new THREE.Mesh(new THREE.BoxGeometry(9,5,9), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),5)})); base.position.set(cx,2.5,cz); scene.add(base);
-    addBox(cx,cz,9,9);
-    // arcade of pointed arches across the street-facing side, with lapis spandrel panels between them
-    for(let i=0;i<3;i++){
-      const ax=cx-3+i*3;
-      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.32,3.4,8), voxMat(0xe0d6be,{noise:10})); col.position.set(ax,1.7,cz+4.6); scene.add(col);
-      const arch=new THREE.Mesh(new THREE.TorusGeometry(0.95,0.22,6,10,Math.PI), voxMat(sandstoneLight,{noise:12})); arch.position.set(ax,3.4,cz+4.6); scene.add(arch);
-      const panel=new THREE.Mesh(new THREE.BoxGeometry(2.2,1.1,0.12), blueTile); panel.position.set(ax,4.5,cz+4.55); scene.add(panel);
+  // ================= THE COVERED BAZAAR — the middle of the walk =================
+  // A timber arcade thrown across the street between z=-1 and z=15, stalls down both sides underneath.
+  // No colliders on any of the overhead structure: it is meant to be walked under, and a collider box
+  // here would seal the street.
+  (function bazaarArcade(){
+    for(let z=-1; z<=15; z+=2.0){
+      ib(11.4,0.34,0.44, timberMat, 0,5.05,z);                  // cross beam
+      [-5.2,5.2].forEach(px=> icyl(0.16,0.2,5.0,7, woodMat, px,2.44,z));  // posts, buried to -0.06
     }
-    const parapet=new THREE.Mesh(new THREE.BoxGeometry(9.4,0.5,9.4), voxMat(sandstoneLight,{noise:12})); parapet.position.set(cx,5.2,cz); scene.add(parapet);
-    // raised drum lifts the dome clear of the roofline so it reads from a distance
-    const drum=new THREE.Mesh(new THREE.CylinderGeometry(3.0,3.2,1.6,14), voxMat(sandstoneLight,{noise:12})); drum.position.set(cx,6.2,cz); scene.add(drum);
-    for(let i=0;i<8;i++){ const a=i/8*Math.PI*2;   // ring of small windows around the drum
-      const w=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.7,0.3), blueTile); w.position.set(cx+Math.cos(a)*3.05,6.3,cz+Math.sin(a)*3.05); w.rotation.y=-a; scene.add(w); }
-    const dome=new THREE.Mesh(new THREE.SphereGeometry(3.15,14,8,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(cx,7.0,cz); scene.add(dome);
-    const finial=new THREE.Mesh(new THREE.ConeGeometry(0.18,0.8,6), goldMat); finial.position.set(cx,10.4,cz); scene.add(finial);
-    // minaret: a tall tapering tower with a balcony ring and a tiled cap
-    const minaretX=cx+6, minaretZ=cz-4;
-    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.95,9,10), voxMat(0xe0d6be,{noise:12})); shaft.position.set(minaretX,4.5,minaretZ); scene.add(shaft);
-    addBox(minaretX,minaretZ,1.9,1.9);
-    [3.0,6.0].forEach(by=>{ const band=new THREE.Mesh(new THREE.CylinderGeometry(0.88,0.88,0.35,10), blueTile); band.position.set(minaretX,by,minaretZ); scene.add(band); });
-    const balcony=new THREE.Mesh(new THREE.CylinderGeometry(1.15,1.15,0.32,10), voxMat(sandstoneLight,{noise:10})); balcony.position.set(minaretX,8.6,minaretZ); scene.add(balcony);
-    const upper=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.62,1.5,10), voxMat(0xe0d6be,{noise:12})); upper.position.set(minaretX,9.5,minaretZ); scene.add(upper);
-    const cap=new THREE.Mesh(new THREE.ConeGeometry(0.75,1.7,10), domeMat); cap.position.set(minaretX,11.0,minaretZ); scene.add(cap);
-    const capFinial=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.55,6), goldMat); capFinial.position.set(minaretX,12.1,minaretZ); scene.add(capFinial);
-  }
-  mosque(-13,-6);
-  tilePlaza(-13,2,12,6);   // tiled forecourt in front of the mosque arcade
+    // raised to 5.22 so they actually carry the slats: the cross beams are 2.0 apart and the slats are
+    // 0.72 apart, so most slats sit over a gap and had nothing under them at all
+    [-5.2,5.2].forEach(px=> ib(0.3,0.3,17.6, timberMat, px,5.22,7));      // longitudinal rails
+    // slatted roof, gapped so daylight falls in stripes on the cobbles
+    // 5.25, not 5.34: the beams top out at 5.22, so at 5.34 every slat hung 0.07 clear of its support
+    for(let z=-0.6; z<=14.8; z+=0.72) ib(10.4,0.1,0.34, woodMat, 0,5.25,z);
+    // lanterns strung down the middle of the arcade
+    for(let z=0.5; z<=14; z+=3.4){
+      icyl(0.03,0.03,0.7,5, brassMat, 0,4.6,z);
+      ib(0.3,0.36,0.3, brassMat, 0,4.05,z);
+      lamp(0,4.05,z,7);
+    }
+    // carpets and cloth bolts hung off the rails — pure colour, no colliders
+    [[-5.45,2.4,0xa8342a],[-5.45,4.2,0x2a4a8a],[-5.45,10.8,0x2e6b4a],[-5.45,12.6,0xc07a20],
+     [ 5.45,3.2,0x2e6b4a],[ 5.45,9.4,0xa8342a],[ 5.45,13.6,0x2a4a8a]].forEach(([cx,cz,col])=>{
+      ib(0.12,1.7,1.3, voxMat(col,{noise:12}), cx,3.55,cz);
+    });
+  })();
 
-  // ---- Khan bazaar: a covered market square — stalls with alternating red/green awnings, stacked crates,
-  // barrels and hanging carpets. This is the map's colour hotspot. ----
-  function marketStall(x,z,rot,mat){
+  // Every stall used to carry the same three boxes on the same table, so a market of six read as one
+  // stall copied six times. Each now sells something identifiable at a glance: spices in conical piles,
+  // fruit heaped in a pyramid, pottery, hanging lamps, bolts of cloth, beaten copper.
+  const TT = 0.60;   // every table's top face, so goods can be seated on it without guessing
+  function marketStall(x,z,rot,mat,kind){
     const stall=new THREE.Group(); stall.position.set(x,0,z); stall.rotation.y=rot||0; scene.add(stall);
-    const post=(px,pz)=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.8,6), woodMat); p.position.set(px,0.9,pz); stall.add(p); };
+    const sb=(w,h,d,m,px,py,pz)=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); b.position.set(px,py,pz); b.castShadow=true; stall.add(b); return b; };
+    const scy=(rt,rb,h,seg,m,px,py,pz)=>{ const c2=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),m); c2.position.set(px,py,pz); c2.castShadow=true; stall.add(c2); return c2; };
+    // goods sit 0.03 INTO the table top rather than on it, so no base plane ties with the tabletop
+    const seat=(h)=> TT - 0.03 + h/2;
+    const post=(px,pz)=>{ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.96,6), woodMat); p.position.set(px,0.92,pz); stall.add(p); };
     post(-1,-0.7); post(1,-0.7); post(-1,0.7); post(1,0.7);
     const roof=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.15,1.8), mat||awningMat); roof.position.set(0,1.85,0); stall.add(roof);
-    // striped valance hanging off the awning's front edge
     for(let i=0;i<5;i++){ const v=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.28,0.06), i%2?(mat||awningMat):voxMat(0xe8dcc0,{noise:8}));
       v.position.set(-0.96+i*0.48,1.63,0.9); stall.add(v); }
-    const table=new THREE.Mesh(new THREE.BoxGeometry(2.0,0.6,1.4), woodMat); table.position.set(0,0.3,0); stall.add(table);
-    // goods heaped on the table
-    for(let i=0;i<3;i++){ const g2=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.22,0.36), i%2?blueTile:voxMat(0xb8862a,{noise:14}));
-      g2.position.set(-0.6+i*0.6,0.71,0); stall.add(g2); }
-    // collider in world space: rotated bounding box (same pattern as ruinedWall/coverWall)
-    const c=Math.cos(rot||0), s=Math.sin(rot||0);
-    const w=2.4, d=1.8;
+    sb(2.0,0.66,1.4, woodMat, 0,0.27,0);          // table: -0.06 .. 0.60
+
+    if(kind==='spice'){
+      // conical piles of ground spice in shallow dishes — the loudest colour in the market
+      [[-0.66,0xc4471f],[-0.22,0xd9a520],[0.22,0x8f2f26],[0.66,0x6f7d24]].forEach(([gx,col],i)=>{
+        scy(0.19,0.21,0.07,10, voxMat(0x7a5a34,{noise:12}), gx, seat(0.07), -0.1);
+        const cone=new THREE.Mesh(new THREE.ConeGeometry(0.17,0.30,9), voxMat(col,{noise:16}));
+        cone.position.set(gx, TT+0.06+0.15, -0.1); stall.add(cone);
+      });
+      scy(0.13,0.15,0.34,8, voxMat(0x8a6a3a,{noise:14}), 0.78, seat(0.34), 0.36);  // a sack, leaning open
+    } else if(kind==='fruit'){
+      // a pyramid of oranges plus hanging date bunches
+      const orange=voxMat(0xd2731c,{noise:14});
+      for(let r=0;r<3;r++) for(let i=0;i<3-r;i++)
+        sb(0.24,0.24,0.24, orange, -0.32+i*0.32+r*0.16, TT-0.03+0.12+r*0.22, -0.08);
+      sb(0.5,0.2,0.36, voxMat(0x7a4a1c,{noise:14}), 0.66, seat(0.20), 0.1);
+      [[-0.55,0.2],[0.05,0.34]].forEach(([hx,hz])=>{                 // dates hung off the awning
+        scy(0.02,0.02,0.34,5, woodMat, hx,1.60,hz);
+        sb(0.2,0.42,0.2, voxMat(0x6b3f18,{noise:16}), hx,1.24,hz);
+      });
+    } else if(kind==='pottery'){
+      scy(0.2,0.14,0.5,9,  voxMat(0xa8703a,{noise:14}), -0.62, seat(0.50), 0.0);
+      scy(0.15,0.22,0.38,9, voxMat(0x8c5a2c,{noise:14}), -0.18, seat(0.38), 0.16);
+      scy(0.24,0.18,0.62,9, voxMat(0xb07a44,{noise:14}),  0.30, seat(0.62), -0.1);
+      scy(0.12,0.16,0.3,8,  voxMat(0x6f7d84,{noise:12}),  0.72, seat(0.30), 0.2);
+      scy(0.34,0.40,0.72,10, voxMat(0x96612e,{noise:16}), 1.16,0.30,-0.42);   // a big jar on the floor
+    } else if(kind==='lamps'){
+      // pierced brass lanterns, several hung from the awning and lit — the market's night-light
+      [[-0.7,0.18],[0.0,-0.2],[0.7,0.2]].forEach(([lx,lz])=>{
+        scy(0.022,0.022,0.42,5, brassMat, lx,1.56,lz);
+        sb(0.24,0.34,0.24, brassMat, lx,1.20,lz);
+        const gl=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.2,0.14), new THREE.MeshBasicMaterial({color:0xffcf72,fog:false}));
+        gl.position.set(lx,1.20,lz); stall.add(gl);
+        const L=new THREE.PointLight(0xffb84a,0.4,5); L.position.set(lx,1.16,lz); stall.add(L);
+      });
+      [-0.6,-0.1,0.45].forEach((gx,i)=> sb(0.22,0.3+i*0.06,0.22, brassMat, gx, seat(0.3+i*0.06), -0.1));
+    } else if(kind==='cloth'){
+      // folded bolts stacked flat, and rolls stood on end behind them
+      [[0xa8342a,0],[0x2a4a8a,1],[0x2e6b4a,2],[0xc07a20,3]].forEach(([col,i])=>
+        sb(1.5,0.14,0.5, voxMat(col,{noise:12}), -0.15, TT-0.03+0.07+i*0.15, -0.1));
+      [[0xa8342a,-0.78],[0x2a4a8a,0.62],[0xd8cfc0,0.88]].forEach(([col,gx])=>
+        scy(0.13,0.13,0.78,8, voxMat(col,{noise:12}), gx, seat(0.78), 0.34));
+    } else {   // 'copper' — beaten trays and plates, standing and stacked
+      // staggered in depth: stood at the same z both trays were the same 0.06-thick disc on the same
+      // plane, so their faces coincided exactly where they overlapped
+      [[-0.66,0.46,-0.02],[0.02,0.58,-0.26]].forEach(([gx,r,gz])=>{
+        const tray=new THREE.Mesh(new THREE.CylinderGeometry(r,r,0.06,14), brassMat);
+        tray.position.set(gx, TT+0.24, gz); tray.rotation.x=Math.PI/2; stall.add(tray);
+        sb(0.12,0.5,0.12, timberMat, gx, seat(0.50), gz);             // the stand it leans on
+      });
+      [0,1,2].forEach(i=> scy(0.28,0.28,0.05,14, brassMat, 0.72, TT-0.03+0.03+i*0.06, 0.24));
+    }
+    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=2.4, d=1.8;
     addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
   }
-  marketStall(11,7,0,awningMat); marketStall(17,7,0.15,awningGreen); marketStall(14,12,1.5708,awningMat);
-  marketStall(19,12,1.5708,awningGreen);
-  // ---- travel booth: the one stall you can actually use. It has to read as different from the four
-  // goods stalls from across the square, so it gets the map's only lapis-and-gold awning, a raised
-  // destination board, a brass globe on the counter and two lit lanterns — a taller, brighter silhouette
-  // among low red/green ones. Registered as an interactable below (see the hub section). ----
+  // Stalls line the arcade facing inward: west side turned east (+PI/2), east side turned west (-PI/2).
+  marketStall(-7.5, 1.0, 1.5708, awningMat,   'spice');
+  marketStall(-7.5, 6.5, 1.5708, awningGreen, 'pottery');
+  marketStall(-7.5,11.0, 1.5708, awningMat,   'cloth');
+  marketStall( 7.5, 0.0,-1.5708, awningGreen, 'fruit');
+  marketStall( 7.5, 8.0,-1.5708, awningMat,   'lamps');
+  marketStall( 7.5,12.0,-1.5708, awningGreen, 'copper');
+
+  // ---- travel booth: the one stall you can actually use, and the reason this map exists.
+  // Moved to the head of the bazaar, dead on the street axis at (0,-6), and built at roughly 1.6x a goods
+  // stall. Tucked against the east arcade at its old size it filled the screen the moment you touched it
+  // while still being easy to walk past; standing in the open where the arcade ends, it terminates the
+  // walk from the gate and is read as a building rather than a table. The 9-wide street leaves 1.9 units
+  // of clear pavement either side of its dais.
   function travelBooth(x,z,rot){
     const B=new THREE.Group(); B.position.set(x,0,z); B.rotation.y=rot||0; scene.add(B);
     const bb=(w,h,d,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(px,py,pz); m.castShadow=true; m.receiveShadow=true; B.add(m); return m; };
-    // four brass posts, run long through the awning so no post cap ties with the roof's underside
-    [[-1.25,-0.9],[1.25,-0.9],[-1.25,0.9],[1.25,0.9]].forEach(([px,pz])=>{
-      const p=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.09,2.7,8), brassMat); p.position.set(px,1.30,pz); B.add(p);
-    });
-    bb(2.86,0.16,2.12, blueTile, 0,2.53,0);                    // lapis awning — the only one in the market
-    bb(2.94,0.07,2.20, brassMat, 0,2.44,0);                    // gold rim just under it
-    // destination board sitting on the awning, its base sunk 0.02 into the roof rather than resting on it
-    bb(2.30,0.56,0.13, timberMat, 0,2.88,-0.86);
-    bb(2.42,0.10,0.16, brassMat,  0,3.19,-0.86);               // gilt cap
+    const bcy=(rt,rb,h,seg,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat); m.position.set(px,py,pz); m.castShadow=true; B.add(m); return m; };
+    bb(5.2,0.28,4.0, tileMat,  0,0.06,0);                       // tiled dais, -0.08 .. 0.20
+    bb(5.4,0.20,4.2, lightMat, 0,0.00,0);                       // its kerb: bottom -0.10, its own plane
+    // four brass posts, run long through the awning so no post cap ties with its underside
+    [[-1.95,-1.4],[1.95,-1.4],[-1.95,1.4],[1.95,1.4]].forEach(([px,pz])=>
+      bcy(0.11,0.13,4.2,8, brassMat, px,2.04,pz));
+    bb(4.45,0.24,3.30, blueTile, 0,3.95,0);                     // lapis awning — the only one in the market
+    bb(4.55,0.10,3.42, brassMat, 0,3.79,0);                     // gold rim just under it
+    // destination board standing on the awning, its base sunk 0.02 in rather than resting on it
+    bb(3.60,0.86,0.20, timberMat, 0,4.48,-1.35);
+    bb(3.75,0.15,0.24, brassMat,  0,4.95,-1.35);                // gilt cap
     for(let i=0;i<5;i++)                                        // route plaques, alternating brass and lapis
-      bb(0.34,0.30,0.05, i%2?blueTile:brassMat, -0.82+i*0.41, 2.88, -0.945);
-    bb(2.10,0.62,1.44, timberMat, 0,0.31,0);                   // counter
-    bb(2.18,0.09,1.52, woodMat,   0,0.66,0);                   // counter lip, overlapping the top by 0.03
-    // brass globe: the single cue that says "travel" from a distance
-    const globe=new THREE.Mesh(new THREE.SphereGeometry(0.30,12,9), brassMat); globe.position.set(-0.62,1.02,0.02); B.add(globe);
-    const meridian=new THREE.Mesh(new THREE.TorusGeometry(0.34,0.035,6,16), goldMat); meridian.position.set(-0.62,1.02,0.02); meridian.rotation.y=0.5; B.add(meridian);
-    bb(0.34,0.12,0.34, timberMat, -0.62,0.76,0.02);            // globe stand
+      bb(0.53,0.46,0.05, i%2?blueTile:brassMat, -1.28+i*0.64, 4.48, -1.46);
+    bb(3.25,0.95,2.25, timberMat, 0,0.415,0);                   // counter
+    bb(3.38,0.14,2.36, woodMat,   0,0.94,0);                    // counter lip, overlapping the top by 0.02
+    // brass globe: the cue that says "travel" from the far end of the street
+    const globe=new THREE.Mesh(new THREE.SphereGeometry(0.46,14,10), brassMat); globe.position.set(-0.95,1.58,0.03); B.add(globe);
+    const meridian=new THREE.Mesh(new THREE.TorusGeometry(0.52,0.05,6,18), goldMat); meridian.position.set(-0.95,1.58,0.03); meridian.rotation.y=0.5; B.add(meridian);
+    bb(0.52,0.18,0.52, timberMat, -0.95,1.08,0.03);             // globe stand
     // ticket rolls and a stamped ledger heaped on the counter
-    for(let i=0;i<4;i++){ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.075,0.30,7), voxMat(0xe8dcc0,{noise:8}));
-      r.position.set(0.35+ (i%2)*0.22, 0.79+Math.floor(i/2)*0.16, -0.20+(i%2)*0.26); r.rotation.z=Math.PI/2; B.add(r); }
-    bb(0.52,0.09,0.38, blueTile, 0.86,0.775,0.30);             // ledger
-    // two hanging lanterns — warm light so the booth reads as open for business at any hour
-    [-1.05,1.05].forEach(lx=>{
-      const chain=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.42,5), brassMat); chain.position.set(lx,2.23,0.62); B.add(chain);
-      bb(0.24,0.30,0.24, goldMat, lx,1.90,0.62);
-      const glow=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.19,0.15), new THREE.MeshBasicMaterial({color:0xffcf72,fog:false}));
-      glow.position.set(lx,1.90,0.62); B.add(glow);
-      const L=new THREE.PointLight(0xffcf72,0.55,6); L.position.set(lx,1.86,0.62); B.add(L);
+    for(let i=0;i<6;i++){ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.46,8), voxMat(0xe8dcc0,{noise:8}));
+      r.position.set(0.5+(i%3)*0.34, 1.13+Math.floor(i/3)*0.24, -0.3+(i%3)*0.3); r.rotation.z=Math.PI/2; B.add(r); }
+    bb(0.80,0.14,0.58, blueTile, 1.32,1.08,0.46);               // ledger
+    // two hanging lanterns — the booth reads as open for business at any hour
+    [-1.63,1.63].forEach(lx=>{
+      bcy(0.03,0.03,0.70,5, brassMat, lx,3.60,0.95);
+      bb(0.38,0.46,0.38, goldMat, lx,3.05,0.95);
+      const glow=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.3,0.24), new THREE.MeshBasicMaterial({color:0xffcf72,fog:false}));
+      glow.position.set(lx,3.05,0.95); B.add(glow);
+      const L=new THREE.PointLight(0xffcf72,0.75,9); L.position.set(lx,3.0,0.95); B.add(L);
     });
-    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=2.86, d=2.20;
+    // ---- the waypoint beacon: a shaft of gold light standing on the dais and rising above every roof in
+    // the city, with a slowly turning crystal at its head. Its base is on the dais rather than hanging in
+    // mid-air, which is both how a beam should read and what keeps it off the floating-scenery report.
+    // the shaft starts just above the dais, not at its base: run down to the same -0.10 as the kerb it
+    // would have shared that plane across the whole 4.41-unit footprint
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.55,1.05,15.1,12,1,true),
+      new THREE.MeshBasicMaterial({color:0xffd45e, transparent:true, opacity:0.17, side:THREE.DoubleSide, depthWrite:false, fog:false}));
+    beam.position.set(0,7.8,0); B.add(beam);
+    const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(0.85),
+      new THREE.MeshBasicMaterial({color:0xffe08a, fog:false}));
+    crystal.position.set(0,14.4,0); B.add(crystal);
+    const beaconLight=new THREE.PointLight(0xffcf72,0.9,14); beaconLight.position.set(0,13.4,0); B.add(beaconLight);
+    boothBeacon = crystal;
+    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=5.2, d=4.0;
     addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
     BOOTH_POS.x=x; BOOTH_POS.z=z;
   }
-  // (11,16) fronts the bazaar square from the south — verified clear of all 40 Cairo colliders and of
-  // every entry in SPAWN_POINTS. rot=PI turns its open front and counter toward the square.
-  travelBooth(11,16,Math.PI);
-  tilePlaza(14.5,9.5,13,11);
-  // crates, barrels and a rolled carpet stack filling the square
+  // rot 0 so the counter faces +z — the direction you walk in from the gate
+  travelBooth(0, -6, 0);
+
+  // market clutter filling the arcade floor
   function crateStack(x,z){
-    const c1=new THREE.Mesh(new THREE.BoxGeometry(0.8,0.8,0.8), woodMat); c1.position.set(x,0.4,z); scene.add(c1);
-    const c2=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.62,0.62), timberMat); c2.position.set(x+0.12,1.11,z-0.08); c2.rotation.y=0.4; scene.add(c2);
+    ib(0.8,0.86,0.8, woodMat, x,0.37,z);
+    const c2=ib(0.62,0.62,0.62, timberMat, x+0.12,1.11,z-0.08); c2.rotation.y=0.4;
     addBox(x,z,0.9,0.9);
   }
-  crateStack(9,13); crateStack(20,8.5); crateStack(12.5,5.5);
+  crateStack(-9.4,-1.6); crateStack(9.6,15.2); crateStack(-9.6,14.6);
   function barrel(x,z){
-    const b=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.9,10), woodMat); b.position.set(x,0.45,z); scene.add(b);
-    [0.2,0.7].forEach(by=>{ const hoop=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,0.1,10), brassMat); hoop.position.set(x,by,z); scene.add(hoop); });
+    icyl(0.34,0.34,0.96,10, woodMat, x,0.42,z);
+    [0.2,0.72].forEach(by=> icyl(0.36,0.36,0.1,10, brassMat, x,by,z));
     addBox(x,z,0.72,0.72);
   }
-  barrel(17.5,13.5); barrel(10.2,9.5);
-  // carpets draped over a rail — pure colour, no collider
-  [[8.4,10.5,0xa8342a],[8.4,11.4,0x2a4a8a],[8.4,12.3,0x2e6b4a]].forEach(([cx2,cz2,col])=>{
-    const rug=new THREE.Mesh(new THREE.BoxGeometry(0.1,1.3,0.75), voxMat(col,{noise:12})); rug.position.set(cx2,1.0,cz2); scene.add(rug);
-  });
+  barrel(9.5,-1.4); barrel(-9.5,11.5);   // 9.0 sat on the shared spawn point at (-9,9) barrel(9.4,5.2);
 
-  // ---- townhouses with mashrabiya oriel windows: cheap, dense, and unmistakably Cairene. These fill the
-  // large dead expanses the map used to have between its three widely-spaced landmarks. ----
+  // ================= THE CITADEL TERRACE — the one place you can climb =================
+  // A raised walled platform on the east side with a broad stair up its street face. There is nothing to
+  // shoot from it; it is here because a hub wants somewhere to stand and look out over the city, and it
+  // gives the flat east half a piece of vertical geometry. Placed at (22,2) so it clears the shared
+  // spawn points at (16,-6) and (20,16), and its stair corridor clears (9,4).
+  (function citadelTerrace(){
+    const CX=20.5, CZ=2, CW=12, CD=12, H=3.2;   // 20.5 not 22: at 22 the terrace collider reached x=28.1, into the east wall
+    ib(CW,H+0.06, CD, new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),8)}), CX,(H-0.06)/2,CZ);
+    ib(CW+0.44,0.34,CD+0.44, darkMat, CX,0.62,CZ);              // battered plinth course
+    ib(CW-0.5,0.22,CD-0.5, tileMat, CX,H+0.05,CZ);              // tiled deck, proud of the block by 0.02
+    addBox(CX,CZ,CW+0.2,CD+0.2,H);
+    heightZoneTarget.push({type:'plateau', x1:CX-CW/2, z1:CZ-CD/2, x2:CX+CW/2, z2:CZ+CD/2, y:H});
+    // parapet with merlons on the three outer sides; the west side is left open for the stair
+    for(let z=CZ-CD/2; z<=CZ+CD/2; z+=1.6) ib(0.8,0.9,0.8, lightMat, CX+CW/2-0.4, H+0.5, z);
+    // stops 1.6 short of the east run above, which already owns both corners -- running to CX+CW/2 put
+    // two merlons in the same corner at the same height, overlapping in x and z
+    for(let x=CX-CW/2+1.6; x<=CX+CW/2-1.6; x+=1.6){
+      ib(0.8,0.9,0.8, lightMat, x, H+0.5, CZ-CD/2+0.4);
+      ib(0.8,0.9,0.8, lightMat, x, H+0.5, CZ+CD/2-0.4);
+    }
+    // a domed kiosk to stand under, and a flagstaff, so the deck is somewhere rather than a bare slab
+    [[-3.2,-3.0],[3.0,3.2],[-3.2,3.2],[3.0,-3.0]].forEach(([ox,oz])=> icyl(0.2,0.24,2.5,8, creamMat, CX+ox,H+1.31,CZ+oz));
+    ib(7.4,0.3,7.4, lightMat, CX-0.1,H+2.7,CZ+0.1);
+    const kdome=new THREE.Mesh(new THREE.SphereGeometry(2.5,14,8,0,Math.PI*2,0,Math.PI/2), domeMat);
+    kdome.position.set(CX-0.1,H+2.82,CZ+0.1); scene.add(kdome);
+    const kfin=new THREE.Mesh(new THREE.ConeGeometry(0.14,0.6,6), goldMat); kfin.position.set(CX-0.1,H+5.6,CZ+0.1); scene.add(kfin);
+    lamp(CX-0.1, H+2.3, CZ+0.1, 9);
+    // broad stair down the west face, matching the plateau's own height exactly
+    const steps=8, rampW=3.4, rampLen=5.0;
+    for(let i=0;i<=steps;i++){
+      const y=(1-i/steps)*H, along=CW/2+(i/steps)*rampLen;
+      // each tread stops 0.02 below its nominal height: at exactly y the top tread's face landed level
+      // with the terrace deck it runs into, tying across the whole tread
+      const th=Math.max(0.14,y-0.02);
+      ib(rampLen/steps+0.1, th, rampW, i%2?lightMat:darkMat, CX-along, th/2-0.04, CZ);   // -0.04: the terrace block owns -0.06
+    }
+    heightZoneTarget.push({type:'ramp', x1:CX-CW/2-rampLen, x2:CX-CW/2, z1:CZ-rampW/2, z2:CZ+rampW/2, y1:0, y2:H, axisX:true});
+    // stair rails
+    [-1,1].forEach(sd=> ib(rampLen,0.22,0.22, timberMat, CX-CW/2-rampLen/2, H*0.55, CZ+sd*(rampW/2+0.15)));
+  })();
+
+  // ================= THE WIKALA — a caravanserai courtyard =================
+  // Merchants' inn: arcaded ground floor around a court, gallery above, a well in the middle. Gives the
+  // north-west quarter a building with an interior logic rather than another solid box.
+  (function wikala(){
+    const WX=-19, WZ=11, WW=12, WD=10;
+    ib(WW,7.2,WD, stoneMat, WX,3.57,WZ);
+    addBox(WX,WZ,WW,WD);
+    ib(WW+0.4,0.44,WD+0.4, lightMat, WX,7.3,WZ);
+    for(let i=0;i<7;i++) ib(0.85,0.8,0.85, lightMat, WX-4.5+i*1.5, 7.9, WZ);
+    // arcade of pointed arches on the courtyard face, with lapis spandrels
+    for(let i=0;i<4;i++){
+      const ax=WX-4.2+i*2.8;
+      icyl(0.26,0.3,3.3,8, creamMat, ax,1.62,WZ+WD/2+0.55);
+      const arch=new THREE.Mesh(new THREE.TorusGeometry(0.92,0.2,6,10,Math.PI), lightMat);
+      arch.position.set(ax,3.28,WZ+WD/2+0.55); scene.add(arch);
+      ib(2.1,1.0,0.14, blueTile, ax,4.35,WZ+WD/2+0.50);
+      // mashrabiya screen on the gallery above each arch
+      ib(2.0,1.5,0.5, timberMat, ax,5.6,WZ+WD/2+0.4);
+      for(let j=0;j<6;j++) ib(0.08,1.3,0.07, woodMat, ax-0.7+j*0.28, 5.6, WZ+WD/2+0.68);
+    }
+    // the well in the courtyard
+    icyl(0.95,1.05,0.92,12, darkMat, WX,0.40,WZ+8.5);
+    icyl(0.8,0.8,0.12,12, new THREE.MeshPhongMaterial({color:0x2f6f96,shininess:110,specular:0xbfefff,emissive:0x08303f}), WX,0.78,WZ+8.5);
+    [-1,1].forEach(sd=> icyl(0.09,0.09,2.0,6, timberMat, WX+sd*1.0,1.35,WZ+8.5));
+    ib(2.4,0.16,0.16, timberMat, WX,2.35,WZ+8.5);
+    icyl(0.06,0.06,0.7,5, brassMat, WX,1.95,WZ+8.5);
+    ib(0.34,0.3,0.34, woodMat, WX,1.5,WZ+8.5);
+    addBox(WX,WZ+8.5,2.2,2.2);
+    ib(0.1,0.1,1.3, brassMat, WX,4.98,WZ+5.6);   // bracket reaching out of the gallery face
+    lamp(WX, 4.9, WZ+6.0, 9);
+  })();
+
+  // ================= RESIDENTIAL QUARTER =================
   function townhouse(x,z,h,rot){
     const grp=new THREE.Group(); grp.position.set(x,0,z); grp.rotation.y=rot||0; scene.add(grp);
-    const body=new THREE.Mesh(new THREE.BoxGeometry(5,h,5), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),4)})); body.position.set(0,h/2,0); grp.add(body);
-    const cap=new THREE.Mesh(new THREE.BoxGeometry(5.4,0.45,5.4), voxMat(sandstoneLight,{noise:12})); cap.position.set(0,h+0.2,0); grp.add(cap);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(5,h+0.06,5), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),4)}));
+    body.position.set(0,(h-0.06)/2,0); grp.add(body);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(5.4,0.45,5.4), lightMat); cap.position.set(0,h+0.2,0); grp.add(cap);
     // projecting timber oriel (mashrabiya) on the street face, with a lattice front
     const oriel=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.5,0.7), timberMat); oriel.position.set(0,h*0.6,2.85); grp.add(oriel);
     for(let i=0;i<5;i++){ const slat=new THREE.Mesh(new THREE.BoxGeometry(0.09,1.3,0.08), voxMat(0x6b4a28,{noise:10})); slat.position.set(-1.0+i*0.5,h*0.6,3.22); grp.add(slat); }
     const hood=new THREE.Mesh(new THREE.BoxGeometry(2.9,0.2,0.95), timberMat); hood.position.set(0,h*0.6+0.85,2.95); grp.add(hood);
-    // doorway with a pointed arch
     const door=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.9,0.15), timberMat); door.position.set(0,0.95,2.55); grp.add(door);
-    const dArch=new THREE.Mesh(new THREE.TorusGeometry(0.62,0.14,6,10,Math.PI), voxMat(sandstoneLight,{noise:10})); dArch.position.set(0,1.9,2.58); grp.add(dArch);
-    // small upper windows
+    const dArch=new THREE.Mesh(new THREE.TorusGeometry(0.62,0.14,6,10,Math.PI), lightMat); dArch.position.set(0,1.9,2.58); grp.add(dArch);
     [-1.4,1.4].forEach(wx=>{ const w=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.12), blueTile); w.position.set(wx,h*0.82,2.55); grp.add(w); });
+    // roof clutter — a water jar and a washing line. Rooftops are half of Cairo's actual skyline.
+    const jar=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.22,0.7,8), voxMat(0xa8703a,{noise:14})); jar.position.set(1.5,h+0.75,-1.4); grp.add(jar);
+    [[-1.6,-1.2,0xd8cfc0],[-1.6,0.1,0xa8342a],[-1.6,1.4,0x2a4a8a]].forEach(([lx,lz,col])=>{
+      const cloth=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.75,0.9), voxMat(col,{noise:12})); cloth.position.set(lx,h+0.8,lz); grp.add(cloth); });
     const c=Math.cos(rot||0), s=Math.sin(rot||0);
     addBox(x,z, Math.abs(5*c)+Math.abs(5*s), Math.abs(5*s)+Math.abs(5*c));
   }
-  // (24,14) rather than (20,8): at (20,8) this house's 5x5 footprint swallowed both a bazaar stall and a
-  // crate stack, and pushing it only as far as (22,14) still clipped the stall at (19,12).
-  townhouse(-8,14,6.5,0); townhouse(8,-19,7.5,Math.PI); townhouse(24,14,6,-1.5708); townhouse(-22,-8,7,1.5708);
-  townhouse(-8,-20,6,Math.PI); townhouse(21,-8,6.5,-1.5708);
+  // Placements verified against the shared SPAWN_POINTS list and the citadel stair corridor.
+  townhouse(-22,-6, 7.0, 1.5708);
+  townhouse(-13,-8, 6.0, 1.5708);
+  townhouse(-21,-19,6.5, 0);
+  townhouse(-12.5,-20,7.5, 0);   // -11 clipped the widened mosque facade
+  townhouse( 13,-22,6.0, 0);
+  townhouse( 21,-18,7.0,-1.5708);
+  townhouse( 24, 21,6.5,-1.5708);
+  townhouse(-13, 20,6.0, Math.PI);   // -10 overlapped both the west gate tower and the sabil
+  townhouse( 13, 18.5,7.0, Math.PI);   // 11,20 overlapped the east gate tower's footprint
+  townhouse(-24, 22,6.5, 0);
 
-  // ---- sabil (public fountain house): a small domed kiosk with a water basin, a classic Cairo street fixture ----
+  // ---- sabil-kuttab (public fountain with a Quran school above): a classic Cairo street corner ----
   (function sabil(x,z){
-    const podium=new THREE.Mesh(new THREE.BoxGeometry(3.4,0.5,3.4), voxMat(sandstoneLight,{noise:12})); podium.position.set(x,0.25,z); scene.add(podium);
-    const body=new THREE.Mesh(new THREE.BoxGeometry(2.8,2.4,2.8), new THREE.MeshLambertMaterial({map:_finish(citadelStoneTex(),3)})); body.position.set(x,1.7,z); scene.add(body);
-    [-1,1].forEach(s=>{ const grille=new THREE.Mesh(new THREE.BoxGeometry(0.12,1.2,1.6), timberMat); grille.position.set(x+s*1.42,1.7,z); scene.add(grille); });
-    const front=new THREE.Mesh(new THREE.BoxGeometry(1.6,1.2,0.12), blueTile); front.position.set(x,1.7,z+1.42); scene.add(front);
-    const cap=new THREE.Mesh(new THREE.BoxGeometry(3.2,0.35,3.2), voxMat(sandstoneLight,{noise:12})); cap.position.set(x,3.05,z); scene.add(cap);
-    const dome=new THREE.Mesh(new THREE.SphereGeometry(1.5,12,7,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(x,3.2,z); scene.add(dome);
-    const fin=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.5,6), goldMat); fin.position.set(x,4.9,z); scene.add(fin);
-    // basin pushed to +3.0 with a 2.0 collider so it clears the kiosk's own 3.4 box instead of overlapping it
-    const basin=new THREE.Mesh(new THREE.CylinderGeometry(1.05,1.15,0.42,12), voxMat(sandstoneLight,{noise:10})); basin.position.set(x,0.65,z+3.0); scene.add(basin);
-    const water=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.1,12), new THREE.MeshPhongMaterial({color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52}));
-    water.position.set(x,0.88,z+3.0); scene.add(water);
+    ib(3.4,0.56,3.4, lightMat, x,0.22,z);
+    ib(2.8,2.5,2.8, stoneMat, x,1.75,z);
+    [-1,1].forEach(s=> ib(0.14,1.25,1.65, timberMat, x+s*1.42,1.75,z));
+    ib(1.65,1.25,0.14, blueTile, x,1.75,z+1.42);
+    ib(3.25,0.38,3.25, lightMat, x,3.15,z);
+    // the kuttab: an open timber loggia on the roof, which is what makes it a sabil-KUTTAB
+    [-1,1].forEach(s=> icyl(0.13,0.15,1.5,6, woodMat, x+s*1.1,4.1,z));
+    ib(3.0,0.22,3.0, timberMat, x,4.95,z);
+    const dome=new THREE.Mesh(new THREE.SphereGeometry(1.5,12,7,0,Math.PI*2,0,Math.PI/2), domeMat); dome.position.set(x,5.05,z); scene.add(dome);
+    const fin=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.5,6), goldMat); fin.position.set(x,6.7,z); scene.add(fin);
+    icyl(1.05,1.15,0.5,12, lightMat, x,0.19,z+3.0);
+    const water=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.12,12), new THREE.MeshPhongMaterial({color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52}));
+    water.position.set(x,0.42,z+3.0); scene.add(water);
     addBox(x,z,3.4,3.4); addBox(x,z+3.0,2.0,2.0);
-  })(7,-9);
+    // hung from the loggia deck on a visible stem rather than floating below the dome
+    icyl(0.03,0.03,0.5,5, brassMat, x,4.60,z);
+    lamp(x,4.30,z,8);
+  })(-13,0);   // clear of the arcade posts, the wikala, and the gate tower's footprint at (-7.1,24)
 
-  // ---- 1 more legion-tower-style lookout, reused across every era ----
-  sniperTower(23,20, 4, 5.5, 0xa89e8c, 'w');
-
-  // ---- date palms, clustered rather than evenly sprinkled so they read as planted groves ----
+  // ---- date palms, clustered rather than sprinkled so they read as planted groves ----
   function courtyardPalm(x,z,h){
     const th=h||2.6;
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.22,th,6), voxMat(0x6b5230,{noise:14})); trunk.position.set(x,th/2,z); trunk.rotation.z=0.05; scene.add(trunk);
-    for(let i=0;i<4;i++){ const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.19,0.19,0.12,6), voxMat(0x5a462a,{noise:12})); ring.position.set(x,0.5+i*0.55,z); scene.add(ring); }
+    const trunk=icyl(0.14,0.22,th+0.06,6, voxMat(0x6b5230,{noise:14}), x,(th-0.06)/2,z); trunk.rotation.z=0.05;
+    for(let i=0;i<4;i++) icyl(0.19,0.19,0.12,6, voxMat(0x5a462a,{noise:12}), x,0.5+i*0.55,z);
     const leafMat=voxMat(0x4a7a3e,{noise:16}), leafMat2=voxMat(0x386030,{noise:14});
     for(let i=0;i<7;i++){ const a=i/7*Math.PI*2;
-      const leaf=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.09,0.3), i%2?leafMat:leafMat2);
-      leaf.position.set(x+Math.cos(a)*0.55,th+0.12,z+Math.sin(a)*0.55); leaf.rotation.y=a; leaf.rotation.x=-0.32; scene.add(leaf); }
-    const dates=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.2,0.28), voxMat(0x8a5a20,{noise:12})); dates.position.set(x,th-0.15,z); scene.add(dates);
+      const leaf=ib(1.15,0.09,0.3, i%2?leafMat:leafMat2, x+Math.cos(a)*0.55,th+0.12,z+Math.sin(a)*0.55);
+      leaf.rotation.y=a; leaf.rotation.x=-0.32; }
+    ib(0.28,0.2,0.28, voxMat(0x8a5a20,{noise:12}), x,th-0.15,z);
     addBox(x,z,0.7,0.7);
   }
-  // placements verified against the collider audit: (6,25) sat squarely in the north tower's ramp corridor
-  // (x[-4,7.05] z[23.6,26.4]) and would have walled the climb off; (-26,24) was inside the Citadel's
-  // footprint; (-24,-6) was inside the townhouse at (-22,-8).
-  courtyardPalm(-26,-21,3.0); courtyardPalm(-24,-24,2.4); courtyardPalm(-21,-22,2.7);
-  courtyardPalm(25,23,2.8); courtyardPalm(22,25,2.3); courtyardPalm(25,-24,3.0);
-  courtyardPalm(-26,26,2.6); courtyardPalm(-26,-11,2.5); courtyardPalm(24,6,2.9);
-  courtyardPalm(-6,-25,2.6); courtyardPalm(10,25,2.4);
+  courtyardPalm(-26,-24,3.0); courtyardPalm(-23.5,-26,2.4); courtyardPalm(-26.5,-20,2.7);
+  courtyardPalm( 26, 25,2.8); courtyardPalm( 23, 26,2.3); courtyardPalm( 26,-25,3.0);
+  courtyardPalm(-26, 26,2.6); courtyardPalm(-26.5,-2,2.5); courtyardPalm( 26.5, 12,2.9);
+  courtyardPalm( 26.5,-13,2.6); courtyardPalm(-3.2,-13.5,2.7); courtyardPalm(3.2,-13.5,2.7);
+  courtyardPalm(-16, 22,2.5); courtyardPalm( 17, 24,2.8);
 })();
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
@@ -9995,7 +10254,9 @@ function reloadWeapon(idx){
 }
 function selectWeapon(i){
   currentWeapon = (i+weapons.length)%weapons.length;
-  weapons.forEach((w,idx)=>w.visible = idx===currentWeapon);
+  // In the hub the viewmodel stays holstered: you are walking through a city at peace, not patrolling it.
+  // The index still moves so the weapon you carried into Cairo is the one you leave with.
+  weapons.forEach((w,idx)=>w.visible = !inHub && idx===currentWeapon);
   const active = weapons[currentWeapon];
   gunGroup.position.copy(active.userData.pos);
   gunBaseZ = active.userData.pos.z;
@@ -10056,7 +10317,10 @@ function enterIslamicWorld(banner){
   skyTint(0xffe2b4); // warm Cairo afternoon
   hemi.intensity=0.72; hemi.color.set(0xffe4b0); hemi.groundColor.set(0x5a4a2c);
   sun.intensity=1.0; fill.intensity=0.22; fill.color.set(0xffdca0);
-  camera.position.set(0,1.7,10); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  // Just inside Bab Zuwayla, looking north up the whole length of the Qasaba: the covered bazaar ahead,
+  // the travel booth lit on its east side 15 units along, and the sultan's mosque closing the view. The
+  // old spawn at z=10 belonged to the previous layout and now stands in the middle of the bazaar.
+  camera.position.set(0,1.7,19); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   weapons = islamicWeapons;
@@ -10070,7 +10334,22 @@ function enterHub(banner){
   inHub = true;
   enterIslamicWorld(banner);
   pending = null; betweenTimer = 0;
+  // holster everything: no viewmodel, no crosshair, no ammo counter, no scope
+  setScope(false);
+  weapons.forEach(w=>w.visible=false);
+  gunGroup.visible = false;
+  document.body.classList.add('hub');
   setHubStats(true);
+  // Paint the world map NOW rather than on the first [E]. Colouring 131072 cells costs about 0.4s, which
+  // is a visible freeze when the panel opens but invisible here, behind the map swap and the arrival
+  // banner. drawWorldMap() caches the result, so every later open is a straight putImageData.
+  drawWorldMap();
+}
+// Undone by startGame() when a fresh run begins — see setHubStats(false) there.
+function exitHubChrome(){
+  document.body.classList.remove('hub');
+  gunGroup.visible = true;
+  if(weapons[currentWeapon]) weapons[currentWeapon].visible = true;
 }
 // The stats bar is relabelled rather than rebuilt: spawnWave() and setEnemyCount() look #wave and
 // #enemies up by id with no null guard, so every id has to survive the swap or the next wave throws.
@@ -10204,9 +10483,6 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 // disables firing and turns the next pointer-lock click into a full restart — you cannot rest somewhere
 // that restarts the game when you click. Cairo is now a hub state instead: peaceful (spawnWave() already
 // early-returns for n>=9, so no waves come), weapons kept, and a booth you can actually walk up to.
-let inHub = false;
-let boothOpen = false;
-
 // ---- currency ----
 // player.score is the existing kill counter (+1 per enemy, +10 per boss, set in the bot-death path). It
 // already survives death — respawnPlayer() never clears it, only startGame() does — so it is a per-run
@@ -10224,21 +10500,150 @@ function spendScore(n){
 // Egypt is built yet, so every other entry is priced and listed but not travellable; `ready:false` is the
 // single flag that gates that. Adding a country later means flipping ready and pointing `go` at its
 // enter*World() function — no UI work.
+// China and Japan are ONE destination, not two: Kublai Khan's Yuan fleet launched from China to invade
+// Kyushu, so the arc runs three waves in Yuan China, then the sea crossing, then a single samurai wave on
+// the Japanese shore. That crossing is the same mid-arc map swap Egypt already does three times.
 const DESTINATIONS = [
-  {flag:'🇪🇬', name:'Egypt',  era:'Pharaohs to Mamluks', price:0,  ready:true,  done:true},
-  {flag:'🏯', name:'Japan',  era:'Sengoku period · 1467–1615', price:60, ready:false},
-  {flag:'🗿', name:'Mexico', era:'Aztec empire · 1345–1521',   price:75, ready:false},
-  {flag:'🐉', name:'China',  era:'Qin dynasty · 221–206 BC',   price:90, ready:false},
+  {flag:'🇪🇬', name:'Egypt',         era:'Pharaohs to Mamluks · the road so far', price:0,  ready:true, done:true,
+   lon: 31, lat: 27},
+  {flag:'🗿', name:'Mexico',        era:'Aztec Tenochtitlan · 1345–1521',         price:50, ready:false,
+   lon:-99, lat: 19},
+  {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka & Uppsala, 800–1050', price:60, ready:false,
+   lon: 17, lat: 60},
+  {flag:'🐉', name:'China & Japan', era:'Yuan China to Kyushu · 1271–1281',       price:70, ready:false,
+   lon:116, lat: 39, leg:{lon:133, lat:33}},   // the leg is the sea crossing to Kyushu, drawn dashed
 ];
+
+// ---- the world map ----
+// Equirectangular 512x256 land mask, rasterized from Natural Earth's 50m coastlines (public domain) and
+// packed one bit per cell, row-major, MSB first. It is baked in as base64 rather than fetched because the
+// page's CSP blocks every external host — and because a travel booth should not need the network.
+const WORLD_W = 512, WORLD_H = 256;
+const WORLD_MASK_B64 = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/4AAAAD////+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/////4B57//////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH////////////////3P8AAAAAAAAAAAAAAAA44AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/f//////////////////AAAAAAAAAAAAAAOP//wAAOAB/8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////+////////////8AAAAAAAf/4DAAH////4AADAAD/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHP/////8P///////////wAAAAAB///+DgAAH8H8AAAOAAB//gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIH/N/////g////////////wAAAAAAf///eAAAAAAAAAAAAAAB//8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/g///////7////////////sAAAAAAH//8YAAAAAAAAAAAAAAAAH/8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/4Y/fzv//4////////////+gAAAAAAH+fwAAAAAAAAAAAAAAAABn6AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/+jDjT9///wH////////////wAAAAAAA+BgAAAAAAAAAfgAAADAeH//wAAAAAAABgAAAAAAAAAAAAAAAAAAAB//57f/f///4AH///////////8AAAAAAABgAAAAAAAAAf/wAAAAA/////AAAAAHsAAwAAAAAAAAAAAAAAAAAAAH///3//v//8AAAAf/////////gAAAAAAAAAAAAAAAAD//AAAGAf/////wAAAAP//+AAAAAAAAAAAAAAAAAAAADD///h/////AAAAB/////////8AAAAAAAAAAAAAAAAB/gAAAAA//////4AAAAAf/f4AAAAAAAAAAAAAAAAAAAP/w8AAfP8/sAAAAAP////////4AAAAAAAAMAAAAAAAB/gAAAAGv//////AAMAAweAAAAAAAAAAAAAAAAAAAAAD//wD8f//f//wAAAA////////8AAAAAAAAAAAAAAAAB/gABxcP////////+H/AAP4AAAAAAAAAAAAAAAAAAAAB////+f+/P///AAAAP///////4AAAAAAAAAAAAAAAAA/gAA/d////////////wAD/4AAAAAAAAAAAAAAAAAAAAf////h/uH///8AAAD///////+AAAAAAAAAAAAAAAAAfgAAf/////////////+IB//8AAAAAADwAAAA8AAAAAAB+///8D/w////8AAA////////wAAYAAAAAAANgAAAAH+AA///////////////n////4+AAAAD4AAAX//8AAAAYAH///7D/P////8AAD//////98AAGAAAAAAB//gAAAAf2AP/f///////////////////+AAAAwAAAP////+g//f4f///j/4/////gAB///////+AAAAAAAAAf//+AAAAAB/h///////////////////////Dv/iAAAP/////////////////4////8AAP//////+AAAAAAAAB/////gADxw3/////////////////////////7//8AA////////////////////5P//AAA//////8AAAAAAAAB//////B8////////////////////////////////4AH//////////////////v+T///AAf/////AAAAAAAAAA//////+Pv/////7//////////////////////////8AP///////////////////g8//+AH////4AAAAAAAAAAH//////j//////7///////////////////////////4f///////////////////wA///gB////8AA5/wAAAAAH/////////////////////////////////////////+////////////////////wGP/vwAP///8AAf/+AAAAAD/////wv////////////////////////////////+H8D////////////////////D///wAB///AAAH//gAAAAB//4/////////////////////////////////////AOAf//////////////////f8///4AAf//gAAAf/wAAAAA//+f////////////////////////////////////gAfgH/////////////////f/OD/+AAD//4AAAH/gAAAAB///f////////////////////////////////////4ABwf/////////////////A3DGP/gAAf/8AAAAAAAAAAD///f/////////////////////////////////////AAAP/////////////////ADn/9/4AAD/+AAAAAAABgAB///D////////////////////////////////////9gAAH/////////////////AABn/geAAAf/gAAAAAAAIAA///g////////////////////////////////////4AAYA/////////////////gAAD//RgAAB/wAAAAAAAABgP//8P///////////////////////////////4f//wAADB/////////////////wAACf/s4AAAB4AAAAAAAAAYB///////////////////////////////////4B/xgAAAAEH//4AH//////////8AABP/8PgAAAAAAAAAAAAAYAf//4P//////////////////////////////+B/gAAAAAAB//wAAH//////////wAAD///4AAAAAAAAAAAAD+AH//+H////////////////////////////AA8A/4AAAAAAAAf8AAAf/////////+AAAf///AAAAAAAAAAAAB/wAe/8xv///////////////////////////gAAD/4AAAAAGAAP/AAAD//////////+AAj///4AAAAAAAAAAAAf8AB//4////////////////////////////gAAA/+AAAAAAgAPnAAAAf//////////8AOf//+AAAAAAAAAAAAH+AAff0f///////////////////////////gAAAf/gAAAAAAAfiAAAAD///////////4Dv///4AAAAAAAAAAAA/wAH/8H///////////////////////////wAAAH/4AAAAAAA/wAAAAAf///////////8f////wAAAAAAAAAAA/8AB/8D///////////////////////////+AAAB/4aAAAAAB/AAAAAAD////////////P////+AAAAAAAAAAB//wAf8/////////////////////////////4wAAf+DwAAAAD4AAAAAAA7///////////x/////4AAAAAAAAAAf1+B////////////////////////////////8AAH8AAAAAAD4AAAAAAAG/////////////////+AAAAAAAAAAH9/4/////////////////////////////////AAA/AABgAH5AAAAAAAAAz///////////3/////gAAAAAAAAAB/f+f////////////////////////////////wAAPAAAMIPgAAAAAAAAAEf////////////////8AAAAAAAAAAfP/v////////////////////////////////+AADgAAADwAAAAAAAAAAAH/////////////////AAAAAAAAAAAB//////////////////////////////////7gABwAAAAAAAAAAAAAAAAB////////////////3wAAAAAAAAAAB/n////////////////////////////////84AA4AAAAAAAAAAAAAAAAAH/////////////+vh/AAAAAAAAAAAA//////////////////////////////////PAAYAAAAAAAAAAAAAAAAAAf/////////////+5/4AAAAAAAAAAB//////////////////////////////////3wAEAAAAAAAAAAAAAAAAAAD//////////////gf+AAAAAAAAAAAf/////////////////////////////////9gAAAAAAAAAAAAAAAAAAAAA//////////////5n/wAAAAAAAAAAF////////////9////////////////////8cADAAAAAAAAAAAAAAAAAAAH//////////////2H4AAAAAAAAAAAH///////////8D////////////////////HgBgAAAAAAAAAAAAAAAAAAB///////////////gAAAAAAAAAAAAA////////+f/8A////////////////////h4DgAAAAAAAAAAAAAAAAAAAf//////////////4AAAAAAAAAAAAAP//////+P//+AP///////////////////w4HgAAAAAAAAAAAAAAAAAAAH//////////////wAAAAAAAAAAAAAD///f///h7//AP///////////////////4HPgAAAAAAAAAAAAAAAAAAAB/////////////ngwAAAAAAAAAAANA//39///gAH/4H///////////////////4B/gAAAAAAAAAAAAAAAAAAAA/////////////AwAAAAAAAAAAAAP///x/P//4AA/+A///////////////////+B/wAAAAAAAAAAAAAAAAAAAAP////////////wAAAAAAAAAAAAAB//+A/4//8AAD/gH//////////////////uA/gAAAAAAAAAAAAAAAAAAAAB////////////+AAAAAAAAAAAAAAf//gM/x//h/Af8Af/////////////////wAOQAAAAAAAAAAAAAAAAAAAAAf////////////gAAAAAAAAAAAAAH//wHH+f//////gD/////////////////4ABwAAAAAAAAAAAAAAAAAAAAAH///////////+AAAAAAAAAAAAAAB//wBwf///////8A/////////////////8AAcAAAAAAAAAAAAAAAAAAAAAB///////////+AAAAAAAAABAAAAA//54cB////////Af//////////////+/+AAPAAAAAAAAAAAAAAAAAAAAAAf///////////gAAAAAAAAARQAAAP//oHAOP//////gH///////////////MPgADwAAAAAAAAAAAAAAAAAAAAAD///////////wAAAAAAAAAA8AAAD//YAB/D//////4B///////////////wH4AD8AAAAAAAAAAAAAAAAAAAAAAf//////////4AAAAAAAAAAAYAAAf/gAEfgf/////+Af///////////////5/ID+AAAAAAAAAAAAAAAAAAAAAAH//////////+AAAAAAAAAAACAAAH/w//9wDv/////4H///////////////+H4A/gAAAAAAAAAAAAAAAAAAAAAA///////////gAAAAAAAAAAAAAAAHB//8IAY33v///////////////////8B+Ef4AAAAAAAAAAAAAAAAAAAAAAH//////////4AAAAAAAAAAAAAAAB9///CAB+A////////////////////+Afj/+AAAAAAAAAAAAAAAAAAAAAAA//////////8AAAAAAAAAAAAAAAA////4AAPAef///////////////////gH7//AAAAAAAAAAAAAAAAAAAAAAAP/////////8AAAAAAAAAAAAAAAAf///8AAAAAP///////////////////8Bn/4AAAAAAAAAAAAAAAAAAAAAAAB/////////8AAAAAAAAAAAAAAAAf////gAAAAH////////////////////AZ/8IAAAAAAAAAAAAAAAAAAAAAAAF/////////AAAYAAAAAAAAAAGAP/////wPgAB////////////////////4A/wCAAAAAAAAAAAAAAAAAAAAAAAAf////////AAAEAAAAAAAAAAAAD/////+D/AAf////////////////////ADwAAAAAAAAAAAAAAAAAAAAAAAAAD////////gAAAAAAAAAAAAAAAA//////4//v/////////////////////wA4AAAAAAAAAAAAAAAAAAAAAAAAAA5///////4AAAAAAAAAAAAAAAAf//////////////////////////////8AGAAAAAAAAAAAAAAAAAAAAAAAAAAH//////n+AAAAAAAAAAAAAAAAH///////////////////////////////gAAAAAAAAAAAAAAAAAAAAAAAAAAAQ/////HwHgAAAAAAAAAAAAAAgj/////////////+P////////////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////AAA8AAAAAAAAAAAAAAP7//////////////z////////////////4AYAAAAAAAAAAAAAAAAAAAAAAAAAAH////gAAPAAAAAAAAAAAAAAD9//////////////+f///////////////+AEAAAAAAAAAAAAAAAAAAAAAAAAAAAf///wAAD7AAAAAAAAAAAAAAA///////////7///z////////////////ACAAAgAAAAAAAAAAAAAAAAAAAAAAAB///8AAAf4AAAAAAAAAAAAAAf//////////+f//+P///////////////gBgAAIAAAAAAAAAAAAAAAAAAAAAAAAO///AAAHjAAAAAAAAAAAAAAP///////////3///w///////////////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAADn//wAABz4AAAAAAAAAAAAAD///////////8///8eH+////////////9wgAAAAAAAAAAAAAAAAAAAAAAAAAAAA8//8AAAQzgAAAAAAAAAAAAB////////////n////wAH///////////+dgAAAAAAAAAAAAAAAAAAAAAAAAAAAADn//AAAAFwAAAAAAAAAAAAAf///////////4/////AA////////////OAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY//gAAP+GAAAAAAAAAAAAAP////////////H////8AH///////////DgAAAAAAAAAAAAAAAAADAAAAAAAAAAAAH/8AAH/w+AAAAAAAAAAAAH////////////5/////AA//////////+AQAAAAAAAAAAAAAAAAAAvAAAAAAAAAAAC//AH5Y/ngAAAAAAAAAAAB////////////+f////gAP////z////+AAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAf/wB+AD9AAAAAAAAAAAAAf////////////n////wAA3///Af//+cAAQAAAAAAAAAAAAAAAAAADAAAAAAAAAAAH/+AfgAf/AAAAAAAAAAAAD////////////4////8AAB///wH///HAAEAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAA//wPwCAH+AAAAAAAAAAAA/////////////D///+AAAf//wA///jwADAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgD///8ADj/vgAAAAAAAAAAH////////////4////gAAH//4AP//48ABwAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAf///AA8/r6gAAAAAAAAAB////////////+H///gAAB//4AA///GAAcAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAB///wAAAAA4AAAAAAABgA/////////////x///gAAAP/+AAP//4AAHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//7AAAAAGAAAAAAAANAP////////////8f//gAAAD//AAD///AAD4AAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAP//+AAAAAgAAAAAAAAQD/////////////z//gAAAA//AAB7//4AA8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//wAAAAMAAAAAAAAcB/////////////8//wAAAAP/AAAAf//AAPAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/8AAAABAAAAAAAAAAf/////////////v/gAAAAB/4AAAH//wAB6AAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//AAAAAQAAAAAAAAAD///////////////wAAAAAf+AACB//8AA/gAAABgAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/wAAAANAAAAAAAAAA//////////////+AHAAAAD/gABgf//AAH4AAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH8AAbgCAAAAAAAAAAP/////////////+AJwAAAA/wAAYH//wAD/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfAA/4AQAAAAAAAAAB//////////////A+AAAABH8AAGBx/8ABn4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHwA/+/8AAAAAAAAAA//////////////7/gAAAAR/AABAcP+AAZ+AAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAB8AP///AAAAAAAAAAB///////////////8AAAAAPwAAQHB+AAOfwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPzn///wAAAAAAAAAAP//////////////+AAAAAD+AAEB4HAAGD8AAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////+AAAAAAAAAAB///////////////gAAAAA9wABAeBwADg/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/////4AAAAAAAAAAf//////////////wAAAAEHeAAMHgAAAgfwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAe////+AAAAAAAAAAH//////////////4AAAAAAHgABA8AAAIH+AEAAAGAAAGYAAAAAAAAAAAAAAAAAAAAAAAAAH////4AAAAAAAAAAf/////////////+AAAAAAB4AAQHgAAHBPAAAAAAAMAACAAAAAAAAAAAAAAAAAAAAAAAAAB/////8AAAAAAAAAD///P//////////AAAAAAAcAABB+AAD5jwAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAf/////wAAAAAAAAAP/8B//////////wAAAAAAAAAAePgAB/wIAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAH//////AAAAAAAAAA4MAf/////////4AAAAAIAAAAHx8AA/gAgAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAB//////wAAAAAAAAAAAAAP////////8AAAAACAAAAA/fBgfwAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/////8AAAAAAAAAAAAAG////////+AAAAAAgAAAAL/7I/8AICAAAAAAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAP//////gAAAAAAAAAAAAAf////////AAAAAAAAAAAD/+AP/ACcAAAAAAAAAAAAAAAABgAAAAAAAAAAAAAAAAAH//////8AAAAAAAAAAAAAn////////AAAAAAAAAAAAL/gf/4BnAAAAAAAAAAYAAAAAAAAAAAAAAAAAAAAAAAAD///////AAAAAAAAAAAAAB////////wAAAAAAAAAAAD/4P///xwAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAYAA///////wAAAAAAAAAAAAEf///////wAAAAAAAAAAAA/+D//P8cAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHwAf///////gAAAAAAAAAAAAP///////4AAAAAAAAAAAAH/wf/ycP/IAAAAAABACAAAAAAAAAAAAAAAAAAAAAB8AP////////gAAAAAAAAAAAD///////+AAAAAAAAAAAAAv4H/9/Dn/AAAgAAABAgAAAAAAAAAAAAAAAAAAAAAAAB////////4AAAAAAAAAAAAf///////AAAAAAAAAAAAAN/i/8f/b//gDIAAAAAAAAEAAAAAAAAAAAAAAAAAAAAA/////////6AAAAAAAAAAAH///////gAAAAAAAAAAAAB/9P/PwQn3+A54AAAAAAABgAAAAAAAAAAAAAAAAAAAAH/////////4AAAAAAAAAAA///////wAAAAAAAAAAAAAL/7/z+H9//+APAAAAAAAAAAAAQAAAAAAAAAAAAAAAAD//////////AAAAAAAAAAAH//////4AAAAAAAAAAAAAAfgE8fx9v//4B4AAAAAABGAAAAAAAAAAAAAAAAAAAAA//////////8AAAAAAAAAAA//////+AAAIAAAAAAAAAAD4AAH8ABv//AcAAAAAAAAAAACAAAAAAAAAAAAAAAAAP//////////wAAAAAAAAAAH//////gAAAAAAAAAAAAABeAAB3AA0///+YAAAAAAAAAAAgAAAAAAAAAAAAAAAAD//////////+AAAAAAAAAAB//////4AAAAAAAAAAAAAAD+CAMoAPD///DAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//////////gAAAAAAAAAAf/////+AAAAAAAAAAAAAAAf/+BAAAw//4A8AAAAAAAAAAAAAAAAAAAAAAAAAAAAD//////////4AAAAAAAAAAD//////gAAAAAADAAAAAAAB/+AQHzAP/8AHwAAAAgAAAAAAAAAAAAAAAAAAAAAAAf/////////+AAAAEAAAAAA//////4AAAAAAAAAAAAAAAG//+/7gH//iA/gAAAQAIAAAAAAAwAAAAAAAAAAAAAH//////////AAAAAAAAAAAP/////+AAAAAAAAAAAAAAAAAf//4AAH4+sH8AAACAAgAAAAAAKAAAAAAAAAAAAAA//////////wAAAAAAAAAAD//////gAAAAAAAAAAAAAAAAABx4AAA8P5APAAAAAAAAAAAAAAgAAAAAAAAAAAAAP/////////4AAAAAAAAAAA//////8AAAAAAAAAAAAAAAgAANcAAACB/AA4AAAAAAAAAAAAAAAAAAAAAAAAAAAB/////////8AAAAAAAAAAAH//////AAAAAAAAAAAAAAAIAAAcAeCAwBgAGGAAAAAAAAACAAAAAAAAAAAAAAAAAf////////+AAAAAAAAAAAB//////xAAAAAAAAAAAAAAAAAAAAP5gcABwGAQAAAAAAAAAAAAAAAAAAAAAAAAAAD/////////gAAAAAAAAAAA//////8OGAAAAAAAAAAAAAAAAAAB/4HAAAAAAABAEAAAAAAAAAAAAAAAAAAAAAAAf////////wAAAAAAAAAAAP//////AjwAAAAAAAAAAAAAAAAAAf+B4AAAAAAAAADgAAAAAAAAAAAAAAAAAAAAAH////////4AAAAAAAAAAAH//////wA8AAAAAAAAAAAAAAAAAHP/geAAAAAIAACAEAAAAAAAAAAAAAAAAAAAAAB////////+AAAAAAAAAAAB//////+AfAAAAAAAAAAAAAAAAAH7/4H4AAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAP////////gAAAAAAAAAAAf//////gPwAAAAAAAAAAAAAAAAB//8B+AAAADwAAgAAAAAAAxAAAAAAAAAAAAAAAB////////4AAAAAAAQAAAP//////wf8AAAAAAAAAAAAAAAAA///wfgAAAAcAAYAAAAAAgNgAAAAAAAAAAAAAAAH///////+AAAAAAAAAAAD//////4H/AAAAAAAAAAAAAAAAA////v8AAAADAAfAAAAAALAAAAAAAAAAAAAAAAAAf///////gAAAAAAAAAAA//////8D/wAAAAAAAAAAAAAAAAf///7/AAAAAQAfYAAAAAAQAQQAAAAAAAAAAAAAAD///////4AAAAAAAAAAAP/////4A/4AAAAAAAAAAAAAAAAH/////4AAAAEAD4CCAAAAAAEGAAAAAAAAAAAAAAAf//////8AAAAAAAAAAAB/////+AP+AAAAAAAAAAAAAAAAD/////+AAAAAgATgAgAAAAAAAAAAAAAAAAAAAAAAD///////AAAAAAAAAAAAP////+AD/AAAAAAAAAAAAAAAAB//////wAAQAMAEAAAAAAAAAAAAAAAAAAAAAAAAAA///////wAAAAAAAAAAAD/////AA/wAYAAAAAAAAAAAAAD///////AAAGBAAEIAAAAAAAAwAAAAAAAAAAAAAAAP//////4AAAAAAAAAAAA/////wAP8A2AAAAAAAAAAAAAf///////wAAB+AAADAAAIAAAAAAAAAAAAAAAAAAAAD//////8AAAAAAAAAAAAH////+AH+AMAAAAAAAAAAAAAH///////+AAAPwCAAAAAAAAAAAAAAAAAAAAAAAAAAA///////AAAAAAAAAAAAA/////gB/gAAAAAAAAAAAAAAH////////4AABwAAAAAAAAAAAAAAAAAAAAAAAAAAAAf//////gAAAAAAAAAAAAP////4Af4AAAAAAAAAAAAAAB////////+AAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/////+AAAAAAAAAAAAAD////+AD8AAAAAAAAAAAAAAAf////////wAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAB/////9AAAAAAAAAAAAAA/////gA/AAAAAAAAAAAAAAAH////////+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf////+AAAAAAAAAAAAAAH////wAPwAAAAAAAAAAAAAAB/////////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/////AAAAAAAAAAAAAAB////gABwAAAAAAAAAAAAAAA/////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/////wAAAAAAAAAAAAAAf///4AAAAAAAAAAAAAAAAAAP/////////AAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAf////8AAAAAAAAAAAAAAH///+AAAAAAAAAAAAAAAAAAB/////////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/////AAAAAAAAAAAAAAA////gAAAAAAAAAAAAAAAAAAP////////+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/////gAAAAAAAAAAAAAAP///4AAAAAAAAAAAAAAAAAAD/////////gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////wAAAAAAAAAAAAAAB///8AAAAAAAAAAAAAAAAAAAf////////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////4AAAAAAAAAAAAAAAP//+AAAAAAAAAAAAAAAAAAAH////////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////+AAAAAAAAAAAAAAAD///AAAAAAAAAAAAAAAAAAAB/////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////AAAAAAAAAAAAAAAAf//wAAAAAAAAAAAAAAAAAAAf////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////gAAAAAAAAAAAAAAAH//wAAAAAAAAAAAAAAAAAAAD///H////8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD////wAAAAAAAAAAAAAAAB//4AAAAAAAAAAAAAAAAAAAA//4AP///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQB////8AAAAAAAAAAAAAAAAf/8AAAAAAAAAAAAAAAAAAAAf/4AB////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf///+AAAAAAAAAAAAAAAAD/8AAAAAAAAAAAAAAAAAAAAH/8AAP///wAAAAYAAAAAAAAAAAAAAAAAAAAAAAAAAH////AAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAAAA/AAAD///4AAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAD///4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//+AAAAA4AAAAAAAAAAAAAAAAAAAAAAAAAA////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADv//AAAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAf///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//wAAAAA4AAAAAAAAAAAAAAAAAAAAAAAAAH///4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//8AAAAAPwAAAAAAAAAAAAAAAAAAAAAAAAB///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/wAAAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAf//+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGYAAAAAB/AAAAAAAAAAAAAAAAAAAAAAAAAH//wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwgAAAAAfAAAAAAAAAAAAAAAAAAAAAAAAAB//8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOMAAAAAVwAAAAAAAAAAAAAAAAAAAAAAAAA///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB+AAAAAP4AAAAAAAAAAAAAAAAAAAAAAAAAP//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPgAAAAH0AAAAAAAAAAAAAAAAAAAAAAAAAD//wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4AAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAB//4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+AAAAB+AAwAAAAAAAAAAAAAAAAAAAAAAAf/8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAB/gAEAAAAAAAAAAAAAAAAAAAAAAAH//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/AAAAAAAAAAAAAAAAAAAAAAAAAAB//gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wAAAAAAAAAAAAAAAAAAAAAAAAAA//gAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAP4AAAAAAAAAAAAAAAAAAAAAAAAAAP/+AAAAAAAAAAAAAAAAAAAAAAAAQAAEAAAAAAAAAAAAAAAAAAAAAAAAAAA8AAAAAAAAAAAAAAAAAAAAAAAAAAD//gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAA//4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAP/AAoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4AfAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf+AHgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAH/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/+AAAAAAHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//AAAAAA8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/gAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABwAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2PAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/AAAAAAAAAAAAAAAAAAAAAAAAAAH8AAAAAAAAQQ/gH4AAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/wAAAAAAAAAAAAAAAAAAAAAAAAA3/wAAAAAD2////5/gB+P//wAAAA4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/AAAAAAAAAAAAAAAAAAAAAAAAAB///4AAAAD//////////////wAAACgAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/AAAAAAAAAAAAAAAAAAAAAAAAAP//////AA////////////////gAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAADj+QAAAAAAAAAAAAAAAAAAAAAOA///////wA//////////////////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//4AAAAAAAAAAAAAAAAAAAAADwP//////8B////////////////////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAO///AAAAAAAAAAAAAGGYEfzMOP////////+f////////////////////5AAAAAAAAAAAAAAAAAAAAAAAAAAAAH3//4AAAAAAAAAAAT7x////////////////n//////////////////////4AAAAAAAAAAAAAAAAAAAAAAAAAAB///8AAAAAAAAAAA///////////////////x///////////////////////4AAAAAAAAAAAAAAAAAAAA/+AAAAP/v/AAAAAAAAAAAf//////////////////////////////////////////+AAAAAAAAAAAAAAAAAAAC//5+AGH///4AAAAAAAAAD////////////////////////////////////////////gAAAAAAAAAAAAAD7+AAA3/////////+AAAAAAAAAg////////////////////////////////////////////wAAAAAAAAAAAABx///7wB//////////AAAAAAAAA4f//////////////////////////////////////////8AAAAAAAAAAAAH///////D//////////gAAAAAAAAAf///////////////////////////////////////////AAAAAAAAAAAP///////////////////gAAAAAAAAf///////////////////////////////////////////8AAAAAAAAAAB///////////////////+AAAAAAAAf/////////////////////////////////////////////AAAAAAAAA/z/////////////////+/gAAAAAAAD//////////////////////////////////////////////4wAAAAAAAP///////////////////+AAAAAD4AH///////////////////////////////////////////////fgAAAAAGB///////////////////OB8AAAP/AD////////////////////////////////////////////////gAAAAAD+B//////////////////8H+AAAH/4B///////////////////////////////////////////////4AAAAAAAfw8f/////////////////B74PAP/+AAf/////////////////////////////////////////////gAAAAAAAAAAH/////////////////6+H/wP//gB//////////////////////////////////////////////4AAAAAAAD8P//////////////////////4CAAD///////////////////////////////////////////////+AAAAAAAABcf/////////////////////0Af/j////////////////////////////////////////////////+AAAAA+AHAH//////////////////////H/////////////////////////////////////////////////////AAAAA/////////////////////////////////////////////////////////////////////////////////4AOAA/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////w==";
+let _worldMask = null, _worldShelf = null, _worldPainted = null;
+function worldMask(){
+  if(_worldMask) return _worldMask;
+  const raw = atob(WORLD_MASK_B64);
+  const bits = new Uint8Array(WORLD_W * WORLD_H);
+  for(let i=0;i<bits.length;i++) bits[i] = (raw.charCodeAt(i>>3) >> (7-(i&7))) & 1;
+  _worldMask = bits;
+  // continental shelf: any sea cell within two cells of land, so a coastline gets a lighter rim instead
+  // of land meeting deep ocean at a hard edge
+  const shelf = new Uint8Array(bits.length);
+  for(let y=0;y<WORLD_H;y++) for(let x=0;x<WORLD_W;x++){
+    const i = y*WORLD_W + x;
+    if(bits[i]) continue;
+    let near = 0;
+    for(let dy=-2;dy<=2 && !near;dy++) for(let dx=-2;dx<=2;dx++){
+      const ny=y+dy, nx=x+dx;
+      if(ny<0||ny>=WORLD_H||nx<0||nx>=WORLD_W) continue;
+      if(bits[ny*WORLD_W+nx]){ near=1; break; }
+    }
+    shelf[i] = near;
+  }
+  _worldShelf = shelf;
+  return _worldMask;
+}
+// The BAKED bitmap is equirectangular, but equirectangular stretches everything east-west as latitude
+// rises -- Scandinavia and Russia come out flattened and far too wide. The map is therefore RESAMPLED to
+// Mercator at draw time, which is conformal, so local shapes stay right. Clipped at 78N/58S: past that
+// Mercator runs away to infinity, and the extra rows are empty polar ocean anyway.
+const MERC_N = 78, MERC_S = -58;
+function mercY(latDeg){ const p = latDeg*Math.PI/180; return Math.log(Math.tan(Math.PI/4 + p/2)); }
+const MERC_TOP = mercY(MERC_N), MERC_BOT = mercY(MERC_S);
+// inverse, for resampling: a row of the output maps back to a latitude, then to a source row
+function mercLat(t){ const y = MERC_TOP + t*(MERC_BOT - MERC_TOP); return (2*Math.atan(Math.exp(y)) - Math.PI/2) * 180/Math.PI; }
+// lon/lat -> percentage across the map, so a pin and the canvas agree at any size
+function lonLatPct(lon, lat){
+  const c = Math.max(MERC_S, Math.min(MERC_N, lat));
+  return {x:(lon+180)/360*100, y:(MERC_TOP - mercY(c))/(MERC_TOP - MERC_BOT)*100};
+}
+
+// Biomes are derived from position rather than stored: a second data layer would double the payload for
+// something that latitude plus a dozen named drylands approximates well enough at this scale.
+const DRYLANDS = [   // [lonMin, lonMax, latMin, latMax, lightColour, darkColour]
+  [ -17,  34,  15,  32, 0xd9c89a, 0xc7b488],   // Sahara
+  [  34,  60,  12,  32, 0xd6c294, 0xc4ae80],   // Arabian
+  [  58,  78,  24,  38, 0xcfba8c, 0xbca678],   // Iranian plateau and the Thar
+  [  75, 118,  36,  48, 0xcdb98a, 0xb9a476],   // Taklamakan and Gobi
+  [ 118, 146, -31, -19, 0xc9762f, 0xb26526],   // the Australian outback, the one properly red desert
+  [ 113, 141, -35, -31, 0xc08a4a, 0xa9773c],
+  [  12,  25, -29, -17, 0xd2bd8e, 0xbfa97a],   // Kalahari and Namib
+  [ -72, -66, -28, -17, 0xc7ae82, 0xb39a6e],   // Atacama
+  [ -73, -64, -52, -39, 0xbca77f, 0xa8936c],   // Patagonian steppe
+  [-119,-104,  30,  42, 0xcbb187, 0xb79d74],   // Great Basin and Sonoran
+];
+// Value noise, used to warp every biome boundary. Without it the climate bands render as dead-straight
+// horizontal stripes and each dryland as a visible rectangle, which is exactly what they looked like.
+function _wh(i,j){ const v = Math.sin(i*127.1 + j*311.7) * 43758.5453; return v - Math.floor(v); }
+function _vn(x,y){
+  const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi;
+  const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
+  return _wh(xi,yi)*(1-u)*(1-v) + _wh(xi+1,yi)*u*(1-v) + _wh(xi,yi+1)*(1-u)*v + _wh(xi+1,yi+1)*u*v;
+}
+function _fbm(x,y){ return _vn(x,y)*0.6 + _vn(x*2.1+5.2, y*2.1+1.3)*0.3 + _vn(x*4.3+9.1, y*4.3+7.7)*0.1; }
+
+function biomeAt(lon, lat, n){
+  // warp the coordinates the bands are tested against, so every edge wanders a few degrees
+  const w1 = _fbm(lon*0.055, lat*0.055) - 0.5;
+  const w2 = _fbm(lon*0.11 + 31.7, lat*0.11 + 12.3) - 0.5;
+  const latW = lat + w1*11, lonW = lon + w2*11;
+  const al = Math.abs(latW);
+  // ice: both caps, plus Greenland — it is an ice sheet and reads badly in green
+  if(latW < -62 || al > 74 || (lonW > -71 && lonW < -13 && latW > 60 && latW < 85))
+    return n > 0.5 ? 0xeef4f8 : 0xdde7ee;
+  if(al > 63) return n > 0.5 ? 0xbdc8bd : 0xa6b3a6;            // tundra
+  for(let i=0;i<DRYLANDS.length;i++){
+    const d = DRYLANDS[i];
+    // a rounded-rectangle falloff from the region's centre with a noisy edge, rather than a box test
+    const cx=(d[0]+d[1])/2, cy=(d[2]+d[3])/2, hx=(d[1]-d[0])/2, hy=(d[3]-d[2])/2;
+    const nx=Math.abs((lon-cx)/hx), ny=Math.abs((lat-cy)/hy);
+    const r = Math.pow(Math.pow(nx,2.5) + Math.pow(ny,2.5), 0.4);
+    if(r < 0.92 + (_fbm(lon*0.16+d[0], lat*0.16+d[2]) - 0.5)*0.55) return n > 0.5 ? d[4] : d[5];
+  }
+  if(al > 49) return n > 0.5 ? 0x3c5c3f : 0x314f35;            // boreal
+  if(al < 12) return n > 0.5 ? 0x2f6b2c : 0x265a25;            // tropical
+  return n > 0.5 ? 0x487a35 : 0x3c692d;                        // temperate
+}
+function drawWorldMap(){
+  const cv = document.getElementById('worldcanvas');
+  if(!cv || !cv.getContext) return;
+  const g = cv.getContext('2d');
+  if(!g || !g.createImageData) return;
+  if(_worldPainted){ g.putImageData(_worldPainted, 0, 0); return; }   // painted once, reused every open
+  const bits = worldMask(), shelf = _worldShelf;
+  const OW = cv.width, OH = cv.height;
+  const img = g.createImageData(OW, OH), data = img.data;
+  for(let oy=0;oy<OH;oy++){
+    const lat = mercLat((oy + 0.5) / OH);
+    // nearest source row for this Mercator latitude
+    const sy = Math.max(0, Math.min(WORLD_H-1, Math.floor((90 - lat) / 180 * WORLD_H)));
+    for(let x=0;x<OW;x++){
+      const i = sy*WORLD_W + x, lon = -180 + (x + 0.5) / OW * 360;
+      // deterministic speckle, the same sin-hash the game's voxel textures use
+      const n = Math.abs((Math.sin(x*12.9898 + oy*78.233) * 43758.5453) % 1);
+      let c;
+      if(bits[i])                  c = biomeAt(lon, lat, n);
+      else if(Math.abs(lat) + (_fbm(lon*0.07, lat*0.07)-0.5)*9 > 69) c = n > 0.5 ? 0x9fc4e2 : 0x8db4d6;  // pack ice, edge warped like the land bands
+      else if(shelf[i])            c = n > 0.5 ? 0x3f81c6 : 0x3877b8;   // continental shelf
+      else                         c = n > 0.5 ? 0x27568f : 0x224e85;   // deep ocean
+      const o = (oy*OW + x)*4;
+      data[o] = (c>>16)&255; data[o+1] = (c>>8)&255; data[o+2] = c&255; data[o+3] = 255;
+    }
+  }
+  _worldPainted = img;
+  g.putImageData(img, 0, 0);
+}
 
 const promptEl = document.getElementById('prompt');
 const boothOverlay = document.getElementById('boothoverlay');
-const destListEl = document.getElementById('destlist');
+const pinsEl = document.getElementById('worldpins');
 const boothBalEl = document.getElementById('boothbal');
 
-// Distance at which the booth offers itself. 3.2 clears the booth's own 2.86x2.20 collider by about a
-// metre, so the prompt appears as you walk up to the counter rather than only when you are wedged in it.
-const BOOTH_RADIUS = 3.2;
+// Distance at which the booth offers itself, measured from its centre. The dais is 5.2x4.0, so 4.6 puts
+// the prompt up as you step onto it — at the old 3.2 the radius fell inside the counter, which you cannot
+// walk into, so the prompt only appeared if you approached from a corner.
+const BOOTH_RADIUS = 4.6;
 function nearBooth(){
   if(!inHub || !player.alive) return false;
   const dx = camera.position.x - BOOTH_POS.x, dz = camera.position.z - BOOTH_POS.z;
@@ -10246,30 +10651,100 @@ function nearBooth(){
 }
 // Called once per frame from the animate loop.
 function updateInteract(){
-  if(!promptEl) return;
-  const show = nearBooth() && !boothOpen && !paused;
-  promptEl.textContent = show ? '🎟 Travel Booth — press [E]' : '';
-  promptEl.style.opacity = show ? '1' : '0';
+  if(promptEl){
+    const show = nearBooth() && !boothOpen && !paused;
+    promptEl.textContent = show ? '\u{1F39F} Travel Booth — press [E]' : '';
+    promptEl.style.opacity = show ? '1' : '0';
+  }
+  updateBoothMarker();
 }
 
+// ---- waypoint marker ----
+// Projects the booth into screen space every frame. In view it sits over the booth with the walking
+// distance; out of view it pins to the screen edge with an arrow turned toward it, so there is never a
+// moment in the hub where you cannot tell which way to walk.
+const bmEl   = document.getElementById('boothmarker');
+const bmDist = document.getElementById('bmdist');
+const bmArrow= document.getElementById('bmarrow');
+const _bmVec = new THREE.Vector3();
+function updateBoothMarker(){
+  if(!bmEl) return;
+  if(!inHub || boothOpen || paused || !player.alive){ bmEl.style.opacity='0'; return; }
+  const dx = camera.position.x - BOOTH_POS.x, dz = camera.position.z - BOOTH_POS.z;
+  const dist = Math.sqrt(dx*dx + dz*dz);
+  if(dist < BOOTH_RADIUS){ bmEl.style.opacity='0'; return; }   // close enough that [E] takes over
+  // aim at the counter's head height, not the beacon, so the pill sits on the building itself
+  const p = _bmVec.set(BOOTH_POS.x, 4.6, BOOTH_POS.z).project(camera);
+  const W = window.innerWidth, H = window.innerHeight, M = 54;
+  let sx = (p.x*0.5+0.5)*W, sy = (-p.y*0.5+0.5)*H;
+  // project() gives a mirrored point for anything behind the camera; flipping about the centre turns it
+  // back into a usable direction to point at
+  const behind = p.z > 1;
+  if(behind){ sx = W - sx; sy = H - sy; }
+  const off = behind || sx < M || sx > W-M || sy < M || sy > H-M;
+  if(off){
+    let vx = sx - W/2, vy = sy - H/2;
+    const len = Math.hypot(vx,vy) || 1; vx/=len; vy/=len;
+    // walk out from the centre until the first screen edge is met
+    const t = Math.min((W/2-M)/Math.max(Math.abs(vx),1e-6), (H/2-M)/Math.max(Math.abs(vy),1e-6));
+    sx = W/2 + vx*t; sy = H/2 + vy*t;
+    if(bmArrow) bmArrow.style.transform = 'rotate(' + (Math.atan2(vy,vx)*180/Math.PI + 90) + 'deg)';
+  }
+  bmEl.classList.toggle('edge', off);
+  bmEl.style.left = sx + 'px';
+  bmEl.style.top  = sy + 'px';
+  bmEl.style.opacity = '1';
+  if(bmDist) bmDist.textContent = Math.round(dist) + 'm';
+}
+
+
+function destState(d){
+  if(d.done) return {cls:'done', label:'✓ COMPLETED', note:'You have already walked this road.'};
+  if(!d.ready) return {cls:'soon', label:'— COMING SOON —', note:'Not yet built. Passage cannot be sold.'};
+  if(!canAfford(d.price)) return {cls:'short', label:'⭐ ' + d.price,
+    note:'Short by ' + (d.price - balance()) + ' ⭐. Come back with more.'};
+  return {cls:'buyable', label:'⭐ ' + d.price, note:'Click to buy passage.'};
+}
 function renderBooth(){
   if(boothBalEl) boothBalEl.textContent = '⭐ ' + balance() + '  in hand';
-  if(!destListEl) return;
-  destListEl.innerHTML = '';
+  drawWorldMap();
+  if(!pinsEl) return;
+  pinsEl.innerHTML = '';
+  const card = document.getElementById('worldcard');
+  const show = d => {
+    if(!card) return;
+    const st = destState(d);
+    card.classList.add('on');
+    document.getElementById('wcname').textContent  = d.flag + '  ' + d.name;
+    document.getElementById('wcera').textContent   = d.era;
+    document.getElementById('wcstate').textContent = st.label + ' — ' + st.note;
+  };
   DESTINATIONS.forEach(d => {
-    const row = document.createElement('div');
-    const buyable = d.ready && !d.done && canAfford(d.price);
-    row.className = 'dest' + (d.done ? ' done' : buyable ? ' buyable' : !d.ready ? '' : ' short');
-    const price = d.done ? '✓ COMPLETED'
-                : !d.ready ? '— COMING SOON —'
-                : canAfford(d.price) ? '⭐ ' + d.price
-                : '⭐ ' + d.price + ' (short ' + (d.price - balance()) + ')';
-    row.innerHTML = '<div class="dflag">' + d.flag + '</div>'
-      + '<div class="dmain"><div class="dname">' + d.name + '</div>'
-      + '<div class="dera">' + d.era + '</div></div>'
-      + '<div class="dprice">' + price + '</div>';
-    if(buyable) row.addEventListener('click', () => buyTicket(d));
-    destListEl.appendChild(row);
+    const st = destState(d), pos = lonLatPct(d.lon, d.lat);
+    // a two-part journey draws its second leg dashed, with a small ring at the far end
+    if(d.leg){
+      const to = lonLatPct(d.leg.lon, d.leg.lat);
+      const dx = to.x - pos.x, dy = (to.y - pos.y) * 0.5;   // y is half-weighted: the box is 2:1
+      const leg = document.createElement('div');
+      leg.className = 'pleg';
+      leg.style.left = pos.x + '%'; leg.style.top = pos.y + '%';
+      leg.style.width = Math.hypot(dx, dy) + '%';
+      leg.style.transform = 'rotate(' + (Math.atan2(dy*2, dx) * 180/Math.PI) + 'deg)';
+      pinsEl.appendChild(leg);
+      const end = document.createElement('div');
+      end.className = 'plegend'; end.style.left = to.x + '%'; end.style.top = to.y + '%';
+      pinsEl.appendChild(end);
+    }
+    const pin = document.createElement('button');
+    pin.className = 'pin ' + st.cls;
+    pin.style.left = pos.x + '%'; pin.style.top = pos.y + '%';
+    pin.innerHTML = '<span class="pdot"></span><span class="plabel">'
+      + d.flag + ' ' + d.name + (d.done ? '' : ' · ' + st.label) + '</span>';
+    pin.addEventListener('mouseenter', () => show(d));
+    pin.addEventListener('focus', () => show(d));
+    pin.addEventListener('mouseleave', () => { if(card) card.classList.remove('on'); });
+    if(st.cls === 'buyable') pin.addEventListener('click', () => buyTicket(d));
+    pinsEl.appendChild(pin);
   });
 }
 function buyTicket(d){
@@ -10525,9 +11000,11 @@ function spawnWave(n){
   // them scale up faster than intended — harder than the pyramid era (correct, it's the later era) but not
   // by this much, especially with a still-harder era planned after this one. Softened back ~12%, which still
   // keeps every Greek wave above the pyramid era's toughest wave (compare wave3's diff below). Roman waves
-  // get a smaller softening (~20% off the raw curve) since this is meant to be the hardest era so far —
+  // get a bigger softening (~28% off the raw curve). diff is not just a speed knob: it scales melee and
+  // ranged damage and the ranged hit chance too, so at 0.8 a wave-9 legionary hit for 31 and moved at
+  // 2.7x base, which is what made this era spike. This era should still be the hardest, just not by that —
   // full unscaled waveDiff(8) alone would be ~5.5x base HP, too steep for a first pass on brand new content.
-  const diff = pyramid ? waveDiff(n) : roman ? waveDiff(n)*0.8 : waveDiff(n)*0.88;
+  const diff = pyramid ? waveDiff(n) : roman ? waveDiff(n)*0.72 : waveDiff(n)*0.88;
   for(let i=0;i<count;i++){
     const sp=SPAWN_POINTS[(i*3 + n*2 + i) % SPAWN_POINTS.length];
     const x=sp[0], z=sp[1];
@@ -10552,7 +11029,7 @@ function spawnWave(n){
     const col=ENEMY_COLORS[(i+n)%ENEMY_COLORS.length];
     // Greek grunts all share the same HP curve now (minotaur no longer weaker); wave 6 (the last regular
     // wave) is capped at a flat value instead of letting the difficulty curve keep scaling it up
-    const hp = (!pyramid && !roman && n===5) ? 245 : roman ? [290,320,300][n-6] : Math.round(BOT_MAX_HP*diff);
+    const hp = (!pyramid && !roman && n===5) ? 245 : roman ? [265,290,275][n-6] : Math.round(BOT_MAX_HP*diff);
     const scale = skin==='basilisk' ? 1.35 : 1;
     spawnBot(x,z,col,[x-2.5,0,z],[x+2.5,0,z],wt,{skin, hp, diff, speed:1+(diff-1)*0.5, scale});
   }
@@ -10572,7 +11049,7 @@ function spawnWave(n){
   if(roman){ // one hound pack per Roman wave — a themed encounter, not looped into the regular roster.
     // HP scaled up ~1.4x over a regular grunt to represent 3 hounds sharing a single pool.
     const sp=SPAWN_POINTS[(n*5+2) % SPAWN_POINTS.length];
-    const gruntHp=[290,320,300][n-6];
+    const gruntHp=[265,290,275][n-6];
     spawnBot(sp[0],sp[1],0x201d19,[sp[0]-2,0,sp[1]],[sp[0]+2,0,sp[1]],'knife',
       {skin:'warhound', hp:Math.round(gruntHp*1.4), diff, speed:1+(diff-1)*0.5});
   }
@@ -10611,7 +11088,7 @@ function startGame(){
   document.body.classList.add('playing');
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
-  inHub=false; closeBooth(); setHubStats(false);   // a fresh run leaves the hub and restores the wave HUD
+  inHub=false; closeBooth(); setHubStats(false); exitHubChrome();  // leave the hub: wave HUD and weapon back
   // drain any leftover fire meteors from a previous run so one can't fire into the fresh game (quakeEffects,
   // the older analogous VFX-effect array, has this same gap on restart — out of scope here, only fixing
   // fireMeteors, this feature's own code)
@@ -10883,7 +11360,7 @@ let muzzleTimer = 0;
 let lastShot = -99;
 const _fwd = new THREE.Vector3();
 function fire(){
-  if(!player.alive) return;
+  if(!player.alive || inHub) return;   // Cairo is a hub — nothing to shoot and nothing drawn to shoot with
   const w = weapons[currentWeapon].userData;
   const now = performance.now()*0.001;
   if(now - lastShot < w.fireRate) return;
@@ -11156,6 +11633,7 @@ function animate(){
   // otherwise the prompt stays burned on screen behind the panel.
   if (boothOpen){ updateInteract(); renderer.render(scene, camera); return; }
   updateInteract();
+  if(boothBeacon){ boothBeacon.rotation.y += dt*0.7; boothBeacon.rotation.x = Math.sin(t*0.9)*0.18; }
 
   // drifting chimney smoke
   smokePuffs.forEach(p => {
