@@ -139,7 +139,7 @@
 </style>
 </head>
 <body>
-<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Z] Zahra Gun · [Space] jump · [F] reload · right-click or hold [Shift] to scope (bow/sling)</div>
+<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Space] jump · [F] reload · right-click or hold [Shift] to scope (bow/sling)</div>
 <div id="pausebtn" title="Pause">❚❚ PAUSE</div>
 <div id="pauseoverlay"><div id="pausetitle">PAUSED</div><button id="resumebtn">RESUME</button><div id="pausehint">Press P or Esc to resume</div></div>
 <div id="stats">🔫 <span id="weap">Rifle</span> &nbsp; ⭐ <span id="score">0</span> &nbsp; 🌊 Wave <span id="wave">1</span> &nbsp; 👾 <span id="enemies">0</span></div>
@@ -3952,15 +3952,35 @@ heightZoneTarget = heightZonesGreek;
     // Helios statue crowning the lantern, as the real one carried
     const statue=new THREE.Mesh(new THREE.BoxGeometry(0.8,2.2,0.7), bronzeMat); statue.position.set(x,30.8,z); scene.add(statue);
     const shead=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.5,0.55), bronzeMat); shead.position.set(x,32.15,z); scene.add(shead);
-    // ring of columns around the base, as before but scaled to the new footprint
-    for(let i=0;i<12;i++){ const a=i/12*Math.PI*2;
-      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.58,6.6,10), marbleTrim);
-      col.position.set(x+Math.cos(a)*6.7, 3.3, z+Math.sin(a)*6.7); col.castShadow=true; scene.add(col);
-    }
-    // approach stair up to the base, facing the player as they walk toward it
+    // approach stair: four treads rising to 1.8. It had no collider, so walking at it put the player
+    // inside the steps — the game has no step-up, so a stair is either solid or it is a hole you fall
+    // into. One box over the whole flight. x stays within +/-3.5, which keeps the wave spawn at (-4,-20)
+    // outside it.
+    // stairZ1 stops 0.3 short of the treads' true edge so the box does not clip the kerb at (-2,-17)
+    const stairZ0 = z + 6.2 - 0.55, stairZ1 = z + 6.2 + 3*1.05 + 0.25;
     for(let s=0;s<4;s++){
       const st=new THREE.Mesh(new THREE.BoxGeometry(7-s*0.5,0.45,1.1), marbleTrim);
       st.position.set(x, 0.22+s*0.45, z+6.2+s*1.05); scene.add(st);
+    }
+    // 6.4 wide, not the widest tread's 7.0: the audit clears a spawn point by the bot radius (0.55),
+    // and at 7.0 the box reached -4.05 while SPAWN_POINTS[8] sits at (-4,-20). 6.4 clears it by 0.25
+    // and leaves only 0.3 of the bottom tread's lip phaseable, which is not noticeable.
+    addBox(x, (stairZ0+stairZ1)/2, 6.4, stairZ1-stairZ0);
+    // ring of columns around the base. These are 6.6 tall and were walk-through, which is what "I can go
+    // into this wall" was: from inside one you see the unlit back faces of a marble shaft.
+    for(let i=0;i<12;i++){ const a=i/12*Math.PI*2;
+      const cx = x+Math.cos(a)*6.7, cz = z+Math.sin(a)*6.7;
+      const col=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.58,6.6,10), marbleTrim);
+      col.position.set(cx, 3.3, cz); col.castShadow=true; scene.add(col);
+      // the column standing in the stair is already enclosed by the box above; a second collider there
+      // would just be a reported overlap
+      const inStair = Math.abs(cx-x) <= 3.5 && cz >= stairZ0 && cz <= stairZ1;
+      // Size each collider so it stops AT the base's wall rather than reaching inside it. The ring stands
+      // hard against an 11x11 base, so a full 1.2 box on the eight columns nearest the flats overlapped
+      // that box by 0.3 — legitimate geometry, but it reads as a placement error in the audit. Clamped
+      // this way the player is stopped about 0.17 short of a column instead of walking into it.
+      const h = Math.min(0.6, Math.max(Math.abs(cx-x), Math.abs(cz-z)) - 5.5);
+      if(!inStair && h > 0.05) addBox(cx, cz, h*2, h*2);
     }
   }
   // z=-27: down the -Z spawn sightline, and beyond the pylon gate at z=-2 so the gate frames it rather than
@@ -4025,9 +4045,15 @@ heightZoneTarget = heightZonesGreek;
     // painted entablature between wall top and roof — the band Greek buildings actually carried colour on
     const entab=new THREE.Mesh(new THREE.BoxGeometry(w+0.4,0.7,d+0.4), stuccoMat); entab.position.set(x,5.6,z); scene.add(entab);
     const roof=new THREE.Mesh(new THREE.BoxGeometry(w+0.8,0.4,d+0.8), roofTileMat); roof.position.set(x,6.15,z); scene.add(roof);
+    // The cella's addBox above stops at the wall, so the colonnade in front of it and the stylobate it
+    // stands on were both walk-through — you could stroll into a 5.2-tall marble column. Each column gets
+    // its own collider so the colonnade stays walkable BETWEEN them, which is the point of a colonnade.
     for(let i=0;i<6;i++){ const cx=-w/2+(i/5)*w;
       const col=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.4,5.2,10), marbleTrim); col.position.set(x+cx,2.85,z-d/2-0.9); col.castShadow=true; scene.add(col);
+      addBox(x+cx, z-d/2-0.9, 0.80, 0.80);   // 0.80 = the column's real diameter (radius 0.40 at the base)
     }
+    // the stylobate is a 0.5 step, so it is a height zone rather than a wall: you step up onto the terrace
+    heightZoneTarget.push({type:'plateau', x1:x-(w+1.2)/2, z1:z-(d+1.2)/2, x2:x+(w+1.2)/2, z2:z+(d+1.2)/2, y:0.5});
     const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.5,0.55,0.4), stuccoMat); pediment.position.set(x,5.75,z-d/2-0.9); scene.add(pediment);
     for(let i=0;i<8;i++){ const nx=-w/2+0.6+(i/7)*(w-1.2);
       const niche=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.7,0.15), marbleTrim); niche.position.set(x+nx,3.4,z+d/2+0.05); scene.add(niche);
@@ -4051,11 +4077,16 @@ heightZoneTarget = heightZonesGreek;
     const cella=new THREE.Mesh(new THREE.BoxGeometry(w,5.5,d), marbleMat); cella.position.set(x,3.1,z); cella.castShadow=true; scene.add(cella);
     const roofL=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofTileMat); roofL.position.set(x,6.1,z-d*0.19); roofL.rotation.x=0.4; scene.add(roofL);
     const roofR=new THREE.Mesh(new THREE.BoxGeometry(w+1,0.35,d*0.62),roofTileMat); roofR.position.set(x,6.1,z+d*0.19); roofR.rotation.x=-0.4; scene.add(roofR);
+    // Same as the library: the peristyle ring stands OUTSIDE the cella's addBox, so every column was
+    // walk-through. Individual colliders keep the ring walkable between columns.
     for(let i=0;i<5;i++){ const cz=-d/2+(i/4)*d;
-      [x-w/2-0.9, x+w/2+0.9].forEach(cx=>{ const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), marbleTrim); col.position.set(cx,3,z+cz); col.castShadow=true; scene.add(col); });
+      [x-w/2-0.9, x+w/2+0.9].forEach(cx=>{ const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), marbleTrim); col.position.set(cx,3,z+cz); col.castShadow=true; scene.add(col);
+        addBox(cx, z+cz, 0.76, 0.76); });   // 0.76 = the column's real diameter
     }
+    heightZoneTarget.push({type:'plateau', x1:x-(w+1.5)/2, z1:z-(d+1.5)/2, x2:x+(w+1.5)/2, z2:z+(d+1.5)/2, y:0.6});
     for(let i=0;i<5;i++){ const cx=-w/2+(i/4)*w;
       const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), marbleTrim); col.position.set(x+cx,3,z-d/2-0.9); col.castShadow=true; scene.add(col);
+      addBox(x+cx, z-d/2-0.9, 0.76, 0.76);
     }
     const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.55,0.6,0.4), stuccoMat); pediment.position.set(x,6.2,z-d/2-0.9); scene.add(pediment);
     // Poseidon statue on its own plinth, out front
@@ -4597,17 +4628,29 @@ heightZoneTarget = heightZonesGreek;
     // Colliders in world space. addBox takes WORLD extents, so a rotated piece has to have its own
     // width/depth rotated too — passing the local pair straight through registered this stoa's back
     // wall 90 degrees out of true, which is how a wave spawn point ended up inside it.
+    //
+    // The POSITION was still wrong after that fix, and much more visibly: this used
+    //     x + lx*c - lz*s,  z + lx*s + lz*c
+    // which is the TRANSPOSE of the rotation matrix, i.e. a rotation by -rot. three.js sends local +X to
+    // (cos,0,-sin) and local +Z to (sin,0,cos), so the correct pair is
+    //     x + lx*c + lz*s,  z - lx*s + lz*c
+    // At rot=PI/2 the transpose mirrors everything about the building's centre: the back wall's collider
+    // landed at x=-14.75 while its mesh stands at x=-20.25. That is both reported symptoms at once — the
+    // back wall was walk-through, and there was an invisible wall across the colonnade where its collider
+    // had been mirrored to. Same for every column.
     const c=Math.cos(rot||0), s=Math.sin(rot||0);
     const add=(lx,lz,w,dd)=>{
-      addBox(x+lx*c-lz*s, z+lx*s+lz*c, Math.abs(w*c)+Math.abs(dd*s), Math.abs(w*s)+Math.abs(dd*c));
+      addBox(x+lx*c+lz*s, z-lx*s+lz*c, Math.abs(w*c)+Math.abs(dd*s), Math.abs(w*s)+Math.abs(dd*c));
     };
     add(0,-d/2,len,0.7);
     // BOTH column rows, not just the outer one. The inner row at cz=0 had no collider, so half the
     // colonnade was walk-through.
     for(let i=0;i<nCols;i++){
       const cx=-len/2+0.9+(i/(nCols-1))*(len-1.8);
-      add(cx, d/2-0.5, 0.8, 0.8);
-      add(cx, 0,       0.8, 0.8);
+      // 0.76 = the column's real diameter. An oversized box narrows the walkable gap between columns
+      // by the difference, which reads in game as an invisible wall where you can plainly see a way through.
+      add(cx, d/2-0.5, 0.76, 0.76);
+      add(cx, 0,       0.76, 0.76);
     }
     // The podium is a 0.5 step and the colonnade is meant to be fought from, so it gets a height zone
     // rather than a collider: you step up onto it instead of walking into it. Without either, the player
@@ -10905,7 +10948,11 @@ document.addEventListener('keydown', e => {
   if (e.code==='Digit2') selectWeapon(1);
   if (e.code==='Digit3') selectWeapon(2);
   if (e.code==='Digit4') selectWeapon(3);
-  if (e.code==='KeyZ') selectWeapon(weapons.findIndex(w=>w.userData.ultimate));
+  // KeyZ used to jump to the ultimate weapon via weapons.findIndex(w=>w.userData.ultimate). The Zahra Gun
+  // is the only weapon with that flag, and it lives in originalWeapons, which is unreachable in normal
+  // play — so findIndex always returned -1, and selectWeapon(-1) wrapped to weapons.length-1: the LAST
+  // weapon in whatever loadout was active (the Naft Pot in Cairo), not a special weapon at all. Z is
+  // intentionally a no-op now rather than a broken alias for "select weapon 3".
   if (e.code==='KeyF' && player.alive) reloadWeapon(currentWeapon);
 });
 document.addEventListener('keyup', e => {
@@ -11173,18 +11220,20 @@ function spawnBossFight(){
   // Boss III = Colosseum Champion (amphitheatre arena); Boss IV = Ifrit King (Citadel courtyard, the
   // current final boss). Each swaps in its own arena world.
   let skin, col, hp, scale, speed, label;
+  // HP +19-24%, speed +6-10% across the board (2026-09-10 boss pass) — each still keeps its old scale,
+  // so a bigger health bar doesn't come with a bigger hitbox.
   if(bossNum===1){
     enterDungeon();
-    skin='colossus'; col=0xc9a671; hp=1450; scale=3.1; speed=1.5; label='BOSS I';
+    skin='colossus'; col=0xc9a671; hp=1800; scale=3.1; speed=1.65; label='BOSS I';
   } else if(bossNum===2){
     enterHydraArena();
-    skin='hydra'; col=0x35502e; hp=1750; scale=2.4; speed=1.7; label='BOSS II';
+    skin='hydra'; col=0x35502e; hp=2150; scale=2.4; speed=1.8; label='BOSS II';
   } else if(bossNum===3){
     enterColosseumArena();
-    skin='champion'; col=0x8a9299; hp=2100; scale=2.3; speed=2.1; label='BOSS III';
+    skin='champion'; col=0x8a9299; hp=2500; scale=2.3; speed=2.2; label='BOSS III';
   } else {
     enterIfritArena();
-    skin='ifritking'; col=0xc93a14; hp=2450; scale=2.0; speed=1.8; label='BOSS IV';
+    skin='ifritking'; col=0xc93a14; hp=2950; scale=2.0; speed=1.9; label='BOSS IV';
   }
   const bmesh=spawnBot(0,-8,col,[-7,0,-8],[7,0,-8],'pistol',{hp, scale, boss:true, speed, skin, diff:1});
   showBossBar(true); setBossBar(bmesh.userData.data);
@@ -11560,7 +11609,11 @@ function updateGrenadePreview(){
   // — undefined fails that check, so the red landing reticle never actually got hidden after switching to
   // any non-grenade weapon (only ever exercised in real play once a grenade weapon became reachable in the
   // Greek loadout)
-  const show = !!(player.alive && w.grenade && !w.reloading && document.pointerLockElement===renderer.domElement);
+  // !inHub as well: weapons are holstered in the Cairo hub (gunGroup.visible=false, selectWeapon() keeps
+  // every mesh hidden), but this preview is a separate per-frame draw with no visibility check of its own
+  // — so switching to a grenade weapon there (the Naft Pot, whichever loadout slot you land on) drew the
+  // splash-radius ring in a map that has no combat and no weapon actually showing.
+  const show = !!(player.alive && !inHub && w.grenade && !w.reloading && document.pointerLockElement===renderer.domElement);
   grenadeArcLine.visible = grenadeFill.visible = grenadeRing.visible = show;
   if(!show) return;
   camera.getWorldDirection(_fwd);
@@ -11646,13 +11699,29 @@ function spawnQuakeEffect(x,z){
 // player's real dodge window), then a burst deals AOE damage if they're still standing in it. Modeled on
 // spawnQuakeEffect()'s timed-array-of-effects pattern.
 const fireMeteors = [];
-function spawnFireMeteor(x,z){
+// Generalized telegraphed-AOE spawner. Every boss ranged special (the Ifrit King's meteor, the Colossus's
+// boulder, the Hydra's venom spit, the Ifrit King's own close-range nova) is one of these with different
+// numbers and colours, and every one goes into this SAME array — the two existing cleanup points
+// (restart, era transitions) already drain it in full, so a new ability type needs no cleanup code of its
+// own, and can't leave orphaned VFX behind if the player dies or the era changes mid-telegraph.
+function spawnAoeTelegraph(x,z,opts){
+  const ringR = opts.ringR!==undefined ? opts.ringR : 2.0;
   const grp = new THREE.Group(); grp.position.set(x,0.05,z); scene.add(grp);
-  const ringMat = new THREE.MeshBasicMaterial({color:0xff4a1a, transparent:true, opacity:0.85, fog:false, side:THREE.DoubleSide});
-  const ring = new THREE.Mesh(new THREE.RingGeometry(1.6,2.0,20), ringMat); ring.rotation.x=-Math.PI/2; grp.add(ring);
-  const fillMat = new THREE.MeshBasicMaterial({color:0xff8a2a, transparent:true, opacity:0.3, fog:false, side:THREE.DoubleSide});
-  const fill = new THREE.Mesh(new THREE.CircleGeometry(2.0,20), fillMat); fill.rotation.x=-Math.PI/2; fill.position.y=0.01; grp.add(fill);
-  fireMeteors.push({grp, ring, ringMat, fillMat, x, z, t:0, impactAt:0.9, dur:1.5, impacted:false});
+  const ringMat = new THREE.MeshBasicMaterial({color:opts.ringColor, transparent:true, opacity:0.85, fog:false, side:THREE.DoubleSide});
+  const ring = new THREE.Mesh(new THREE.RingGeometry(ringR*0.8,ringR,20), ringMat); ring.rotation.x=-Math.PI/2; grp.add(ring);
+  const fillMat = new THREE.MeshBasicMaterial({color:opts.fillColor, transparent:true, opacity:0.3, fog:false, side:THREE.DoubleSide});
+  const fill = new THREE.Mesh(new THREE.CircleGeometry(ringR,20), fillMat); fill.rotation.x=-Math.PI/2; fill.position.y=0.01; grp.add(fill);
+  fireMeteors.push({grp, ring, ringMat, fillMat, x, z, t:0,
+    impactAt: opts.impactAt!==undefined ? opts.impactAt : 0.9,
+    dur: opts.dur!==undefined ? opts.dur : 1.5,
+    impacted:false,
+    hitRadius: opts.hitRadius!==undefined ? opts.hitRadius : 2.0,
+    damage: opts.damage!==undefined ? opts.damage : 24,
+    impactColor: opts.impactColor!==undefined ? opts.impactColor : 0xffd23a});
+}
+// Ifrit King fire meteor — same numbers it always had, now expressed as one call into the generic spawner.
+function spawnFireMeteor(x,z){
+  spawnAoeTelegraph(x,z,{ringColor:0xff4a1a, fillColor:0xff8a2a, impactColor:0xffd23a, ringR:2.0, impactAt:0.9, dur:1.5, hitRadius:2.0, damage:24});
 }
 function damageBot(bd, dmg, point){
   if(!bd.alive) return;
@@ -11990,10 +12059,10 @@ function animate(){
       if(m.t >= m.impactAt){
         m.impacted = true;
         const distToImpact = Math.hypot(camera.position.x-m.x, camera.position.z-m.z);
-        if(distToImpact < 2.0 && player.alive && !gameWon) damagePlayer(Math.round(24*(1-distToImpact/2.0*0.3)));
+        if(distToImpact < m.hitRadius && player.alive && !gameWon) damagePlayer(Math.round(m.damage*(1-distToImpact/m.hitRadius*0.3)));
         shakeAmt = Math.max(shakeAmt, 0.25);
         SFX.explosion();
-        m.fillMat.opacity = 0.9; m.fillMat.color.set(0xffd23a);
+        m.fillMat.opacity = 0.9; m.fillMat.color.set(m.impactColor);
       }
     } else {
       const fadeT = Math.min(1, (m.t-m.impactAt)/(m.dur-m.impactAt));
@@ -12128,7 +12197,15 @@ function animate(){
     const toPX = camera.position.x-b.mesh.position.x, toPZ = camera.position.z-b.mesh.position.z;
     let facePlayer = true;
     if(b.boss){
-      if(distToPlayer>4){ b.moving=1; moveActor(b.mesh, toPX, toPZ, b.speed*dt, R); } else b.moving=0;
+      // Champion mid-charge: override the normal "walk toward the player" behaviour and drive straight at
+      // the point captured when the charge started, through moveActor so the dash stays collision-safe —
+      // it cannot fling the boss through an arena wall the way a raw position lerp could.
+      if(b.charging){
+        b.moving=1;
+        const cdx=b.chargeTX-b.mesh.position.x, cdz=b.chargeTZ-b.mesh.position.z;
+        const distLeft=Math.hypot(cdx,cdz);
+        if(distLeft>0.3) moveActor(b.mesh, cdx, cdz, Math.min(distLeft, b.speed*5*dt), R);
+      } else if(distToPlayer>4){ b.moving=1; moveActor(b.mesh, toPX, toPZ, b.speed*dt, R); } else b.moving=0;
     } else if(canEngage){
       b.moving=0;                          // pistol: stop & shoot / knife: in melee range
     } else if(inNileArea && (b.skin==='crocodile'||b.skin==='hippo') && nileBiters && nileBiters.indexOf(b)<0){
@@ -12179,15 +12256,44 @@ function animate(){
     // travels through the ground, not the air), so it can't just be dodged by breaking LOS the way its pistol
     // fire can, giving it a real second tool and a reason to keep moving instead of camping one spot
     if(b.boss && b.skin==='colossus' && player.alive){
+      // enrage: every boss special below 30% HP fires on a shortened cooldown — the fight visibly
+      // sharpens in its last third rather than just grinding down at a flat pace.
+      const colossusEnraged = b.hp <= b.maxHp*0.3;
       b.quakeCd = b.quakeCd===undefined ? 3.5 : b.quakeCd - dt;
       if(b.quakeCd <= 0 && distToPlayer < 13){
-        b.quakeCd = 6.5 + Math.random()*1.5;
+        b.quakeCd = (6.5 + Math.random()*1.5) * (colossusEnraged?0.7:1);
         const quakeR = 7.5;
         if(distToPlayer <= quakeR) damagePlayer(Math.round(22 * (1 - distToPlayer/quakeR*0.4)));
         shakeAmt = Math.max(shakeAmt, 0.35);
         SFX.explosion();
         spawnQuakeEffect(b.mesh.position.x, b.mesh.position.z);
         setBanner('⚠ QUAKE!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ QUAKE!') setBanner(''); },700);
+      }
+      // NEW: boulder throw. The quake only reaches 13 units, so backing off used to make the Colossus
+      // toothless at range — this covers exactly the distance the quake can't, so kiting past 13 trades
+      // one threat for the other instead of going safe.
+      b.boulderCd = b.boulderCd===undefined ? 2.5 : b.boulderCd - dt;
+      if(b.boulderCd <= 0 && distToPlayer >= 13 && distToPlayer < 28){
+        b.boulderCd = (5.5 + Math.random()*1.5) * (colossusEnraged?0.7:1);
+        spawnAoeTelegraph(camera.position.x, camera.position.z,
+          {ringColor:0x8a7050, fillColor:0xa8895e, impactColor:0xcbb27a, ringR:2.2, impactAt:1.05, dur:1.7, hitRadius:2.2, damage:20});
+        SFX.boss();
+        setBanner('⚠ Boulder incoming!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ Boulder incoming!') setBanner(''); },900);
+      }
+    }
+
+    // Hydra (Boss II): venom spit at the player's current position. The Hydra had NO unique ability at
+    // all before this — just the shared boss pistol fire everything else has, plus its multi-head visuals
+    // — so it was the one boss whose fight didn't feel different from the others.
+    if(b.boss && b.skin==='hydra' && player.alive){
+      const hydraEnraged = b.hp <= b.maxHp*0.3;
+      b.venomCd = b.venomCd===undefined ? 3 : b.venomCd - dt;
+      if(b.venomCd <= 0 && distToPlayer < 24){
+        b.venomCd = (5 + Math.random()*1.5) * (hydraEnraged?0.7:1);
+        spawnAoeTelegraph(camera.position.x, camera.position.z,
+          {ringColor:0x4a8f2a, fillColor:0x6fbf3a, impactColor:0x8fe050, ringR:1.8, impactAt:0.75, dur:1.3, hitRadius:1.8, damage:18});
+        SFX.boss();
+        setBanner('⚠ Venom!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ Venom!') setBanner(''); },700);
       }
     }
 
@@ -12222,14 +12328,58 @@ function animate(){
       setBanner('⚠ The Champion looses two tigers!'); setTimeout(()=>{ if(bossActive) setBanner(''); },1800);
     }
 
+    // NEW: shield charge. A telegraphed dash at the player's position when at range, so standing off and
+    // trading shots isn't purely safe the way it was before — closing the Colosseum's open floor punishes
+    // kiting the same way its arena already invites it. b.charging/b.chargeTX/TZ are read by the movement
+    // override above; this block only starts/ticks/ends the charge and applies the one-time contact hit.
+    if(b.boss && b.skin==='champion' && player.alive){
+      if(b.charging){
+        b.chargeT -= dt;
+        if(!b.chargeHit && distToPlayer < 1.8){
+          b.chargeHit = true;
+          damagePlayer(20);
+          shakeAmt = Math.max(shakeAmt, 0.3);
+          SFX.boss();
+        }
+        if(b.chargeT <= 0) b.charging = false;
+      } else {
+        const championEnraged = b.hp <= b.maxHp*0.3;
+        b.chargeCd = b.chargeCd===undefined ? 4 : b.chargeCd - dt;
+        if(b.chargeCd <= 0 && distToPlayer >= 7 && distToPlayer < 20){
+          b.chargeCd = (8 + Math.random()*2) * (championEnraged?0.7:1);
+          // Duration scaled to the actual distance, not a flat 0.9s: at the dash's own speed (b.speed*5)
+          // a flat 0.9s only covers ~9.9 units, so any charge triggered past ~10 (and the trigger band
+          // goes to 20) ran out of time and stopped short of the player — a boss that visibly charges and
+          // then simply halts, having never landed the hit it telegraphed. +0.25s buffer over the exact
+          // travel time so the last frame of closing isn't cut off by a rounding edge.
+          b.charging = true; b.chargeT = distToPlayer/(b.speed*5) + 0.25; b.chargeHit = false;
+          b.chargeTX = camera.position.x; b.chargeTZ = camera.position.z;
+          SFX.boss();
+          setBanner('⚠ CHARGE!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ CHARGE!') setBanner(''); },700);
+        }
+      }
+    }
+
     // Ifrit King (Boss IV): periodically calls down a telegraphed fire meteor at the player's CURRENT
     // position — a ranged, dodge-driven hazard, distinct from the Colossus's proximity quake (no telegraph,
     // can't be dodged by movement alone) and the Champion's one-time add-summon above.
     if(b.boss && b.skin==='ifritking' && player.alive){
+      const ifritEnraged = b.hp <= b.maxHp*0.3;
       b.meteorCd = b.meteorCd===undefined ? 4 : b.meteorCd - dt;
       if(b.meteorCd <= 0 && distToPlayer < 26){
-        b.meteorCd = 7 + Math.random()*2;
+        b.meteorCd = (7 + Math.random()*2) * (ifritEnraged?0.7:1);
         spawnFireMeteor(camera.position.x, camera.position.z);
+      }
+      // NEW: fire nova. The meteor is a ranged, dodge-at-range threat, which left melee range as the
+      // objectively safe place to stand — this is a short, near-instant burst centred on the boss itself
+      // that punishes exactly that, with only a 0.35s window instead of the meteor's dodge-friendly delay.
+      b.novaCd = b.novaCd===undefined ? 2 : b.novaCd - dt;
+      if(b.novaCd <= 0 && distToPlayer < 4.5){
+        b.novaCd = (4 + Math.random()) * (ifritEnraged?0.7:1);
+        spawnAoeTelegraph(b.mesh.position.x, b.mesh.position.z,
+          {ringColor:0xff6a1a, fillColor:0xff9a3a, impactColor:0xffcf6a, ringR:3.2, impactAt:0.35, dur:0.9, hitRadius:3.2, damage:16});
+        shakeAmt = Math.max(shakeAmt, 0.2);
+        setBanner('⚠ Fire nova!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ Fire nova!') setBanner(''); },600);
       }
     }
 
