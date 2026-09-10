@@ -217,6 +217,7 @@ const BOOTH_POS = {x:0, z:0};
 let inHub = false;
 let boothOpen = false;
 let boothBeacon = null;   // the crystal at the head of the booth's light shaft; spun by the animate loop
+let godMode = false;   // toggled by [G] — see the debug keys in the keydown handler
 // ---- collision registry (top-down AABB rectangles; buildings/props are full-height blockers) ----
 const colliders = [];            // original overworld colliders
 const pyramidColliders = [];     // pyramid overworld colliders (waves 1-3)
@@ -10853,6 +10854,28 @@ document.addEventListener('keydown', e => {
   }
   if (paused) return;
   if (e.code==='KeyE' && nearBooth()){ openBooth(); return; }
+  // ==================== DEBUG KEYS ====================
+  // Shipped deliberately: the owner wants these available on the public build. They are undocumented
+  // in the HUD, but this is a single unminified HTML file, so treat them as public knowledge — anyone
+  // who opens the source can find them. Do not build anything that assumes a run was played honestly.
+  // K: instantly kills every living enemy on screen (wave, boss, Nile wave — whatever's active).
+  if (e.code==='KeyK' && player.alive){
+    bots.forEach(b=>{ if(b.alive) damageBot(b, 99999, b.mesh.position); });
+  }
+  // H: jump straight to the Cairo hub, exactly as beating the Colosseum Champion does.
+  if (e.code==='KeyH' && player.alive){
+    clearBots();
+    currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
+    if(player.score < 120) player.score = 120;   // enough ⭐ in hand to exercise the booth's prices
+    enterHub('🕌 Jumped to the Cairo hub — booth is at (0, -6)');
+  }
+  // G: toggles infinite health — damagePlayer() no-ops while godMode is true.
+  if (e.code==='KeyG'){
+    godMode = !godMode;
+    setBanner(godMode ? '🛡 GOD MODE ON' : '🛡 god mode off');
+    setTimeout(()=>{ if(bannerEl && bannerEl.textContent.toLowerCase().includes('god mode')) setBanner(''); },1200);
+  }
+  // ====================================================
   keys[e.code]=true;
   if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && document.pointerLockElement===renderer.domElement) setScope(true);
   if (e.code==='Digit1') selectWeapon(0);
@@ -11627,7 +11650,7 @@ function damageBot(bd, dmg, point){
   }
 }
 function damagePlayer(dmg){
-  if(!player.alive) return;
+  if(!player.alive || godMode) return;   // godMode is the [G] debug toggle
   player.hp -= dmg; player.lastHit = performance.now()*0.001; showDamage(); setHUD(); SFX.hurt();
   if(player.hp <= 0){
     player.alive = false; player.respawn = 2.5;
