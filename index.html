@@ -139,7 +139,7 @@
 </style>
 </head>
 <body>
-<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Z] Zahra Gun · [F] reload · right-click or hold [Shift] to scope (bow/sling)</div>
+<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Z] Zahra Gun · [Space] jump · [F] reload · right-click or hold [Shift] to scope (bow/sling)</div>
 <div id="pausebtn" title="Pause">❚❚ PAUSE</div>
 <div id="pauseoverlay"><div id="pausetitle">PAUSED</div><button id="resumebtn">RESUME</button><div id="pausehint">Press P or Esc to resume</div></div>
 <div id="stats">🔫 <span id="weap">Rifle</span> &nbsp; ⭐ <span id="score">0</span> &nbsp; 🌊 Wave <span id="wave">1</span> &nbsp; 👾 <span id="enemies">0</span></div>
@@ -9419,13 +9419,29 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
   const bot = makeVoxelBot(color, weaponType, opts.skin);
   if(opts.scale) bot.scale.setScalar(opts.scale);
   bot.position.set(x,0,z);
-  // Bosses get a collision radius measured from the model's real footprint rather than a flat constant.
-  // Floored at the old 1.2 so nothing shrinks, and capped so a boss can still path between obstacles.
-  let radius = 0.55*(opts.scale||1);
+  // Collision radius measured from the model's real footprint. Every non-boss used to get a flat
+  // 0.55*scale whatever it was, so a manticore nearly three units across collided like a mummy and walked
+  // its body into walls — which is what "enemies phase into structures" looks like.
+  //
+  // The NARROW horizontal axis is the right measure, not the long one: a crocodile is ~1 wide and ~4.5
+  // long, so half its length would leave it hovering two metres off every surface and unable to fit
+  // anywhere. Half the narrow axis keeps the body out of walls; a tail or a wingtip may still overlap,
+  // which is normal and reads fine.
+  const bb = new THREE.Box3().setFromObject(bot);
+  const bw = bb.max.x - bb.min.x, bd = bb.max.z - bb.min.z;
+  let radius;
   if(opts.boss){
-    const bb = new THREE.Box3().setFromObject(bot);
+    // bosses keep the long-axis measure: they fight in open arenas, so girth costs them nothing
     radius = Math.max(Math.abs(bb.max.x), Math.abs(bb.min.x), Math.abs(bb.max.z), Math.abs(bb.min.z));
     radius = Math.max(1.2, Math.min(3.0, radius));
+  } else {
+    // Floored at the old value so nothing shrinks, and capped at 0.85 — which is measured, not guessed.
+    // These maps were laid out around a 0.55 radius, so widening enemies also walls them OUT: flood-filling
+    // every overworld from the player's spawn, a radius of 0.65, 0.75 or 0.85 all cut off the same three
+    // spawn points, while 0.95 cuts six and 1.6 cuts nineteen. 0.85 is the top of that plateau — the most
+    // solidity available before enemies start failing to reach the player, which is a worse bug than a
+    // manticore clipping a pillar.
+    radius = Math.max(0.55*(opts.scale||1), Math.min(0.85, 0.5*Math.min(bw, bd) + 0.12));
   }
   bot.userData.isBot = true;
   scene.add(bot);
@@ -10521,6 +10537,8 @@ let playerHeight = 0;                // current ground/rooftop height under the 
 let shakeAmt = 0;                    // camera shake intensity (decays each frame) — used by the colossus's quake stomp
 let stuckTimer = 0;                  // seconds spent trying to move without making progress
 let wedgeTimer = 0;                  // same, for the horizontal case (boxed in at the right height)
+let jumpY = 0, jumpV = 0;            // height above the terrain, and its vertical speed
+const JUMP_V = 5.2, JUMP_G = 14;     // ~0.97 units at the apex, about a metre
 const lastPos = {x:0, z:0};          // previous frame's position, to measure actual displacement
 let netTimer = 0;                    // seconds of continuous movement input, for the net-displacement check
 const netAnchor = {x:0, z:0};        // where that window started
@@ -10848,9 +10866,14 @@ document.addEventListener('keydown', e => {
     if (e.code==='Escape' || e.code==='KeyE'){ e.preventDefault(); closeBooth(); }
     return;
   }
-  if (e.code==='KeyP' || e.code==='Escape' || e.code==='Space'){
-    if (e.code==='Space') e.preventDefault(); // stop the page from scrolling / re-clicking a focused button
+  if (e.code==='KeyP' || e.code==='Escape'){
     if (gameStarted && !gameWon){ paused?resumeGame():pauseGame(); }
+  }
+  // Space jumps. preventDefault stays regardless of whether the jump is allowed, or the page scrolls
+  // and a focused button gets re-clicked.
+  if (e.code==='Space'){
+    e.preventDefault();
+    if (!paused && player.alive && jumpY <= 0 && jumpV === 0) jumpV = JUMP_V;
   }
   if (paused) return;
   if (e.code==='KeyE' && nearBooth()){ openBooth(); return; }
@@ -11174,6 +11197,7 @@ function startGame(){
   document.body.classList.add('playing');
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
+  jumpY = 0; jumpV = 0;
   inHub=false; closeBooth(); setHubStats(false); exitHubChrome();  // leave the hub: wave HUD and weapon back
   // drain any leftover fire meteors from a previous run so one can't fire into the fresh game (quakeEffects,
   // the older analogous VFX-effect array, has this same gap on restart — out of scope here, only fixing
@@ -11659,6 +11683,7 @@ function damagePlayer(dmg){
 }
 function respawnPlayer(){
   player.hp = player.maxHp; player.alive = true; player.lastHit=-99;
+  jumpY = 0; jumpV = 0;   // never respawn mid-jump
   // dying always rolls progress back to the START OF THE CURRENT ERA, with that wave's enemies freshly
   // respawned — never back into an earlier era (e.g. dying in a later era must not send you back to the
   // Egyptian/pyramid one). No continuing a wave (or a boss fight) from where you died, either.
@@ -11807,7 +11832,15 @@ function animate(){
     const targetGroundY = getTerrainHeight(camera.position.x, camera.position.z, playerHeight);
     const maxHeightStep = 5*dt;
     playerHeight += Math.max(-maxHeightStep, Math.min(maxHeightStep, (targetGroundY - playerHeight) * Math.min(1, dt*10)));
-    camera.position.y = playerHeight + 1.7;
+    // The jump is an offset ON TOP of the eased terrain height, never a replacement for it: walking off
+    // a ledge mid-jump still hands you back to the terrain, and colliders are full-height regardless of
+    // the mesh, so jumping can never carry you over a wall.
+    if(jumpV !== 0 || jumpY > 0){
+      jumpV -= JUMP_G*dt;
+      jumpY += jumpV*dt;
+      if(jumpY <= 0){ jumpY = 0; jumpV = 0; }
+    }
+    camera.position.y = playerHeight + 1.7 + jumpY;
     // camera shake (the colossus's quake stomp triggers this) — decays each frame, applied as a pure visual
     // offset on top of the real position so it never affects movement/collision state
     if(shakeAmt > 0){
