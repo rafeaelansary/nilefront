@@ -139,7 +139,7 @@
 </style>
 </head>
 <body>
-<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Z] Zahra Gun · [F] reload · right-click or hold [Shift] to scope (bow/sling) · [R] unstick</div>
+<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Z] Zahra Gun · [F] reload · right-click or hold [Shift] to scope (bow/sling)</div>
 <div id="pausebtn" title="Pause">❚❚ PAUSE</div>
 <div id="pauseoverlay"><div id="pausetitle">PAUSED</div><button id="resumebtn">RESUME</button><div id="pausehint">Press P or Esc to resume</div></div>
 <div id="stats">🔫 <span id="weap">Rifle</span> &nbsp; ⭐ <span id="score">0</span> &nbsp; 🌊 Wave <span id="wave">1</span> &nbsp; 👾 <span id="enemies">0</span></div>
@@ -265,7 +265,48 @@ function getTerrainHeight(x,z,curH){
   }
   return h;
 }
+// True if (px,pz) is inside any collider the player cannot be standing on top of. Shares the roof rule
+// with resolveStep below, so the two can never disagree about what counts as solid.
+function insideCollider(px,pz,R,curH){
+  for(const c of activeColliders){
+    if(c.roofY!=null){
+      const rx=Math.max(c.x1,Math.min(px,c.x2)), rz=Math.max(c.z1,Math.min(pz,c.z2));
+      if(getTerrainHeight(rx,rz,curH) >= c.roofY-0.4) continue;
+    }
+    const nx=Math.max(c.x1,Math.min(px,c.x2)), nz=Math.max(c.z1,Math.min(pz,c.z2));
+    const dx=px-nx, dz=pz-nz;
+    if(dx*dx+dz*dz < R*R - 1e-9) return true;
+  }
+  return false;
+}
+// Last resort when iteration cannot settle: walk outward in rings and take the first clear spot. Called
+// only when two colliders are pushing the player back and forth, which no shipped map currently does —
+// it exists so that "the player is stuck" is not a reachable state rather than merely an unlikely one.
+function nearestFreeSpot(px,pz,R,curH){
+  for(let rad=0.3; rad<=8; rad+=0.3){
+    for(let a=0; a<20; a++){
+      const th=a/20*Math.PI*2;
+      const nx=px+Math.cos(th)*rad, nz=pz+Math.sin(th)*rad;
+      if(Math.abs(nx)>playClamp || Math.abs(nz)>playClamp) continue;
+      if(!insideCollider(nx,nz,R,curH)) return [nx,nz];
+    }
+  }
+  return [px,pz];
+}
 function resolveCollision(px,pz,R,curH){
+  // One pass resolves against each box independently, so being pushed out of one box can push you INTO
+  // another that was already handled — which is exactly how a concave corner wedges you, and why the game
+  // needed a manual unstick key. Iterate to a fixed point instead, then verify.
+  let x=px, z=pz;
+  for(let i=0;i<5;i++){
+    const s=resolveStep(x,z,R,curH);
+    if(Math.abs(s[0]-x)<1e-6 && Math.abs(s[1]-z)<1e-6) break;
+    x=s[0]; z=s[1];
+  }
+  if(insideCollider(x,z,R,curH)) return nearestFreeSpot(x,z,R,curH);
+  return [x,z];
+}
+function resolveStep(px,pz,R,curH){
   for(const c of activeColliders){
     const nx=Math.max(c.x1,Math.min(px,c.x2));
     const nz=Math.max(c.z1,Math.min(pz,c.z2));
@@ -3298,7 +3339,7 @@ function enterNileWave(){
   boatHoles = 0;
   boatHoleMeshes.forEach(m=>nileWorld.remove(m)); boatHoleMeshes.length = 0; // fresh hull on a replay
   clearWorldGroups(); scene.add(nileWorld); sky.visible=true;
-  activeColliders = nileColliders; activeHeightZones = heightZonesOriginal;
+  activeColliders = nileColliders; activeHeightZones = heightZonesNone;   // a boat deck has nothing to climb
   scene.background.set(0x4a90b8); scene.fog.color.set(0x4a90b8); scene.fog.near=30; scene.fog.far=140;
   setDistantGround(0x2f7fae); // open river running to the horizon
   skyTint(0xd6ecf7); // bright river haze
@@ -3781,8 +3822,13 @@ heightZoneTarget = heightZonesPyramid;
     [-0.55,0.55].forEach(o=>{ const rail=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,3.4), timber); rail.position.set(x-2.4+o,0.11,z+1.2); scene.add(rail); });
     for(let i=0;i<4;i++){ const tie=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.16,0.22), timber); tie.position.set(x-2.4,0.3,z-0.1+i*0.9); scene.add(tie); }
     addBox(x-2.4,z+1.2,1.6,3.4);
-    // haul ramp of mudbrick, rising toward the yard
-    for(let s=0;s<5;s++){ block(2.6,0.35,0.8, 0x7c5f3e, x+1.2, 0.17+s*0.35, z-1.6-s*0.8, {noise:20,pattern:'plate'}); }
+    // haul ramp of mudbrick, rising toward the yard. It gets a collider covering the whole flight: the
+    // game has no step-up, so without one the player walks straight into the brickwork and stands
+    // buried in it. The five treads span z from -1.6 to -4.8 relative to the yard.
+    // x-1.0, not x+1.2: at +1.2 the ramp straddled SPAWN_POINTS[2] at (-9,9), so bots were spawning
+    // inside it — invisible until the ramp got a collider and the audit could finally see it.
+    for(let s=0;s<5;s++){ block(2.6,0.35,0.8, 0x7c5f3e, x-1.0, 0.17+s*0.35, z-1.6-s*0.8, {noise:20,pattern:'plate'}); }
+    addBox(x-1.0, z-3.2, 2.6, 4.0);
   })(-11,12);
   // toppled/half-buried columns, sandstone-toned
   function buriedColumns(x,z){
@@ -4012,7 +4058,9 @@ heightZoneTarget = heightZonesGreek;
     }
     const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.55,0.6,0.4), stuccoMat); pediment.position.set(x,6.2,z-d/2-0.9); scene.add(pediment);
     // Poseidon statue on its own plinth, out front
-    const sz = z-d/2-3.2;
+    // 1.6 out, not 3.2: at 3.2 the statue landed on the stoa's podium next door, and its collider
+    // swallowed the stoa's northernmost inner column.
+    const sz = z-d/2-1.6;
     const plinth=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.7,1.6), marbleTrim); plinth.position.set(x,0.65,sz); scene.add(plinth);
     const statueMat = voxMat(0xb8c4c0,{noise:10}); // weathered sea-stone
     const body=new THREE.Mesh(new THREE.BoxGeometry(0.7,2.0,0.6), statueMat); body.position.set(x,2.0,sz); scene.add(body);
@@ -4553,7 +4601,19 @@ heightZoneTarget = heightZonesGreek;
       addBox(x+lx*c-lz*s, z+lx*s+lz*c, Math.abs(w*c)+Math.abs(dd*s), Math.abs(w*s)+Math.abs(dd*c));
     };
     add(0,-d/2,len,0.7);
-    for(let i=0;i<nCols;i++){ const cx=-len/2+0.9+(i/(nCols-1))*(len-1.8); add(cx,d/2-0.5,0.8,0.8); }
+    // BOTH column rows, not just the outer one. The inner row at cz=0 had no collider, so half the
+    // colonnade was walk-through.
+    for(let i=0;i<nCols;i++){
+      const cx=-len/2+0.9+(i/(nCols-1))*(len-1.8);
+      add(cx, d/2-0.5, 0.8, 0.8);
+      add(cx, 0,       0.8, 0.8);
+    }
+    // The podium is a 0.5 step and the colonnade is meant to be fought from, so it gets a height zone
+    // rather than a collider: you step up onto it instead of walking into it. Without either, the player
+    // sinks into the platform and stands buried to the knee — which is what this looked like in game.
+    const pw = Math.abs((len+1.0)*c) + Math.abs((d+1.0)*s);
+    const pd = Math.abs((len+1.0)*s) + Math.abs((d+1.0)*c);
+    heightZoneTarget.push({type:'plateau', x1:x-pw/2, z1:z-pd/2, x2:x+pw/2, z2:z+pd/2, y:0.5});
   }
   // One stoa, on the west side of the main street facing it. A second one was tried on the east side and
   // there is nowhere to put it: that quarter is boxed in by the library, the watchtower at (24,-4), the
@@ -5352,7 +5412,9 @@ heightZoneTarget = heightZonesRoman;
   // a ridge and acroteria, and a bronze cult door at the back of the porch.
   (function capitolineTemple(){
     const TX=-17, TZ=12, w=13, d=10, podH=2.6;
-    addBox(TX,TZ,w,13);                                                        // podium + stair apron
+    // 15.8 deep, not 13: at 13 the box reached only z=5.5 while the staircase runs out to z=2.78, so the
+    // lower five treads had nothing on them and the player walked into the steps.
+    addBox(TX,TZ-1.4,w,15.8);                                                  // podium + the whole stair
     bx(w+0.6,0.4,d+0.6, travDark, TX,0.2,TZ);                                  // podium base moulding
     bx(w,podH-0.75,d, travMat, TX,0.4+(podH-0.75)/2,TZ);
     bx(w+0.5,0.35,d+0.5, travLight, TX,podH-0.175,TZ);                         // podium crown moulding
@@ -10370,7 +10432,8 @@ function enterHydraArena(){
   scene.add(hydraArena);
   sky.visible = true;
   activeColliders = hydraColliders;
-  activeHeightZones = heightZonesOriginal;   // flat platform, no climbable zones
+  activeHeightZones = heightZonesNone;   // flat platform — heightZonesOriginal is NOT empty, it holds the
+                                         // dead original map's three towers, which put invisible ramps here
   // Neutral overcast, not a green one. This arena used to run a green cast on five things at once — a
   // 0x8a9c86 sky, a 0x7f947c fog, a 0x93a894 sky tint, a 0xc3d3b4 hemisphere and a 0xb0c8a4 fill — and
   // those multiply, so the whole fight rendered through a swamp filter rather than merely being set in a
@@ -10395,7 +10458,7 @@ function enterColosseumArena(){
   scene.add(colosseumArena);
   sky.visible = true;
   activeColliders = colosseumColliders;
-  activeHeightZones = heightZonesOriginal;
+  activeHeightZones = heightZonesNone;   // flat arena; heightZonesOriginal carries the dead map's towers
   scene.background.set(0x8fd6f2); scene.fog.color.set(0xd8c4a0); scene.fog.near=45; scene.fog.far=200; // warm daylit arena
   setDistantGround(0xb09268); // dusty ground outside the arena wall
   // The arena's own outer rim (the seating cap) only reaches ~38 units; the gladiator gate tunnels open a
@@ -10414,7 +10477,7 @@ function enterIfritArena(){
   scene.add(ifritArena);
   sky.visible = true;
   activeColliders = ifritColliders;
-  activeHeightZones = heightZonesOriginal;
+  activeHeightZones = heightZonesNone;   // flat arena; heightZonesOriginal carries the dead map's towers
   scene.background.set(0x8a4a2e); scene.fog.color.set(0xa85a34); scene.fog.near=22; scene.fog.far=90; // warm dusk, fire-lit
   setDistantGround(0x7a4028); // scorched red desert under a burning sky
   horizonHaze.visible=false; // enclosed arena with its own walls — see the note in enterColosseumArena()
@@ -10456,6 +10519,10 @@ const vel = new THREE.Vector3();     // smoothed movement velocity (world units/
 let playerHeight = 0;                // current ground/rooftop height under the player (added to eye height)
 let shakeAmt = 0;                    // camera shake intensity (decays each frame) — used by the colossus's quake stomp
 let stuckTimer = 0;                  // seconds spent trying to move without making progress
+let wedgeTimer = 0;                  // same, for the horizontal case (boxed in at the right height)
+const lastPos = {x:0, z:0};          // previous frame's position, to measure actual displacement
+let netTimer = 0;                    // seconds of continuous movement input, for the net-displacement check
+const netAnchor = {x:0, z:0};        // where that window started
 document.addEventListener('mousemove', e => {
   if (document.pointerLockElement !== renderer.domElement) return;
   if (paused) return;
@@ -10794,12 +10861,6 @@ document.addEventListener('keydown', e => {
   if (e.code==='Digit4') selectWeapon(3);
   if (e.code==='KeyZ') selectWeapon(weapons.findIndex(w=>w.userData.ultimate));
   if (e.code==='KeyF' && player.alive) reloadWeapon(currentWeapon);
-  if (e.code==='KeyR' && player.alive){
-    const spot = pickRecoverySpot(camera.position.x, camera.position.z);
-    camera.position.x = spot.x; camera.position.z = spot.z; playerHeight = spot.h;
-    camera.position.y = playerHeight + 1.7; vel.set(0,0,0); stuckTimer = 0;
-    setBanner('↺ repositioned'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='↺ repositioned') setBanner(''); }, 900);
-  }
 });
 document.addEventListener('keyup', e => {
   keys[e.code]=false;
@@ -10973,7 +11034,9 @@ const ENEMY_COLORS=[0xc0392b,0x2980b9,0x27ae60,0x8e44ad,0xe67e22,0x16a085,0xd354
 // [8] was (-2,-20), which sits inside the Great Sphinx's body collider on the pyramid map — the Sphinx is
 // that map's hero landmark and trimming its footprint to dodge a spawn point is the wrong trade. [7] was
 // (18,14), inside a date palm's collider in Cairo. Both moved to points verified clear on all four maps.
-const SPAWN_POINTS=[[-6,-6],[9,4],[-9,9],[-14,-14],[16,-6],[4,16],[-20,4],[20,16],[-4,-20],[12,-16]];
+// [6] was (-20,4), which sits inside the Capitoline temple's front staircase on the Roman map — bots
+// spawned inside the steps. Only visible once the staircase got the collider it was always missing.
+const SPAWN_POINTS=[[-6,-6],[9,4],[-9,9],[-14,-14],[16,-6],[4,16],[-25.5,4.5],[20,16],[-4,-20],[12,-16]];
 const WAVES=[3,4,5, 6,7,9, 7,8,10, 9,10,12]; // 12 waves; a boss after wave 3, 6, 9, and 12
 function waveDiff(n){ return 1 + n*n*0.05 + n*0.16; } // accelerating curve: each wave is meaningfully tougher than the last
 let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWon=false, gameStarted=false;
@@ -11211,7 +11274,19 @@ function firstHit(origin, dir, maxDist, ignoreGroup){
     let p=o, underCam=false, botGroup=null, ignored=false;
     while(p){ if(p===camera) underCam=true; if(p===ignoreGroup) ignored=true; if(p.userData && p.userData.isBot) botGroup=p; p=p.parent; }
     if(underCam || ignored) continue;
+    // A hit on ANY part of a living actor counts, tested before the decoration rules below — the Colossus
+    // has a see-through part, and skipping it would let shots pass through the boss itself.
     if(botGroup){ if(!botGroup.userData.data.alive) continue; return {point:h.point, dist:h.distance, bot:botGroup.userData.data}; }
+    // three r128's Raycaster checks neither visibility nor whether a material is solid, so a switched-off
+    // mesh, a lantern's glow, a flame or the horizon haze all swallow a shot and whatever is behind them
+    // takes no damage. Nothing you can see straight through should stop a bullet.
+    if(o.visible === false) continue;
+    const mat = o.material;
+    if(mat && !Array.isArray(mat)){
+      if(mat.depthWrite === false) continue;                        // atmosphere: haze, light shafts
+      if(mat.transparent && mat.opacity < 0.5) continue;            // anything you can see straight through
+      if(mat.isMeshBasicMaterial && mat.fog === false) continue;    // this codebase's glow/flame signature
+    }
     return {point:h.point, dist:h.distance, bot:null};
   }
   return null;
@@ -11690,9 +11765,17 @@ function animate(){
     camera.position.x = Math.max(-playClamp, Math.min(playClamp, camera.position.x));
     camera.position.z = Math.max(-playClamp, Math.min(playClamp, camera.position.z));
     // solid buildings/props: push the player out of any collider (unless standing on its roof already)
-    const [rx,rz] = resolveCollision(camera.position.x, camera.position.z, 0.45, playerHeight);
+    let [rx,rz] = resolveCollision(camera.position.x, camera.position.z, 0.45, playerHeight);
     if(rx!==camera.position.x) vel.x=0;   // kill velocity into a wall so you don't stutter against it
     if(rz!==camera.position.z) vel.z=0;
+    // Re-clamp: resolution can push past playClamp, and next frame's clamp would shove you straight back
+    // into the same collider — a two-frame oscillation that reads as being stuck. If clamping lands you
+    // inside something, take the nearest clear spot instead.
+    const cx2 = Math.max(-playClamp, Math.min(playClamp, rx));
+    const cz2 = Math.max(-playClamp, Math.min(playClamp, rz));
+    if((cx2!==rx || cz2!==rz) && insideCollider(cx2,cz2,0.45,playerHeight)){
+      const free = nearestFreeSpot(cx2,cz2,0.45,playerHeight); rx=free[0]; rz=free[1];
+    } else { rx=cx2; rz=cz2; }
     camera.position.x = rx; camera.position.z = rz;
     // climb ramps up to rooftops: ease toward the terrain height under the player (smooth stairs, no snapping).
     // getTerrainHeight() is passed the player's current height so it can ignore a ramp zone entirely when
@@ -11722,6 +11805,54 @@ function animate(){
     // leaving you permanently stuck. Only triggers when genuinely wedged for a sustained moment. ----
     const heightMismatch = Math.abs(playerHeight - targetGroundY) > 1.0;
     const tryingToMove = (keys['KeyW']||keys['KeyA']||keys['KeyS']||keys['KeyD']||Math.abs(moveVec.x)>0.1||Math.abs(moveVec.z)>0.1);
+    // Horizontal wedge: boxed in at the correct height, which the height check above cannot see and which
+    // is the exact case [R] used to exist for. Going nowhere is NOT enough on its own — leaning on a wall
+    // looks identical — so once the timer has run a while, probe all eight directions and only recover if
+    // every one of them is blocked. That is the difference between touching a wall and being enclosed.
+    // How many of eight directions actually lead somewhere. Pressed against a flat wall this is ~5;
+    // wedged in a corner or a pocket it is 0-2. That is what separates "camping behind cover" from
+    // "cannot get out", and both checks below lean on it.
+    const openDirections = () => {
+      let n = 0;
+      for(let a=0;a<8;a++){
+        const th=a/8*Math.PI*2, probe=0.5;
+        const tx=camera.position.x+Math.cos(th)*probe, tz=camera.position.z+Math.sin(th)*probe;
+        const cx3=Math.max(-playClamp,Math.min(playClamp,tx)), cz3=Math.max(-playClamp,Math.min(playClamp,tz));
+        const pr=resolveCollision(cx3,cz3,0.45,playerHeight);
+        if(Math.hypot(pr[0]-camera.position.x, pr[1]-camera.position.z) > probe*0.5) n++;
+      }
+      return n;
+    };
+    const unwedge = () => {
+      const free = nearestFreeSpot(camera.position.x, camera.position.z, 0.45, playerHeight);
+      if(free[0]!==camera.position.x || free[1]!==camera.position.z){
+        camera.position.x = free[0]; camera.position.z = free[1]; vel.set(0,0,0); return true;
+      }
+      // nothing clear nearby — fall back to a known-good spawn rather than leave the player stuck
+      const spot = pickRecoverySpot(camera.position.x, camera.position.z);
+      camera.position.x = spot.x; camera.position.z = spot.z; playerHeight = spot.h;
+      camera.position.y = playerHeight + 1.7; vel.set(0,0,0);
+      return true;
+    };
+    const moved = Math.hypot(camera.position.x - lastPos.x, camera.position.z - lastPos.z);
+    lastPos.x = camera.position.x; lastPos.z = camera.position.z;
+    // (a) hard wedge: going nowhere at all, and every direction is blocked
+    if(tryingToMove && moved < 0.25*dt) wedgeTimer += dt; else wedgeTimer = 0;
+    if(wedgeTimer > 1.5){ wedgeTimer = 0; if(openDirections() === 0) unwedge(); }
+    // (b) net-displacement check, for anything the hard wedge misses — oscillating between two colliders,
+    // or shuffling inside a pocket too small to leave. Judged by OUTCOME rather than cause: three seconds
+    // of asking to move while ending up less than a metre from where you started, with almost every way
+    // out blocked. A player leaning on cover keeps ~5 open directions and never trips this.
+    if(tryingToMove){
+      netTimer += dt;
+      if(netTimer > 3.0){
+        const net = Math.hypot(camera.position.x - netAnchor.x, camera.position.z - netAnchor.z);
+        if(net < 1.0 && openDirections() <= 2) unwedge();
+        netAnchor.x = camera.position.x; netAnchor.z = camera.position.z; netTimer = 0;
+      }
+    } else {
+      netTimer = 0; netAnchor.x = camera.position.x; netAnchor.z = camera.position.z;
+    }
     if(heightMismatch && tryingToMove){
       stuckTimer += dt;
       if(stuckTimer > 1.2){
