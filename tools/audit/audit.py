@@ -64,6 +64,7 @@ globalThis.__builders = {
   makeWereJaguar: typeof makeWereJaguar==='function' ? makeWereJaguar : null,
   makeMonolithVanguard: typeof makeMonolithVanguard==='function' ? makeMonolithVanguard : null,
   makeMudGolem: typeof makeMudGolem==='function' ? makeMudGolem : null,
+  makeJadeShaman: typeof makeJadeShaman==='function' ? makeJadeShaman : null,
   makeTiger: typeof makeTiger==='function' ? makeTiger : null,
   makeXiphos: typeof makeXiphos==='function' ? makeXiphos : null,
   makeTrident: typeof makeTrident==='function' ? makeTrident : null,
@@ -160,6 +161,7 @@ ACTORS = [
     ("makeWereJaguar","b=>b()",                             1.00, 0.00, "Were-Jaguar"),
     ("makeMonolithVanguard","b=>b()",                       1.00, 0.00, "Monolith Vanguard"),
     ("makeMudGolem", "b=>b()",                              1.25, 0.00, "Mud Golem"),
+    ("makeJadeShaman", "b=>b()",                            1.90, 0.00, "JadeShaman (La Venta)"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor
