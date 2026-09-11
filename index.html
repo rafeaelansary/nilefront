@@ -217,6 +217,8 @@ const BOOTH_POS = {x:0, z:0};
 let inHub = false;
 let boothOpen = false;
 let boothBeacon = null;   // the crystal at the head of the booth's light shaft; spun by the animate loop
+const RAFT_POS = {x:0, z:0};   // La Venta's landing raft — the way home, filled in when that map builds
+let tripDest = null;      // which destination you are currently away in, or null when home
 let godMode = false;   // toggled by [G] — see the debug keys in the keydown handler
 // ---- collision registry (top-down AABB rectangles; buildings/props are full-height blockers) ----
 const colliders = [];            // original overworld colliders
@@ -230,6 +232,7 @@ const hydraColliders = [];       // Greek boss arena colliders (Boss II — the 
 const colosseumColliders = [];   // Roman boss arena colliders (Boss III — the Colosseum Champion; a full arena)
 const ifritColliders = [];       // Islamic boss arena colliders (Boss IV — the Ifrit King; the Citadel courtyard)
 const islamicColliders = [];     // Islamic/Mamluk Cairo overworld colliders (waves 10-12)
+const mexicoColliders = [];      // La Venta basin colliders (Olmec Mexico — the first booth destination)
 let addTarget = colliders;       // where addBox pushes during world build
 let activeColliders = colliders; // which set physics currently uses
 function addBox(cx,cz,w,d,roofY){ addTarget.push({x1:cx-w/2, z1:cz-d/2, x2:cx+w/2, z2:cz+d/2, roofY}); }
@@ -246,6 +249,7 @@ const heightZonesPyramid = [];
 const heightZonesGreek = [];
 const heightZonesRoman = [];
 const heightZonesIslamic = [];
+const heightZonesMexico = [];    // the Great Pyramid's stair and summit
 let heightZoneTarget = heightZonesOriginal;   // where sniperTower()/plaza() push during world build
 let activeHeightZones = heightZonesPyramid;   // which set getTerrainHeight() reads at runtime (pyramid phase starts active)
 function getTerrainHeight(x,z,curH){
@@ -1020,6 +1024,82 @@ function lernaAshlarTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
 // Travertine ashlar — the pale gold cut limestone of the Colosseum's outer order and every public facade.
 // Big drafted-margin blocks: each one gets its own tone and a recessed joint, so a large wall reads as
 // coursed masonry from a distance rather than a flat panel.
+// ---- La Venta surfaces (Olmec Mexico). Deterministic sin-hash noise like every other texture here. ----
+// Packed river clay: the Great Pyramid at La Venta was built from earth, not cut stone, so its surface has
+// to read as compacted mud with grit in it rather than masonry.
+function claySurfaceTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  const tones=['#8a6a45','#7d5f3c','#95744d','#725636'];
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*15.3+j*91.7)*43758.5%1);
+    x.fillStyle=tones[(n*4)|0]; x.fillRect(i,j,1,1);
+    if(n>0.93){ x.fillStyle='#5e4529'; x.fillRect(i,j,1,1); }   // embedded pebbles
+  }
+  // shallow horizontal weathering runs, the way a rain-cut earthen mound streaks
+  for(let j=3;j<P;j+=7){ x.fillStyle='rgba(90,66,40,0.32)'; x.fillRect(0,j,P,1); }
+  return c;
+}
+// Basalt: the colossal heads and the column palisade were carved from it. Near-black, faintly speckled.
+function basaltTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  const tones=['#3a3a3e','#333338','#424248','#2d2d31'];
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*21.1+j*47.9)*43758.5%1);
+    x.fillStyle=tones[(n*4)|0]; x.fillRect(i,j,1,1);
+    if(n>0.95){ x.fillStyle='#55555c'; x.fillRect(i,j,1,1); }   // vesicles
+  }
+  return c;
+}
+// Tar: the basin's seeps. Almost black, with a slick sheen highlight so it doesn't read as a flat hole.
+function tarTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*9.7+j*33.3)*43758.5%1);
+    x.fillStyle = n>0.88 ? '#2a2620' : (n>0.5 ? '#14120e' : '#0d0b08');
+    x.fillRect(i,j,1,1);
+  }
+  return c;
+}
+// Jungle floor: leaf litter over wet dark earth.
+function jungleFloorTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  const tones=['#3f4a28','#465232','#38412a','#4e5b36'];
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*13.7+j*61.3)*43758.5%1);
+    x.fillStyle=tones[(n*4)|0]; x.fillRect(i,j,1,1);
+    if(n>0.91){ x.fillStyle='#6b6a3a'; x.fillRect(i,j,1,1); }   // fallen leaves
+  }
+  return c;
+}
+// Laterite: the red-orange iron-rich soil that tropical lowlands actually weather to. The single most
+// useful non-green surface here -- bare earth is what breaks up an unrelieved canopy of green.
+function lateriteTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  const tones=['#9e5a33','#8a4d2b','#ac6a3d','#7d4426'];
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*18.3+j*57.1)*43758.5%1);
+    x.fillStyle=tones[(n*4)|0]; x.fillRect(i,j,1,1);
+    if(n>0.94){ x.fillStyle='#c08a5a'; x.fillRect(i,j,1,1); }   // gravel flecks
+  }
+  return c;
+}
+// Sun-bleached grass at the basin's drier margins: straw and olive rather than jungle green.
+function dryGrassTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  const tones=['#9a9350','#8a8447','#a8a25c','#7d783f'];
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*14.1+j*71.9)*43758.5%1);
+    x.fillStyle=tones[(n*4)|0]; x.fillRect(i,j,1,1);
+    if(n>0.92){ x.fillStyle='#b5ad68'; x.fillRect(i,j,1,1); }
+  }
+  return c;
+}
+// The Great Mosaic Pavement: La Venta buried actual serpentine block mosaics laid as a stylised mask.
+function serpentineTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*17.9+j*29.1)*43758.5%1);
+    x.fillStyle = n>0.6 ? '#4a7a5e' : (n>0.3 ? '#3f6b52' : '#558a6a');
+    x.fillRect(i,j,1,1);
+  }
+  // the mosaic's block joints
+  x.fillStyle='rgba(22,40,30,0.55)';
+  for(let k=0;k<P;k+=8){ x.fillRect(k,0,1,P); x.fillRect(0,k,P,1); }
+  return c;
+}
 function travertineTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
   x.fillStyle='#8d7f63'; x.fillRect(0,0,P,P);                 // mortar joint tone, showing between blocks
   for(let by=0;by<P;by+=8){
@@ -2791,7 +2871,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 // the invariant "at most one world group in the scene" holds no matter what state the flags are in.
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
-  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
 }
 function enterDungeon(){
   dungeonWasPyramid = pyramidPhase; // false during era 1 (Greek) — the only other era currently reachable
@@ -5912,7 +5992,10 @@ heightZoneTarget = heightZonesIslamic;
   (function sultanMosque(){
     const MZ=-24.2, MD=5.6, MW=17.4;   // 17.4 not 17: at 17 the facade's side faces landed exactly on the minaret bands'
     ib(MW,12.5,MD, stoneMat, 0,6.19,MZ);                        // -0.06 .. 12.44
-    addBox(0,MZ,MW,MD);
+    // +0.7 deep, shifted 0.35 south: the bronze doors and the muqarnas hood corbel out in front of the
+    // facade, and at the plain 5.6 they stood past the collider and could be walked into. Extended
+    // southward only -- north would reach the perimeter wall.
+    addBox(0,MZ+0.35,MW,MD+0.7);
     ib(MW+0.5,0.55,MD+0.5, lightMat, 0,12.6,MZ);                // crowning cornice
     for(let i=0;i<11;i++) ib(0.9,0.85,0.9, lightMat, -7.5+i*1.5, 13.3, MZ);   // crenellation
     // the pishtaq: a tall recessed portal, its reveals stepped so the recess reads as deep
@@ -5955,6 +6038,7 @@ heightZoneTarget = heightZonesIslamic;
       icyl(0.16,0.22,2.9,8, creamMat, lx,1.6,-14.5);
       ib(0.5,0.5,0.5, brassMat, lx,3.25,-14.5);
       lamp(lx,3.25,-14.5,8);
+      addBox(lx, -14.5, 0.9, 0.9);   // solid, like the arcade posts: they stand out in the open forecourt
     });
   })();
 
@@ -5965,7 +6049,8 @@ heightZoneTarget = heightZonesIslamic;
   (function bazaarArcade(){
     for(let z=-1; z<=15; z+=2.0){
       ib(11.4,0.34,0.44, timberMat, 0,5.05,z);                  // cross beam
-      [-5.2,5.2].forEach(px=> icyl(0.16,0.2,5.0,7, woodMat, px,2.44,z));  // posts, buried to -0.06
+      [-5.2,5.2].forEach(px=>{ icyl(0.16,0.2,5.0,7, woodMat, px,2.44,z);
+        addBox(px, z, 0.5, 0.5); });   // solid: they stand clear of the street, so this costs no room
     }
     // raised to 5.22 so they actually carry the slats: the cross beams are 2.0 apart and the slats are
     // 0.72 apart, so most slats sit over a gap and had nothing under them at all
@@ -6175,8 +6260,25 @@ heightZoneTarget = heightZonesIslamic;
       ib(rampLen/steps+0.1, th, rampW, i%2?lightMat:darkMat, CX-along, th/2-0.04, CZ);   // -0.04: the terrace block owns -0.06
     }
     heightZoneTarget.push({type:'ramp', x1:CX-CW/2-rampLen, x2:CX-CW/2, z1:CZ-rampW/2, z2:CZ+rampW/2, y1:0, y2:H, axisX:true});
-    // stair rails
-    [-1,1].forEach(sd=> ib(rampLen,0.22,0.22, timberMat, CX-CW/2-rampLen/2, H*0.55, CZ+sd*(rampW/2+0.15)));
+    // Stair rails. They used to be one flat bar at a constant y=H*0.55 over a stair that climbs the whole
+    // of H, so a rail hung at head height at the foot of the steps and was buried in the treads at the top
+    // — and you walked straight through it either way. Now each rail follows the stair's own pitch on
+    // short posts, and is solid: the ramp corridor is z=CZ±rampW/2, the rails sit just outside it, so this
+    // keeps you from stepping off the side of the climb without narrowing the climb itself.
+    const railAng = Math.atan2(H, rampLen), railLen = Math.hypot(rampLen, H);
+    [-1,1].forEach(sd=>{
+      const rz = CZ + sd*(rampW/2 + 0.15);
+      const rail = ib(railLen, 0.16, 0.18, timberMat, CX-CW/2-rampLen/2, H/2 + 0.95, rz);
+      rail.rotation.z = railAng;                    // +x is the upslope (east) end, so +angle lifts it
+      // posts down to the treads, each one measured to the stair height directly beneath it
+      for(let i=1;i<=3;i++){
+        const f = i/4, px = CX-CW/2-rampLen + f*rampLen, tread = f*H;
+        ib(0.16, 0.95, 0.16, timberMat, px, tread + 0.475, rz);
+      }
+      // 4.5 not rampLen: the full run would reach x=14.4 into the terrace's own collider and crowd the
+      // enemy spawn at (9,4) at the foot of the steps. Stops just short of both.
+      addBox(CX-CW/2-rampLen/2 + 0.15, rz, 4.5, 0.3);
+    });
   })();
 
   // ================= THE WIKALA — a caravanserai courtyard =================
@@ -6192,6 +6294,7 @@ heightZoneTarget = heightZonesIslamic;
     for(let i=0;i<4;i++){
       const ax=WX-4.2+i*2.8;
       icyl(0.26,0.3,3.3,8, creamMat, ax,1.62,WZ+WD/2+0.55);
+      addBox(ax, WZ+WD/2+0.55, 0.62, 0.62);   // stands proud of the wikala's own box, so needs its own
       const arch=new THREE.Mesh(new THREE.TorusGeometry(0.92,0.2,6,10,Math.PI), lightMat);
       arch.position.set(ax,3.28,WZ+WD/2+0.55); scene.add(arch);
       ib(2.1,1.0,0.14, blueTile, ax,4.35,WZ+WD/2+0.50);
@@ -6292,6 +6395,401 @@ scene.add(distantGround);
 scene.add(horizonHaze);
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
+
+
+// ===================== LA VENTA BASIN (Olmec Mexico) — the first booth destination =====================
+// One contiguous jungle basin, no interior barriers: the Great Pyramid stands at the centre ringed by tar
+// seeps, mangrove swamp closes the west, and the ceremonial plaza with its colossal heads opens to the
+// east. You can shoot the pyramid's base from inside the swamp treeline, and the swamp's own tree trunks
+// are the cover on that side — the two halves read differently and play differently without a wall
+// between them.
+//
+// Same swap architecture as every other overworld: its own collider/height-zone arrays, swept into its own
+// group below. Ground tops out at exactly y=0, so every base sits a hair under it (see the pyramid note).
+addTarget = mexicoColliders;
+heightZoneTarget = heightZonesMexico;
+(function buildLaVenta(){
+  const clayMat    = new THREE.MeshLambertMaterial({map:_finish(claySurfaceTex(),10)});
+  const clayDark   = voxMat(0x6b5238,{noise:16});
+  const basaltMat  = new THREE.MeshLambertMaterial({map:_finish(basaltTex(),3)});
+  const basaltDark = voxMat(0x26262a,{noise:12});
+  const jadeMat    = voxMat(0x3f8f6a,{noise:12});
+  const barkMat    = new THREE.MeshLambertMaterial({map:_finish(logTex(),2)});
+  const leafMat    = new THREE.MeshLambertMaterial({map:_finish(leavesTex(),2)});
+  const leafDark   = voxMat(0x2f5a2c,{noise:18});
+  const leafLight  = voxMat(0x63a04a,{noise:16});
+  // Not every tree is the same green. A yellow-green and an olive give the canopy depth, and the two
+  // flowering tones are the only saturated colour above ground level -- heliconia and flame-tree reds are
+  // exactly what a lowland jungle carries, and a few of them read from right across the basin.
+  const leafOlive  = voxMat(0x4a6b30,{noise:16});
+  const leafYellow = voxMat(0x86a83e,{noise:16});
+  const bloomRed   = voxMat(0xb8462c,{noise:14});
+  const bloomGold  = voxMat(0xc8963a,{noise:14});
+  const canopyTones = [leafMat, leafDark, leafOlive, leafYellow];
+  const stuccoRed  = voxMat(0xa8503a,{noise:12});   // the painted trim Olmec platforms carried
+
+  // ---- basin floor: jungle litter everywhere, with the plaza paved and the swamp waterlogged ----
+  const groundMat = new THREE.MeshLambertMaterial({map:_finish(jungleFloorTex(),46)});
+  const ground = new THREE.Mesh(new THREE.BoxGeometry(64,1,64), groundMat);
+  ground.position.set(0,-0.5,0); ground.receiveShadow=true; scene.add(ground);
+
+  const lb=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  const lcy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  // Flat ground overlay (paving, water, tar), stacked by LAYER rather than by hand-picked y values.
+  //
+  // polygonOffset stops an overlay fighting the ground beneath it, but it does nothing for two overlays
+  // that lie on EACH OTHER: both are biased against the ground, neither against its neighbour, so where
+  // they overlap they fight for the same pixels. The coplanar audit cannot see this either -- it skips
+  // polygonOffset materials by design (three_stub.js:728) -- which is exactly how a tar pool ended up
+  // fighting the offering court in plain sight while every sweep reported the map clean.
+  //
+  // Each layer gets BOTH its own height and its own depth bias, so a higher layer always wins cleanly
+  // wherever two overlap, and overlap stops being something that has to be avoided by hand.
+  const flat=(tex,repeat,x,z,w,d,layer,extra)=>{
+    const L = layer||0;
+    const o = Object.assign({map:_finish(tex,repeat), polygonOffset:true,
+                             polygonOffsetFactor:-(2+L*2), polygonOffsetUnits:-(2+L*2)}, extra||{});
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d), new THREE.MeshLambertMaterial(o));
+    m.position.set(x, 0.03 + L*0.022, z); m.receiveShadow=true; scene.add(m); return m;
+  };
+
+  // ---- tonal ground patches: bare laterite, dry grass and leaf mould breaking up the green ----
+  // Placed one per grid cell with jitter bounded so a patch can never leave its own cell, which means they
+  // cannot overlap each other. That matters: overlapping ground overlays share a depth bias and fight for
+  // pixels, and the polygonOffset exemption in the coplanar audit means nothing would report it. The older
+  // maps' beaches do exactly that and shimmer for it.
+  const patchTex = [lateriteTex(), dryGrassTex(), claySurfaceTex()];
+  for(let gx=-3; gx<=3; gx++){
+    for(let gz=-3; gz<=3; gz++){
+      const n = Math.abs(Math.sin(gx*37.7 + gz*91.3)*43758.5%1);
+      const m = Math.abs(Math.sin(gx*13.1 + gz*57.9)*9371.3%1);
+      if(n < 0.42) continue;                                   // leave most of the basin green
+      const cell = 9.0;
+      const cx = gx*cell + (m-0.5)*2.0, cz = gz*cell + (n-0.5)*2.0;
+      if(Math.hypot(cx,cz) < 15.5) continue;                   // clear of the pyramid's apron
+      if(cx < -10) continue;                                   // and of the swamp's water
+      if(cx > 6 && Math.abs(cz) < 17) continue;                // and of the paved plaza
+      const w = 4.0 + m*2.5, d = 3.4 + n*2.4;                  // always < the 9-unit cell
+      flat(patchTex[(n*3)|0], 3, cx, cz, w, d, 0);
+    }
+  }
+
+  // ================= THE GREAT PYRAMID — hero landmark, dead centre =================
+  // La Venta's Complex C is an earthen mound, not cut stone, and its silhouette is famously fluted rather
+  // than cleanly stepped. Built as stacked tiers with ribbed flutes down each face so it reads as packed
+  // clay that rain has channelled, and climbable up a stair on its south face — the side the player
+  // arrives from.
+  // Height 9, not 14. The stair has to obey getTerrainHeight()'s continuity rule -- a ramp zone is
+  // ignored unless its height is within 1.5 of where the player currently is -- and the player's climb is
+  // rate-capped at 5 units/sec while walking at 6. A 14-unit rise over a 7.9-unit run (slope 1.76) locks
+  // itself out: the player's height lags, the lag exceeds 1.5, the ramp switches off, and they stop dead
+  // at the wall. Every working tower in this game uses rampLen = height*1.45 (slope 0.69), so the pyramid
+  // is sized to that. It also lands closer to La Venta's real base-to-height proportion (~3.8:1).
+  const PY_TIERS = [
+    {w:26.0, h:2.2, y:0.0},
+    {w:21.0, h:2.0, y:2.2},
+    {w:16.4, h:1.8, y:4.2},
+    {w:12.2, h:1.6, y:6.0},
+    {w: 8.4, h:1.4, y:7.6},
+  ];
+  const PY_TOP = 9.0;                  // summit deck height — the boss's ground when that lands
+  PY_TIERS.forEach((t,i)=>{
+    // -0.06 on the bottom tier: it rests on the ground slab whose top face IS y=0, and a base plane
+    // exactly at 0 shares that plane across the whole footprint.
+    const y0 = i===0 ? -0.06 : t.y;
+    const h  = i===0 ? t.h+0.06 : t.h;
+    lb(t.w, h, t.w, clayMat, 0, y0 + h/2, 0);
+    // fluted ribs: shallow half-round channels down each face, four per side per tier
+    for(let s=0;s<4;s++){
+      const a = s*Math.PI/2;
+      for(let k=-1;k<=1;k++){
+        const off = k * t.w*0.26;
+        const rx = Math.cos(a)*(t.w/2+0.05) - Math.sin(a)*off;
+        const rz = Math.sin(a)*(t.w/2+0.05) + Math.cos(a)*off;
+        const rib = lcy(0.42,0.42, t.h*0.94, 8, clayDark, rx, t.y + t.h/2, rz);
+        rib.rotation.x = Math.PI/2; rib.rotation.z = Math.PI/2 - a;
+      }
+    }
+    // A capping course so the tiers separate in silhouette, every other one painted in red cinnabar —
+    // Olmec platforms carried painted trim, and against an all-green basin it is the pyramid's only
+    // strong colour and the thing that makes it read as built rather than heaped.
+    lb(t.w+0.4, 0.28, t.w+0.4, i%2 ? stuccoRed : clayDark, 0, t.y + t.h - 0.02, 0);
+  });
+  // summit deck + its low parapet
+  lb(8.4, 0.30, 8.4, stuccoRed, 0, PY_TOP-0.13, 0);     // painted summit course
+  lb(7.6, 0.22, 7.6, jadeMat,  0, PY_TOP+0.04, 0);      // jade-inlaid summit floor
+  // The collider is THREE boxes with a notch cut for the stairway, not one 26.4 square. A single box
+  // covering the whole footprint blocks the pyramid's own stair: the roof rule only switches a collider
+  // off once the terrain there is within 0.4 of the roof, so anywhere on the face below ~8.6 stays solid
+  // and the player stops dead partway up. Every working tower keeps its ramp OUTSIDE its collider, and
+  // this does the same by leaving the stair corridor (x -4..4, south of the summit) uncovered.
+  addBox(0,    -8.7, 26.4,  9.0, PY_TOP);   // north of the summit, full width
+  addBox(-8.6,  4.5,  9.2, 17.4, PY_TOP);   // west of the stair notch
+  addBox( 8.6,  4.5,  9.2, 17.4, PY_TOP);   // east of the stair notch
+  heightZoneTarget.push({type:'plateau', x1:-4.0, z1:-4.2, x2:4.0, z2:4.2, y:PY_TOP});
+
+  // ---- the south stair: one flight from the summit edge, down the face and out across the apron ----
+  // It starts at the SUMMIT edge (z=4.2), not the base edge, so the ramp zone runs continuously from the
+  // top deck to the ground with no dead stretch between them — a gap there strands the player at the wall
+  // with nothing to step up onto. Carrying it out across the apron is also how a Mesoamerican processional
+  // stair actually reads. It needs a ramp zone because the game has no step-up: a stair without one is
+  // just a wall you walk into (learned on the Roman temple and the Pharos).
+  const STAIR_W = 6.0, STAIR_Z0 = 4.2, STAIR_Z1 = 4.2 + PY_TOP*1.45;
+  const steps = 22;
+  for(let i=0;i<steps;i++){
+    const f = i/(steps-1);
+    const z = STAIR_Z1 - f*(STAIR_Z1-STAIR_Z0);
+    const y = f*PY_TOP;
+    const h = Math.max(0.18, y);
+    lb(STAIR_W, h, (STAIR_Z1-STAIR_Z0)/steps + 0.12, i%2?clayMat:clayDark, 0, h/2 - 0.05, z);
+  }
+  // Balustrades either side, so the climb reads as a processional stair and not a ramp of boxes. They sit
+  // at x=+/-3.35, INSIDE the collider notch cut for the stairway, so they get their own colliders — the
+  // notch is what makes the stair climbable, but it also means anything standing in it is solid only if
+  // it says so. Without these the player walks straight into the balustrade, which then reads as a height
+  // glitch and used to trip the recovery watchdog.
+  [-1,1].forEach(sd=>{
+    for(let i=0;i<steps;i+=2){
+      const f=i/(steps-1), z=STAIR_Z1-f*(STAIR_Z1-STAIR_Z0), y=f*PY_TOP;
+      lb(0.7, Math.max(0.5,y+0.5), (STAIR_Z1-STAIR_Z0)/steps+0.1, clayDark, sd*(STAIR_W/2+0.35), Math.max(0.25,(y+0.5)/2)-0.05, z);
+      addBox(sd*(STAIR_W/2+0.35), z, 0.7, (STAIR_Z1-STAIR_Z0)/steps+0.1);
+    }
+  });
+  heightZoneTarget.push({type:'ramp', x1:-3.0, x2:3.0, z1:STAIR_Z0, z2:STAIR_Z1, y1:PY_TOP, y2:0});
+
+  // ================= TAR SEEPS ringing the pyramid =================
+  // Flat and walkable on purpose: the brief calls for an open basin with no barriers, and a ring of
+  // impassable pits around the one landmark would wall the map in half. They read as hazard, not as wall.
+  // The last pool was 8 deep centred at z=-16.5, which put it straight through the offering court at
+  // z=-20. Narrowed and centred in the 4.3-unit gap between the pyramid's base (z=-13.2) and the court.
+  const tarPools = [[-15.5,-9.0,7.0,5.0],[14.0,-11.0,6.0,4.6],[-13.0,9.5,5.6,4.4],
+                    [15.5,8.0,6.6,5.2],[0.0,-15.3,7.0,3.6]];
+  tarPools.forEach(([tx,tz,tw,td])=>{
+    flat(tarTex(), 3, tx, tz, tw, td, 2);         // layer 2: tar lies on top of mud or paving
+    // No collider and no raised rim. An earlier pass gave these a solid crust edge to hide behind, but the
+    // brief is an open contiguous basin with no barriers, and a ring of solid rims around the one landmark
+    // walls the map in half — they read as hazard on their own.
+    // slow tar bubbles frozen mid-rise, as small domes
+    for(let i=0;i<4;i++){
+      const n=Math.abs(Math.sin((tx+i)*12.9+tz*7.3)*43758.5%1);
+      const bx2 = tx + (n-0.5)*tw*0.7, bz2 = tz + ((n*7)%1-0.5)*td*0.7;
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.22+n*0.18, 8, 5, 0, Math.PI*2, 0, Math.PI/2),
+        new THREE.MeshLambertMaterial({color:0x1a1712}));
+      dome.position.set(bx2, 0.1, bz2); scene.add(dome);
+    }
+  });
+
+  // ================= THE MANGROVE SWAMP — west half =================
+  // Standing water with mangroves on stilt roots. The trunks are the cover here, and the canopy overhead
+  // is what makes the west feel closed while the plaza stays open.
+  flat(swampWaterTex(), 8, -21, 0, 20, 44, 1, {transparent:true, opacity:0.88});   // layer 1: water over it
+  flat(bogMudTex(), 6, -21, 0, 21, 45, 0);        // layer 0: the mud bed
+  function mangrove(x,z,h,lean){
+    const trunk = lcy(0.34,0.46,h,8, barkMat, x, h/2-0.06, z);
+    trunk.rotation.z = lean||0;
+    // stilt roots: the mangrove's signature, four legs splaying out of the waterline
+    for(let i=0;i<4;i++){
+      const a=i/4*Math.PI*2 + 0.4;
+      const r = lcy(0.13,0.17, 1.5, 6, barkMat, x+Math.cos(a)*0.55, 0.62, z+Math.sin(a)*0.55);
+      r.rotation.z = Math.cos(a)*0.45; r.rotation.x = -Math.sin(a)*0.45;
+    }
+    // canopy: three offset leaf masses rather than one ball, so it reads as foliage not a lollipop
+    [[0,0,1.0],[0.6,0.4,0.72],[-0.5,0.3,0.66]].forEach(([ox,oz,sc],i)=>{
+      lb(2.6*sc, 1.1*sc, 2.6*sc, i%2?leafDark:leafOlive, x+ox, h+0.35+i*0.32, z+oz);
+    });
+    addBox(x, z, 0.92, 0.92);
+    return trunk;
+  }
+  // clustered, not gridded — a swamp has thickets and clearings
+  [[-26,-18,4.4],[-23.5,-15,5.2],[-27.5,-12,4.0],[-20,-17,4.8],[-24,-8.5,5.6],[-28,-5,4.4],
+   [-19.5,-6,5.0],[-25,-1,4.8],[-29,2,4.2],[-21,2.5,5.4],[-26,7,5.0],[-19,8.5,4.6],
+   [-28.5,12,4.4],[-23,14,5.2],[-19.5,17,4.8],[-26,19.5,4.2],[-14.5,-12,4.6],[-15,4,5.0],
+   [-14,15,4.4],[-17,-20,4.2]].forEach(([x,z,h],i)=> mangrove(x,z,h, ((i%3)-1)*0.05));
+  // fallen logs across the water — low cover, and something to break the vertical rhythm of the trunks
+  [[-21.5,-12.2,2.2],[-24.5,5,1.4],[-18,11,2.8],[-27,16,1.1]].forEach(([x,z,rot])=>{   // first log nudged clear of the mangrove at (-24,-8.5)
+    const log = lcy(0.44,0.5,4.6,8, barkMat, x, 0.4, z);
+    log.rotation.z = Math.PI/2; log.rotation.y = rot;
+    addBox(x, z, Math.abs(4.6*Math.cos(rot))+0.9, Math.abs(4.6*Math.sin(rot))+0.9);
+  });
+  // reed beds at the water's edge, no colliders — pure texture
+  for(let i=0;i<26;i++){
+    const n=Math.abs(Math.sin(i*19.7)*43758.5%1), m=Math.abs(Math.sin(i*7.1)*9371.3%1);
+    const rx = -12.5 + (n-0.5)*3.2, rz = -22 + m*44;
+    for(let k=0;k<3;k++) lb(0.1, 0.9+n*0.5, 0.1, leafLight, rx+k*0.22-0.22, 0.45+n*0.25, rz+((k*0.3)%0.6)-0.3);
+  }
+
+  // ================= THE PLAZA — east half =================
+  // Open, paved, and deliberately the opposite of the swamp: long sightlines, hard cover only where the
+  // monuments stand.
+  flat(serpentineTex(), 5, 17, 0, 22, 34, 1);     // layer 1: plaza paving
+  // the Great Mosaic Pavement, a stylised jaguar mask laid in serpentine blocks
+  (function mosaicMask(cx,cz){
+    const jm = voxMat(0x2f6b52,{noise:10});
+    lb(8.0,0.10,9.0, jm, cx,0.13,cz);
+    [[-1.9,-2.4],[1.9,-2.4]].forEach(([ox,oz])=> lb(2.0,0.12,1.5, basaltDark, cx+ox,0.15,cz+oz));  // eyes
+    lb(1.4,0.12,1.6, basaltDark, cx,0.15,cz-0.2);                                                  // muzzle bar
+    for(let i=0;i<4;i++) lb(1.1,0.12,0.7, basaltDark, cx-2.6+i*1.75, 0.15, cz+2.6);                // fang row
+    lb(8.6,0.09,0.5, clayDark, cx,0.12,cz-4.6); lb(8.6,0.09,0.5, clayDark, cx,0.12,cz+4.6);        // border
+  })(17,-9);
+
+  // ---- colossal heads: the single most recognisable Olmec object ----
+  function colossalHead(x,z,rot,scale){
+    const S = scale||1;
+    const g = new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rot||0; scene.add(g);
+    const hb=(w,h,d,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(px,py,pz); m.castShadow=true; m.receiveShadow=true; g.add(m); return m; };
+    hb(3.1*S,0.5*S,2.6*S, basaltDark, 0, 0.25*S-0.06, 0);                 // plinth, sunk into the ground
+    hb(2.9*S,2.5*S,2.4*S, basaltMat,  0, 1.75*S, 0);                      // the head mass
+    hb(3.0*S,0.7*S,2.5*S, basaltMat,  0, 3.15*S, 0);                      // the flat helmet-like headdress
+    hb(3.06*S,0.16*S,2.56*S, basaltDark, 0, 2.80*S, 0);                   // headdress band
+    // heavy brow, wide flat nose, thick lips — the features that make it read as Olmec and not a statue
+    hb(2.5*S,0.34*S,0.30*S, basaltDark, 0, 2.30*S, 1.22*S);
+    [-0.62,0.62].forEach(ox=> hb(0.62*S,0.30*S,0.22*S, basaltDark, ox*S, 2.02*S, 1.24*S));   // eyes
+    hb(0.72*S,0.60*S,0.42*S, basaltMat,  0, 1.62*S, 1.30*S);                                  // nose
+    hb(1.30*S,0.34*S,0.26*S, basaltDark, 0, 1.12*S, 1.26*S);                                  // lips
+    [-1,1].forEach(sd=> hb(0.34*S,0.70*S,0.40*S, basaltMat, sd*1.42*S, 1.90*S, 0.25*S));      // ears
+    const c=Math.cos(rot||0), s2=Math.sin(rot||0);
+    addBox(x, z, Math.abs(3.1*S*c)+Math.abs(2.6*S*s2), Math.abs(3.1*S*s2)+Math.abs(2.6*S*c));
+  }
+  colossalHead(9.5, -18.0,  0.25, 1.0);
+  colossalHead(21.0,-16.0, -0.5,  0.92);
+  colossalHead(24.5,  4.0,  1.9,  1.05);
+  colossalHead(11.0, 16.0,  2.9,  0.95);   // 13.5 put it inside the pyramid's footprint
+
+  // ---- Altar 4: a table-top throne with a figure seated in its niche ----
+  (function altar(x,z){
+    lb(5.0,0.45,3.4, basaltDark, x,0.16,z);           // base
+    lb(4.6,1.9,3.0,  basaltMat,  x,1.34,z);           // the block
+    lb(5.4,0.55,3.8, basaltMat,  x,2.55,z);           // overhanging table top
+    lb(5.5,0.14,3.9, basaltDark, x,2.86,z);
+    // the niche, cut into the front, with the seated figure inside it
+    lb(2.2,1.3,0.5,  basaltDark, x,1.20,z+1.52);
+    lb(0.62,0.85,0.4,basaltMat,  x,1.05,z+1.42);      // figure's torso
+    lb(0.46,0.42,0.36,basaltMat, x,1.66,z+1.42);      // head
+    addBox(x,z,5.5,3.9);
+  })(20.0,-2.5);
+
+  // ---- stelae: tall carved basalt slabs, the plaza's vertical accents and its hard cover ----
+  function stela(x,z,h,rot){
+    lb(1.7,0.4,1.0, basaltDark, x,0.14,z,rot);
+    const sl = lb(1.5,h,0.6, basaltMat, x,h/2+0.3,z,rot);
+    lb(1.56,0.22,0.66, basaltDark, x,h+0.32,z,rot);   // cap
+    // shallow relief bands so the slab isn't a blank plank
+    for(let i=0;i<3;i++) lb(1.1,0.12,0.66, basaltDark, x, 0.9+i*(h/3.4), z, rot);
+    const c=Math.cos(rot||0), s2=Math.sin(rot||0);
+    addBox(x,z, Math.abs(1.7*c)+Math.abs(1.0*s2), Math.abs(1.7*s2)+Math.abs(1.0*c));
+  }
+  stela(15.0, -4.0, 3.4, 0.1);    // 13.0 clipped the pyramid's footprint
+  stela(15.5,  3.5, 3.0, -0.2);   // 13.5 clipped the pyramid's footprint
+  stela(24.0,-17.0, 3.8, 0.6);    // 25.5,-9.5 stood in the palisade arc
+  stela(18.5,  9.0, 3.2, 1.3);
+
+  // ---- the basalt column palisade: La Venta Complex A was fenced with upright basalt columns ----
+  (function palisade(cx,cz,r,fromA,toA){
+    // 9, not 26: at 26 the columns sat 0.39 apart while each collider is 0.72 wide, so every neighbour
+    // overlapped. 1.12 spacing keeps a real gap and still reads as a palisade.
+    const n = 9;
+    for(let i=0;i<=n;i++){
+      const a = fromA + (toA-fromA)*(i/n);
+      const px = cx+Math.cos(a)*r, pz = cz+Math.sin(a)*r;
+      const h = 3.0 + ((i*0.37)%1)*0.7;
+      lcy(0.3,0.34,h,6, basaltMat, px, h/2-0.06, pz);
+      addBox(px,pz,0.72,0.72);
+    }
+  })(17,-9, 9.2, -0.55, 0.55);
+
+  // ================= NORTH: ceremonial mounds and the offering court =================
+  function mound(x,z,w,h){
+    lb(w,h+0.06,w*0.8, clayMat, x,(h-0.06)/2,z);
+    lb(w+0.3,0.24,w*0.8+0.3, clayDark, x,h-0.04,z);
+    addBox(x,z,w,w*0.8);
+  }
+  mound(-8.0,-22.5, 5.4, 1.8);    // -6.0 overlapped the mound at (-1,-26)
+  mound( 4.5,-23.5, 4.6, 1.5);
+  mound(-1.0,-26.0, 6.0, 2.2);
+  // offering court: a sunken rectangle of packed clay with jade celts laid in a cross
+  flat(claySurfaceTex(), 4, 0, -20.0, 9.0, 5.0, 2);
+  for(let i=0;i<5;i++) lb(0.34,0.16,0.9, jadeMat, -1.6+i*0.8, 0.14, -20.0);
+  // the crossing row sits 0.01 higher: at a shared 0.14 both rows had identical top AND bottom faces
+  // while overlapping at the centre of the cross
+  for(let i=0;i<3;i++) lb(0.9,0.16,0.34, jadeMat, 0, 0.15, -21.4+i*1.4);
+
+  // ================= jungle edge: trees closing the basin's rim =================
+  function jungleTree(x,z,h,tone,bloom){
+    lcy(0.36,0.5,h,8, barkMat, x, h/2-0.06, z);
+    const t0 = canopyTones[(tone||0) % canopyTones.length];
+    const t1 = canopyTones[((tone||0)+2) % canopyTones.length];
+    [[0,0,1.15],[0.7,0.5,0.8],[-0.65,0.45,0.75],[0.2,-0.7,0.7]].forEach(([ox,oz,sc],i)=>{
+      lb(3.0*sc,1.25*sc,3.0*sc, i%2?t0:t1, x+ox, h+0.4+i*0.36, z+oz);
+    });
+    // a flowering crown on some of them — small, but it is the only strong colour in the treeline
+    if(bloom){
+      const bm = bloom===1 ? bloomRed : bloomGold;
+      [[0.5,0.3],[-0.45,0.35],[0.1,-0.5]].forEach(([ox,oz],i)=>
+        lb(1.0,0.34,1.0, bm, x+ox, h+1.5+i*0.22, z+oz));
+    }
+    // a hanging vine or two
+    [[0.9,0.3],[-0.8,-0.4]].forEach(([ox,oz])=> lb(0.09, 1.6, 0.09, leafLight, x+ox, h-0.4, z+oz));
+    addBox(x,z,1.0,1.0);
+  }
+  [[-8,-29],[3,-30],[13,-27],[22,-24],[28,-18],[30,-6],[29,9],[26,18],[19,25],[9,28],
+   [-2,30],[-11,28],[-20,26],[-27,24],[-30,15],[-31,-2],[-29,-14],[-24,-24],[-15,-27],[24,-29]
+  ].forEach(([x,z],i)=> jungleTree(x,z, 5.0 + (i%4)*0.8, i, (i%5===0) ? 1 : (i%7===0 ? 2 : 0)));
+
+  // ---- ferns and undergrowth scattered through the basin, no colliders ----
+  for(let i=0;i<70;i++){
+    const n=Math.abs(Math.sin(i*23.1)*43758.5%1), m=Math.abs(Math.sin(i*11.7)*9371.3%1);
+    const fx = -30 + n*60, fz = -30 + m*60;
+    if(Math.hypot(fx,fz) < 15) continue;                 // keep the pyramid's apron clear
+    if(fx < -12 && Math.abs(fz) < 22) continue;          // and the swamp water
+    for(let k=0;k<3;k++){
+      const a=k/3*Math.PI*2;
+      const fernTone = n>0.82 ? bloomRed : (n>0.62 ? leafYellow : (k%2?leafLight:leafOlive));
+      const fr = lb(0.85,0.09,0.3, fernTone, fx+Math.cos(a)*0.3, 0.25+n*0.2, fz+Math.sin(a)*0.3);
+      fr.rotation.y=a; fr.rotation.x=-0.3;
+    }
+  }
+
+  // ---- the landing raft: how you got here, and how you leave ----
+  // A bound-log raft with its pole, at the south approach beside the processional stair. The Olmec moved
+  // multi-tonne basalt heads by river raft, so it is the right vehicle for this place — and it gives the
+  // trip a physical way home instead of a menu. Registered as the return interactable below.
+  (function raft(x,z){
+    for(let i=0;i<7;i++) lb(0.42, 0.26, 4.4, barkMat, x - 1.26 + i*0.42, 0.11, z);   // bound logs
+    [-1.9,1.9].forEach(oz=> lb(3.1, 0.16, 0.22, clayDark, x, 0.26, z+oz));            // lashings
+    lcy(0.09,0.11, 3.4, 6, barkMat, x+1.5, 1.7, z-0.6);                               // punt pole
+    lb(0.6,0.5,0.6, clayDark, x-1.0, 0.44, z+1.2);                                    // a bundle of cargo
+    lb(0.44,0.34,0.44, jadeMat, x-1.0, 0.86, z+1.2);
+    RAFT_POS.x = x; RAFT_POS.z = z;
+    addBox(x, z, 3.2, 4.6);
+  })(6.5, 25.5);
+
+  // ---- torches on the pyramid's stair, so the climb reads at a distance ----
+  [[-4.2,19.0],[4.2,19.0],[-4.2,15.4],[4.2,15.4]].forEach(([tx,tz])=>{
+    lcy(0.12,0.15,2.2,6, barkMat, tx, 1.04, tz);
+    const bowl = lcy(0.3,0.22,0.3,8, basaltDark, tx, 2.25, tz);
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.26,0.6,7),
+      new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false}));
+    fl.position.set(tx,2.68,tz); scene.add(fl);
+    const L = new THREE.PointLight(0xffa040, 1.1, 10); L.position.set(tx,2.7,tz); scene.add(L);
+    addBox(tx,tz,0.5,0.5);
+  });
+})();
+
+const mexicoOverworld = new THREE.Group();
+// distantGround and horizonHaze are parented to the scene ABOVE this point (they persist across every
+// world swap on purpose), so they have to be excluded here or this sweep would steal them from every
+// other map.
+scene.children.slice().forEach(o=>{
+  if(o===sky || o.isLight || o===distantGround || o===horizonHaze) return;
+  if(o===overworld || o===pyramidOverworld || o===greekOverworld || o===romanOverworld || o===islamicOverworld) return;
+  mexicoOverworld.add(o);
+});
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
 
 // ---- voxel humanoid bot (Minecraft/Pixel-Gun proportions: blocky head+helmet, layered torso armor, segmented limbs) ----
 function makeVoxelTexture(baseHex, {noise=22, size=64, pattern=null, cell=6} = {}){
@@ -6548,6 +7046,11 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='ghoul') return makeGhoul();
   if(skinName==='roc') return makeRoc();
   if(skinName==='ifritking') return makeIfritKing();
+  // La Venta creatures — dispatched directly like the ifrit/ghoul/roc above, no SKINS entry needed
+  if(skinName==='stalker') return makeSwampStalker();
+  if(skinName==='werejaguar') return makeWereJaguar();
+  if(skinName==='vanguard') return makeMonolithVanguard();
+  if(skinName==='mudgolem') return makeMudGolem();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -6776,25 +7279,69 @@ function makeVoxelBot(color, weaponType, skinName){
   g.userData.legL = legL; g.userData.legR = legR; g.userData.armR = armR; g.userData.armL = armL;
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 2.7, 0); marker.scale.set(1.05,1.05,1.05); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
-// shared marker texture: glowing red downward arrow/chevron
+// ---- the enemy marker ----------------------------------------------------------------------------
+// It used to be a solid filled triangle with a white border, and it had two problems: it was an opaque
+// slab that blotted out whatever it hovered over (faces, mostly), and at distance it collapsed into an
+// unreadable red blob. This is a stroked chevron instead — the same signal in about a third of the ink,
+// so you can see the enemy THROUGH it, and it keeps its shape all the way down to a dozen pixels.
+// Tuned by rendering it at 72/48/32/22/14px against both flat ground and a busy voxel face.
+const MARKER_PX = 256;                 // the chevron has round caps and diagonals, so it wants the detail
+// the chevron path, in texture units on a 128 grid (scaled to MARKER_PX below)
+const MARKER_PATH = [[26,46],[64,92],[102,46]];
+// How far down the texture the point of the chevron sits: apex 92 + half the 30-wide outline = 107 of 128.
+// placeEnemyMarker() needs this to put the tip a known distance above an enemy's head.
+const MARKER_TIP = 107/128;
 let _markerTex=null;
 function enemyMarkerTex(){
   if(_markerTex) return _markerTex;
-  const c=document.createElement('canvas'); c.width=c.height=128; const ctx=c.getContext('2d');
-  // bright, high-contrast downward arrow with a bold white outline + dark halo so it reads through walls
-  ctx.shadowColor='rgba(0,0,0,0.85)'; ctx.shadowBlur=14;
-  ctx.strokeStyle='#000'; ctx.lineWidth=14; ctx.lineJoin='round';
-  ctx.beginPath(); ctx.moveTo(26,20); ctx.lineTo(102,20); ctx.lineTo(64,96); ctx.closePath(); ctx.stroke();
+  const c=document.createElement('canvas'); c.width=c.height=MARKER_PX;
+  const ctx=c.getContext('2d'), k=MARKER_PX/128;
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  const path=(dy)=>{ ctx.beginPath();
+    MARKER_PATH.forEach(([x,y],i)=>{ const px=x*k, py=(y+(dy||0))*k;
+      if(i) ctx.lineTo(px,py); else ctx.moveTo(px,py); });
+    ctx.stroke(); };
+  // dark halo + outline in one pass, so the shape holds against bright sand as well as dark stone
+  ctx.shadowColor='rgba(0,0,0,0.9)'; ctx.shadowBlur=7*k;
+  ctx.strokeStyle='#1a0a0a'; ctx.lineWidth=30*k; path();
   ctx.shadowBlur=0;
-  ctx.fillStyle='#ff2a2a'; ctx.strokeStyle='#ffffff'; ctx.lineWidth=8;
-  ctx.beginPath(); ctx.moveTo(26,20); ctx.lineTo(102,20); ctx.lineTo(64,96); ctx.closePath(); ctx.fill(); ctx.stroke();
-  _markerTex=new THREE.CanvasTexture(c); _markerTex.magFilter=THREE.NearestFilter; _markerTex.anisotropy=maxAniso; return _markerTex;
+  ctx.strokeStyle='#f0342c'; ctx.lineWidth=18*k; path();
+  ctx.strokeStyle='#ff9678'; ctx.lineWidth=5*k;  path(-4);   // a lit edge along the top of the arms
+  _markerTex=new THREE.CanvasTexture(c); _markerTex.anisotropy=maxAniso; return _markerTex;
+}
+// Build the sprite and remember how tall the model under it is. Every builder used to hand-pick a height
+// and a size for its own marker; 13 of the 22 guesses put the arrow down inside the model, which is why
+// they sat on top of faces. Measuring the model instead means a new enemy gets this right for free.
+function attachEnemyMarker(g){
+  const bb = new THREE.Box3().setFromObject(g);          // called BEFORE the sprite is added, so it
+  g.userData.markerTop = isFinite(bb.max.y) ? bb.max.y : 2;   // measures the body and not itself
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(),
+    depthTest:false, depthWrite:false, transparent:true, fog:false}));
+  marker.renderOrder = 9999;
+  marker.raycast = function(){};
+  g.add(marker); g.userData.marker = marker;
+  placeEnemyMarker(g, 1);
+  return marker;
+}
+const MARKER_SIZE = 1.0;    // world units for an ordinary enemy — it is a HUD cue, not part of the model
+const MARKER_GAP  = 0.22;   // clear air between the point of the chevron and the top of the head
+// It used to scale with the enemy, so a 3.1x Colossus wore a three-unit arrow while a shabti wore a
+// half-unit one. Flat-rate looks wrong the other way — a 1-unit chevron over an 8-unit boss reads as a
+// speck. So it grows, but far slower than the model does: +7% per unit of height above 2, capped at 1.7.
+function markerSizeFor(worldHeight){
+  return MARKER_SIZE * Math.max(1, Math.min(1.7, 1 + (worldHeight - 2)*0.07));
+}
+// Called again from spawnBot() once the spawn scale is known. Size and gap are both divided by that
+// scale so they survive the group's setScalar and come out at the world values computed here.
+function placeEnemyMarker(g, scale){
+  const m = g.userData.marker; if(!m) return;
+  const s = markerSizeFor((g.userData.markerTop||2) * (scale||1))/(scale||1);
+  m.scale.set(s, s, 1);
+  // sprite spans its centre +- s/2; the tip is MARKER_TIP down from the top edge
+  m.position.set(0, (g.userData.markerTop||2) + (MARKER_GAP/(scale||1)) + s*(MARKER_TIP - 0.5), 0);
 }
 
 // BOSS I — SANDSTONE COLOSSUS. Like the mummy and the jackal this was a SKINS entry on the shared soldier
@@ -6937,9 +7484,7 @@ function makeColossus(){
   g.userData.legL=legL; g.userData.legR=legR; g.userData.armR=armR; g.userData.armL=armL;
   g.userData.botMuzzle=botMuzzle;
   g.userData.bodyMeshes=[]; g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker=new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0,3.2,0); marker.scale.set(1.2,1.2,1.2); marker.renderOrder=9999; marker.raycast=function(){};
-  g.add(marker); g.userData.marker=marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -7092,9 +7637,7 @@ function makeMummy(){
   g.userData.legL=legL; g.userData.legR=legR; g.userData.armR=armR; g.userData.armL=armL;
   g.userData.botMuzzle=botMuzzle;
   g.userData.bodyMeshes=[]; g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker=new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0,2.5,0); marker.scale.set(1.05,1.05,1.05); marker.renderOrder=9999; marker.raycast=function(){};
-  g.add(marker); g.userData.marker=marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -7191,9 +7734,7 @@ function makeJackal(){
   g.userData.legL=legL; g.userData.legR=legR; g.userData.armR=armR; g.userData.armL=armL;
   g.userData.botMuzzle=botMuzzle;
   g.userData.bodyMeshes=[]; g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker=new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0,2.7,0); marker.scale.set(1.05,1.05,1.05); marker.renderOrder=9999; marker.raycast=function(){};
-  g.add(marker); g.userData.marker=marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -7270,10 +7811,7 @@ function makeScarab(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.15, 0); marker.scale.set(0.9,0.9,0.9); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -7365,10 +7903,7 @@ function makeScorpion(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.25, 0); marker.scale.set(0.85,0.85,0.85); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -7394,10 +7929,7 @@ function makeShabti(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.2, 0); marker.scale.set(0.7,0.7,0.7); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -7471,10 +8003,7 @@ function makeHippo(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.5, 0); marker.scale.set(1.1,1.1,1.1); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -7568,10 +8097,7 @@ function makeCrocodile(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.0, 0); marker.scale.set(0.9,0.9,0.9); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -7724,11 +8250,7 @@ function makeMinotaur(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  // 3.15: the upright rebuild stands just under 3 to the horn tips, so the old 2.7 sat inside its head
-  marker.position.set(0, 3.15, 0); marker.scale.set(1.1,1.1,1.1); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);   // measured off the horn tips now, rather than the hand-picked 3.15 it had
   return g;
 }
 
@@ -7850,10 +8372,7 @@ function makeGriffin(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 2.1, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -7992,10 +8511,7 @@ function makeMedusa(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 2.9, 0); marker.scale.set(1.1,1.1,1.1); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -8117,10 +8633,7 @@ function makeWarHoundPack(){
   });
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.95, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -8439,10 +8952,7 @@ function makeManticore(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 2.10, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -8592,10 +9102,7 @@ function makeBasilisk(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.85, 0); marker.scale.set(0.95,0.95,0.95); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -8674,10 +9181,7 @@ function makeIfrit(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 2.4, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -8689,6 +9193,156 @@ function makeIfrit(){
 // that slab, a player being charged saw a featureless green box with ears — no face, no claws, no menace.
 // Now the skull LEADS the silhouette (lowest, furthest forward point), the arms bracket it wide and reach
 // forward, and the ribcage is narrow so the limbs read instead of being swallowed by the body.
+// ---- La Venta creatures (Olmec Mexico). Each answers a different half of the basin. ----
+// Shared rig contract, same as every other actor: userData.legL/legR drive the walk, armR/armL the aim
+// blend, bodyMeshes the hit flash, marker the off-screen indicator.
+function _mexRig(g, legL, legR, armR, armL){
+  g.userData.legL=legL; g.userData.legR=legR; g.userData.armR=armR; g.userData.armL=armL;
+  g.userData.bodyMeshes=[];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  attachEnemyMarker(g);
+  return g;
+}
+
+// SWAMP STALKER — a mud-caked skirmisher with a blowgun. Built low and lean, streaked with river clay so
+// it reads as camouflaged rather than merely dirty, which is the whole idea of the thing.
+function makeSwampStalker(){
+  const g=new THREE.Group();
+  const mud=voxMat(0x5e5236,{noise:20}), mudDark=voxMat(0x3e3622,{noise:18});
+  const skin=voxMat(0x8a6a48,{noise:14}), cane=voxMat(0x9a8f4a,{noise:12});
+  const paint=voxMat(0xb8462c,{noise:10});          // the one bright note: red body paint
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+  b(0.34,0.42,0.20, mud, 0,0.86,0);                 // torso
+  b(0.36,0.10,0.22, mudDark, 0,1.04,0);             // clay streaks across the chest
+  b(0.30,0.08,0.21, paint, 0,0.80,0);
+  b(0.24,0.24,0.22, skin, 0,1.20,0);                // head
+  b(0.25,0.07,0.23, paint, 0,1.24,0);               // painted band across the eyes
+  b(0.26,0.09,0.10, mudDark, 0,1.33,0.01);          // matted hair
+  // arms: the right one holds the blowgun up across the body
+  const armR=new THREE.Group(); armR.position.set(0.22,1.06,0); g.add(armR);
+  const ar=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.34,0.10), skin); ar.position.set(0,-0.14,0); armR.add(ar);
+  const bg=new THREE.Mesh(new THREE.CylinderGeometry(0.022,0.026,0.66,6), cane);
+  bg.position.set(0,-0.24,-0.24); bg.rotation.x=Math.PI/2; armR.add(bg);
+  const armL=new THREE.Group(); armL.position.set(-0.22,1.06,0); g.add(armL);
+  const al=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.34,0.10), skin); al.position.set(0,-0.14,0); armL.add(al);
+  // hips at 0.36 so the foot of a 0.36 leg lands at exactly y=0
+  // hips at the torso's underside (0.65) and a leg exactly that long, so it meets the body at the top
+  // and the ground at the bottom — a shorter leg leaves the body floating over a gap.
+  const legL=new THREE.Group(); legL.position.set(0.10,0.65,0); g.add(legL);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.65,0.12), mudDark); _m.position.set(0,-0.325,0); _m.castShadow=true; legL.add(_m); }
+  const legR=new THREE.Group(); legR.position.set(-0.10,0.65,0); g.add(legR);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.65,0.12), mudDark); _m.position.set(0,-0.325,0); _m.castShadow=true; legR.add(_m); }
+  const botMuzzle=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.07),
+    new THREE.MeshBasicMaterial({color:0xc8e070, transparent:true, opacity:0, fog:false}));
+  botMuzzle.position.set(0.22,0.82,-0.52); botMuzzle.visible=false; g.add(botMuzzle);
+  g.userData.botMuzzle=botMuzzle;
+  return _mexRig(g, legL, legR, armR, armL);
+}
+
+// OLMEC WERE-JAGUAR — the were-jaguar is THE Olmec supernatural motif: a snarling cleft-headed half-man
+// half-cat. Fast and low, built to close distance in the open plaza.
+function makeWereJaguar(){
+  const g=new THREE.Group();
+  const pelt=voxMat(0xb8862a,{noise:18,pattern:'pelt'}), peltDark=voxMat(0x6b4a18,{noise:16});
+  const skin=voxMat(0x8a6a48,{noise:14});
+  const fang=new THREE.MeshLambertMaterial({color:0xf0ecd8});
+  const claw=new THREE.MeshLambertMaterial({color:0xe4dcc4});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+  b(0.46,0.42,0.72, pelt, 0,0.80,0);                 // a long prowling body, not an upright torso
+  b(0.40,0.10,0.66, peltDark, 0,0.97,0);             // dorsal stripe, sunk into the back rather than capping it
+  b(0.34,0.30,0.34, pelt, 0,0.96,0.50);              // head, thrust forward
+  b(0.36,0.09,0.33, peltDark, 0,1.04,0.50);          // the cleft — the were-jaguar's signature brow,
+                                                     // set below the head's own top face rather than level with it
+  b(0.10,0.13,0.09, peltDark, 0,1.15,0.50);
+  b(0.22,0.14,0.16, skin, 0,0.895,0.66);             // snarling muzzle, lifted off the head's own base plane
+  // each fang stepped slightly in y and z: a row at one identical depth shares faces along its length
+  for(let i=0;i<4;i++) b(0.035,0.09,0.035, fang, -0.075+i*0.05, 0.82+(i%2)*0.006, 0.72+(i%2)*0.005);
+  [-1,1].forEach(sd=>{ const e=b(0.09,0.12,0.05, pelt, sd*0.12,1.14,0.46); e.rotation.z=sd*0.3; });
+  // a lashing tail
+  // 0.14 spacing and a gentler tilt: at 0.17 with a steepening rotation the last two segments pulled
+  // clear of the one before and floated.
+  // 0.11 spacing on 0.20-long segments, and a gentle uniform tilt. The segments taper as they go, so a
+  // wider spacing plus a steepening rotation pulled the thin tip segments clear of their neighbours.
+  for(let i=0;i<4;i++){ const t=b(0.10-i*0.015,0.10-i*0.015,0.20, peltDark, 0,0.80+i*0.022,-0.40-i*0.11); t.rotation.x=-0.12-i*0.03; }
+  // hips at 0.385: the paw is the lowest part (centre -0.34, half-height 0.045), so 0.385-0.385 = 0
+  const mkLeg=(sx,sz)=>{ const l=new THREE.Group(); l.position.set(sx,0.385,sz); g.add(l);
+    { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.36,0.15), pelt); _m.position.set(0,-0.18,0); _m.castShadow=true; l.add(_m); }
+    const paw=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.09,0.22), peltDark); paw.position.set(0,-0.34,0.03); l.add(paw);
+    for(let i=0;i<3;i++){ const c=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.03,0.07), claw);
+      c.position.set(-0.05+i*0.05,-0.36+(i%2)*0.005,0.14+(i%2)*0.004); l.add(c); }   // stepped, as above
+    return l; };
+  const legFL=mkLeg(0.17,0.26), legFR=mkLeg(-0.17,0.26), legBL=mkLeg(0.17,-0.26), legBR=mkLeg(-0.17,-0.26);
+  // Four legs on a two-handle rig: the shared walk animation drives legL/legR only, so the diagonal pairs
+  // are bound together through proxies -- the same trick the manticore uses.
+  const diagonal=(a,c)=>({ rotation:{ get x(){ return a.rotation.x; },
+                                      set x(v){ a.rotation.x=v; c.rotation.x=v; } } });
+  return _mexRig(g, diagonal(legFL,legBR), diagonal(legFR,legBL), null, null);
+}
+
+// MONOLITH VANGUARD — a warrior behind a stone shield carved as a face. Frontally immune, which this game
+// already expresses exactly: damageBot() halves damage inside a bot's facing arc and the minotaur turns
+// slowly so flanking works. This reuses that rather than inventing a second system.
+function makeMonolithVanguard(){
+  const g=new THREE.Group();
+  const stone=new THREE.MeshLambertMaterial({map:_finish(basaltTex(),2)});
+  const stoneDark=voxMat(0x26262a,{noise:12});
+  const skin=voxMat(0x8a6a48,{noise:14}), kilt=voxMat(0x9a7a3a,{noise:14});
+  const jade=voxMat(0x3f8f6a,{noise:12});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+  b(0.42,0.46,0.24, skin, 0,0.92,0);
+  b(0.44,0.20,0.25, kilt, 0,0.64,0);
+  b(0.27,0.27,0.25, skin, 0,1.26,0);
+  b(0.29,0.10,0.26, jade, 0,1.31,0);                 // jade headband, clear of the head's own top face
+  // the shield: a slab carved as a face, the thing you cannot shoot through
+  const sh=b(0.72,0.92,0.16, stone, 0,0.95,0.34);
+  b(0.60,0.16,0.06, stoneDark, 0,1.20,0.43);         // heavy brow
+  [-1,1].forEach(sd=> b(0.15,0.13,0.05, stoneDark, sd*0.15,1.06,0.44));   // eyes
+  b(0.16,0.18,0.07, stone, 0,0.92,0.45);             // the flat nose
+  b(0.34,0.12,0.05, stoneDark, 0,0.74,0.44);         // the downturned mouth
+  const armL=new THREE.Group(); armL.position.set(-0.26,1.10,0); g.add(armL);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.36,0.12), skin); _m.position.set(0,-0.16,0); _m.castShadow=true; armL.add(_m); }
+  const armR=new THREE.Group(); armR.position.set(0.26,1.10,0); g.add(armR);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.36,0.12), skin); _m.position.set(0,-0.16,0); _m.castShadow=true; armR.add(_m); }
+  const club=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.46,0.05), stoneDark);
+  club.position.set(0,-0.42,-0.02); armR.add(club);
+  // hips at the kilt's underside (0.54), leg exactly that long
+  const legL=new THREE.Group(); legL.position.set(0.12,0.54,0); g.add(legL);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.54,0.14), skin); _m.position.set(0,-0.27,0); _m.castShadow=true; legL.add(_m); }
+  const legR=new THREE.Group(); legR.position.set(-0.12,0.54,0); g.add(legR);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.54,0.14), skin); _m.position.set(0,-0.27,0); _m.castShadow=true; legR.add(_m); }
+  return _mexRig(g, legL, legR, armR, armL);
+}
+
+// MUD GOLEM — a slow lump of sacred river clay. Heavy and durable; its threat is that it keeps coming and
+// hits hard when it arrives, since the brief's movement-slowing mud has no system behind it here.
+function makeMudGolem(){
+  const g=new THREE.Group();
+  const mud=voxMat(0x6b5238,{noise:22}), mudDark=voxMat(0x453521,{noise:20});
+  const wet=voxMat(0x3a2c1a,{noise:18});
+  const jade=voxMat(0x3f8f6a,{noise:12});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+  b(0.72,0.62,0.56, mud, 0,0.92,0);                  // a heavy shapeless mass
+  b(0.60,0.18,0.50, mudDark, 0,1.20,0);
+  b(0.40,0.34,0.38, mud, 0,1.40,0.04);               // a lump of a head, barely a neck
+  [-1,1].forEach(sd=> b(0.09,0.08,0.06, jade, sd*0.10,1.46,0.20));   // jade shards for eyes
+  b(0.26,0.08,0.06, wet, 0,1.32,0.20);               // a slack mouth slit
+  // clay sloughing off the shoulders in clods
+  [[-0.34,1.14,0.10],[0.36,1.10,-0.08],[-0.30,0.98,-0.22],[0.32,1.22,0.16]].forEach(([x,y,z],i)=>
+    b(0.18-i*0.02,0.16,0.17, wet, x,y,z));
+  const armR=new THREE.Group(); armR.position.set(0.42,1.12,0); g.add(armR);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.46,0.22), mud); _m.position.set(0,-0.20,0); _m.castShadow=true; armR.add(_m); }
+  const fistR=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.24,0.26), mudDark); fistR.position.set(0,-0.48,0); armR.add(fistR);
+  const armL=new THREE.Group(); armL.position.set(-0.42,1.12,0); g.add(armL);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.46,0.22), mud); _m.position.set(0,-0.20,0); _m.castShadow=true; armL.add(_m); }
+  const fistL=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.24,0.26), mudDark); fistL.position.set(0,-0.48,0); armL.add(fistL);
+  // hips at the body's underside (0.61), leg exactly that long
+  const legL=new THREE.Group(); legL.position.set(0.20,0.61,0); g.add(legL);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.61,0.24), mudDark); _m.position.set(0,-0.305,0); _m.castShadow=true; legL.add(_m); }
+  const legR=new THREE.Group(); legR.position.set(-0.20,0.61,0); g.add(legR);
+  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.61,0.24), mudDark); _m.position.set(0,-0.305,0); _m.castShadow=true; legR.add(_m); }
+  return _mexRig(g, legL, legR, armR, armL);
+}
+
 function makeGhoul(){
   const g = new THREE.Group();
   const skinMat = voxMat(0x93a08c,{noise:16});   // corpse-pale grey-green
@@ -8758,10 +9412,7 @@ function makeGhoul(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 1.15, 0); marker.scale.set(1,1,1); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -8844,10 +9495,7 @@ function makeRoc(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 2.5, 0); marker.scale.set(1.2,1.2,1.2); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -8944,10 +9592,7 @@ function makeIfritKing(){
 
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 3.5, 0); marker.scale.set(1.4,1.4,1.4); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -9190,10 +9835,7 @@ function makeHydra(){
   g.userData.hydraTrunk = trunkMeshes.map(m=>({mesh:m, baseY:m.position.y, z:m.position.z}));
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 3.2, 0); marker.scale.set(1.4,1.4,1.4); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -9344,10 +9986,7 @@ function makeChampion(){
   g.userData.legL = champLegL; g.userData.legR = champLegR; g.userData.armR = armR; g.userData.armL = armL;
   g.userData.bodyMeshes = [];
   g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
-  const marker = new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(), depthTest:false, depthWrite:false, transparent:true, fog:false}));
-  marker.position.set(0, 3.0, 0); marker.scale.set(1.3,1.3,1.3); marker.renderOrder = 9999;
-  marker.raycast = function(){};
-  g.add(marker); g.userData.marker = marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -9449,9 +10088,7 @@ function makeTiger(){
   }
 
   g.userData.bodyMeshes=[]; g.traverse(o=>{if(o.isMesh)g.userData.bodyMeshes.push(o);});
-  const marker=new THREE.Sprite(new THREE.SpriteMaterial({map:enemyMarkerTex(),depthTest:false,depthWrite:false,transparent:true,fog:false}));
-  marker.position.set(0,1.35,0); marker.scale.set(0.9,0.9,0.9); marker.renderOrder=9999; marker.raycast=function(){};
-  g.add(marker); g.userData.marker=marker;
+  attachEnemyMarker(g);
   return g;
 }
 
@@ -9461,6 +10098,7 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
   opts = opts||{};
   const bot = makeVoxelBot(color, weaponType, opts.skin);
   if(opts.scale) bot.scale.setScalar(opts.scale);
+  placeEnemyMarker(bot, opts.scale||1);   // re-place at the spawn scale so the arrow stays a constant size
   bot.position.set(x,0,z);
   // Collision radius measured from the model's real footprint. Every non-boss used to get a flat
   // 0.55*scale whatever it was, so a manticore nearly three units across collided like a mummy and walked
@@ -9470,7 +10108,12 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
   // long, so half its length would leave it hovering two metres off every surface and unable to fit
   // anywhere. Half the narrow axis keeps the body out of walls; a tail or a wingtip may still overlap,
   // which is normal and reads fine.
+  // Lift the marker out first. A Sprite carries a 1x1 plane geometry, so setFromObject() counts it —
+  // and the marker is deliberately a constant world size, which is WIDER than a shabti or a scarab. Left
+  // in, it would set the collision radius for every small enemy from the HUD arrow over its head.
+  const _mk = bot.userData.marker; if(_mk) bot.remove(_mk);
   const bb = new THREE.Box3().setFromObject(bot);
+  if(_mk) bot.add(_mk);
   const bw = bb.max.x - bb.min.x, bd = bb.max.z - bb.min.z;
   let radius;
   if(opts.boss){
@@ -10354,9 +10997,108 @@ const greekWeapons = [makeSling(), makeXiphos(), makeTrident()];
 // Roman loadout — not yet wired into wave/era progression (map-only turn), but ready for when it is
 const romanWeapons = [makeJavelin(), makePugio(), makeGreekFire()];
 const islamicWeapons = [makeCrossbow(), makeScimitar(), makeNaftPot()];
+
+// ===================== LA VENTA LOADOUT (Olmec Mexico) =====================
+// Three weapons, each a different answer to the basin's two halves: an open plaza with long sightlines and
+// a mangrove swamp full of trunks to shoot from between.
+//
+// The brief asked for more than the engine has, so three things were dropped rather than faked: the
+// macana's bleed and its obsidian-teeth durability (no status effects, no repair), and the blowgun's
+// modular scope and poison/blindness (no attachment or debuff system). What each weapon DOES is built to
+// carry the same intent through mechanics that already exist.
+
+// MACANA — the obsidian-toothed war club. A flat hardwood paddle with knapped blades set along both edges.
+// The brief's "heavy bleed" becomes what this engine can express honestly: the hardest-hitting melee in
+// the game and the slowest, so it trades reach and rate for a single decisive blow.
+function makeMacana(){
+  const g=new THREE.Group();
+  const wood=voxMat(0x6b4a28,{noise:16}), woodDark=voxMat(0x452c17,{noise:14});
+  const obsidian=metalMatP(0x2a2632,120,0x9a8fb5);   // volcanic glass: near-black, very sharp highlight
+  const cord=voxMat(0xb09a68,{noise:16});
+  const mb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
+  // grip, then a slightly wider paddle: the silhouette is a flat bat, not a sword
+  mb(0.05,0.30,0.05, woodDark, 0,0.02,0);
+  for(let i=0;i<5;i++) mb(0.058,0.022,0.058, cord, 0,-0.06+i*0.06,0);    // corded wrap
+  mb(0.09,0.52,0.035, wood, 0,0.44,0);                                    // the paddle
+  mb(0.094,0.50,0.012, woodDark, 0,0.44,0.018);                           // face groove
+  // obsidian teeth down BOTH edges, alternating slightly so the row reads as knapped blades set in pitch
+  [-1,1].forEach(sd=>{
+    for(let i=0;i<7;i++){
+      const t=mb(0.03,0.055,0.05, obsidian, sd*0.052, 0.23+i*0.073, (i%2)*0.004);
+      t.rotation.z = sd*0.22;
+    }
+  });
+  mb(0.10,0.05,0.05, woodDark, 0,0.72,0);                                 // butt cap at the tip
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.26,-0.40),recoil:0.16,name:'Macana',
+    melee:true, range:1.9, damage:190, fireRate:0.46};
+  return g;
+}
+
+// BAMBOO BLOWGUN — a long hollow cane bound with vine. Silent and precise: almost no spread and the
+// tightest scope in the game, but the lowest per-hit damage of any ranged weapon here, so it rewards
+// picking targets from cover in the swamp rather than trading in the open.
+// The brief's lashed-on lens becomes the engine's own native scope (scoped/scopeFov) rather than an
+// attachment system that does not exist.
+function makeBlowgun(){
+  const g=new THREE.Group();
+  const cane=voxMat(0x9a8f4a,{noise:14}), caneDark=voxMat(0x6b6230,{noise:12});
+  const vine=voxMat(0x3f6b30,{noise:16}), bone=voxMat(0xd8cfae,{noise:10});
+  const bb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
+  const bcy=(rt,rb,h,seg,mat,x,y,z,rx)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.rotation.x = rx===undefined ? Math.PI/2 : rx; g.add(m); return m; };
+  bcy(0.032,0.036,1.05,8, cane, 0,0,-0.42);                       // the barrel
+  // node rings along the cane, which is what makes bamboo read as bamboo
+  for(let i=0;i<5;i++) bcy(0.040,0.040,0.03,8, caneDark, 0,0,-0.86+i*0.21);
+  // vine lashings
+  [-0.70,-0.20].forEach(z=> bcy(0.043,0.043,0.05,8, vine, 0,0,z));
+  bcy(0.050,0.038,0.07,8, caneDark, 0,0,0.08);                    // mouthpiece
+  // a hollowed jaguar-bone sight lashed to the top — the brief's lens, as fixed ironwork rather than a slot
+  bb(0.028,0.05,0.22, bone, 0,0.052,-0.52);
+  bb(0.034,0.016,0.05, vine, 0,0.052,-0.42);
+  // a few spare darts in a quiver band, fletched with down
+  [-1,1].forEach(sd=>{
+    bcy(0.008,0.008,0.20,5, bone, sd*0.045,-0.03,-0.10);
+    bb(0.018,0.018,0.03, bone, sd*0.045,-0.03,-0.02);
+  });
+  g.userData={muzzleZ:-0.95,muzzleY:0,pos:new THREE.Vector3(0.20,-0.18,-0.30),recoil:0.02,name:'Blowgun',
+    damage:46, fireRate:0.5, auto:false, spread:0.0015, tracer:0xe8e0c0, scoped:true, scopeFov:32,
+    magSize:10, ammo:10, reloadTime:1.3, reloading:false, reloadT:0};
+  return g;
+}
+
+// ATLATL — the spear-thrower, and the brief's "wildcard". It is genuinely dual-mode: a thrusting jab at
+// contact range and a hurled javelin beyond it, switching on distance rather than on a keypress.
+// hybridRange is read by fire(); nothing else in the game has it.
+function makeAtlatl(){
+  const g=new THREE.Group();
+  const iron=voxMat(0x5a4326,{noise:16}), ironDark=voxMat(0x3a2a16,{noise:14});
+  const obsidian=metalMatP(0x2a2632,120,0x9a8fb5);
+  const cord=voxMat(0xb09a68,{noise:16}), feather=voxMat(0xc8b25a,{noise:12});
+  const ab=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
+  const acy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.rotation.x=Math.PI/2; g.add(m); return m; };
+  // the thrower board itself, held in the hand, with its finger loops and the spur the dart butts against
+  ab(0.07,0.035,0.46, iron, 0,-0.03,-0.12);
+  ab(0.075,0.02,0.10, ironDark, 0,-0.048,0.06);                   // the spur end
+  [-1,1].forEach(sd=> acy(0.022,0.022,0.05,6, cord, sd*0.042,-0.03,-0.02));   // finger loops
+  ab(0.055,0.045,0.07, obsidian, 0,-0.03,0.10);                   // spiked obsidian pommel
+  // the loaded dart, running the length of the board and out past it
+  acy(0.017,0.019,0.92,7, iron, 0,0.012,-0.36);
+  ab(0.030,0.075,0.13, obsidian, 0,0.012,-0.84);                  // the knapped head
+  for(let i=0;i<3;i++) acy(0.024,0.024,0.02,7, cord, 0,0.012,-0.10-i*0.16);   // binding
+  [-1,1].forEach(sd=>{ const f=ab(0.006,0.05,0.13, feather, sd*0.016,0.012,0.02); f.rotation.z=sd*0.25; });
+  g.userData={muzzleZ:-0.92,muzzleY:0.012,pos:new THREE.Vector3(0.24,-0.22,-0.40),recoil:0.18,name:'Atlatl',
+    damage:150, fireRate:0.95, auto:false, spread:0.004, tracer:0xd8c49a,
+    magSize:5, ammo:5, reloadTime:1.5, reloading:false, reloadT:0,
+    // Dual-mode. Inside this distance the atlatl is a thrusting jab -- no dart spent, faster, and it hits
+    // for hybridMelee; beyond it the dart is thrown for the full damage above. fire() reads both.
+    hybridRange:2.6, hybridMelee:95, hybridMeleeRate:0.34};
+  return g;
+}
+const mexicoWeapons = [makeMacana(), makeBlowgun(), makeAtlatl()];
 let weapons = pyramidWeapons; // waves 1-3 + Boss I start on the pyramid loadout; swapped back after Boss I
 const gunGroup = new THREE.Group();
-originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons).concat(romanWeapons).concat(islamicWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
+originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons).concat(romanWeapons).concat(islamicWeapons).concat(mexicoWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
 gunGroup.add(muzzle);
 let currentWeapon = 0; // start on the bow
 function setAmmoHUD(){
@@ -10424,6 +11166,88 @@ function enterRomanWorld(banner){
 // swaps in the Islamic/Cairo map + loadout — used by both the real post-Boss-III victory transition (Task 4)
 // and by respawnPlayer() for era-3 deaths (Task 4). Modeled directly on enterRomanWorld(): an open
 // transition, not exiting a dungeon, so world+lighting+loadout all happen in one call.
+// La Venta basin (Olmec Mexico). Reached by buying passage at the Cairo travel booth (50 stars); the raft
+// at the south landing is the way home. The [J] debug key jumps straight here through the same travelTo().
+//
+// ---- destination waves ----
+// A trip runs its OWN short ladder. Everything in onAllDead() below the tripDest branch is campaign
+// logic — era switches, dungeon entries, boss triggers — and none of it means anything out here. Letting
+// it run was the "no more enemies after the first wave" bug: clearing the basin advanced the campaign's
+// waveIdx into the Islamic era's waves 10-12, which spawn nothing by design. The wave WAS advancing —
+// into an empty one.
+//
+// SPAWN_POINTS is the shared list fullcheck audits against every map, La Venta included, so the ladder
+// draws from it rather than carrying its own coordinates. Split by side of the basin so each creature
+// still arrives where it belongs: the west points are back in the mangroves where the stalkers snipe
+// from cover, the east ones are out on the open plaza where the jaguars can run.
+const LA_VENTA_WEST = [6,3,2,0,8];    // indices into SPAWN_POINTS
+const LA_VENTA_EAST = [4,7,9,1,5];
+const LA_VENTA_WAVES = [
+  {stalker:3, werejaguar:2},
+  {stalker:3, werejaguar:3, vanguard:1},
+  {stalker:2, werejaguar:3, vanguard:2, mudgolem:1},
+  {stalker:3, werejaguar:4, vanguard:2, mudgolem:2},
+];
+const LA_VENTA_STATS = {
+  stalker:    {hp:110, speed:1.15, wt:'pistol', scale:1.00, west:true },
+  werejaguar: {hp:190, speed:2.35, wt:'knife',  scale:1.00, west:false},
+  vanguard:   {hp:300, speed:1.00, wt:'knife',  scale:1.00, west:false},
+  mudgolem:   {hp:380, speed:0.70, wt:'knife',  scale:1.25, west:true },
+};
+const TRIP_CLEAR_BONUS = 40;          // ⭐ for clearing a destination, so a trip pays back part of its fare
+let tripWave = 0, tripCleared = false;
+function spawnTripWave(){
+  clearBots();
+  const roster = LA_VENTA_WAVES[Math.min(tripWave, LA_VENTA_WAVES.length-1)];
+  const diff = 1 + tripWave*0.12;     // the garrison toughens a little each wave, as waveDiff() does
+  let wi=0, ei=0, n=0;
+  Object.keys(roster).forEach(skin=>{
+    const st = LA_VENTA_STATS[skin];
+    for(let i=0;i<roster[skin];i++){
+      const pool = st.west ? LA_VENTA_WEST : LA_VENTA_EAST;
+      const sp = SPAWN_POINTS[pool[(st.west ? wi++ : ei++) % pool.length]];
+      spawnBot(sp[0], sp[1], ENEMY_COLORS[n++ % ENEMY_COLORS.length],
+               [sp[0]-2.5,0,sp[1]], [sp[0]+2.5,0,sp[1]], st.wt,
+               {skin, hp:Math.round(st.hp*diff), diff, speed:st.speed, scale:st.scale});
+    }
+  });
+  setTripHUD();
+}
+// While away, the stats bar's #wave/#enemies spans carry the destination's own progress instead of the
+// campaign's. Once the basin is clear they hand over to the way home.
+function setTripHUD(){
+  const w=document.getElementById('wave'), e=document.getElementById('enemies');
+  if(w) w.textContent = (tripDest ? tripDest.place : 'La Venta') + ' ' +
+                        Math.min(tripWave+1, LA_VENTA_WAVES.length) + '/' + LA_VENTA_WAVES.length;
+  if(e) e.textContent = tripCleared ? 'raft at the landing' : bots.filter(b=>b.alive).length;
+}
+function enterMexicoWorld(banner){
+  clearWorldGroups();
+  scene.add(mexicoOverworld);
+  sky.visible = true;
+  activeColliders = mexicoColliders;
+  activeHeightZones = heightZonesMexico;
+  // A green sky over green ground over green canopy left the whole basin one flat hue with no horizon in
+  // it. The sky is properly blue now and the haze warm, so the treeline reads AGAINST something instead of
+  // dissolving into it, and the ground's own colour has somewhere to sit.
+  scene.background.set(0x74b0d4); scene.fog.color.set(0xc2c8a4); scene.fog.near=30; scene.fog.far=155;
+  // the distant jungle gets the basin's own floor texture rather than a flat tint, so the land past the
+  // rim has grain instead of reading as painted card
+  setDistantGround(0x6e7a4a, _finish(jungleFloorTex(), 60));
+  skyTint(0xdfe8c8);
+  // warm sun against a cool sky bounce: the two pulling opposite ways is what stops everything averaging
+  // to the same green
+  hemi.intensity=0.68; hemi.color.set(0xbcd8ea); hemi.groundColor.set(0x4a4028);
+  sun.intensity=0.95; fill.intensity=0.28; fill.color.set(0xc8b98a);
+  // South of the pyramid on the processional approach, looking straight up the stair at it.
+  camera.position.set(0,1.7,27); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  weapons.forEach(w=>w.visible=false);
+  weapons = mexicoWeapons;
+  selectWeapon(0);
+  spawnTripWave();
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
 function enterIslamicWorld(banner){
   clearWorldGroups();
   scene.add(islamicOverworld);
@@ -10454,6 +11278,7 @@ function enterIslamicWorld(banner){
 // ends here; the travel booth in the bazaar is what leads onward.
 function enterHub(banner){
   inHub = true;
+  tripDest = null;        // coming home always ends any trip, however it was entered
   enterIslamicWorld(banner);
   pending = null; betweenTimer = 0;
   // holster everything: no viewmodel, no crosshair, no ammo counter, no scope
@@ -10476,10 +11301,15 @@ function exitHubChrome(){
 // The stats bar is relabelled rather than rebuilt: spawnWave() and setEnemyCount() look #wave and
 // #enemies up by id with no null guard, so every id has to survive the swap or the next wave throws.
 const STATS_HTML_DEFAULT = (document.getElementById('stats')||{}).innerHTML || '';
-function setHubStats(on){
+function setHubStats(on, place, hint, icon){
   const st=document.getElementById('stats'); if(!st) return;
+  // Same four span ids either way — spawnWave() and setEnemyCount() look #wave and #enemies up with no
+  // null guard, so dropping one throws on the next wave.
   st.innerHTML = on
-    ? '🔫 <span id="weap"></span> &nbsp; ⭐ <span id="score">0</span> &nbsp; 🕌 <span id="wave">Cairo</span> &nbsp; 🎟 <span id="enemies">booth in the bazaar</span>'
+    ? '🔫 <span id="weap"></span> &nbsp; ⭐ <span id="score">0</span> &nbsp; ' + (icon||'🕌')
+      + ' <span id="wave">' + (place||'Cairo') + '</span> &nbsp; '
+      + (hint===undefined ? '🎟 <span id="enemies">booth in the bazaar</span>'
+                          : '🛶 <span id="enemies">' + hint + '</span>')
     : STATS_HTML_DEFAULT;
   const wv=document.getElementById('weap');
   if(wv && weapons[currentWeapon]) wv.textContent = weapons[currentWeapon].userData.name;
@@ -10635,8 +11465,13 @@ function spendScore(n){
 const DESTINATIONS = [
   {flag:'🇪🇬', name:'Egypt',         era:'Pharaohs to Mamluks · the road so far', price:0,  ready:true, done:true,
    lon: 31, lat: 27},
-  {flag:'🗿', name:'Mexico',        era:'Aztec Tenochtitlan · 1345–1521',         price:50, ready:false,
-   lon:-99, lat: 19},
+  // The first destination actually built. La Venta is Olmec, not Aztec — the Olmec are the older
+  // civilisation the Aztec inherited from, and its colossal heads and earthen pyramid are far more
+  // distinctive to build than another stepped-stone city.
+  {flag:'🗿', name:'Mexico',        era:'Olmec La Venta · 1200–400 BC',           price:50, ready:true,
+   lon:-94, lat: 18,
+   go(){ travelTo({place:'La Venta', icon:'🗿',
+                   enter(){ enterMexicoWorld('🗿 The basin of La Venta — the pyramid stands at its centre'); }}); }},
   {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka & Uppsala, 800–1050', price:60, ready:false,
    lon: 17, lat: 60},
   {flag:'🐉', name:'China & Japan', era:'Yuan China to Kyushu · 1271–1281',       price:70, ready:false,
@@ -10778,12 +11613,21 @@ function nearBooth(){
   const dx = camera.position.x - BOOTH_POS.x, dz = camera.position.z - BOOTH_POS.z;
   return (dx*dx + dz*dz) < BOOTH_RADIUS*BOOTH_RADIUS;
 }
+// The return raft, the other end of the same journey. Only live while actually away on a trip, so it can
+// never be triggered from a map that merely happens to sit at those coordinates.
+function nearRaft(){
+  if(!tripDest || !player.alive) return false;
+  const dx = camera.position.x - RAFT_POS.x, dz = camera.position.z - RAFT_POS.z;
+  return (dx*dx + dz*dz) < BOOTH_RADIUS*BOOTH_RADIUS;
+}
 // Called once per frame from the animate loop.
 function updateInteract(){
   if(promptEl){
-    const show = nearBooth() && !boothOpen && !paused;
-    promptEl.textContent = show ? '\u{1F39F} Travel Booth — press [E]' : '';
-    promptEl.style.opacity = show ? '1' : '0';
+    const booth = nearBooth() && !boothOpen && !paused;
+    const raft  = nearRaft() && !paused;
+    promptEl.textContent = booth ? '\u{1F39F} Travel Booth — press [E]'
+                         : raft  ? '\u{1F6F6} Take the raft home to Cairo — press [E]' : '';
+    promptEl.style.opacity = (booth || raft) ? '1' : '0';
   }
   updateBoothMarker();
 }
@@ -10798,12 +11642,15 @@ const bmArrow= document.getElementById('bmarrow');
 const _bmVec = new THREE.Vector3();
 function updateBoothMarker(){
   if(!bmEl) return;
-  if(!inHub || boothOpen || paused || !player.alive){ bmEl.style.opacity='0'; return; }
-  const dx = camera.position.x - BOOTH_POS.x, dz = camera.position.z - BOOTH_POS.z;
+  if((!inHub && !tripDest) || boothOpen || paused || !player.alive){ bmEl.style.opacity='0'; return; }
+  // In the hub it tracks the booth; away on a trip it tracks the raft home. Same widget, same reasoning:
+  // there should never be a moment where you cannot tell which way the way out is.
+  const tgt = tripDest ? RAFT_POS : BOOTH_POS;
+  const dx = camera.position.x - tgt.x, dz = camera.position.z - tgt.z;
   const dist = Math.sqrt(dx*dx + dz*dz);
   if(dist < BOOTH_RADIUS){ bmEl.style.opacity='0'; return; }   // close enough that [E] takes over
   // aim at the counter's head height, not the beacon, so the pill sits on the building itself
-  const p = _bmVec.set(BOOTH_POS.x, 4.6, BOOTH_POS.z).project(camera);
+  const p = _bmVec.set(tgt.x, 4.6, tgt.z).project(camera);
   const W = window.innerWidth, H = window.innerHeight, M = 54;
   let sx = (p.x*0.5+0.5)*W, sy = (-p.y*0.5+0.5)*H;
   // project() gives a mirrored point for anything behind the camera; flipping about the centre turns it
@@ -10824,6 +11671,7 @@ function updateBoothMarker(){
   bmEl.style.top  = sy + 'px';
   bmEl.style.opacity = '1';
   if(bmDist) bmDist.textContent = Math.round(dist) + 'm';
+  const bi = document.getElementById('bmicon'); if(bi) bi.textContent = tripDest ? '\u{1F6F6}' : '\u{1F39F}';
 }
 
 
@@ -10882,6 +11730,25 @@ function buyTicket(d){
   setBanner('🎟 Passage bought — ' + d.name);
   if(typeof d.go === 'function') d.go();
 }
+// ---- travelling out, and coming home ----
+// A trip is deliberately symmetrical: buying passage takes the hub's chrome off and hands the player their
+// weapons back, and the destination always carries a physical way home (La Venta's landing raft) so no
+// destination can strand you. Everything a trip changes is undone by returnToHub().
+function travelTo(dest){
+  inHub = false;
+  tripDest = dest;
+  tripWave = 0; tripCleared = false;   // every trip starts the destination's ladder at its first wave
+  closeBooth();
+  exitHubChrome();                       // weapons out of the holster, crosshair and ammo back
+  setHubStats(true, dest.place, 'raft at the landing', dest.icon);
+  dest.enter();
+}
+function returnToHub(){
+  tripDest = null;
+  tripWave = 0; tripCleared = false;   // clears the guard in updateWaves() as well as the ladder
+  clearBots();                         // anything still standing out there does not follow you home
+  enterHub('🛶 Home in Cairo — the booth is in the bazaar');
+}
 function openBooth(){
   if(boothOpen || paused) return;
   boothOpen = true; firing = false;
@@ -10920,6 +11787,7 @@ document.addEventListener('keydown', e => {
   }
   if (paused) return;
   if (e.code==='KeyE' && nearBooth()){ openBooth(); return; }
+  if (e.code==='KeyE' && nearRaft()){ returnToHub(); return; }
   // ==================== DEBUG KEYS ====================
   // Shipped deliberately: the owner wants these available on the public build. They are undocumented
   // in the HUD, but this is a single unminified HTML file, so treat them as public knowledge — anyone
@@ -10934,6 +11802,15 @@ document.addEventListener('keydown', e => {
     currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
     if(player.score < 120) player.score = 120;   // enough ⭐ in hand to exercise the booth's prices
     enterHub('🕌 Jumped to the Cairo hub — booth is at (0, -6)');
+  }
+  // J: jump to the La Venta basin (Olmec Mexico), free of charge.
+  // It goes through travelTo() rather than calling enterMexicoWorld() directly. Calling the world builder
+  // on its own skipped everything travelTo() does — above all it left inHub true when jumping from Cairo,
+  // and inHub gates both fire() and weapon visibility, so you arrived unarmed and unable to shoot, still
+  // wearing the hub's HUD, with the booth waypoint tracking a booth on another continent.
+  if (e.code==='KeyJ' && player.alive){
+    travelTo({place:'La Venta', icon:'\u{1F5FF}',
+              enter(){ enterMexicoWorld('\u{1F5FF} La Venta basin — climb the pyramid\u2019s south stair'); }});
   }
   // G: toggles infinite health — damagePlayer() no-ops while godMode is true.
   if (e.code==='KeyG'){
@@ -11247,7 +12124,7 @@ function startGame(){
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
   jumpY = 0; jumpV = 0;
-  inHub=false; closeBooth(); setHubStats(false); exitHubChrome();  // leave the hub: wave HUD and weapon back
+  inHub=false; tripDest=null; closeBooth(); setHubStats(false); exitHubChrome();  // fresh run: wave HUD and weapon back
   // drain any leftover fire meteors from a previous run so one can't fire into the fresh game (quakeEffects,
   // the older analogous VFX-effect array, has this same gap on restart — out of scope here, only fixing
   // fireMeteors, this feature's own code)
@@ -11263,6 +12140,21 @@ function startGame(){
 }
 function onAllDead(){
   if(gameWon || !gameStarted || pending) return;
+  // Away on a trip: run the destination's own ladder and return. Nothing below this line applies out
+  // here — falling through is what used to walk the campaign's waveIdx into an empty Islamic wave.
+  if(tripDest){
+    tripWave++;
+    if(tripWave >= LA_VENTA_WAVES.length){
+      tripCleared = true;
+      player.score += TRIP_CLEAR_BONUS;
+      setBanner('🗿 The basin is clear — the raft waits at the south landing');
+      setTripHUD(); setHUD();
+      return;
+    }
+    pending='tripwave'; betweenTimer=4.0;
+    setBanner('WAVE ' + (tripWave+1) + ' — they come from the treeline…');
+    return;
+  }
   if(bossActive){
     // boss defeated
     bossActive=false; showBossBar(false);
@@ -11330,9 +12222,12 @@ function updateWaves(dt){
       if(pending==='wave'){ spawnWave(waveIdx); setBanner('WAVE '+(waveIdx+1)); setTimeout(()=>{ if(!gameWon) setBanner(''); },1200); }
       else if(pending==='boss'){ spawnBossFight(); }
       else if(pending==='nile'){ enterNileWave(); }
+      else if(pending==='tripwave'){ spawnTripWave(); setBanner('WAVE '+(tripWave+1)); setTimeout(()=>{ if(!gameWon) setBanner(''); },1200); }
       pending=null;
     }
-  } else if(gameStarted && !gameWon && bots.length>0 && bots.filter(b=>b.alive).length===0){
+    // !tripCleared: onAllDead() returns without arming `pending` when a destination is finished, so
+    // without this the "all dead" condition stays true and re-fires it every single frame.
+  } else if(gameStarted && !gameWon && !tripCleared && bots.length>0 && bots.filter(b=>b.alive).length===0){
     onAllDead();
   }
 }
@@ -11534,6 +12429,26 @@ function fire(){
   if(!player.alive || inHub) return;   // Cairo is a hub — nothing to shoot and nothing drawn to shoot with
   const w = weapons[currentWeapon].userData;
   const now = performance.now()*0.001;
+  // The atlatl is dual-mode: a thrusting jab at contact range, a hurled dart beyond it, switching on
+  // distance rather than a keypress. Resolved BEFORE the rate gate, because the two modes have different
+  // fire rates -- checking w.fireRate first would hold the fast jab to the slow throw's cooldown.
+  let hybridJab = false;
+  if(w.hybridRange){
+    camera.getWorldDirection(_fwd);
+    const probe = firstHit(camera.position, _fwd, w.hybridRange);
+    hybridJab = !!(probe && probe.bot);
+  }
+  if(hybridJab){
+    if(now - lastShot < w.hybridMeleeRate) return;
+    lastShot = now;
+    SFX.knife(1.2);
+    gunGroup.position.z = gunBaseZ + w.recoil*0.6;
+    gunGroup.rotation.x -= 0.13;
+    camera.getWorldDirection(_fwd);
+    const hit = firstHit(camera.position, _fwd, w.hybridRange);
+    if(hit && hit.bot){ damageBot(hit.bot, w.hybridMelee, hit.point); showHitmarker(); SFX.hitmark(); }
+    return;                      // a jab spends no dart, which is the point of carrying it
+  }
   if(now - lastShot < w.fireRate) return;
   if(w.melee){
     // khopesh: a short-range swing — same raycast every hitscan weapon uses, just a very short max distance and no ammo/reload
@@ -11725,10 +12640,12 @@ function spawnFireMeteor(x,z){
 }
 function damageBot(bd, dmg, point){
   if(!bd.alive) return;
-  if(bd.skin==='minotaur'){
-    // the lowered horned head: damage from within its facing arc is reduced (not nearly blocked) —
-    // flanking or hitting it from behind while its slow turn rate hasn't caught up still hits full damage,
-    // but frontal hits aren't supposed to feel like shooting a brick wall
+  if(bd.skin==='minotaur' || bd.skin==='vanguard'){
+    // the lowered horned head, and the Monolith Vanguard's carved stone shield: damage from within the
+    // facing arc is reduced (not nearly blocked) — flanking, or hitting it from behind while its slow turn
+    // rate hasn't caught up, still lands full damage, but frontal hits aren't supposed to feel like
+    // shooting a brick wall. One rule, two enemies: the brief's "immune to frontal damage" expressed
+    // through the mechanic this game already has rather than a second system beside it.
     const dx=camera.position.x-bd.mesh.position.x, dz=camera.position.z-bd.mesh.position.z;
     let da = Math.atan2(-dx,-dz) - bd.facing;
     da = ((da+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2) - Math.PI;
@@ -11764,6 +12681,10 @@ function respawnPlayer(){
   bossNum = currentEra; // keep credit for any boss(es) already defeated in earlier eras
   // exitDungeon() only knows the pyramid/greek pairing (dungeonWasPyramid) — there's no Roman/Islamic
   // dungeon, so eras 2 and 3 each get their own reset here instead of routing through that
+  // Dying away on a trip respawns you at that destination, not in Cairo. Without this it falls through
+  // to the era branches below and lands you in the Islamic map with tripDest still set — home, but
+  // with the trip's HUD and a live raft prompt at coordinates that mean nothing there.
+  if(tripDest){ tripDest.enter(); const sp1=pickSpawnPoint(); camera.position.copy(sp1); playerHeight=0; stuckTimer=0; vel.set(0,0,0); setHUD(); return; }
   if(inHub){ enterHub('💀 you wake in Cairo'); const sp0=pickSpawnPoint(); camera.position.copy(sp0); playerHeight=0; stuckTimer=0; vel.set(0,0,0); setHUD(); return; }
   if(currentEra >= 3) enterIslamicWorld('💀 back to Wave 10');
   else if(currentEra >= 2) enterRomanWorld('💀 back to Wave 7');
@@ -11953,11 +12874,11 @@ function animate(){
       if(free[0]!==camera.position.x || free[1]!==camera.position.z){
         camera.position.x = free[0]; camera.position.z = free[1]; vel.set(0,0,0); return true;
       }
-      // nothing clear nearby — fall back to a known-good spawn rather than leave the player stuck
-      const spot = pickRecoverySpot(camera.position.x, camera.position.z);
-      camera.position.x = spot.x; camera.position.z = spot.z; playerHeight = spot.h;
-      camera.position.y = playerHeight + 1.7; vel.set(0,0,0);
-      return true;
+      // Nothing clear within 8 units. This used to fall back to a known-good spawn, i.e. teleport the
+      // player across the map; that is explicitly not wanted, and the sweeps report 0 wedge points and 0
+      // escape failures on every live map, so nearestFreeSpot finding nothing means the situation does not
+      // arise. Stay put rather than fling them somewhere.
+      return false;
     };
     const moved = Math.hypot(camera.position.x - lastPos.x, camera.position.z - lastPos.z);
     lastPos.x = camera.position.x; lastPos.z = camera.position.z;
@@ -11978,13 +12899,18 @@ function animate(){
     } else {
       netTimer = 0; netAnchor.x = camera.position.x; netAnchor.z = camera.position.z;
     }
+    // A height mismatch is corrected IN PLACE -- playerHeight is simply snapped to the terrain under the
+    // player -- rather than teleporting them to a spawn point. The mismatch is a bookkeeping disagreement
+    // between the eased height and the real terrain, so fixing the number fixes it; moving the player was
+    // always a heavier remedy than the fault deserved, and being yanked across the map (with a "repositioned"
+    // banner announcing it) is worse than the glitch it was papering over. No teleport, no banner.
     if(heightMismatch && tryingToMove){
       stuckTimer += dt;
       if(stuckTimer > 1.2){
-        const spot = pickRecoverySpot(camera.position.x, camera.position.z);
-        camera.position.x = spot.x; camera.position.z = spot.z; playerHeight = spot.h;
-        camera.position.y = playerHeight + 1.7; vel.set(0,0,0);
-        stuckTimer = 0; setBanner('↺ repositioned'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='↺ repositioned') setBanner(''); }, 900);
+        stuckTimer = 0;
+        playerHeight = targetGroundY;
+        camera.position.y = playerHeight + 1.7;
+        vel.set(0,0,0);
       }
     } else {
       stuckTimer = 0;
@@ -12241,7 +13167,7 @@ function animate(){
     // minotaur: "slow to turn" — a capped turn rate instead of instantly snapping to face the player, so a
     // player circling fast enough ends up hitting its flank/back before its horned head can re-orient (see damageBot)
     const wantFacing = facePlayer ? Math.atan2(-toPX,-toPZ) : Math.atan2(-Math.cos(b.heading),-Math.sin(b.heading));
-    if(b.skin==='minotaur'){
+    if(b.skin==='minotaur' || b.skin==='vanguard'){
       let df = wantFacing - b.facing; df = ((df+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2) - Math.PI;
       const maxTurn = 1.1*dt;
       b.facing += Math.max(-maxTurn, Math.min(maxTurn, df));
