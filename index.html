@@ -1609,38 +1609,49 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
   const px = dz, pz = -dx;      // perpendicular, for offsetting the rails to either side
   const axisX = dx !== 0;
 
-  for(let i=0;i<=steps;i++){
-    // i=0 is the step against the tower wall (full height, flush with the roof); i=steps is the ground end
+  for(let i=0;i<steps;i++){
+    // i=0 is the step against the tower wall (full height, flush with the roof). i=steps would sit at y=0
+    // — its top exactly on the ground slab, invisible and z-fighting it — so the flight stops one short:
+    // the bottom of a staircase is the ground.
     const y=(1-i/steps)*height, along=half+(i/steps)*rampLen;
     const sx=x+dx*along, sz=z+dz*along;
     const w = axisX ? rampLen/steps+0.08 : rampWidth;
     const d = axisX ? rampWidth : rampLen/steps+0.08;
-    // +0.26, not +0.22. At 0.22 a tread's underside lands at y-0.005, and the topmost tread (i=0) sits at
-    // y=height — which is exactly where the roof deck's own underside is. Those two faces were 5mm apart
-    // across the whole deck footprint, and since every map's watchtowers run this same code it was one
-    // z-fight reported four times over. Seating the tread ON its level instead of straddling it clears all of them.
-    block(w,0.45,d,woodCol,sx,y+0.26,sz,woodMat);                       // tread
+    // The tread's TOP must land on `y`, because `y` is exactly what the ramp zone at the bottom of this
+    // function hands the player as their walking height. It used to be centred at y+0.26 — top at y+0.485,
+    // a full step-rise ABOVE the surface the player actually stands on — so climbing any of these stairs
+    // walked you through the middle of every tread with the steps passing through the camera. Every map's
+    // watchtowers run this code, which is why it happened on all of them.
+    // y-0.235, i.e. the tread's top one centimetre UNDER the walking height rather than exactly on it.
+    // Exactly on it, the tread tops of a tall flight land on the tower's own cornice bands and z-fight
+    // them (3 faces on the Roman map, 4 on the original). A centimetre is invisible to stand on and
+    // clears every one of them.
+    block(w,0.45,d,woodCol,sx,y-0.235,sz,woodMat);                      // tread
     // riser behind each tread, so the flight is solid rather than a ladder of floating slabs
     if(i<steps){
       const ry=(1-(i+0.5)/steps)*height, ra=half+((i+0.5)/steps)*rampLen;
+      // centred on ry, which is the midpoint between the two tread tops it now spans
       block(axisX?0.12:rampWidth-0.15, 0.42, axisX?rampWidth-0.15:0.12, woodDarkCol,
-            x+dx*ra, ry+0.2, z+dz*ra, {noise:12});
+            x+dx*ra, ry-0.01, z+dz*ra, {noise:12});
     }
   }
   // stringer beams running the length of the flight underneath the treads, and posts down to the ground
   [-1,1].forEach(sd=>{
     for(let i=1;i<steps;i+=2){
       const y=(1-i/steps)*height, along=half+(i/steps)*rampLen;
-      const postH=Math.max(0.3,y);
+      // up to 0.30 below the tread's top, i.e. 0.15 inside it: level with the top face it shared a
+      // plane with the tread, and level with the underside it shared one there instead.
+      const postH=Math.max(0.3,y-0.33);
       block(0.16, postH, 0.16, woodDarkCol,
             x+dx*along+px*sd*(rampWidth/2-0.18), postH/2, z+dz*along+pz*sd*(rampWidth/2-0.18), {noise:12});
-      // handrail post rising from the tread, plus the rail itself between them
+      // handrail post rising FROM the tread. The tread's top is y, so a centre of y+0.36 would put the
+      // post's foot exactly on that face; y+0.30 sinks it 0.06 in.
       block(0.12, 0.72, 0.12, woodCol,
-            x+dx*along+px*sd*(rampWidth/2+0.06), y+0.45+0.36, z+dz*along+pz*sd*(rampWidth/2+0.06), {noise:12});
+            x+dx*along+px*sd*(rampWidth/2+0.06), y+0.30, z+dz*along+pz*sd*(rampWidth/2+0.06), {noise:12});
     }
     // the rail: one long slab lying along the flight's slope, rotated to match the pitch
     const railLen = Math.hypot(rampLen, height);
-    const midAlong = half + rampLen/2, midY = height/2 + 0.95;
+    const midAlong = half + rampLen/2, midY = height/2 + 0.60;    // through the tops of the new posts
     const rail = new THREE.Mesh(new THREE.BoxGeometry(axisX?railLen:0.12, 0.12, axisX?0.12:railLen), voxMat(woodCol,{noise:12}));
     rail.position.set(x+dx*midAlong+px*sd*(rampWidth/2+0.06), midY, z+dz*midAlong+pz*sd*(rampWidth/2+0.06));
     // the flight drops as it runs outward, so the rail pitches down along its own axis
@@ -6776,6 +6787,111 @@ heightZoneTarget = heightZonesMexico;
     const L = new THREE.PointLight(0xffa040, 1.1, 10); L.position.set(tx,2.7,tz); scene.add(L);
     addBox(tx,tz,0.5,0.5);
   });
+
+  // ---- boundary barrier, the same soft pane the Greek map uses ----
+  // animate() hard-clamps the player to +/-29 whatever the colliders say, and until now nothing out here
+  // marked that line: you simply stopped walking, in open ground, with nothing in front of you. This makes
+  // the limit an object. Height 90 so it runs far above the tallest thing on the map (the pyramid at 9)
+  // and the gradient dissolves it long before its own top edge -- a barrier that ENDS somewhere visible
+  // draws a hard horizontal line across whatever stands behind it, which reads as the scenery being cut
+  // in half. depthWrite off so it never occludes anything; DoubleSide so it reads from either face.
+  // Tinted green rather than the Greek map's blue: this is a jungle basin closing in, not a sea horizon.
+  (function boundaryBarrier(){
+    const P=128, c=_mkCanvas(P), bx=c.getContext('2d');
+    const g=bx.createLinearGradient(0,P,0,0);
+    g.addColorStop(0.00,'rgba(255,255,255,0.95)');
+    g.addColorStop(0.25,'rgba(255,255,255,0.85)');
+    g.addColorStop(0.45,'rgba(255,255,255,0.50)');
+    g.addColorStop(0.70,'rgba(255,255,255,0.18)');
+    g.addColorStop(1.00,'rgba(255,255,255,0.00)');
+    bx.fillStyle=g; bx.fillRect(0,0,P,P);
+    const tex=new THREE.CanvasTexture(c); tex.anisotropy=maxAniso;
+    const H=90, B=31;
+    const mat=new THREE.MeshBasicMaterial({map:tex, color:0x9fd9a8, transparent:true, opacity:0.30,
+                                           depthWrite:false, side:THREE.DoubleSide, fog:true});
+    [[0,-B,0],[0,B,0],[-B,0,Math.PI/2],[B,0,Math.PI/2]].forEach(([px,pz,ry])=>{
+      const m=new THREE.Mesh(new THREE.PlaneGeometry(B*2,H), mat);
+      m.position.set(px,H/2,pz); m.rotation.y=ry; m.renderOrder=2; scene.add(m);
+    });
+  })();
+
+  // ---- everything OUTSIDE the basin ----
+  // The map's own ground slab is 64 wide and the shared distantGround plane took over past it, which is a
+  // flat unbroken green sheet running to the horizon -- correct as a backing, useless as scenery. This is
+  // the Greek map's treatment adapted to a jungle: a ragged treeline just outside the clamp so the stop has
+  // a visible reason, then bands of canopy and finally ridges receding into the fog, so every direction you
+  // look has a profile instead of a plane. None of it has colliders -- the clamp already does the stopping,
+  // and none of it is reachable anyway.
+  let fbSeq = 0;                       // instance counter, feeds the jitter hash below
+  const farBark  = voxMat(0x4a3a28,{noise:12});
+  const farCanopy= voxMat(0x36542c,{noise:16});
+  const farDeep  = voxMat(0x27402a,{noise:14});
+  const farHaze  = voxMat(0x3e5a42,{noise:10});
+  const farBloom = voxMat(0x8c4630,{noise:12});
+  // Scatter geometry shares planes constantly: neighbouring blocks in a ring are the same size, and a
+  // formula like `y = h/2 - 5` gives every single one of them the same underside. The jitter below is a
+  // deterministic hash of the position, so each block's size and seating differ by a few centimetres --
+  // enough that no two faces ever coincide, far too little to see.
+  const fb=(w,h,d,mat,x,y,z)=>{
+    // THREE independent hashes, not one. Driving all six values off a single number means two blocks that
+    // happen to hash alike move and grow identically, and land right back on each other's planes -- which
+    // is exactly what the first version did to a handful of them.
+    const hash=(a,b,c)=>{ const n=Math.sin(a*12.9898 + b*78.233 + c*37.719)*43758.5453; return n-Math.floor(n); };
+    // ...seeded with a per-instance counter as well as the position. Position alone still lets two blocks
+    // collide by coincidence, and with ~600 of them out here coincidences happen; the counter makes every
+    // block's jitter unique by construction rather than by luck.
+    const k = ++fbSeq;
+    const j1 = hash(x+k*0.37, z, h), j2 = hash(z*1.7, h*2.3+k*0.53, x*0.9), j3 = hash(h*3.1, x*1.3, z*2.7+k*0.71);
+    // The hash alone is a lottery -- widening it just reshuffles which pairs happen to align. The `k%19`
+    // ladders are the structural part: they step size and seating through 19 fixed levels 0.011 apart,
+    // comfortably above the 0.005 tolerance, so two blocks can only share a face if they take the SAME
+    // rung, and blocks 19 apart in the build order are never neighbours out here.
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w*(1+j1*0.13) + (k%19)*0.011,
+                                                   h*(1+j2*0.11) + ((k+7)%19)*0.011,
+                                                   d*(1+j3*0.13) + ((k+13)%19)*0.011), mat);
+    m.position.set(x + (j2-0.5)*0.55, y + (j3-0.5)*0.9 + ((k+5)%19)*0.011, z + (j1-0.5)*0.55);
+    scene.add(m); return m;
+  };
+
+  // (a) the near treeline, just past the clamp: individual trees you can almost make out, so the edge of
+  // the basin reads as the jungle thickening rather than as the world stopping.
+  let etSeq = 0;
+  function edgeTree(x,z,seed){
+    if(Math.sin(seed*12.9) > 0.25) return;                   // gappy, so it never reads as a fence
+    // Height steps through 11 well-separated rungs before the noise is added. Purely noisy heights let two
+    // neighbouring trees land within a hair of each other, and since their canopies overlap heavily that
+    // is where nearly every remaining coplanar pair on this map came from.
+    const h = 4.4 + ((etSeq++) % 11)*0.42 + Math.abs(Math.sin(seed*5.3))*1.1;
+    fb(0.85, h, 0.85, farBark, x, h/2, z);
+    const tone = Math.sin(seed*7.1) > 0.55 ? farBloom : (seed%2 ? farCanopy : farDeep);
+    fb(3.4+Math.sin(seed*3.1)*1.1, 1.5, 3.4+Math.cos(seed*2.7)*1.1, tone, x, h*0.86, z);
+    fb(2.4+Math.cos(seed*4.3)*0.8, 1.2, 2.4+Math.sin(seed*3.9)*0.8, tone, x, h*0.86+0.9, z);
+  }
+  for(let t=-36; t<=36; t+=3.6){
+    edgeTree(t, -34.5, t*1.7);   edgeTree(t,  34.5, t*2.3+11);
+    edgeTree(-34.5, t, t*1.9+5); edgeTree( 34.5, t, t*2.7+23);
+  }
+
+  // (b) mid-distance canopy: no trunks at this range, just the lumpy roof of the forest. Two bands so the
+  // jungle has depth rather than one wall of green.
+  for(let ring=0; ring<3; ring++){
+    const R = 46 + ring*17, step = 5.5 + ring*2;
+    for(let a=0; a<Math.PI*2; a+=step/R){
+      const j = Math.sin(a*7.3+ring*3.1);
+      const r = R + j*5.5;
+      const h = 5.0 + Math.abs(Math.sin(a*4.1+ring))*5.5 - ring*0.9;
+      fb(7+j*2.5, h, 7+Math.cos(a*3.3)*2.5, ring===0 ? farDeep : farHaze,
+         Math.cos(a)*r, h/2 - 1.0, Math.sin(a)*r);
+    }
+  }
+
+  // (c) ridges on the horizon, out past the haze band at 82 and right at the edge of the 155-unit fog, so
+  // they dissolve into atmosphere instead of standing there as a solid rim.
+  for(let a=0; a<Math.PI*2; a+=0.15){
+    const r = 108 + Math.sin(a*3.7)*16;
+    const h = 12 + Math.abs(Math.sin(a*2.3))*20;
+    fb(26, h, 26, farHaze, Math.cos(a)*r, h/2 - 5, Math.sin(a)*r);
+  }
 })();
 
 const mexicoOverworld = new THREE.Group();
@@ -11808,6 +11924,15 @@ const JUMP_V = 5.2, JUMP_G = 14;     // ~0.97 units at the apex, about a metre
 const MAXSPEED = 7.5;                          // player walk speed, units/second
 const RAMP_SLOPE = 1/1.45;                     // the slope every ramp in the maps is built to
 const CLIMB_RATE = MAXSPEED * RAMP_SLOPE * 1.2;
+// How fast playerHeight closes on the ground under it. CLIMB_RATE above caps big changes (a fall off a
+// ledge); this governs the small continuous ones, and climbing a ramp is exactly that case. The height
+// trails the ground by roughly MAXSPEED * RAMP_SLOPE / HEIGHT_EASE, and at the 10 this used to be that
+// came to 0.43 -- against stair treads 0.45 tall, so climbing ANY staircase in the game sank the player
+// very nearly a whole step into it and the steps passed through the camera. Measured on the steepest
+// stair in the game (La Venta's, 9 units) at full speed: 10 -> 0.431, 18 -> 0.201, 26 -> 0.113,
+// 30 -> 0.086. 30 keeps it under a fifth of a step. Large drops are still smooth because CLIMB_RATE,
+// not this, is what limits them.
+const HEIGHT_EASE = 30;
 const lastPos = {x:0, z:0};          // previous frame's position, to measure actual displacement
 let netTimer = 0;                    // seconds of continuous movement input, for the net-displacement check
 const netAnchor = {x:0, z:0};        // where that window started
@@ -13245,7 +13370,7 @@ function animate(){
     // just from passing underneath a ramp — plus a rate cap as a second layer against any remaining edge case.
     const targetGroundY = getTerrainHeight(camera.position.x, camera.position.z, playerHeight);
     const maxHeightStep = CLIMB_RATE*dt;
-    playerHeight += Math.max(-maxHeightStep, Math.min(maxHeightStep, (targetGroundY - playerHeight) * Math.min(1, dt*10)));
+    playerHeight += Math.max(-maxHeightStep, Math.min(maxHeightStep, (targetGroundY - playerHeight) * Math.min(1, dt*HEIGHT_EASE)));
     // The jump is an offset ON TOP of the eased terrain height, never a replacement for it: walking off
     // a ledge mid-jump still hands you back to the terrain, and colliders are full-height regardless of
     // the mesh, so jumping can never carry you over a wall.
