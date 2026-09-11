@@ -60,6 +60,10 @@ globalThis.__builders = {
   makeHydra: typeof makeHydra==='function' ? makeHydra : null,
   makeChampion: typeof makeChampion==='function' ? makeChampion : null,
   makeIfritKing: typeof makeIfritKing==='function' ? makeIfritKing : null,
+  makeSwampStalker: typeof makeSwampStalker==='function' ? makeSwampStalker : null,
+  makeWereJaguar: typeof makeWereJaguar==='function' ? makeWereJaguar : null,
+  makeMonolithVanguard: typeof makeMonolithVanguard==='function' ? makeMonolithVanguard : null,
+  makeMudGolem: typeof makeMudGolem==='function' ? makeMudGolem : null,
   makeTiger: typeof makeTiger==='function' ? makeTiger : null,
   makeXiphos: typeof makeXiphos==='function' ? makeXiphos : null,
   makeTrident: typeof makeTrident==='function' ? makeTrident : null,
@@ -104,12 +108,14 @@ globalThis.__world = {
   heightZonesPyramid: typeof heightZonesPyramid !== 'undefined' ? heightZonesPyramid : null,
   heightZonesRoman:   typeof heightZonesRoman   !== 'undefined' ? heightZonesRoman   : null,
   heightZonesIslamic: typeof heightZonesIslamic !== 'undefined' ? heightZonesIslamic : null,
+  heightZonesMexico:  typeof heightZonesMexico  !== 'undefined' ? heightZonesMexico  : null,
   heightZonesOriginal:typeof heightZonesOriginal!== 'undefined' ? heightZonesOriginal: null,
 };
 // Every world group and its collider array, for the whole-game sweep.
 globalThis.__worlds = {};
 [['overworld','colliders'],['pyramidOverworld','pyramidColliders'],['greekOverworld','greekColliders'],
  ['romanOverworld','romanColliders'],['islamicOverworld','islamicColliders'],
+ ['mexicoOverworld','mexicoColliders'],
  ['dungeon','dungeonColliders'],['pyramidDungeon','pyramidDungeonColliders'],
  ['greekDungeon','greekDungeonColliders'],['nileWorld','nileColliders'],
  ['hydraArena','hydraColliders'],['colosseumArena','colosseumColliders'],
@@ -120,7 +126,7 @@ globalThis.__worlds = {};
   if(g) globalThis.__worlds[pair[0]] = {group:g, colliders:c};
 });
 globalThis.__loadouts = {};
-['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons'].forEach(function(n){
+['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons','mexicoWeapons'].forEach(function(n){
   try { globalThis.__loadouts[n] = eval(n); } catch(e) {}
 });
 """
@@ -149,6 +155,11 @@ ACTORS = [
     ("makeWarHoundPack","b=>b()",                           1.00, 0.00, "War hound pack"),
     ("makeManticore","b=>b()",                              1.00, 0.00, "Manticore"),
     ("makeBasilisk", "b=>b()",                              1.00, 0.00, "Basilisk"),
+    # La Venta roster (Olmec Mexico). All four spawn at 1.0 except the golem, which is scaled up.
+    ("makeSwampStalker","b=>b()",                           1.00, 0.00, "Swamp Stalker"),
+    ("makeWereJaguar","b=>b()",                             1.00, 0.00, "Were-Jaguar"),
+    ("makeMonolithVanguard","b=>b()",                       1.00, 0.00, "Monolith Vanguard"),
+    ("makeMudGolem", "b=>b()",                              1.25, 0.00, "Mud Golem"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor

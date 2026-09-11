@@ -331,6 +331,45 @@ class Raycaster {
   set(){} setFromCamera(){} intersectObject(){ return []; } intersectObjects(){ return []; }
 }
 class Clock { constructor(){ this._t=0; } getDelta(){ return 0.016; } getElapsedTime(){ return this._t+=0.016; } }
+// Real enough for setFromObject(), which is what the game uses it for (measuring an actor's
+// footprint in spawnBot). Leans on __meshWorldBox below so it agrees with the audit helpers.
+class Box3 {
+  constructor(min, max){
+    this.min = min || new Vector3( Infinity,  Infinity,  Infinity);
+    this.max = max || new Vector3(-Infinity, -Infinity, -Infinity);
+  }
+  makeEmpty(){ this.min.set(Infinity,Infinity,Infinity); this.max.set(-Infinity,-Infinity,-Infinity); return this; }
+  isEmpty(){ return this.max.x < this.min.x || this.max.y < this.min.y || this.max.z < this.min.z; }
+  expandByPoint(p){
+    this.min.x=Math.min(this.min.x,p.x); this.min.y=Math.min(this.min.y,p.y); this.min.z=Math.min(this.min.z,p.z);
+    this.max.x=Math.max(this.max.x,p.x); this.max.y=Math.max(this.max.y,p.y); this.max.z=Math.max(this.max.z,p.z);
+    return this;
+  }
+  setFromObject(root){
+    this.makeEmpty();
+    root.updateMatrixWorld();
+    root.traverse(o=>{
+      if(o.isMesh){
+        const b = global.__meshWorldBox(o);
+        this.expandByPoint(b.min); this.expandByPoint(b.max);
+      } else if(o.isSprite){
+        // real three.js gives a Sprite a 1x1 plane geometry, so setFromObject() counts it. The audit
+        // helpers (__modelBounds etc.) deliberately look at meshes only, but Box3 is what the GAME calls
+        // to measure an enemy's collision radius -- if this ignored sprites, the harness would disagree
+        // with the browser about how wide every enemy is.
+        const m = o.matrixWorld, sx = o.scale.x/2, sy = o.scale.y/2;
+        const p = applyMat(m, 0, 0, 0);
+        this.expandByPoint({x:p.x-sx, y:p.y-sy, z:p.z-sx});
+        this.expandByPoint({x:p.x+sx, y:p.y+sy, z:p.z+sx});
+      }
+    });
+    return this;
+  }
+  getSize(t){ const v = t || new Vector3();
+    v.set(this.max.x-this.min.x, this.max.y-this.min.y, this.max.z-this.min.z); return v; }
+  getCenter(t){ const v = t || new Vector3();
+    v.set((this.min.x+this.max.x)/2, (this.min.y+this.max.y)/2, (this.min.z+this.max.z)/2); return v; }
+}
 
 const THREE = {
   Scene, Group, Mesh, InstancedMesh, Sprite, Points, Line, LineSegments, Object3D,
@@ -345,7 +384,7 @@ const THREE = {
   MeshPhysicalMaterial, ShaderMaterial, RawShaderMaterial, ShadowMaterial,
   Color, Texture, CanvasTexture, Vector3, Vector2: Vector3, Euler, Quaternion,
   AmbientLight, HemisphereLight, PointLight, DirectionalLight, SpotLight,
-  Fog, FogExp2, PerspectiveCamera, WebGLRenderer, Raycaster, Clock,
+  Fog, FogExp2, PerspectiveCamera, WebGLRenderer, Raycaster, Clock, Box3,
   BufferAttribute: BufferAttribute,
   Float32BufferAttribute: BufferAttribute,
   Uint16BufferAttribute: BufferAttribute,
@@ -411,13 +450,31 @@ const document = {
   getElementById(id){ if(!_byId[id]){ _byId[id]=makeElement('div'); _byId[id].id=id; } return _byId[id]; },
   querySelector(){ return makeElement('div'); },
   querySelectorAll(){ return []; },
-  addEventListener(){}, removeEventListener(){},
+  // Listeners are RECORDED, not dropped. A no-op addEventListener makes every keyboard-driven bug
+  // untestable -- the [J] debug jump was one, and the only honest way to test it is to fire the real
+  // keydown handler the game registered. __fire() below is how a harness does that.
+  _listeners: {},
+  addEventListener(type, fn){ (this._listeners[type] = this._listeners[type] || []).push(fn); },
+  removeEventListener(type, fn){
+    const a = this._listeners[type]; if(!a) return;
+    const i = a.indexOf(fn); if(i >= 0) a.splice(i, 1);
+  },
+  dispatchEvent(ev){ (this._listeners[ev && ev.type] || []).forEach(fn=>fn(ev)); return true; },
   body: makeElement('body'),
   documentElement: makeElement('html'),
   head: makeElement('head'),
   exitPointerLock(){},
   pointerLockElement: null,
   hidden: false,
+};
+// Fire a real DOM-ish event at the document's registered handlers.
+//   __fire('keydown', {code:'KeyJ'})
+global.__fire = function(type, props){
+  const ev = Object.assign({type:type, preventDefault(){}, stopPropagation(){},
+                            repeat:false, shiftKey:false, ctrlKey:false, altKey:false, metaKey:false},
+                           props||{});
+  document.dispatchEvent(ev);
+  return ev;
 };
 document.body.requestPointerLock = ()=>{};
 
