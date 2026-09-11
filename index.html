@@ -7051,6 +7051,7 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='werejaguar') return makeWereJaguar();
   if(skinName==='vanguard') return makeMonolithVanguard();
   if(skinName==='mudgolem') return makeMudGolem();
+  if(skinName==='jadeshaman') return makeJadeShaman();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -9209,32 +9210,89 @@ function _mexRig(g, legL, legR, armR, armL){
 function makeSwampStalker(){
   const g=new THREE.Group();
   const mud=voxMat(0x5e5236,{noise:20}), mudDark=voxMat(0x3e3622,{noise:18});
-  const skin=voxMat(0x8a6a48,{noise:14}), cane=voxMat(0x9a8f4a,{noise:12});
+  const skin=voxMat(0x8a6a48,{noise:14}), skinDark=voxMat(0x5f4830,{noise:12});
+  const cane=voxMat(0x9a8f4a,{noise:12}), caneDark=voxMat(0x6b6230,{noise:10});
   const paint=voxMat(0xb8462c,{noise:10});          // the one bright note: red body paint
+  const cloth=voxMat(0x8c7a4a,{noise:16});
+  const shell=voxMat(0xe0d8bc,{noise:8});
   const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
-  b(0.34,0.42,0.20, mud, 0,0.86,0);                 // torso
-  b(0.36,0.10,0.22, mudDark, 0,1.04,0);             // clay streaks across the chest
-  b(0.30,0.08,0.21, paint, 0,0.80,0);
-  b(0.24,0.24,0.22, skin, 0,1.20,0);                // head
-  b(0.25,0.07,0.23, paint, 0,1.24,0);               // painted band across the eyes
-  b(0.26,0.09,0.10, mudDark, 0,1.33,0.01);          // matted hair
-  // arms: the right one holds the blowgun up across the body
-  const armR=new THREE.Group(); armR.position.set(0.22,1.06,0); g.add(armR);
-  const ar=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.34,0.10), skin); ar.position.set(0,-0.14,0); armR.add(ar);
-  const bg=new THREE.Mesh(new THREE.CylinderGeometry(0.022,0.026,0.66,6), cane);
-  bg.position.set(0,-0.24,-0.24); bg.rotation.x=Math.PI/2; armR.add(bg);
-  const armL=new THREE.Group(); armL.position.set(-0.22,1.06,0); g.add(armL);
-  const al=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.34,0.10), skin); al.position.set(0,-0.14,0); armL.add(al);
-  // hips at 0.36 so the foot of a 0.36 leg lands at exactly y=0
-  // hips at the torso's underside (0.65) and a leg exactly that long, so it meets the body at the top
-  // and the ground at the bottom — a shorter leg leaves the body floating over a gap.
-  const legL=new THREE.Group(); legL.position.set(0.10,0.65,0); g.add(legL);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.65,0.12), mudDark); _m.position.set(0,-0.325,0); _m.castShadow=true; legL.add(_m); }
-  const legR=new THREE.Group(); legR.position.set(-0.10,0.65,0); g.add(legR);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.65,0.12), mudDark); _m.position.set(0,-0.325,0); _m.castShadow=true; legR.add(_m); }
+
+  // ---- legs: hip-pivoted, thigh/knee/shin/ankle/foot, so the walk reads as a stride and not a swinging plank
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.11,0.72,0); g.add(l);
+    const part=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    part(0.15,0.30,0.16, mud,      -0.16, 0);         // thigh
+    part(0.128,0.09,0.138, mudDark,-0.34, 0);         // knee
+    part(0.106,0.30,0.116, mud,    -0.52, 0);         // shin
+    part(0.132,0.06,0.142, paint,  -0.45, 0);         // a painted band round the calf, standing proud of it
+    part(0.084,0.08,0.094, skinDark,-0.66, 0.024);    // ankle
+    part(0.144,0.07,0.22, skin,    -0.685, 0.06);     // foot
+    part(0.10,0.04,0.06, skinDark, -0.695, 0.155);    // toes
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  // ---- hips and torso: he is lean and slightly hunched, built around the blowgun
+  b(0.32,0.14,0.20, cloth,   0,0.76,0);              // hip wrap
+  b(0.30,0.09,0.224, mudDark, 0,0.70,0);             // its lower hem, deeper than the wrap
+  b(0.16,0.20,0.07, cloth,   0,0.66,0.11);           // the loincloth's hanging front panel
+  b(0.30,0.26,0.19, mud,     0,0.96,0);              // belly
+  b(0.34,0.24,0.21, mud,     0,1.18,0);              // chest, broader than the belly
+  b(0.36,0.08,0.236, mudDark, 0,1.12,0);             // clay streaked across the ribs
+  b(0.312,0.07,0.242,paint,   0,1.232,0);            // red paint over the collarbone
+  b(0.33,0.10,0.22, mudDark,  0,1.06,-0.03);         // more clay, set further back
+  b(0.30,0.16,0.17, mud,     0,1.30,-0.01);          // shoulder yoke
+  // a necklace of river shells
+  for(let i=0;i<5;i++) b(0.045,0.05,0.045, shell, -0.10+i*0.05, 1.256+(i%2)*0.012, 0.118);
+
+  // ---- the dart quiver slung on his back
+  b(0.10,0.26,0.09, caneDark, -0.145,1.12,-0.14);
+  b(0.13,0.05,0.12, cloth,    -0.145,1.26,-0.14);
+  // 1.33, not 1.34: the stagger that keeps the darts from sharing faces also lifted the middle one
+  // 0.005 clear of the quiver's cap, which is past the connectivity threshold — a dart floating in mid-air.
+  for(let i=0;i<3;i++) b(0.018,0.13,0.018, cane, -0.16+i*0.03,1.33+(i%2)*0.015,-0.13);
+  b(0.04,0.30,0.03, cloth, -0.02,1.175,-0.15);       // its strap across the back
+
+  // ---- neck and head
+  b(0.12,0.09,0.12, skinDark, 0,1.40,0);             // neck
+  b(0.24,0.23,0.22, skin,     0,1.54,0);             // skull
+  b(0.266,0.07,0.246,paint,   0,1.56,0);             // painted band across the eyes
+  [-1,1].forEach(sd=> b(0.05,0.04,0.04, shell, sd*0.07,1.555,0.112));   // shell eyes in the band
+  b(0.19,0.09,0.10, skinDark, 0,1.45,0.09);          // jaw, pushed forward
+  b(0.09,0.06,0.07, skin,     0,1.50,0.13);          // nose
+  b(0.26,0.08,0.234, mudDark, 0,1.65,-0.02);         // matted hair, caked flat with clay
+  b(0.22,0.09,0.12, mudDark,  0,1.62,-0.11);         // and a hank of it down the back of the neck
+  [-1,1].forEach(sd=> b(0.04,0.08,0.06, skinDark, sd*0.13,1.53,-0.01));  // ears
+  [-1,1].forEach(sd=> b(0.035,0.05,0.035, shell, sd*0.145,1.47,-0.01));  // shell ear plugs
+
+  // ---- arms: the right carries the blowgun up across the body, the left steadies it
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.21,1.28,0); g.add(a);
+    const part=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    part(0.126,0.26,0.126, mud,     -0.13, 0);       // upper arm
+    part(0.104,0.07,0.104, mudDark, -0.28, 0);       // elbow
+    part(0.082,0.24,0.082, skin,    -0.41, 0);       // forearm
+    part(0.108,0.05,0.108, paint,   -0.37, 0);       // painted armlet, below the elbow rather than on it
+    part(0.112,0.11,0.122, skinDark,-0.56, 0.01);    // hand, deeper than the node ring it grips
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+  // the blowgun itself, carried in the right hand: a bound cane with its node rings and mouthpiece
+  const bgun=new THREE.Group(); bgun.position.set(0,-0.56,-0.02); armR.add(bgun);
+  const bg=(rt,rb,h,mat,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,7),mat);
+    m.position.set(0,0,z); m.rotation.x=Math.PI/2; bgun.add(m); return m; };
+  bg(0.024,0.028,0.70, cane, -0.20);
+  for(let i=0;i<4;i++) bg(0.042,0.042,0.03, caneDark, -0.48+i*0.19);   // node rings, clearly proud
+  // 0.17: the barrel ends at z=0.15, so this still overlaps it, while sitting forward of the hand's
+  // 0.071 so the two never share a plane. At 0.21 it cleared the hand but floated off the cane entirely.
+  bg(0.052,0.040,0.06, caneDark, 0.17);               // mouthpiece
+  [-0.40,-0.06].forEach(z=> bg(0.056,0.056,0.04, cloth, z));   // vine lashings, proud of the rings too
+
   const botMuzzle=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.07),
     new THREE.MeshBasicMaterial({color:0xc8e070, transparent:true, opacity:0, fog:false}));
-  botMuzzle.position.set(0.22,0.82,-0.52); botMuzzle.visible=false; g.add(botMuzzle);
+  botMuzzle.position.set(0,0,-0.58); botMuzzle.visible=false; bgun.add(botMuzzle);
   g.userData.botMuzzle=botMuzzle;
   return _mexRig(g, legL, legR, armR, armL);
 }
@@ -9244,34 +9302,73 @@ function makeSwampStalker(){
 function makeWereJaguar(){
   const g=new THREE.Group();
   const pelt=voxMat(0xb8862a,{noise:18,pattern:'pelt'}), peltDark=voxMat(0x6b4a18,{noise:16});
+  const peltPale=voxMat(0xd8b054,{noise:14});
   const skin=voxMat(0x8a6a48,{noise:14});
   const fang=new THREE.MeshLambertMaterial({color:0xf0ecd8});
   const claw=new THREE.MeshLambertMaterial({color:0xe4dcc4});
+  const jade=voxMat(0x3f8f6a,{noise:12});
   const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
-  b(0.46,0.42,0.72, pelt, 0,0.80,0);                 // a long prowling body, not an upright torso
-  b(0.40,0.10,0.66, peltDark, 0,0.97,0);             // dorsal stripe, sunk into the back rather than capping it
-  b(0.34,0.30,0.34, pelt, 0,0.96,0.50);              // head, thrust forward
-  b(0.36,0.09,0.33, peltDark, 0,1.04,0.50);          // the cleft — the were-jaguar's signature brow,
-                                                     // set below the head's own top face rather than level with it
-  b(0.10,0.13,0.09, peltDark, 0,1.15,0.50);
-  b(0.22,0.14,0.16, skin, 0,0.895,0.66);             // snarling muzzle, lifted off the head's own base plane
-  // each fang stepped slightly in y and z: a row at one identical depth shares faces along its length
-  for(let i=0;i<4;i++) b(0.035,0.09,0.035, fang, -0.075+i*0.05, 0.82+(i%2)*0.006, 0.72+(i%2)*0.005);
-  [-1,1].forEach(sd=>{ const e=b(0.09,0.12,0.05, pelt, sd*0.12,1.14,0.46); e.rotation.z=sd*0.3; });
-  // a lashing tail
-  // 0.14 spacing and a gentler tilt: at 0.17 with a steepening rotation the last two segments pulled
-  // clear of the one before and floated.
-  // 0.11 spacing on 0.20-long segments, and a gentle uniform tilt. The segments taper as they go, so a
-  // wider spacing plus a steepening rotation pulled the thin tip segments clear of their neighbours.
-  for(let i=0;i<4;i++){ const t=b(0.10-i*0.015,0.10-i*0.015,0.20, peltDark, 0,0.80+i*0.022,-0.40-i*0.11); t.rotation.x=-0.12-i*0.03; }
-  // hips at 0.385: the paw is the lowest part (centre -0.34, half-height 0.045), so 0.385-0.385 = 0
-  const mkLeg=(sx,sz)=>{ const l=new THREE.Group(); l.position.set(sx,0.385,sz); g.add(l);
-    { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.36,0.15), pelt); _m.position.set(0,-0.18,0); _m.castShadow=true; l.add(_m); }
-    const paw=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.09,0.22), peltDark); paw.position.set(0,-0.34,0.03); l.add(paw);
-    for(let i=0;i<3;i++){ const c=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.03,0.07), claw);
-      c.position.set(-0.05+i*0.05,-0.36+(i%2)*0.005,0.14+(i%2)*0.004); l.add(c); }   // stepped, as above
-    return l; };
-  const legFL=mkLeg(0.17,0.26), legFR=mkLeg(-0.17,0.26), legBL=mkLeg(0.17,-0.26), legBR=mkLeg(-0.17,-0.26);
+
+  // ---- body: a long prowling barrel, deeper at the shoulders than the haunches
+  b(0.44,0.40,0.34, pelt,     0,0.82,-0.20);          // haunches
+  b(0.46,0.40,0.36, pelt,     0,0.84, 0.16);          // shoulders, a shade bigger
+  b(0.42,0.34,0.22, pelt,     0,0.83,-0.02);          // the waist between them
+  b(0.40,0.09,0.62, peltDark, 0,1.01,-0.02);          // dorsal stripe. y=1.01: at 1.00 its top face
+                                                      // landed within a rounding error of the shoulders'.
+  b(0.36,0.10,0.30, peltPale, 0,0.63, 0.03);          // pale underbelly
+  // rosettes down both flanks — what makes the pelt read as a jaguar's and not a lion's
+  [-1,1].forEach(sd=>{ for(let i=0;i<4;i++)
+    b(0.02,0.075,0.075, peltDark, sd*0.225, 0.78+(i%2)*0.09, -0.30+i*0.17); });
+  // shoulder blades standing proud as it prowls
+  [-1,1].forEach(sd=> b(0.10,0.13,0.16, peltDark, sd*0.17,1.00,0.16));
+
+  // ---- head, thrust forward on a short thick neck
+  b(0.26,0.20,0.16, pelt,     0,0.94,0.34);           // neck
+  b(0.34,0.30,0.32, pelt,     0,0.98,0.52);           // skull
+  b(0.36,0.09,0.30, peltDark, 0,1.07,0.525);          // the cleft — the were-jaguar's signature brow
+  b(0.11,0.14,0.10, peltDark, 0,1.17,0.50);           // the cleft's crest
+  b(0.30,0.12,0.12, peltPale, 0,0.86,0.60);           // pale muzzle bridge
+  b(0.24,0.15,0.17, skin,     0,0.912,0.67);          // snarling muzzle
+  b(0.10,0.07,0.07, peltDark, 0,0.945,0.755);         // nose
+  b(0.20,0.06,0.12, peltDark, 0,0.838,0.70);          // the lower lip, drawn back
+  // upper and lower fangs, each row stepped so no two share a plane
+  for(let i=0;i<4;i++) b(0.035,0.10,0.035, fang, -0.075+i*0.05, 0.845+(i%2)*0.008, 0.725+(i%2)*0.006);
+  for(let i=0;i<3;i++) b(0.030,0.07,0.030, fang, -0.05+i*0.05, 0.795+(i%2)*0.007, 0.715+(i%2)*0.005);
+  [-1,1].forEach(sd=> b(0.055,0.05,0.05, jade, sd*0.09,1.02,0.665));   // jade-inlay eyes
+  [-1,1].forEach(sd=> b(0.035,0.03,0.03, fang, sd*0.09,1.005,0.685));  // and their bright centres
+  [-1,1].forEach(sd=>{ const e=b(0.09,0.13,0.05, pelt, sd*0.13,1.15,0.47); e.rotation.z=sd*0.3; });
+  [-1,1].forEach(sd=>{ const e=b(0.05,0.06,0.035, peltDark, sd*0.135,1.128,0.455); e.rotation.z=sd*0.3; });
+  // whisker stubble, a few short bristles either side of the muzzle
+  [-1,1].forEach(sd=>{ for(let i=0;i<3;i++)
+    b(0.055,0.012,0.012, peltPale, sd*0.155, 0.925+i*0.028, 0.665+(i%2)*0.01); });
+
+  // ---- a jade collar: it is a sacred animal, not just a big cat
+  for(let i=0;i<7;i++){ const a=(i-3)*0.42;
+    b(0.05,0.055,0.05, jade, Math.sin(a)*0.168, 0.965+Math.cos(a)*0.02, 0.34+Math.cos(a)*0.03); }
+
+  // ---- a lashing tail, tapering and tufted
+  for(let i=0;i<5;i++){ const t=b(0.11-i*0.014,0.11-i*0.014,0.20, i%2?peltDark:pelt,
+      0, 0.82+i*0.024, -0.42-i*0.115); t.rotation.x=-0.12-i*0.03; }
+  b(0.09,0.09,0.13, peltDark, 0,0.945,-1.01);         // the tuft
+
+  // ---- legs: shoulder/elbow/forearm/paw, so the quadruped gait reads as a prowl
+  const mkLeg=(sx,sz,front)=>{
+    const l=new THREE.Group(); l.position.set(sx,0.46,sz); g.add(l);
+    const part=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    part(0.17,0.22,0.18, pelt,     -0.11, 0);         // upper leg
+    part(0.14,0.07,0.15, peltDark, -0.25, 0);         // elbow / hock
+    part(0.112,0.14,0.118, pelt,   -0.36, 0);         // lower leg
+    part(0.135,0.05,0.14, peltPale, -0.395,0.018);    // fetlock, clear of the paw's top and near faces
+    part(0.16,0.075,0.21, peltDark, -0.4225, 0.04);   // paw: bottom at exactly -0.46, so with the hip at
+                                                      // 0.46 the foot lands on y=0 to the millimetre
+    for(let i=0;i<3;i++){ const c=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.028,0.07), claw);
+      c.position.set(-0.05+i*0.05, -0.435+(i%2)*0.006, 0.125+(i%2)*0.005); l.add(c); }
+    if(front) part(0.145,0.09,0.10, peltDark, -0.19, 0.02);   // a heavier forequarter
+    return l;
+  };
+  const legFL=mkLeg(0.18,0.24,true), legFR=mkLeg(-0.18,0.24,true),
+        legBL=mkLeg(0.18,-0.26,false), legBR=mkLeg(-0.18,-0.26,false);
   // Four legs on a two-handle rig: the shared walk animation drives legL/legR only, so the diagonal pairs
   // are bound together through proxies -- the same trick the manticore uses.
   const diagonal=(a,c)=>({ rotation:{ get x(){ return a.rotation.x; },
@@ -9285,31 +9382,97 @@ function makeWereJaguar(){
 function makeMonolithVanguard(){
   const g=new THREE.Group();
   const stone=new THREE.MeshLambertMaterial({map:_finish(basaltTex(),2)});
-  const stoneDark=voxMat(0x26262a,{noise:12});
-  const skin=voxMat(0x8a6a48,{noise:14}), kilt=voxMat(0x9a7a3a,{noise:14});
-  const jade=voxMat(0x3f8f6a,{noise:12});
+  const stoneDark=voxMat(0x26262a,{noise:12}), stonePale=voxMat(0x4a4a52,{noise:14});
+  const skin=voxMat(0x8a6a48,{noise:14}), skinDark=voxMat(0x5f4830,{noise:12});
+  const kilt=voxMat(0x9a7a3a,{noise:14}), kiltDark=voxMat(0x6a5222,{noise:12});
+  const jade=voxMat(0x3f8f6a,{noise:12}), jadePale=voxMat(0x6fd0a4,{noise:10});
+  const cord=voxMat(0xb09a68,{noise:16});
   const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
-  b(0.42,0.46,0.24, skin, 0,0.92,0);
-  b(0.44,0.20,0.25, kilt, 0,0.64,0);
-  b(0.27,0.27,0.25, skin, 0,1.26,0);
-  b(0.29,0.10,0.26, jade, 0,1.31,0);                 // jade headband, clear of the head's own top face
-  // the shield: a slab carved as a face, the thing you cannot shoot through
-  const sh=b(0.72,0.92,0.16, stone, 0,0.95,0.34);
-  b(0.60,0.16,0.06, stoneDark, 0,1.20,0.43);         // heavy brow
-  [-1,1].forEach(sd=> b(0.15,0.13,0.05, stoneDark, sd*0.15,1.06,0.44));   // eyes
-  b(0.16,0.18,0.07, stone, 0,0.92,0.45);             // the flat nose
-  b(0.34,0.12,0.05, stoneDark, 0,0.74,0.44);         // the downturned mouth
-  const armL=new THREE.Group(); armL.position.set(-0.26,1.10,0); g.add(armL);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.36,0.12), skin); _m.position.set(0,-0.16,0); _m.castShadow=true; armL.add(_m); }
-  const armR=new THREE.Group(); armR.position.set(0.26,1.10,0); g.add(armR);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.36,0.12), skin); _m.position.set(0,-0.16,0); _m.castShadow=true; armR.add(_m); }
-  const club=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.46,0.05), stoneDark);
-  club.position.set(0,-0.42,-0.02); armR.add(club);
-  // hips at the kilt's underside (0.54), leg exactly that long
-  const legL=new THREE.Group(); legL.position.set(0.12,0.54,0); g.add(legL);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.54,0.14), skin); _m.position.set(0,-0.27,0); _m.castShadow=true; legL.add(_m); }
-  const legR=new THREE.Group(); legR.position.set(-0.12,0.54,0); g.add(legR);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.54,0.14), skin); _m.position.set(0,-0.27,0); _m.castShadow=true; legR.add(_m); }
+
+  // ---- legs: heavy and planted, thigh/knee/shin/ankle/foot
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.13,0.62,0); g.add(l);
+    const part=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    part(0.175,0.26,0.18, skin,     -0.14, 0);        // thigh
+    part(0.155,0.08,0.16, skinDark, -0.30, 0);        // knee
+    part(0.14,0.20,0.145, skin,     -0.44, 0);        // shin
+    part(0.166,0.055,0.172, cord,   -0.375, 0);       // a corded binding, standing proud of the shin
+    part(0.125,0.07,0.13, skinDark, -0.565, 0);       // ankle
+    part(0.17,0.075,0.24, skinDark, -0.5825, 0.045);  // foot: bottom at -0.62, hip at 0.62 -> lands on 0
+    for(let i=0;i<3;i++) part(0.035,0.035,0.055, skin, -0.585+(i%2)*0.006, 0.155+(i%2)*0.005)
+      .position.setX(-0.045+i*0.045);                 // toes
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  // ---- kilt and torso
+  b(0.46,0.22,0.27, kilt,     0,0.72,0);
+  b(0.484,0.07,0.296, kiltDark, 0,0.615,0);          // its weighted hem
+  for(let i=0;i<5;i++) b(0.06,0.20,0.03, kiltDark, -0.16+i*0.08, 0.70+(i%2)*0.02, 0.145);  // pleats
+  b(0.44,0.30,0.25, skin,     0,0.97,0);             // belly
+  b(0.46,0.26,0.27, skin,     0,1.23,0);             // chest
+  b(0.484,0.09,0.296, skinDark, 0,1.16,0);           // pectoral shadow
+  b(0.42,0.12,0.24, stoneDark,0,1.37,0);             // shoulder yoke
+  b(0.30,0.10,0.06, jade,     0,1.30,0.145);         // a jade pectoral plaque
+  b(0.16,0.06,0.04, jadePale, 0,1.30,0.18);
+  // cords crossing the chest, holding the shield's harness
+  [-1,1].forEach(sd=>{ const c=b(0.05,0.36,0.04, cord, sd*0.09,1.20,0.13); c.rotation.z=sd*0.35; });
+
+  // ---- head
+  b(0.14,0.09,0.14, skinDark, 0,1.45,0);             // neck
+  b(0.29,0.28,0.27, skin,     0,1.63,0);             // skull
+  b(0.30,0.10,0.28, jade,     0,1.73,0);             // jade headband, standing clear of the skull's crown
+  b(0.13,0.07,0.07, jadePale, 0,1.756,0.16);         // its centrepiece, sitting on the band not in it
+  b(0.22,0.10,0.11, skinDark, 0,1.545,0.10);         // heavy jaw
+  b(0.09,0.07,0.08, skin,     0,1.60,0.145);         // nose
+  [-1,1].forEach(sd=> b(0.06,0.05,0.04, stoneDark, sd*0.075,1.655,0.135));   // deep-set eyes
+  [-1,1].forEach(sd=> b(0.045,0.09,0.065, skinDark, sd*0.155,1.62,-0.005));  // ears
+  [-1,1].forEach(sd=> b(0.04,0.055,0.04, jade, sd*0.165,1.565,-0.005));      // ear spools
+  b(0.26,0.09,0.10, stoneDark, 0,1.79,-0.105);       // a stone crest at the back of the band
+
+  // ---- THE SHIELD: a basalt slab carved as a face. This is the thing you cannot shoot through, so it
+  // reads as the model's single biggest mass, and it is carved, not smooth.
+  b(0.74,0.94,0.15, stone,     0,0.95,0.34);         // the slab
+  b(0.78,0.08,0.17, stonePale, 0,1.44,0.34);         // capping course
+  b(0.78,0.08,0.17, stonePale, 0,0.46,0.34);         // and its foot
+  [-1,1].forEach(sd=> b(0.07,0.90,0.17, stonePale, sd*0.355,0.95,0.36));     // dressed edges
+  b(0.62,0.17,0.07, stoneDark, 0,1.22,0.425);        // heavy brow
+  b(0.66,0.06,0.05, stonePale, 0,1.33,0.444);        // the brow's upper rim
+  [-1,1].forEach(sd=> b(0.17,0.14,0.06, stoneDark, sd*0.16,1.07,0.43));      // eye sockets
+  [-1,1].forEach(sd=> b(0.08,0.07,0.04, jadePale,  sd*0.16,1.07,0.462));     // jade set into each eye
+  b(0.17,0.20,0.08, stone,     0,0.92,0.44);         // the flat Olmec nose
+  b(0.21,0.06,0.05, stoneDark, 0,0.815,0.445);       // its flared base
+  b(0.36,0.14,0.06, stoneDark, 0,0.70,0.43);         // the downturned mouth
+  for(let i=0;i<4;i++) b(0.05,0.05,0.03, stonePale, -0.10+i*0.07, 0.728+(i%2)*0.007, 0.466);  // teeth
+  // glyph bands down both sides of the slab
+  [-1,1].forEach(sd=>{ for(let i=0;i<4;i++)
+    b(0.05,0.06,0.03, stoneDark, sd*0.26, 0.60+i*0.19, 0.425); });
+
+  // ---- arms: the left drives the shield, the right carries the club
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.27,1.33,0); g.add(a);
+    const part=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    part(0.14,0.28,0.14, skin,     -0.14, 0);         // upper arm
+    part(0.118,0.07,0.118,skinDark,-0.31, 0);         // elbow
+    part(0.094,0.24,0.094,skin,    -0.45, 0);         // forearm
+    part(0.122,0.05,0.122,cord,    -0.42, 0);         // corded armlet, below the elbow not on it
+    part(0.13,0.10,0.14, skinDark, -0.615,0.01);      // hand
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+  // the club: a basalt bar bound to a haft, carried in the right hand
+  const club=new THREE.Group(); club.position.set(0,-0.62,-0.02); armR.add(club);
+  const cp=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(0,y,z||0); m.castShadow=true; club.add(m); return m; };
+  cp(0.062,0.34,0.062, cord,      -0.10, 0.022);      // the haft
+  cp(0.11,0.26,0.09,  stoneDark,  -0.34, 0);          // the basalt head
+  cp(0.13,0.06,0.124, stonePale,  -0.235, -0.03);     // its collar
+  cp(0.09,0.05,0.07,  stonePale,  -0.485, 0);         // and its butt
+  for(let i=0;i<3;i++) cp(0.125,0.03,0.14, stonePale, -0.29-i*0.07, 0);   // banding, centred on the head
+                                                                          // and clearly deeper than it
+
   return _mexRig(g, legL, legR, armR, armL);
 }
 
@@ -9318,29 +9481,201 @@ function makeMonolithVanguard(){
 function makeMudGolem(){
   const g=new THREE.Group();
   const mud=voxMat(0x6b5238,{noise:22}), mudDark=voxMat(0x453521,{noise:20});
+  const mudPale=voxMat(0x8a6d4a,{noise:24});
   const wet=voxMat(0x3a2c1a,{noise:18});
-  const jade=voxMat(0x3f8f6a,{noise:12});
+  const tar=voxMat(0x1a1610,{noise:14});
+  const jade=voxMat(0x3f8f6a,{noise:12}), jadePale=voxMat(0x6fd0a4,{noise:10});
   const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
-  b(0.72,0.62,0.56, mud, 0,0.92,0);                  // a heavy shapeless mass
-  b(0.60,0.18,0.50, mudDark, 0,1.20,0);
-  b(0.40,0.34,0.38, mud, 0,1.40,0.04);               // a lump of a head, barely a neck
-  [-1,1].forEach(sd=> b(0.09,0.08,0.06, jade, sd*0.10,1.46,0.20));   // jade shards for eyes
-  b(0.26,0.08,0.06, wet, 0,1.32,0.20);               // a slack mouth slit
-  // clay sloughing off the shoulders in clods
-  [[-0.34,1.14,0.10],[0.36,1.10,-0.08],[-0.30,0.98,-0.22],[0.32,1.22,0.16]].forEach(([x,y,z],i)=>
-    b(0.18-i*0.02,0.16,0.17, wet, x,y,z));
-  const armR=new THREE.Group(); armR.position.set(0.42,1.12,0); g.add(armR);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.46,0.22), mud); _m.position.set(0,-0.20,0); _m.castShadow=true; armR.add(_m); }
-  const fistR=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.24,0.26), mudDark); fistR.position.set(0,-0.48,0); armR.add(fistR);
-  const armL=new THREE.Group(); armL.position.set(-0.42,1.12,0); g.add(armL);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.46,0.22), mud); _m.position.set(0,-0.20,0); _m.castShadow=true; armL.add(_m); }
-  const fistL=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.24,0.26), mudDark); fistL.position.set(0,-0.48,0); armL.add(fistL);
-  // hips at the body's underside (0.61), leg exactly that long
-  const legL=new THREE.Group(); legL.position.set(0.20,0.61,0); g.add(legL);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.61,0.24), mudDark); _m.position.set(0,-0.305,0); _m.castShadow=true; legL.add(_m); }
-  const legR=new THREE.Group(); legR.position.set(-0.20,0.61,0); g.add(legR);
-  { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.61,0.24), mudDark); _m.position.set(0,-0.305,0); _m.castShadow=true; legR.add(_m); }
+
+  // ---- legs: squat and trunk-like, no knees to speak of — it does not walk so much as trudge
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.21,0.62,0); g.add(l);
+    const part=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    part(0.27,0.28,0.27, mudDark, -0.15, 0.02);       // thigh. z nudged: at 0 its side planes lined up
+                                                      // with the fists' knuckle bands hanging beside it
+    part(0.245,0.10,0.25, wet,    -0.32, 0);          // a wet seam round the joint
+    part(0.225,0.20,0.235, mud,   -0.46, 0);          // shin
+    part(0.29,0.09,0.31, mudDark, -0.575, 0.03);      // the splayed foot: bottom at -0.62 -> lands on 0
+    for(let i=0;i<3;i++) part(0.06,0.05,0.07, wet, -0.585+(i%2)*0.006, 0.16+(i%2)*0.005)
+      .position.setX(-0.075+i*0.075);                 // stubby toes
+    // clay sloughing off the shin
+    part(0.09,0.11,0.08, mudPale, -0.40, 0.135).rotation.z = sd*0.3;
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  // ---- the mass: a heavy shapeless body, wider at the shoulders, sagging at the middle
+  b(0.62,0.24,0.50, mudDark, 0,0.70,0);              // hips
+  b(0.70,0.30,0.54, mud,     0,0.95,0);              // belly
+  b(0.78,0.30,0.58, mud,     0,1.22,0);              // chest and shoulders, the widest part
+  b(0.79,0.10,0.59, wet,     0,1.10,0);              // a wet band where the two masses meet
+  b(0.72,0.12,0.52, mudDark, 0,1.39,0);              // the shoulder shelf
+  // tar seeping down its front, the stuff it was pulled out of
+  for(let i=0;i<4;i++) b(0.07,0.30-i*0.04,0.05, tar, -0.20+i*0.14, 1.10-(i%2)*0.05, 0.295);
+  // clods of clay sloughing off it everywhere
+  [[-0.37,1.26,0.12,0.17],[0.37,1.18,-0.10,0.15],[-0.33,1.02,-0.24,0.14],[0.36,1.34,0.16,0.13],
+   [0.30,0.86,0.26,0.12],[-0.28,0.80,0.24,0.11],[0.10,1.44,-0.22,0.12],[-0.14,0.72,-0.25,0.10]
+  ].forEach(([x,y,z,w],i)=> b(w,w*0.9,w*0.95, i%2?wet:mudPale, x,y,z));
+
+  // ---- head: barely a head, a lump pushed up out of the shoulders
+  b(0.30,0.12,0.28, mudDark, 0,1.47,0.02);           // the stump of a neck
+  b(0.46,0.36,0.42, mud,     0,1.66,0.04);           // the lump
+  b(0.47,0.10,0.43, wet,     0,1.55,0.04);           // a wet brow ridge
+  b(0.30,0.12,0.10, mudDark, 0,1.60,0.235);          // a slack mouth slit
+  // Every one of these is set 0.01 PROUD of the surface behind it. Flush against it they shared a front
+  // plane with the face, and a teal chip fighting a brown face is exactly what reads as a glitchy mouth.
+  for(let i=0;i<4;i++) b(0.05,0.05,0.04, jadePale, -0.09+i*0.06, 1.585+(i%2)*0.008, 0.275);  // jade grit in it
+  [-1,1].forEach(sd=> b(0.10,0.09,0.07, jade, sd*0.11,1.72,0.225));    // jade shards for eyes
+  [-1,1].forEach(sd=> b(0.05,0.05,0.04, jadePale, sd*0.11,1.72,0.255)); // their bright cores
+  b(0.42,0.10,0.36, mudPale, 0,1.83,0.02);           // the crown of it, cracked and pale
+  for(let i=0;i<3;i++) b(0.07,0.09,0.06, wet, -0.13+i*0.13, 1.855+(i%2)*0.01, 0.16);   // clods on top
+
+  // ---- arms: long and heavy, ending in fists rather than hands
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.44,1.28,0); g.add(a);
+    const part=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    part(0.25,0.30,0.25, mud,     -0.16, 0);          // upper arm
+    part(0.234,0.10,0.236, wet,   -0.35, 0);          // a wet seam, standing clear of both the upper
+                                                      // arm above it and the forearm below
+    part(0.215,0.28,0.22, mudDark,-0.53, 0);          // forearm
+    part(0.30,0.26,0.28, mudDark, -0.79, 0.01);       // fist
+    part(0.315,0.08,0.30, wet,    -0.68, 0.05);       // the knuckle band, set clear in z of the thigh
+                                                      // it hangs beside as well as of the fist it wraps
+    for(let i=0;i<3;i++) part(0.075,0.075,0.06, mudPale, -0.855+(i%2)*0.007, 0.155+(i%2)*0.005)
+      .position.setX(-0.08+i*0.08);                   // knuckles
+    part(0.10,0.12,0.09, mudPale, -0.44, 0.14).rotation.z = sd*0.35;   // a clod hanging off the forearm
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
   return _mexRig(g, legL, legR, armR, armL);
+}
+
+// JADE-HEART SHAMAN (K'Inich) — La Venta's boss. An Olmec shaman caught mid-transformation into the
+// were-jaguar, floating cross-legged over his own offering court with a jade heart burning in his chest.
+//
+// The brief's phase-2 stone-armour shell is deliberately NOT here — this game has no armour and adding a
+// damage-reduction shell for one enemy would be a second system beside damageBot()'s existing facing-arc
+// rule. Phase 2 is a descent instead: he comes down off his column of tar-smoke, and everything he does
+// comes faster. Same escalation, expressed in mechanics the game already owns.
+//
+// He is legless by design — _mexRig gets null leg handles so the walk cycle never touches him, and
+// userData.hoverBase makes the AI loop bob the whole mesh. The smoke column under him runs all the way to
+// y=0 (the same trick the Ifrit King's flame uses) so the model still meets the floor the spawner expects,
+// while reading as airborne. It is transparent below 0.5 opacity, so firstHit() passes shots through it
+// rather than letting the player plink a cloud.
+function makeJadeShaman(){
+  const g=new THREE.Group();
+  const skin=voxMat(0x8a6a48,{noise:14}), skinDark=voxMat(0x60482e,{noise:12});
+  const jade=voxMat(0x3f8f6a,{noise:12}), jadeLight=voxMat(0x6fd0a4,{noise:10});
+  const basalt=voxMat(0x26262a,{noise:14});
+  const gold=voxMat(0xc8a13a,{noise:10});
+  const quetzal=voxMat(0x2fa36a,{noise:14}), plume=voxMat(0xb8462c,{noise:12});
+  const heartMat=new THREE.MeshLambertMaterial({color:0x7fffc4, emissive:0x2fa878});
+  const smoke=new THREE.MeshLambertMaterial({color:0x2a3a34, transparent:true, opacity:0.34, depthWrite:false});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  // the column of tar-smoke he rides: narrow where it leaves the ground, widest under him. Slabs are
+  // 0.24 tall on a 0.16 pitch, so each overlaps its neighbour by 0.08 -- at the 0.02 overlap I first used,
+  // every joint in the column sat exactly ON the coplanar audit's tolerance and z-fought all the way up.
+  // The bottom slab's underside is exactly y=0, which is the floor contact spawnBot() expects.
+  const smokeCol=[];
+  for(let i=0;i<6;i++){
+    const w=0.20+i*0.06;
+    const s=b(w, 0.24, w, smoke, 0, 0.12+i*0.16, 0);
+    s.castShadow=false; s.rotation.y=i*0.4; smokeCol.push(s);
+  }
+  g.userData.smokeCol = smokeCol;     // phase 2 shrinks these as he comes down
+
+  // folded legs, crossed beneath him — he never stands, so they are scenery, not a rig.
+  // The shin bar and the thighs sit at deliberately different heights: matched at the same y they shared
+  // top and bottom faces exactly, which is five of this model's near-coplanar pairs.
+  b(0.62,0.16,0.26, skin, 0, 1.02,  0.08);                               // shins, crossed in front. z=0.08,
+                                                                         // not 0.06: at 0.06 its near face
+                                                                         // landed exactly on both hands'.
+  b(0.26,0.17,0.44, skin, 0.16,1.08,-0.10);                              // thighs, higher and further back
+  b(0.26,0.17,0.44, skin,-0.16,1.08,-0.10);
+  [-1,1].forEach(sd=> b(0.17,0.10,0.17, skinDark, sd*0.24,1.02,0.16));   // bare feet, soles turned up
+  b(0.54,0.14,0.40, quetzal, 0,1.19,-0.02);                              // a woven waist sash
+
+  // bare torso — no armour anywhere on him, per the brief
+  b(0.46,0.48,0.30, skin, 0,1.44,0);                                     // deep enough that the head's
+                                                                         // underside sinks into it rather
+                                                                         // than butting flush against it
+  b(0.40,0.10,0.32, skinDark, 0,1.28,0.05);                              // the line of the ribs, standing
+                                                                         // proud of the chest on both faces
+  b(0.42,0.08,0.30, skinDark, 0,1.365,0.035);                            // a second rib line above it
+  b(0.44,0.12,0.28, skin,     0,1.63,0);                                 // the shoulder yoke
+  [-1,1].forEach(sd=> b(0.10,0.14,0.20, skin, sd*0.185,1.55,0));         // deltoids
+  b(0.30,0.26,0.06, skinDark, 0,1.40,-0.16);                             // the hollow of his back
+  // the jade heart itself, set INTO the chest rather than hung on it
+  b(0.24,0.26,0.09, basalt,    0,1.46,0.135);                            // the cavity it sits in
+  b(0.20,0.22,0.08, jade,      0,1.46,0.155);                            // its jade lining
+  b(0.14,0.16,0.09, heartMat,  0,1.46,0.18);
+  b(0.08,0.09,0.06, jadeLight, 0,1.50,0.215);                            // the heart's bright facet
+  // gold rays worked around the cavity, the way an Olmec pectoral would be
+  for(let i=0;i<6;i++){ const a=(i/6)*Math.PI*2;
+    const r=b(0.045,0.09,0.04, gold, Math.sin(a)*0.175, 1.46+Math.cos(a)*0.20, 0.145); r.rotation.z=-a; }
+  b(0.32,0.09,0.10, gold,      0,1.662,0.13);                            // gold collar above the cavity
+  b(0.20,0.05,0.07, jadeLight, 0,1.662,0.172);
+  // a stole of quetzal feathers hanging from the collar down his back
+  for(let i=0;i<5;i++) b(0.07,0.30-Math.abs(i-2)*0.05,0.05, i%2?quetzal:plume,
+                         -0.16+i*0.08, 1.44-(i%2)*0.03, -0.175)
+
+  // Arms raised in the conjuring pose — the rig animates these, so they are real groups.
+  // Every segment below is staggered so no two share a min or max face: at my first spacing the cuff's
+  // underside sat exactly on the upper arm's, and the forearm's underside exactly on the crossed shins'.
+  // The chain runs upper arm -> cuff -> forearm -> hand -> shard -> muzzle, each overlapping the next.
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.30,1.58,0); g.add(a);
+    { const _m=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.38,0.15), skin); _m.position.set(0,-0.17,0); _m.castShadow=true; a.add(_m); }
+    const cuff=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.09,0.17), jade);  cuff.position.set(0,-0.30,0); a.add(cuff);
+    const fore=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.34,0.13), skin);  fore.position.set(0,-0.45,0); a.add(fore);
+    const hand=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.13,0.14), skinDark); hand.position.set(0,-0.63,0); a.add(hand);
+    // a jade shard held in each hand — what he throws
+    const sh=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.16,0.09), jadeLight); sh.position.set(0,-0.74,0); sh.rotation.y=0.5; a.add(sh);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  // head: the were-jaguar mask, carrying the same cleft brow the were-jaguar itself has.
+  // The cleft is pushed proud of the face (front 0.19 vs the head's 0.16) and cut short at the back
+  // (-0.11 vs -0.16) so neither of its z faces lands on one of the head's.
+  b(0.34,0.32,0.32, skin, 0,1.80,0);
+  b(0.36,0.09,0.30, basalt, 0,1.90,0.04);                                // the cleft
+  b(0.22,0.13,0.14, skinDark, 0,1.72,0.175);                             // snarling muzzle of the mask
+  for(let i=0;i<4;i++) b(0.03,0.07,0.03, jadeLight, -0.07+i*0.047, 1.648+(i%2)*0.005, 0.238+(i%2)*0.004);
+  [-1,1].forEach(sd=> b(0.07,0.08,0.05, jade, sd*0.11,1.84,0.16));       // jade inlay eyes
+  [-1,1].forEach(sd=> b(0.06,0.09,0.06, gold, sd*0.20,1.74,0.02));       // ear spools
+
+  // feathered headdress — a quetzal fan behind a jade diadem. Each feather hangs off its own rotated
+  // stem group with its base sunk INTO the diadem: positioning rotated boxes by their centres left the
+  // outermost pair hanging clear of it entirely, floating behind his head.
+  b(0.38,0.16,0.34, jade, 0,2.00,0);
+  const fan=new THREE.Group(); fan.position.set(0,2.00,-0.09); g.add(fan);
+  for(let i=0;i<7;i++){
+    const len=0.46-Math.abs(i-3)*0.05;
+    const stem=new THREE.Group(); stem.rotation.z=-(i-3)*0.26; fan.add(stem);
+    const f=new THREE.Mesh(new THREE.BoxGeometry(0.07,len,0.06), i%2?quetzal:plume);
+    // z steps across the fan so the plumes LAYER. At a shared z they were seven coincident plates:
+    // rotating each about its own stem does nothing to the z faces, so they all still fought each other.
+    f.position.set(0, len/2-0.05, (i-3)*0.012);  // -0.05: the quill seats inside the diadem
+    stem.add(f);
+  }
+
+  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.12),
+    new THREE.MeshBasicMaterial({color:0x8fffd0, transparent:true, opacity:0, fog:false}));
+  // arm-LOCAL coordinates: armR's group already sits at (0.30,1.58,0) and the arm hangs downward from
+  // it, so this is the tip of the jade shard in his right hand, not an offset from the body's origin.
+  muzzle.position.set(0,-0.82,0); armR.add(muzzle);
+  muzzle.visible=false;
+
+  const rig=_mexRig(g, null, null, armR, armL);   // legless: the walk cycle must never touch him
+  g.userData.botMuzzle=muzzle;
+  g.userData.hoverBase=0;     // he floats; the AI loop bobs the whole mesh around this rest height
+  return rig;
 }
 
 function makeGhoul(){
@@ -10099,7 +10434,6 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
   const bot = makeVoxelBot(color, weaponType, opts.skin);
   if(opts.scale) bot.scale.setScalar(opts.scale);
   placeEnemyMarker(bot, opts.scale||1);   // re-place at the spawn scale so the arrow stays a constant size
-  bot.position.set(x,0,z);
   // Collision radius measured from the model's real footprint. Every non-boss used to get a flat
   // 0.55*scale whatever it was, so a manticore nearly three units across collided like a mummy and walked
   // its body into walls — which is what "enemies phase into structures" looks like.
@@ -10111,6 +10445,13 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
   // Lift the marker out first. A Sprite carries a 1x1 plane geometry, so setFromObject() counts it —
   // and the marker is deliberately a constant world size, which is WIDER than a shabti or a scarab. Left
   // in, it would set the collision radius for every small enemy from the HUD arrow over its head.
+  //
+  // Measured BEFORE bot.position.set() below, and that ordering is load-bearing. setFromObject() reports
+  // WORLD bounds, so once the bot is placed, bb.max.z for a boss standing at z=22 is ~22.6. The boss
+  // branch takes abs() of those coordinates, so it was reading the boss's DISTANCE FROM THE MAP ORIGIN as
+  // its width and clamping to the 3.0 ceiling every single time — every boss in the game had a radius of
+  // 3.0 regardless of its model. The non-boss branch below subtracts min from max, which is
+  // translation-invariant, which is why only bosses were affected and why this went unnoticed.
   const _mk = bot.userData.marker; if(_mk) bot.remove(_mk);
   const bb = new THREE.Box3().setFromObject(bot);
   if(_mk) bot.add(_mk);
@@ -10129,6 +10470,7 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
     // manticore clipping a pillar.
     radius = Math.max(0.55*(opts.scale||1), Math.min(0.85, 0.5*Math.min(bw, bd) + 0.12));
   }
+  bot.position.set(x,0,z);
   bot.userData.isBot = true;
   scene.add(bot);
   const hp = opts.hp || BOT_MAX_HP;
@@ -11167,7 +11509,7 @@ function enterRomanWorld(banner){
 // and by respawnPlayer() for era-3 deaths (Task 4). Modeled directly on enterRomanWorld(): an open
 // transition, not exiting a dungeon, so world+lighting+loadout all happen in one call.
 // La Venta basin (Olmec Mexico). Reached by buying passage at the Cairo travel booth (50 stars); the raft
-// at the south landing is the way home. The [J] debug key jumps straight here through the same travelTo().
+// at the south landing is the way home.
 //
 // ---- destination waves ----
 // A trip runs its OWN short ladder. Everything in onAllDead() below the tripDest branch is campaign
@@ -11182,10 +11524,12 @@ function enterRomanWorld(banner){
 // from cover, the east ones are out on the open plaza where the jaguars can run.
 const LA_VENTA_WEST = [6,3,2,0,8];    // indices into SPAWN_POINTS
 const LA_VENTA_EAST = [4,7,9,1,5];
+// Three waves, then the Jade-Heart Shaman — the same shape as an era in the campaign, so the basin
+// finishes on a boss rather than just running out of enemies. The old fourth wave's weight was folded
+// into waves 2 and 3 so cutting one didn't make the run to the boss trivial.
 const LA_VENTA_WAVES = [
   {stalker:3, werejaguar:2},
-  {stalker:3, werejaguar:3, vanguard:1},
-  {stalker:2, werejaguar:3, vanguard:2, mudgolem:1},
+  {stalker:3, werejaguar:3, vanguard:2},
   {stalker:3, werejaguar:4, vanguard:2, mudgolem:2},
 ];
 const LA_VENTA_STATS = {
@@ -11196,6 +11540,40 @@ const LA_VENTA_STATS = {
 };
 const TRIP_CLEAR_BONUS = 40;          // ⭐ for clearing a destination, so a trip pays back part of its fare
 let tripWave = 0, tripCleared = false;
+// The Jade-Heart Shaman is fought in the basin itself, on the offering court south of the pyramid —
+// no separate arena world. Every campaign boss swaps into one because each ends an era and needs a
+// change of place; a destination is already somewhere you travelled to, and La Venta's own plaza with
+// the pyramid behind it is the arena the brief asked for.
+// z=+22, NOT -4. The pyramid's processional stair runs SOUTH, from z=4.2 out to z=17.25, so "in front of
+// the pyramid" is positive z. At z=-4 he spawned inside the pyramid's north collider AND under its summit
+// plateau — spawnBot places actors at y=0 regardless of terrain, so he was sealed in the mass of the
+// pyramid nine units below its top, unreachable and unkillable. (0,22) is open ground at the foot of the
+// stair with ~4.8 units of clearance all round, in full view of the landing the player arrives at.
+const TRIP_BOSS = {skin:'jadeshaman', col:0x3fa88a, hp:2400, scale:1.9, speed:1.45, x:0, z:22};
+// How far the Shaman drops when he enters phase 2, in world units. His body rides ~3.4 up while aloft,
+// so this brings his mask down to roughly the player's eyeline. The smoke column sinks with him and
+// pools on the ground, which is the intended read — it is what was holding him up.
+const SHAMAN_DESCENT = -0.55;
+function spawnTripBoss(){
+  clearBots();
+  bossActive = true;
+  // deliberately does NOT touch bossNum: that counts campaign bosses and gates the Cairo/win transitions.
+  // patrol kept to +-4: east of x=5 the approach narrows to 1.2 units of clearance, which is the whole
+  // of a boss's minimum radius. He chases the player anyway; these only matter before he notices you.
+  const m = spawnBot(TRIP_BOSS.x, TRIP_BOSS.z, TRIP_BOSS.col, [-4,0,TRIP_BOSS.z], [4,0,TRIP_BOSS.z],
+                     'pistol', {skin:TRIP_BOSS.skin, hp:TRIP_BOSS.hp, scale:TRIP_BOSS.scale,
+                                speed:TRIP_BOSS.speed, boss:true, diff:1});
+  showBossBar(true); setBossBar(m.userData.data);
+  SFX.boss();
+  setTripHUD();
+}
+// One entry point for "put the right thing in the basin", so arriving, respawning after a death, and
+// advancing a wave all agree on what stage the trip is at.
+function spawnTripStage(){
+  if(tripCleared){ clearBots(); setTripHUD(); return; }
+  if(tripWave >= LA_VENTA_WAVES.length) spawnTripBoss();
+  else spawnTripWave();
+}
 function spawnTripWave(){
   clearBots();
   const roster = LA_VENTA_WAVES[Math.min(tripWave, LA_VENTA_WAVES.length-1)];
@@ -11217,9 +11595,13 @@ function spawnTripWave(){
 // campaign's. Once the basin is clear they hand over to the way home.
 function setTripHUD(){
   const w=document.getElementById('wave'), e=document.getElementById('enemies');
-  if(w) w.textContent = (tripDest ? tripDest.place : 'La Venta') + ' ' +
-                        Math.min(tripWave+1, LA_VENTA_WAVES.length) + '/' + LA_VENTA_WAVES.length;
-  if(e) e.textContent = tripCleared ? 'raft at the landing' : bots.filter(b=>b.alive).length;
+  const place = tripDest ? tripDest.place : 'La Venta';
+  if(w) w.textContent = tripCleared ? place
+                      : bossActive  ? place + ' — the Shaman'
+                      : place + ' ' + Math.min(tripWave+1, LA_VENTA_WAVES.length) + '/' + LA_VENTA_WAVES.length;
+  if(e) e.textContent = tripCleared ? 'raft at the landing'
+                      : bossActive  ? '☠'
+                      : bots.filter(b=>b.alive).length;
 }
 function enterMexicoWorld(banner){
   clearWorldGroups();
@@ -11245,7 +11627,7 @@ function enterMexicoWorld(banner){
   weapons.forEach(w=>w.visible=false);
   weapons = mexicoWeapons;
   selectWeapon(0);
-  spawnTripWave();
+  spawnTripStage();
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
 function enterIslamicWorld(banner){
@@ -11412,6 +11794,20 @@ let stuckTimer = 0;                  // seconds spent trying to move without mak
 let wedgeTimer = 0;                  // same, for the horizontal case (boxed in at the right height)
 let jumpY = 0, jumpV = 0;            // height above the terrain, and its vertical speed
 const JUMP_V = 5.2, JUMP_G = 14;     // ~0.97 units at the apex, about a metre
+// ---- walk speed, and the climb rate that has to keep up with it ----
+// These two are NOT independent, which is why they live together. Every ramp in the game is cut at
+// rampLen = height * 1.45 (a slope of 0.69), so walking up one at full speed demands a climb of
+// MAXSPEED * 0.69 units per second. Exceed the climb cap and you fall behind the rising ground; fall
+// more than 1.5 behind and getTerrainHeight()'s continuity rule stops recognising the ramp zone
+// altogether, which drops your target to ground level and the ramp becomes genuinely unclimbable.
+//
+// Measured, not assumed: holding the cap at its old fixed value of 5, all 11 ramps in the game still
+// climb at 7.0 and 7.5, and 10 of them fail at 8.0. So 7.5 sits just inside the old margin — but only
+// just. Deriving CLIMB_RATE from MAXSPEED keeps the two coupled so the next bump cannot walk off that
+// cliff silently.
+const MAXSPEED = 7.5;                          // player walk speed, units/second
+const RAMP_SLOPE = 1/1.45;                     // the slope every ramp in the maps is built to
+const CLIMB_RATE = MAXSPEED * RAMP_SLOPE * 1.2;
 const lastPos = {x:0, z:0};          // previous frame's position, to measure actual displacement
 let netTimer = 0;                    // seconds of continuous movement input, for the net-displacement check
 const netAnchor = {x:0, z:0};        // where that window started
@@ -11746,6 +12142,7 @@ function travelTo(dest){
 function returnToHub(){
   tripDest = null;
   tripWave = 0; tripCleared = false;   // clears the guard in updateWaves() as well as the ladder
+  bossActive = false; showBossBar(false);   // leaving mid-fight must not carry the Shaman's bar to Cairo
   clearBots();                         // anything still standing out there does not follow you home
   enterHub('🛶 Home in Cairo — the booth is in the bazaar');
 }
@@ -11802,15 +12199,6 @@ document.addEventListener('keydown', e => {
     currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
     if(player.score < 120) player.score = 120;   // enough ⭐ in hand to exercise the booth's prices
     enterHub('🕌 Jumped to the Cairo hub — booth is at (0, -6)');
-  }
-  // J: jump to the La Venta basin (Olmec Mexico), free of charge.
-  // It goes through travelTo() rather than calling enterMexicoWorld() directly. Calling the world builder
-  // on its own skipped everything travelTo() does — above all it left inHub true when jumping from Cairo,
-  // and inHub gates both fire() and weapon visibility, so you arrived unarmed and unable to shoot, still
-  // wearing the hub's HUD, with the booth waypoint tracking a booth on another continent.
-  if (e.code==='KeyJ' && player.alive){
-    travelTo({place:'La Venta', icon:'\u{1F5FF}',
-              enter(){ enterMexicoWorld('\u{1F5FF} La Venta basin — climb the pyramid\u2019s south stair'); }});
   }
   // G: toggles infinite health — damagePlayer() no-ops while godMode is true.
   if (e.code==='KeyG'){
@@ -11940,8 +12328,8 @@ if(isTouch && mobileEl) mobileEl.classList.add('on');
   document.addEventListener('touchend', endTouch, {passive:false});
   document.addEventListener('touchcancel', endTouch, {passive:false});
   // safety nets: never leave the trigger stuck down
-  window.addEventListener('blur', ()=>{ firing=false; fireId=null; });
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ firing=false; fireId=null; } });
+  window.addEventListener('blur', ()=>{ firing=false; fireId=null; releaseAllInput(); });
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ firing=false; fireId=null; releaseAllInput(); } });
 })();
 
 // ===================== GAME / COMBAT =====================
@@ -11954,17 +12342,46 @@ const spawnPoint = new THREE.Vector3(0,1.7,10);
 let playClamp = 29;
 // several verified-clear overworld spots so death doesn't always drop you back in the same place
 const PLAYER_SPAWNS = [[0,10],[0,-10],[15,0],[-15,0],[0,20],[20,-15],[8,3]].map(([x,z])=>new THREE.Vector3(x,1.7,z));
-let lastSpawnIdx = -1;
+let lastSpawn = null;
+// This one list is shared by every map, and it predates La Venta — whose pyramid stands on the origin.
+// Three of these seven land inside that pyramid's colliders and a fourth sits on its stair. Respawning
+// onto one put the player inside the mass of the building. Rather than keep a second hand-maintained
+// list per world (which would drift the moment a map moved), each spawn is tested against whatever map
+// is actually loaded. Note the `undefined` curH: getTerrainHeight()'s continuity rule is there to stop a
+// WALKING player being lifted onto a roof they are standing beside, and it has no meaning for a player
+// being placed somewhere fresh — passing undefined asks for the true height at that spot.
+function spawnUsable(v){
+  const h = getTerrainHeight(v.x, v.z, undefined);
+  return !insideCollider(v.x, v.z, 0.45, h);
+}
+function usableSpawns(){
+  const ok = PLAYER_SPAWNS.filter(spawnUsable);
+  return ok.length ? ok : PLAYER_SPAWNS;    // never return empty: somewhere is better than nowhere
+}
 function pickSpawnPoint(){
-  if(PLAYER_SPAWNS.length<=1) return PLAYER_SPAWNS[0];
-  let idx; do{ idx=Math.floor(Math.random()*PLAYER_SPAWNS.length); } while(idx===lastSpawnIdx);
-  lastSpawnIdx = idx; return PLAYER_SPAWNS[idx];
+  const pool = usableSpawns();
+  if(pool.length<=1) return pool[0];
+  let sp; do{ sp = pool[Math.floor(Math.random()*pool.length)]; } while(sp===lastSpawn);
+  lastSpawn = sp; return sp;
 }
 // nearest of the verified-clear spawns to (x,z) — the guaranteed-safe fallback for unstick recovery
 function nearestClearSpawn(x,z){
-  let best=PLAYER_SPAWNS[0], bestD=Infinity;
-  for(const sp of PLAYER_SPAWNS){ const d=(sp.x-x)**2+(sp.z-z)**2; if(d<bestD){ bestD=d; best=sp; } }
+  const pool = usableSpawns();
+  let best=pool[0], bestD=Infinity;
+  for(const sp of pool){ const d=(sp.x-x)**2+(sp.z-z)**2; if(d<bestD){ bestD=d; best=sp; } }
   return best;
+}
+// Put the player down at a spawn, standing ON the ground there rather than at y=0. Forcing playerHeight
+// to 0 is what buried the player under La Venta's pyramid stair: the terrain there is 5 units up, and
+// once the two disagree by more than 1.5 the continuity rule stops recognising the ramp at all, so the
+// player can never climb back out of it either.
+function placePlayerAt(sp){
+  camera.position.copy(sp);
+  playerHeight = getTerrainHeight(sp.x, sp.z, undefined);
+  camera.position.y = playerHeight + 1.7;
+  jumpY = 0; jumpV = 0;
+  vel.set(0,0,0); stuckTimer = 0; wedgeTimer = 0;
+  netAnchor.x = sp.x; netAnchor.z = sp.z; netTimer = 0;
 }
 // Always recover to the nearest verified-clear spawn point rather than a tracked "last safe"
 // spot: the height-zone model that tracking relied on can't tell "standing on a roof" apart
@@ -12143,12 +12560,19 @@ function onAllDead(){
   // Away on a trip: run the destination's own ladder and return. Nothing below this line applies out
   // here — falling through is what used to walk the campaign's waveIdx into an empty Islamic wave.
   if(tripDest){
-    tripWave++;
-    if(tripWave >= LA_VENTA_WAVES.length){
+    // the Shaman is down: that ends the trip, and only then is the basin clear
+    if(bossActive){
+      bossActive = false; showBossBar(false);
       tripCleared = true;
       player.score += TRIP_CLEAR_BONUS;
-      setBanner('🗿 The basin is clear — the raft waits at the south landing');
+      setBanner('🗿 The jade heart goes dark — the raft waits at the south landing');
       setTripHUD(); setHUD();
+      return;
+    }
+    tripWave++;
+    if(tripWave >= LA_VENTA_WAVES.length){
+      pending='tripboss'; betweenTimer=4.2;
+      setBanner('⚠ The pyramid answers — K’Inich rises over the offering court…');
       return;
     }
     pending='tripwave'; betweenTimer=4.0;
@@ -12223,6 +12647,7 @@ function updateWaves(dt){
       else if(pending==='boss'){ spawnBossFight(); }
       else if(pending==='nile'){ enterNileWave(); }
       else if(pending==='tripwave'){ spawnTripWave(); setBanner('WAVE '+(tripWave+1)); setTimeout(()=>{ if(!gameWon) setBanner(''); },1200); }
+      else if(pending==='tripboss'){ spawnTripBoss(); setBanner('🗿 THE JADE-HEART SHAMAN'); setTimeout(()=>{ if(!gameWon) setBanner(''); },1800); }
       pending=null;
     }
     // !tripCleared: onAllDead() returns without arming `pending` when a destination is finished, so
@@ -12684,8 +13109,8 @@ function respawnPlayer(){
   // Dying away on a trip respawns you at that destination, not in Cairo. Without this it falls through
   // to the era branches below and lands you in the Islamic map with tripDest still set — home, but
   // with the trip's HUD and a live raft prompt at coordinates that mean nothing there.
-  if(tripDest){ tripDest.enter(); const sp1=pickSpawnPoint(); camera.position.copy(sp1); playerHeight=0; stuckTimer=0; vel.set(0,0,0); setHUD(); return; }
-  if(inHub){ enterHub('💀 you wake in Cairo'); const sp0=pickSpawnPoint(); camera.position.copy(sp0); playerHeight=0; stuckTimer=0; vel.set(0,0,0); setHUD(); return; }
+  if(tripDest){ tripDest.enter(); placePlayerAt(pickSpawnPoint()); setHUD(); return; }
+  if(inHub){ enterHub('💀 you wake in Cairo'); placePlayerAt(pickSpawnPoint()); setHUD(); return; }
   if(currentEra >= 3) enterIslamicWorld('💀 back to Wave 10');
   else if(currentEra >= 2) enterRomanWorld('💀 back to Wave 7');
   else exitDungeon();
@@ -12693,7 +13118,7 @@ function respawnPlayer(){
   clearBots(); spawnWave(waveIdx);
   if(currentEra < 2){ setBanner('💀 back to Wave '+(waveIdx+1)); setTimeout(()=>{ if(!gameWon) setBanner(''); },1500); }
   const sp = pickSpawnPoint();
-  camera.position.copy(sp); playerHeight=0; stuckTimer=0;
+  placePlayerAt(sp);
   yaw=0; pitch=0; targetYaw=0; targetPitch=0; vel.set(0,0,0);
   weapons.forEach(wp=>{ wp.userData.ammo=wp.userData.magSize; wp.userData.reloading=false; wp.userData.reloadT=0; });
   setAmmoHUD();
@@ -12782,7 +13207,6 @@ function animate(){
 
   // ----- player movement (disabled while dead), velocity-smoothed -----
   if(player.alive){
-    const MAXSPEED = 6;
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).negate();
     const right = new THREE.Vector3(-forward.z, 0, forward.x); // true camera-right (+X at yaw 0)
     // desired direction from keys + joystick
@@ -12820,7 +13244,7 @@ function animate(){
     // walking under/beside it at ground level (see the continuity check inside it) — you no longer float up
     // just from passing underneath a ramp — plus a rate cap as a second layer against any remaining edge case.
     const targetGroundY = getTerrainHeight(camera.position.x, camera.position.z, playerHeight);
-    const maxHeightStep = 5*dt;
+    const maxHeightStep = CLIMB_RATE*dt;
     playerHeight += Math.max(-maxHeightStep, Math.min(maxHeightStep, (targetGroundY - playerHeight) * Math.min(1, dt*10)));
     // The jump is an offset ON TOP of the eased terrain height, never a replacement for it: walking off
     // a ledge mid-jump still hands you back to the terrain, and colliders are full-height regardless of
@@ -13309,6 +13733,68 @@ function animate(){
       }
     }
 
+    // JADE-HEART SHAMAN (La Venta's boss). Two phases, and the phase change is a DESCENT rather than the
+    // brief's stone-armour shell — this game has no armour, and a damage-reduction shell for one enemy
+    // would be a second system beside damageBot()'s facing-arc rule. Same escalation, existing mechanics.
+    //
+    //   Phase 1 (above 50%): he rides his smoke column high and fights entirely at range — jade shards
+    //     at the player's feet, and Mud Golems called up out of the tar to walk the player down.
+    //   Phase 2 (at/below 50%): he comes down to head height, every cooldown shortens, and the shards
+    //     come in pairs. Nothing new to learn, everything he already did, faster and closer.
+    if(b.boss && b.skin==='jadeshaman' && player.alive){
+      const phase2 = b.hp <= b.maxHp*0.5;
+      if(phase2 && !b.descended){
+        b.descended = true;
+        b.speed *= 1.35;
+        SFX.boss();
+        shakeAmt = Math.max(shakeAmt, 0.35);
+        setBanner('⚠ K’Inich descends — the jade heart burns!');
+        setTimeout(()=>{ if(bossActive) setBanner(''); },1800);
+      }
+      // The descent itself. hoverBase is the group's world y, so easing it down lowers him bodily; the
+      // smoke column that was holding him up collapses by the same fraction, which is what sells it as
+      // a descent rather than the model simply sliding. Driven off hoverBase, not off a timer, so the
+      // two can never disagree.
+      if(ud.hoverBase !== undefined){
+        const want = b.descended ? SHAMAN_DESCENT : 0;
+        ud.hoverBase += (want - ud.hoverBase) * Math.min(1, dt*1.4);
+        if(ud.smokeCol){
+          const f = 1 - (ud.hoverBase / SHAMAN_DESCENT) * 0.75;   // 1 aloft, 0.25 once he is down
+          for(const sm of ud.smokeCol){ sm.scale.set(f,f,f); sm.material.opacity = 0.34*f; }
+        }
+      }
+      // jade shards: a telegraphed strike at where the player IS, so it is dodged by moving
+      b.shardCd = b.shardCd===undefined ? 2.5 : b.shardCd - dt;
+      if(b.shardCd <= 0 && distToPlayer < 30){
+        b.shardCd = (4.2 + Math.random()*1.6) * (phase2?0.62:1);
+        const shard=(ox,oz)=> spawnAoeTelegraph(camera.position.x+ox, camera.position.z+oz,
+          {ringColor:0x2f8f6a, fillColor:0x5fd0a4, impactColor:0x9fffd8,
+           ringR:1.9, impactAt:0.7, dur:1.25, hitRadius:1.9, damage:19});
+        shard(0,0);
+        // phase 2 throws a second shard off to one side, so standing still is punished harder but a
+        // moving player still has somewhere to move TO
+        if(phase2){ const a=Math.random()*Math.PI*2; shard(Math.cos(a)*3.2, Math.sin(a)*3.2); }
+        if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
+        b.swing = 1;
+        SFX.boss();
+        setBanner('⚠ Jade shards!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ Jade shards!') setBanner(''); },650);
+      }
+      // calls Mud Golems up out of the tar seeps. Capped the same way the ammit's summon is, so it can
+      // never spiral into a crowd the player cannot fight through.
+      b.golemCd = b.golemCd===undefined ? 7 : b.golemCd - dt;
+      if(b.golemCd <= 0 && bots.filter(o=>!o.boss && o.alive).length < 3){
+        b.golemCd = (14 + Math.random()*4) * (phase2?0.65:1);
+        const st = LA_VENTA_STATS.mudgolem;
+        for(let i=0;i<(phase2?2:1);i++){
+          const sp = SPAWN_POINTS[LA_VENTA_WEST[(i + ((Math.random()*3)|0)) % LA_VENTA_WEST.length]];
+          spawnBot(sp[0], sp[1], ENEMY_COLORS[(Math.random()*ENEMY_COLORS.length)|0],
+                   [sp[0]-2,0,sp[1]], [sp[0]+2,0,sp[1]], st.wt,
+                   {skin:'mudgolem', hp:st.hp, diff:1.0, speed:st.speed, scale:st.scale});
+        }
+        setBanner('⚠ The tar gives up its dead!'); setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
+      }
+    }
+
     // ---- animation: legs/arms swing only while actually moving (skipped by non-humanoid rigs, e.g. scarabs) ----
     // b.moving is a hard 0/1 flip, and bosses set it from `distToPlayer>4` — so crossing that threshold
     // snapped the legs from mid-stride to rest in a single frame, a visible pop on every approach.
@@ -13323,8 +13809,25 @@ function animate(){
         sg.mesh.position.y = sg.baseY + Math.sin(t*4 + sg.z*1.6) * 0.05 * (0.35 + 0.65*b.gait);
       }
     }
-    if(ud.hoverBase !== undefined){
-      b.mesh.position.y = ud.hoverBase + Math.sin(t*1.6 + b.t) * 0.16;
+    // ---- ride the terrain ----
+    // Until now getTerrainHeight() was consulted for the PLAYER only — not one bot in the game ever
+    // sampled it, so every enemy sat at a flat y=0 forever. On flat ground that is invisible and always
+    // was. It stops being invisible the moment an enemy walks somewhere raised: the La Venta pyramid's
+    // stair corridor has no collider by design (it has to be climbable), so the Shaman chasing the player
+    // up it walked straight in at y=0 and was swallowed by the staircase. That is the boss "phasing
+    // through" the pyramid.
+    //
+    // Eased at the same 5 u/s the player's own height uses, and fed its own last height as curH so it
+    // obeys the same continuity rule — a bot cannot teleport up the side of a plateau it is standing
+    // beside, it has to walk the ramp like anyone else.
+    {
+      const tgt = getTerrainHeight(b.mesh.position.x, b.mesh.position.z, b.groundY || 0);
+      const step = CLIMB_RATE*dt;
+      b.groundY = (b.groundY === undefined) ? tgt
+                : b.groundY + Math.max(-step, Math.min(step, tgt - b.groundY));
+      b.mesh.position.y = b.groundY + (ud.hoverBase !== undefined
+                                       ? ud.hoverBase + Math.sin(t*1.6 + b.t) * 0.16
+                                       : 0);
     }
     // aim blend: 0 = arm down swinging, 1 = arm raised toward player
     const targetAim = canEngage ? 1 : 0;
