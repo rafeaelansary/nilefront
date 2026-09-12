@@ -6688,9 +6688,15 @@ heightZoneTarget = heightZonesMexico;
     for(let i=0;i<4;i++){
       const n=Math.abs(Math.sin((tx+i)*12.9+tz*7.3)*43758.5%1);
       const bx2 = tx + (n-0.5)*tw*0.7, bz2 = tz + ((n*7)%1-0.5)*td*0.7;
+      // Seated INSIDE the tar slab, derived from the overlay constants rather than a literal. These are
+      // open hemispheres -- there is no disc closing the bottom -- so if the rim sits below the tar you
+      // see up into the inside of the bubble. It used to sit at a hard-coded 0.1, which was inside the
+      // tar when overlays were 0.14 thick starting at 0.03; restacking them to fix the layer flicker
+      // moved the tar up and left these rims hanging under it.
+      const tarTop = OVERLAY_BASE + 2*OVERLAY_STEP + OVERLAY_H/2;
       const dome = new THREE.Mesh(new THREE.SphereGeometry(0.22+n*0.18, 8, 5, 0, Math.PI*2, 0, Math.PI/2),
         new THREE.MeshLambertMaterial({color:0x1a1712}));
-      dome.position.set(bx2, 0.1, bz2); scene.add(dome);
+      dome.position.set(bx2, tarTop - 0.03, bz2); scene.add(dome);
     }
   });
 
