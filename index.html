@@ -1687,6 +1687,29 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
     scene.add(rail);
   });
 
+  // ---- solid flanks down both sides of the flight ----
+  // The treads carry no colliders, and they cannot: a collider on the steps would block the very ramp
+  // corridor that carries the player up them. But that left the flight open from the SIDE -- you could
+  // walk straight into the lower steps and pass through the stair. These two thin walls run the length of
+  // the run, just OUTSIDE the corridor, so the flight is solid from every direction except the one you
+  // are meant to climb it from. 0.3 thick at +-(rampWidth/2 + 0.15) leaves a 1.9-wide walkable corridor
+  // for a 0.9-wide player.
+  {
+    // Starts 0.4 out from the tower wall so it cannot overlap the tower's own collider, and is only 0.16
+    // thick sitting right on the corridor edge -- at 0.3 thick and 0.15 proud it reached far enough out
+    // to swallow the shared enemy spawn beside one of these flights.
+    const inset = 0.4, runLen = rampLen - inset;
+    const midAlongC = half + inset + runLen/2;
+    const alongW = axisX ? runLen : 0.16, alongD = axisX ? 0.16 : runLen;
+    [-1,1].forEach(sd=>{
+      // rampWidth/2 - 0.05, i.e. a hair INSIDE the corridor edge. Sat exactly on the edge, the wall's
+      // outer face came within the 0.55 clearance the shared enemy spawn beside one flight needs. The
+      // corridor is still 1.64 wide against a 0.9-wide player.
+      addBox(x + dx*midAlongC + px*sd*(rampWidth/2 - 0.05),
+             z + dz*midAlongC + pz*sd*(rampWidth/2 - 0.05), alongW, alongD);
+    });
+  }
+
   // The walkable ramp zone. This is what actually carries the player up — the step meshes above are only
   // what it looks like. Geometry is unchanged from the original: the ramp butts right against the wall, so
   // there is no dead gap between the top of the flight and the roof deck.
@@ -11765,12 +11788,18 @@ function enterRomanWorld(banner){
 // waveIdx into the Islamic era's waves 10-12, which spawn nothing by design. The wave WAS advancing —
 // into an empty one.
 //
-// SPAWN_POINTS is the shared list fullcheck audits against every map, La Venta included, so the ladder
-// draws from it rather than carrying its own coordinates. Split by side of the basin so each creature
-// still arrives where it belongs: the west points are back in the mangroves where the stalkers snipe
-// from cover, the east ones are out on the open plaza where the jaguars can run.
-const LA_VENTA_WEST = [6,3,2,0,8];    // indices into SPAWN_POINTS
-const LA_VENTA_EAST = [4,7,9,1,5];
+// La Venta carries its OWN spawn coordinates rather than indexing the shared SPAWN_POINTS list.
+// That list is audited against the campaign maps -- and only those: fullcheck's spawn test is gated on
+// WAVE_MAPS, which this map was never added to, so "blocked spawns: ok" was vacuous here for as long as
+// the map has existed. Six of the ten shared points turned out to be unusable in this basin and three of
+// them were INSIDE the pyramid, because no other map has a nine-unit landmark sitting on the origin.
+//
+// Every position below is searched, not chosen: at least 1.3 clear of any collider (the widest enemy
+// radius is 0.85), never on the pyramid's own height zones, at least 9 from the player's arrival point
+// at (0,27), and at least 7 from each other. West is the mangrove side where the stalkers snipe from
+// cover; east is the open plaza where the jaguars can run.
+const LA_VENTA_WEST = [[-15.5,-8.0], [-18.3,24.6], [-24.8,-2.9], [-18.4,15.2], [-15.2,-15.8]];
+const LA_VENTA_EAST = [[20.2,-10.5], [14.6,14.9], [13.7,-18.8], [15.8,22.6], [24.4,10.4]];
 // Three waves, then the Jade-Heart Shaman — the same shape as an era in the campaign, so the basin
 // finishes on a boss rather than just running out of enemies. The old fourth wave's weight was folded
 // into waves 2 and 3 so cutting one didn't make the run to the boss trivial.
@@ -11830,7 +11859,7 @@ function spawnTripWave(){
     const st = LA_VENTA_STATS[skin];
     for(let i=0;i<roster[skin];i++){
       const pool = st.west ? LA_VENTA_WEST : LA_VENTA_EAST;
-      const sp = SPAWN_POINTS[pool[(st.west ? wi++ : ei++) % pool.length]];
+      const sp = pool[(st.west ? wi++ : ei++) % pool.length];
       spawnBot(sp[0], sp[1], ENEMY_COLORS[n++ % ENEMY_COLORS.length],
                [sp[0]-2.5,0,sp[1]], [sp[0]+2.5,0,sp[1]], st.wt,
                {skin, hp:Math.round(st.hp*diff), diff, speed:st.speed, scale:st.scale});
@@ -12785,7 +12814,11 @@ const ENEMY_COLORS=[0xc0392b,0x2980b9,0x27ae60,0x8e44ad,0xe67e22,0x16a085,0xd354
 // (18,14), inside a date palm's collider in Cairo. Both moved to points verified clear on all four maps.
 // [6] was (-20,4), which sits inside the Capitoline temple's front staircase on the Roman map — bots
 // spawned inside the steps. Only visible once the staircase got the collider it was always missing.
-const SPAWN_POINTS=[[-6,-6],[9,4],[-9,9],[-14,-14],[16,-6],[4,16],[-25.5,4.5],[20,16],[-4,-20],[12,-16]];
+// Three of these were within 0.85 of something solid on at least one map -- 0.85 being the measured
+// widest enemy radius -- so a manticore or a mud golem spawned partly inside the scenery and was
+// shoved out on its first step. The audit only ever checked them at 0.55, which is a narrow enemy.
+// Moved the minimum distance that clears 0.95 on ALL four wave maps at once; the rest are unchanged.
+const SPAWN_POINTS=[[-6,-6],[9,4],[-4.25,10],[-14,-14],[17,-6.5],[4,16],[-25.5,4.5],[20,16],[-4.25,-19.5],[12,-16]];
 const WAVES=[3,4,5, 6,7,9, 7,8,10, 9,10,12]; // 12 waves; a boss after wave 3, 6, 9, and 12
 function waveDiff(n){ return 1 + n*n*0.05 + n*0.16; } // accelerating curve: each wave is meaningfully tougher than the last
 let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWon=false, gameStarted=false;
@@ -14167,7 +14200,7 @@ function animate(){
         b.golemCd = (14 + Math.random()*4) * (phase2?0.65:1);
         const st = LA_VENTA_STATS.mudgolem;
         for(let i=0;i<(phase2?2:1);i++){
-          const sp = SPAWN_POINTS[LA_VENTA_WEST[(i + ((Math.random()*3)|0)) % LA_VENTA_WEST.length]];
+          const sp = LA_VENTA_WEST[(i + ((Math.random()*3)|0)) % LA_VENTA_WEST.length];
           spawnBot(sp[0], sp[1], ENEMY_COLORS[(Math.random()*ENEMY_COLORS.length)|0],
                    [sp[0]-2,0,sp[1]], [sp[0]+2,0,sp[1]], st.wt,
                    {skin:'mudgolem', hp:st.hp, diff:1.0, speed:st.speed, scale:st.scale});
