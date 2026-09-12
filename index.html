@@ -6677,7 +6677,10 @@ heightZoneTarget = heightZonesMexico;
   // impassable pits around the one landmark would wall the map in half. They read as hazard, not as wall.
   // The last pool was 8 deep centred at z=-16.5, which put it straight through the offering court at
   // z=-20. Narrowed and centred in the 4.3-unit gap between the pyramid's base (z=-13.2) and the court.
-  const tarPools = [[-15.5,-9.0,7.0,5.0],[14.0,-11.0,6.0,4.6],[-13.0,9.5,5.6,4.4],
+  // (8.5,-16) not (14,-11): at (14,-11) this pool lay directly ON the Great Mosaic Pavement, whose own
+  // pieces sit within a few millimetres of the tar's surface -- the mosaic showed through the tar and the
+  // two fought. South of the pyramid it laps neither the pyramid's footprint nor the pavement.
+  const tarPools = [[-15.5,-9.0,7.0,5.0],[8.5,-16.0,6.0,4.6],[-13.0,9.5,5.6,4.4],
                     [15.5,8.0,6.6,5.2],[0.0,-15.3,7.0,3.6]];
   tarPools.forEach(([tx,tz,tw,td])=>{
     flat(tarTex(), 3, tx, tz, tw, td, 2);         // layer 2: tar lies on top of mud or paving
@@ -6745,12 +6748,19 @@ heightZoneTarget = heightZonesMexico;
   flat(serpentineTex(), 5, 17, 0, 22, 34, 1);     // layer 1: plaza paving
   // the Great Mosaic Pavement, a stylised jaguar mask laid in serpentine blocks
   (function mosaicMask(cx,cz){
+    // Heights derived from the overlay stack rather than written as literals. Every piece here used to
+    // sit between 0.12 and 0.21, which is the same band the ground overlays occupy -- the base slab's top
+    // landed 5mm UNDER a tar pool and the inlay poked 25mm through it. The base now rests ON the plaza
+    // paving and the inlay rests on the base, so each surface is clear of the one below by a visible margin.
+    const PAVE_TOP = OVERLAY_BASE + OVERLAY_STEP + OVERLAY_H/2;      // layer 1 = the plaza paving
     const jm = voxMat(0x2f6b52,{noise:10});
-    lb(8.0,0.10,9.0, jm, cx,0.13,cz);
-    [[-1.9,-2.4],[1.9,-2.4]].forEach(([ox,oz])=> lb(2.0,0.12,1.5, basaltDark, cx+ox,0.15,cz+oz));  // eyes
-    lb(1.4,0.12,1.6, basaltDark, cx,0.15,cz-0.2);                                                  // muzzle bar
-    for(let i=0;i<4;i++) lb(1.1,0.12,0.7, basaltDark, cx-2.6+i*1.75, 0.15, cz+2.6);                // fang row
-    lb(8.6,0.09,0.5, clayDark, cx,0.12,cz-4.6); lb(8.6,0.09,0.5, clayDark, cx,0.12,cz+4.6);        // border
+    const baseH = 0.10, baseTop = PAVE_TOP + baseH;
+    lb(8.0,baseH,9.0, jm, cx, PAVE_TOP + baseH/2, cz);
+    const inlayY = baseTop + 0.06;                                    // inlay centre, sunk 0.06 into nothing
+    [[-1.9,-2.4],[1.9,-2.4]].forEach(([ox,oz])=> lb(2.0,0.12,1.5, basaltDark, cx+ox,inlayY,cz+oz));  // eyes
+    lb(1.4,0.12,1.6, basaltDark, cx,inlayY,cz-0.2);                                                  // muzzle bar
+    for(let i=0;i<4;i++) lb(1.1,0.12,0.7, basaltDark, cx-2.6+i*1.75, inlayY, cz+2.6);                // fang row
+    lb(8.6,0.09,0.5, clayDark, cx,PAVE_TOP+0.035,cz-4.6); lb(8.6,0.09,0.5, clayDark, cx,PAVE_TOP+0.035,cz+4.6);
   })(17,-9);
 
   // ---- colossal heads: the single most recognisable Olmec object ----
@@ -6830,10 +6840,14 @@ heightZoneTarget = heightZonesMexico;
   mound(-1.0,-26.0, 6.0, 2.2);
   // offering court: a sunken rectangle of packed clay with jade celts laid in a cross
   flat(claySurfaceTex(), 4, 0, -20.0, 9.0, 5.0, 2);
-  for(let i=0;i<5;i++) lb(0.34,0.16,0.9, jadeMat, -1.6+i*0.8, 0.14, -20.0);
+  // on TOP of the court slab (layer 2), not buried in it: at 0.14 they poked 35mm through its surface
+  const COURT_TOP = OVERLAY_BASE + 2*OVERLAY_STEP + OVERLAY_H/2;
+  for(let i=0;i<5;i++) lb(0.34,0.16,0.9, jadeMat, -1.6+i*0.8, COURT_TOP+0.08, -20.0);
   // the crossing row sits 0.01 higher: at a shared 0.14 both rows had identical top AND bottom faces
   // while overlapping at the centre of the cross
-  for(let i=0;i<3;i++) lb(0.9,0.16,0.34, jadeMat, 0, 0.15, -21.4+i*1.4);
+  // +0.10, not +0.08: this row crosses the one above at (0,-20), and at a shared height the two markers
+  // meeting there had the same top face. The cross row simply lies over the other one.
+  for(let i=0;i<3;i++) lb(0.9,0.16,0.34, jadeMat, 0, COURT_TOP+0.10, -21.4+i*1.4);
 
   // ================= jungle edge: trees closing the basin's rim =================
   function jungleTree(x,z,h,tone,bloom){
