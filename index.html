@@ -136,6 +136,27 @@
   #wcera{font-size:12px;opacity:0.78;margin-top:3px}
   #wcstate{font-size:14px;font-weight:800;margin-top:7px}
   #boothhint{margin-top:14px;font-size:13px;text-align:center;opacity:0.7}
+  /* ---- admin panel (Z,X,C) ---- */
+  #adminoverlay{position:absolute;inset:0;z-index:12;display:none;align-items:center;justify-content:center;
+    background:radial-gradient(120% 130% at 50% 40%, rgba(4,10,8,0.92) 0%, rgba(2,5,4,0.97) 100%)}
+  body.admin #adminoverlay{display:flex}
+  body.admin #crosshair,body.admin #prompt,body.admin #boothmarker{display:none !important}
+  #adminbox{min-width:min(440px,92vw);padding:22px 26px;border:2px solid #3fd08a;border-radius:12px;
+    background:rgba(6,16,12,0.92);box-shadow:0 14px 50px rgba(0,0,0,0.8), inset 0 0 60px rgba(0,0,0,0.5);
+    color:#dff5e8;font-family:inherit}
+  #admintitle{font-size:20px;font-weight:900;letter-spacing:3px;color:#7fffc4;text-align:center;
+    text-shadow:0 2px 0 #06301f,0 0 18px rgba(70,255,180,0.3);margin-bottom:4px}
+  #adminsub{font-size:12px;text-align:center;opacity:0.62;margin-bottom:16px}
+  .adminrow{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;
+    padding:10px 12px;margin-bottom:8px;border:1px solid rgba(63,208,138,0.35);border-radius:8px;
+    background:rgba(0,0,0,0.3);font-size:15px;font-weight:700;cursor:pointer;
+    font-family:inherit;color:#dff5e8;text-align:left}
+  .adminrow:hover{background:rgba(63,208,138,0.14);border-color:rgba(63,208,138,0.7)}
+  .adminrow .state{font-size:13px;font-weight:900;letter-spacing:1px;padding:3px 10px;border-radius:12px;
+    background:rgba(255,255,255,0.07);color:#8c9a93;white-space:nowrap}
+  .adminrow.on .state{background:rgba(63,208,138,0.22);color:#7fffc4}
+  .adminrow.act .state{background:rgba(255,200,90,0.18);color:#ffd978}
+  #adminhint{margin-top:14px;font-size:12px;text-align:center;opacity:0.6}
 </style>
 </head>
 <body>
@@ -164,6 +185,12 @@
     <div id="worldcard"><div id="wcname"></div><div id="wcera"></div><div id="wcstate"></div></div>
   </div>
   <div id="boothhint">Hover a destination · click to buy passage · [E] or [Esc] to leave</div>
+</div></div>
+<div id="adminoverlay"><div id="adminbox">
+  <div id="admintitle">ADMIN</div>
+  <div id="adminsub">Z · X · C</div>
+  <div id="adminrows"></div>
+  <div id="adminhint">click a row to toggle · [Esc] or [C] to close</div>
 </div></div>
 <div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button></div>
 <div id="mobile">
@@ -1609,38 +1636,49 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
   const px = dz, pz = -dx;      // perpendicular, for offsetting the rails to either side
   const axisX = dx !== 0;
 
-  for(let i=0;i<=steps;i++){
-    // i=0 is the step against the tower wall (full height, flush with the roof); i=steps is the ground end
+  for(let i=0;i<steps;i++){
+    // i=0 is the step against the tower wall (full height, flush with the roof). i=steps would sit at y=0
+    // — its top exactly on the ground slab, invisible and z-fighting it — so the flight stops one short:
+    // the bottom of a staircase is the ground.
     const y=(1-i/steps)*height, along=half+(i/steps)*rampLen;
     const sx=x+dx*along, sz=z+dz*along;
     const w = axisX ? rampLen/steps+0.08 : rampWidth;
     const d = axisX ? rampWidth : rampLen/steps+0.08;
-    // +0.26, not +0.22. At 0.22 a tread's underside lands at y-0.005, and the topmost tread (i=0) sits at
-    // y=height — which is exactly where the roof deck's own underside is. Those two faces were 5mm apart
-    // across the whole deck footprint, and since every map's watchtowers run this same code it was one
-    // z-fight reported four times over. Seating the tread ON its level instead of straddling it clears all of them.
-    block(w,0.45,d,woodCol,sx,y+0.26,sz,woodMat);                       // tread
+    // The tread's TOP must land on `y`, because `y` is exactly what the ramp zone at the bottom of this
+    // function hands the player as their walking height. It used to be centred at y+0.26 — top at y+0.485,
+    // a full step-rise ABOVE the surface the player actually stands on — so climbing any of these stairs
+    // walked you through the middle of every tread with the steps passing through the camera. Every map's
+    // watchtowers run this code, which is why it happened on all of them.
+    // y-0.235, i.e. the tread's top one centimetre UNDER the walking height rather than exactly on it.
+    // Exactly on it, the tread tops of a tall flight land on the tower's own cornice bands and z-fight
+    // them (3 faces on the Roman map, 4 on the original). A centimetre is invisible to stand on and
+    // clears every one of them.
+    block(w,0.45,d,woodCol,sx,y-0.235,sz,woodMat);                      // tread
     // riser behind each tread, so the flight is solid rather than a ladder of floating slabs
     if(i<steps){
       const ry=(1-(i+0.5)/steps)*height, ra=half+((i+0.5)/steps)*rampLen;
+      // centred on ry, which is the midpoint between the two tread tops it now spans
       block(axisX?0.12:rampWidth-0.15, 0.42, axisX?rampWidth-0.15:0.12, woodDarkCol,
-            x+dx*ra, ry+0.2, z+dz*ra, {noise:12});
+            x+dx*ra, ry-0.01, z+dz*ra, {noise:12});
     }
   }
   // stringer beams running the length of the flight underneath the treads, and posts down to the ground
   [-1,1].forEach(sd=>{
     for(let i=1;i<steps;i+=2){
       const y=(1-i/steps)*height, along=half+(i/steps)*rampLen;
-      const postH=Math.max(0.3,y);
+      // up to 0.30 below the tread's top, i.e. 0.15 inside it: level with the top face it shared a
+      // plane with the tread, and level with the underside it shared one there instead.
+      const postH=Math.max(0.3,y-0.33);
       block(0.16, postH, 0.16, woodDarkCol,
             x+dx*along+px*sd*(rampWidth/2-0.18), postH/2, z+dz*along+pz*sd*(rampWidth/2-0.18), {noise:12});
-      // handrail post rising from the tread, plus the rail itself between them
+      // handrail post rising FROM the tread. The tread's top is y, so a centre of y+0.36 would put the
+      // post's foot exactly on that face; y+0.30 sinks it 0.06 in.
       block(0.12, 0.72, 0.12, woodCol,
-            x+dx*along+px*sd*(rampWidth/2+0.06), y+0.45+0.36, z+dz*along+pz*sd*(rampWidth/2+0.06), {noise:12});
+            x+dx*along+px*sd*(rampWidth/2+0.06), y+0.30, z+dz*along+pz*sd*(rampWidth/2+0.06), {noise:12});
     }
     // the rail: one long slab lying along the flight's slope, rotated to match the pitch
     const railLen = Math.hypot(rampLen, height);
-    const midAlong = half + rampLen/2, midY = height/2 + 0.95;
+    const midAlong = half + rampLen/2, midY = height/2 + 0.60;    // through the tops of the new posts
     const rail = new THREE.Mesh(new THREE.BoxGeometry(axisX?railLen:0.12, 0.12, axisX?0.12:railLen), voxMat(woodCol,{noise:12}));
     rail.position.set(x+dx*midAlong+px*sd*(rampWidth/2+0.06), midY, z+dz*midAlong+pz*sd*(rampWidth/2+0.06));
     // the flight drops as it runs outward, so the rail pitches down along its own axis
@@ -6776,6 +6814,117 @@ heightZoneTarget = heightZonesMexico;
     const L = new THREE.PointLight(0xffa040, 1.1, 10); L.position.set(tx,2.7,tz); scene.add(L);
     addBox(tx,tz,0.5,0.5);
   });
+
+  // ---- boundary barrier, the same soft pane the Greek map uses ----
+  // animate() hard-clamps the player to +/-29 whatever the colliders say, and until now nothing out here
+  // marked that line: you simply stopped walking, in open ground, with nothing in front of you. This makes
+  // the limit an object. Height 90 so it runs far above the tallest thing on the map (the pyramid at 9)
+  // and the gradient dissolves it long before its own top edge -- a barrier that ENDS somewhere visible
+  // draws a hard horizontal line across whatever stands behind it, which reads as the scenery being cut
+  // in half. depthWrite off so it never occludes anything; DoubleSide so it reads from either face.
+  // Tinted green rather than the Greek map's blue: this is a jungle basin closing in, not a sea horizon.
+  (function boundaryBarrier(){
+    const P=128, c=_mkCanvas(P), bx=c.getContext('2d');
+    const g=bx.createLinearGradient(0,P,0,0);
+    // fades out far lower than the Greek map's version: there the barrier stands over open water, here
+    // it stands in front of a treeline, and tint carried up the full height washed all of it out
+    g.addColorStop(0.00,'rgba(255,255,255,0.95)');
+    g.addColorStop(0.12,'rgba(255,255,255,0.62)');
+    g.addColorStop(0.28,'rgba(255,255,255,0.26)');
+    g.addColorStop(0.45,'rgba(255,255,255,0.07)');
+    g.addColorStop(1.00,'rgba(255,255,255,0.00)');
+    bx.fillStyle=g; bx.fillRect(0,0,P,P);
+    const tex=new THREE.CanvasTexture(c); tex.anisotropy=maxAniso;
+    const H=90, B=31;
+    // 0.14, not 0.30. The whole treeline and every canopy band sits BEHIND this pane, so at 0.30 the
+    // barrier was not marking a limit so much as laying a sheet of green glass over the entire horizon —
+    // the jungle outside read as translucent slabs rather than as jungle. At 0.14 the limit is still
+    // visible where you walk into it and the scenery beyond keeps its own colour.
+    const mat=new THREE.MeshBasicMaterial({map:tex, color:0xbfe8c6, transparent:true, opacity:0.14,
+                                           depthWrite:false, side:THREE.DoubleSide, fog:true});
+    [[0,-B,0],[0,B,0],[-B,0,Math.PI/2],[B,0,Math.PI/2]].forEach(([px,pz,ry])=>{
+      const m=new THREE.Mesh(new THREE.PlaneGeometry(B*2,H), mat);
+      m.position.set(px,H/2,pz); m.rotation.y=ry; m.renderOrder=2; scene.add(m);
+    });
+  })();
+
+  // ---- everything OUTSIDE the basin ----
+  // The map's own ground slab is 64 wide and the shared distantGround plane took over past it, which is a
+  // flat unbroken green sheet running to the horizon -- correct as a backing, useless as scenery. This is
+  // the Greek map's treatment adapted to a jungle: a ragged treeline just outside the clamp so the stop has
+  // a visible reason, then bands of canopy and finally ridges receding into the fog, so every direction you
+  // look has a profile instead of a plane. None of it has colliders -- the clamp already does the stopping,
+  // and none of it is reachable anyway.
+  let fbSeq = 0;                       // instance counter, feeds the jitter hash below
+  const farBark  = voxMat(0x4a3a28,{noise:12});
+  const farCanopy= voxMat(0x36542c,{noise:16});
+  const farDeep  = voxMat(0x27402a,{noise:14});
+  const farHaze  = voxMat(0x3e5a42,{noise:10});
+  const farBloom = voxMat(0x8c4630,{noise:12});
+  // Scatter geometry shares planes constantly: neighbouring blocks in a ring are the same size, and a
+  // formula like `y = h/2 - 5` gives every single one of them the same underside. The jitter below is a
+  // deterministic hash of the position, so each block's size and seating differ by a few centimetres --
+  // enough that no two faces ever coincide, far too little to see.
+  const fb=(w,h,d,mat,x,y,z)=>{
+    // THREE independent hashes, not one. Driving all six values off a single number means two blocks that
+    // happen to hash alike move and grow identically, and land right back on each other's planes -- which
+    // is exactly what the first version did to a handful of them.
+    const hash=(a,b,c)=>{ const n=Math.sin(a*12.9898 + b*78.233 + c*37.719)*43758.5453; return n-Math.floor(n); };
+    // ...seeded with a per-instance counter as well as the position. Position alone still lets two blocks
+    // collide by coincidence, and with ~600 of them out here coincidences happen; the counter makes every
+    // block's jitter unique by construction rather than by luck.
+    const k = ++fbSeq;
+    const j1 = hash(x+k*0.37, z, h), j2 = hash(z*1.7, h*2.3+k*0.53, x*0.9), j3 = hash(h*3.1, x*1.3, z*2.7+k*0.71);
+    // The hash alone is a lottery -- widening it just reshuffles which pairs happen to align. The `k%19`
+    // ladders are the structural part: they step size and seating through 19 fixed levels 0.011 apart,
+    // comfortably above the 0.005 tolerance, so two blocks can only share a face if they take the SAME
+    // rung, and blocks 19 apart in the build order are never neighbours out here.
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w*(1+j1*0.13) + (k%19)*0.011,
+                                                   h*(1+j2*0.11) + ((k+7)%19)*0.011,
+                                                   d*(1+j3*0.13) + ((k+13)%19)*0.011), mat);
+    m.position.set(x + (j2-0.5)*0.55, y + (j3-0.5)*0.9 + ((k+5)%19)*0.011, z + (j1-0.5)*0.55);
+    scene.add(m); return m;
+  };
+
+  // (a) the near treeline, just past the clamp: individual trees you can almost make out, so the edge of
+  // the basin reads as the jungle thickening rather than as the world stopping.
+  let etSeq = 0;
+  function edgeTree(x,z,seed){
+    if(Math.sin(seed*12.9) > 0.25) return;                   // gappy, so it never reads as a fence
+    // Height steps through 11 well-separated rungs before the noise is added. Purely noisy heights let two
+    // neighbouring trees land within a hair of each other, and since their canopies overlap heavily that
+    // is where nearly every remaining coplanar pair on this map came from.
+    const h = 4.4 + ((etSeq++) % 11)*0.42 + Math.abs(Math.sin(seed*5.3))*1.1;
+    fb(0.85, h, 0.85, farBark, x, h/2, z);
+    const tone = Math.sin(seed*7.1) > 0.55 ? farBloom : (seed%2 ? farCanopy : farDeep);
+    fb(3.4+Math.sin(seed*3.1)*1.1, 1.5, 3.4+Math.cos(seed*2.7)*1.1, tone, x, h*0.86, z);
+    fb(2.4+Math.cos(seed*4.3)*0.8, 1.2, 2.4+Math.sin(seed*3.9)*0.8, tone, x, h*0.86+0.9, z);
+  }
+  for(let t=-36; t<=36; t+=3.6){
+    edgeTree(t, -34.5, t*1.7);   edgeTree(t,  34.5, t*2.3+11);
+    edgeTree(-34.5, t, t*1.9+5); edgeTree( 34.5, t, t*2.7+23);
+  }
+
+  // (b) mid-distance canopy: no trunks at this range, just the lumpy roof of the forest. Two bands so the
+  // jungle has depth rather than one wall of green.
+  for(let ring=0; ring<3; ring++){
+    const R = 46 + ring*17, step = 5.5 + ring*2;
+    for(let a=0; a<Math.PI*2; a+=step/R){
+      const j = Math.sin(a*7.3+ring*3.1);
+      const r = R + j*5.5;
+      const h = 5.0 + Math.abs(Math.sin(a*4.1+ring))*5.5 - ring*0.9;
+      fb(7+j*2.5, h, 7+Math.cos(a*3.3)*2.5, ring===0 ? farDeep : farHaze,
+         Math.cos(a)*r, h/2 - 1.0, Math.sin(a)*r);
+    }
+  }
+
+  // (c) ridges on the horizon, out past the haze band at 82 and right at the edge of the 155-unit fog, so
+  // they dissolve into atmosphere instead of standing there as a solid rim.
+  for(let a=0; a<Math.PI*2; a+=0.15){
+    const r = 108 + Math.sin(a*3.7)*16;
+    const h = 12 + Math.abs(Math.sin(a*2.3))*20;
+    fb(26, h, 26, farHaze, Math.cos(a)*r, h/2 - 5, Math.sin(a)*r);
+  }
 })();
 
 const mexicoOverworld = new THREE.Group();
@@ -11779,10 +11928,15 @@ startBtn.addEventListener('click', pressStart);
 startBtn.addEventListener('touchstart', pressStart, {passive:false});
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === renderer.domElement;
-  // The booth releases pointer lock on purpose. Without this guard that would raise the START overlay
-  // over the panel, and the click that dismissed it would land as a fresh startGame().
-  lockEl.style.display = (locked || boothOpen) ? 'none' : 'flex';
-  if(locked && !boothOpen && (!gameStarted || gameWon)) startGame();
+  // losing the lock (the booth, the admin panel, Esc) is the third way a keyup never arrives
+  if(!locked) releaseAllInput();
+  // The booth and the admin panel both release pointer lock on purpose. Without this guard that raises
+  // the START overlay OVER the panel — so the panel looks like it never opened, the click that dismisses
+  // the overlay lands as a fresh startGame(), and you are left unlocked and unable to move. Any future
+  // overlay that drops pointer lock has to be listed here too.
+  const overlayUp = boothOpen || adminOpen;
+  lockEl.style.display = (locked || overlayUp) ? 'none' : 'flex';
+  if(locked && !overlayUp && (!gameStarted || gameWon)) startGame();
 });
 
 let yaw = 0, pitch = 0;              // actual (smoothed) camera angles
@@ -11808,6 +11962,16 @@ const JUMP_V = 5.2, JUMP_G = 14;     // ~0.97 units at the apex, about a metre
 const MAXSPEED = 7.5;                          // player walk speed, units/second
 const RAMP_SLOPE = 1/1.45;                     // the slope every ramp in the maps is built to
 const CLIMB_RATE = MAXSPEED * RAMP_SLOPE * 1.2;
+// How fast playerHeight closes on the ground under it. CLIMB_RATE above caps big changes (a fall off a
+// ledge); this governs the small continuous ones, and climbing a ramp is exactly that case. The height
+// trails the ground by roughly MAXSPEED * RAMP_SLOPE / HEIGHT_EASE, and at the 10 this used to be that
+// came to 0.43 -- against stair treads 0.45 tall, so climbing ANY staircase in the game sank the player
+// very nearly a whole step into it and the steps passed through the camera. Measured on the steepest
+// stair in the game (La Venta's, 9 units) at full speed: 10 -> 0.431, 18 -> 0.201, 26 -> 0.113,
+// 30 -> 0.086. 30 keeps it under a fifth of a step. Large drops are still smooth because CLIMB_RATE,
+// not this, is what limits them.
+const HEIGHT_EASE = 30;
+const BOT_FALL = 22;   // how fast an enemy drops to ground it has walked off, units/second
 const lastPos = {x:0, z:0};          // previous frame's position, to measure actual displacement
 let netTimer = 0;                    // seconds of continuous movement input, for the net-displacement check
 const netAnchor = {x:0, z:0};        // where that window started
@@ -12146,6 +12310,102 @@ function returnToHub(){
   clearBots();                         // anything still standing out there does not follow you home
   enterHub('🛶 Home in Cairo — the booth is in the bazaar');
 }
+// ===================== ADMIN PANEL =====================
+// Opened by pressing Z, X, C in order. Replaces the old single-key cheats, which fired on a bare keypress
+// and so could alter a run by accident, and which were invisible unless you read the source.
+//
+// Everything here is a flag read at the point it matters -- fire() for ammo and damage, damagePlayer() for
+// god mode, the movement block for flight. Nothing here reaches into game state directly except "skip to
+// the end", which is a one-shot action rather than a toggle.
+const admin = { infAmmo:false, instaKill:false, fly:false };
+let adminOpen = false;
+let flyY = 0;                       // height above the terrain while flying, in units
+
+// ---- the Z,X,C unlock ----
+// Order matters and the run resets on any other key, so it cannot be hit by accident while moving. There
+// is no timeout: a timer would make it fail under a lag spike, and there is nothing to protect here.
+const ADMIN_SEQ = ['KeyZ','KeyX','KeyC'];
+let adminSeqAt = 0;
+function adminSeqStep(code){
+  if(code === ADMIN_SEQ[adminSeqAt]){
+    adminSeqAt++;
+    if(adminSeqAt === ADMIN_SEQ.length){ adminSeqAt = 0; return true; }
+    return false;
+  }
+  // a wrong key restarts the run -- but if that key is itself the first of the sequence, it starts a new one
+  adminSeqAt = (code === ADMIN_SEQ[0]) ? 1 : 0;
+  return false;
+}
+
+const ADMIN_ITEMS = [
+  {key:'infAmmo',   label:'♾  Infinite ammo',  get:()=>admin.infAmmo,   set:v=>{ admin.infAmmo=v; setAmmoHUD(); }},
+  {key:'god',       label:'🛡  God mode',       get:()=>godMode,         set:v=>{ godMode=v; }},
+  {key:'instaKill', label:'💀  Insta kill',     get:()=>admin.instaKill, set:v=>{ admin.instaKill=v; }},
+  {key:'fly',       label:'🕊  Flight',         get:()=>admin.fly,       set:v=>{
+      admin.fly=v;
+      if(v){ flyY = 0; jumpY = 0; jumpV = 0; }
+      else {
+        // Dropping out of flight inside geometry would leave the player sealed in it, so land them on the
+        // ground under wherever they are and, if that spot is solid, on the nearest clear one.
+        flyY = 0;
+        const sp = insideCollider(camera.position.x, camera.position.z, 0.45, playerHeight)
+                 ? nearestFreeSpot(camera.position.x, camera.position.z, 0.45, playerHeight)
+                 : [camera.position.x, camera.position.z];
+        camera.position.x = sp[0]; camera.position.z = sp[1];
+        playerHeight = getTerrainHeight(sp[0], sp[1], undefined);
+        camera.position.y = playerHeight + 1.7;
+        vel.set(0,0,0);
+      }
+    }},
+  // The one action rather than a toggle: the campaign's end state, which is walking into Cairo with the
+  // Egypt arc behind you. Carries enough stars to actually use the travel booth when you get there.
+  {key:'skip', action:true, label:'⏭  Skip to the end', state:'RUN',
+   run:()=>{
+     clearBots();
+     currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
+     bossActive=false; showBossBar(false); pending=null;
+     tripDest=null; tripWave=0; tripCleared=false;
+     if(player.score < 200) player.score = 200;
+     closeAdmin();
+     enterHub('🏆 Skipped to Cairo — the booth in the bazaar sells passage onward 🎟');
+   }},
+];
+
+function renderAdmin(){
+  const host = document.getElementById('adminrows'); if(!host) return;
+  host.innerHTML = '';
+  ADMIN_ITEMS.forEach(it=>{
+    const on = it.action ? false : it.get();
+    const row = document.createElement('button');
+    row.className = 'adminrow' + (it.action ? ' act' : (on ? ' on' : ''));
+    row.innerHTML = '<span>' + it.label + '</span><span class="state">' +
+                    (it.action ? it.state : (on ? 'ON' : 'OFF')) + '</span>';
+    row.addEventListener('click', ()=>{
+      if(it.action) it.run(); else { it.set(!it.get()); renderAdmin(); }
+    });
+    host.appendChild(row);
+  });
+}
+function openAdmin(){
+  if(adminOpen || paused) return;
+  adminOpen = true; firing = false;
+  document.body.classList.add('admin');
+  if(document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+  releaseAllInput();          // no key may be left held down behind the panel
+  renderAdmin();
+}
+function closeAdmin(){
+  if(!adminOpen) return;
+  adminOpen = false;
+  document.body.classList.remove('admin');
+  if(!isTouch && !paused) renderer.domElement.requestPointerLock();   // same as closeBooth()
+}
+// clicking the backdrop (not the box) closes it, matching the booth overlay
+{
+  const ao = document.getElementById('adminoverlay');
+  if(ao) ao.addEventListener('click', e => { if(e.target === ao) closeAdmin(); });
+}
+// ======================================================
 function openBooth(){
   if(boothOpen || paused) return;
   boothOpen = true; firing = false;
@@ -12173,6 +12433,10 @@ document.addEventListener('keydown', e => {
     if (e.code==='Escape' || e.code==='KeyE'){ e.preventDefault(); closeBooth(); }
     return;
   }
+  if (adminOpen){
+    if (e.code==='Escape' || e.code==='KeyC'){ e.preventDefault(); closeAdmin(); }
+    return;                       // the panel swallows everything else while it is up
+  }
   if (e.code==='KeyP' || e.code==='Escape'){
     if (gameStarted && !gameWon){ paused?resumeGame():pauseGame(); }
   }
@@ -12185,28 +12449,14 @@ document.addEventListener('keydown', e => {
   if (paused) return;
   if (e.code==='KeyE' && nearBooth()){ openBooth(); return; }
   if (e.code==='KeyE' && nearRaft()){ returnToHub(); return; }
-  // ==================== DEBUG KEYS ====================
-  // Shipped deliberately: the owner wants these available on the public build. They are undocumented
-  // in the HUD, but this is a single unminified HTML file, so treat them as public knowledge — anyone
-  // who opens the source can find them. Do not build anything that assumes a run was played honestly.
-  // K: instantly kills every living enemy on screen (wave, boss, Nile wave — whatever's active).
-  if (e.code==='KeyK' && player.alive){
-    bots.forEach(b=>{ if(b.alive) damageBot(b, 99999, b.mesh.position); });
-  }
-  // H: jump straight to the Cairo hub, exactly as beating the Colosseum Champion does.
-  if (e.code==='KeyH' && player.alive){
-    clearBots();
-    currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
-    if(player.score < 120) player.score = 120;   // enough ⭐ in hand to exercise the booth's prices
-    enterHub('🕌 Jumped to the Cairo hub — booth is at (0, -6)');
-  }
-  // G: toggles infinite health — damagePlayer() no-ops while godMode is true.
-  if (e.code==='KeyG'){
-    godMode = !godMode;
-    setBanner(godMode ? '🛡 GOD MODE ON' : '🛡 god mode off');
-    setTimeout(()=>{ if(bannerEl && bannerEl.textContent.toLowerCase().includes('god mode')) setBanner(''); },1200);
-  }
-  // ====================================================
+  // ==================== ADMIN PANEL UNLOCK ====================
+  // The single-key cheats (K kill-all, H skip-to-hub, G god mode) are gone. They fired on a bare keypress,
+  // which meant a stray finger during a fight silently altered the run, and they were undiscoverable
+  // except by reading the source. Everything they did now lives behind Z, X, C pressed in that order and
+  // is visible and toggleable in one place. This is still a single unminified HTML file, so treat the
+  // sequence as public knowledge: do not build anything that assumes a run was played honestly.
+  if (!boothOpen && adminSeqStep(e.code)) { openAdmin(); return; }
+  // ============================================================
   keys[e.code]=true;
   if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && document.pointerLockElement===renderer.domElement) setScope(true);
   if (e.code==='Digit1') selectWeapon(0);
@@ -12257,6 +12507,15 @@ if(pauseOverlay){
 
 // ===================== MOBILE TOUCH CONTROLS =====================
 const moveVec = {x:0, z:0};          // analog movement from the left joystick (-1..1)
+// Drop every held input. A keyup is only delivered to a focused document, so alt-tabbing, clicking away,
+// or anything that takes pointer lock (the booth, the admin panel) while W is down leaves keys['KeyW']
+// true forever -- you come back to the game walking with nothing pressed. The trigger already had a
+// safety net for exactly this; the keyboard did not.
+function releaseAllInput(){
+  for(const k in keys) keys[k] = false;
+  moveVec.x = 0; moveVec.z = 0;
+  vel.set(0,0,0);
+}
 let touchPlaying = false;            // mobile "playing" flag (no pointer lock on touch)
 const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints>0) || matchMedia('(pointer: coarse)').matches;
 const mobileEl = document.getElementById('mobile');
@@ -12871,7 +13130,7 @@ function fire(){
     gunGroup.rotation.x -= 0.13;
     camera.getWorldDirection(_fwd);
     const hit = firstHit(camera.position, _fwd, w.hybridRange);
-    if(hit && hit.bot){ damageBot(hit.bot, w.hybridMelee, hit.point); showHitmarker(); SFX.hitmark(); }
+    if(hit && hit.bot){ damageBot(hit.bot, admin.instaKill?1e9:w.hybridMelee, hit.point); showHitmarker(); SFX.hitmark(); }
     return;                      // a jab spends no dart, which is the point of carrying it
   }
   if(now - lastShot < w.fireRate) return;
@@ -12883,13 +13142,14 @@ function fire(){
     gunGroup.rotation.x -= 0.16; // swing kick — every weapon gets a visible kick now, not just the position punch
     camera.getWorldDirection(_fwd);
     const hit = firstHit(camera.position, _fwd, w.range||2.4);
-    if(hit && hit.bot){ damageBot(hit.bot, w.damage, hit.point); showHitmarker(); SFX.hitmark(); }
+    if(hit && hit.bot){ damageBot(hit.bot, admin.instaKill?1e9:w.damage, hit.point); showHitmarker(); SFX.hitmark(); }
     return;
   }
-  if(w.reloading) return;
-  if(w.ammo<=0){ lastShot = now; SFX.dryFire(); return; }
+  if(w.reloading && !admin.infAmmo) return;
+  if(w.ammo<=0 && !admin.infAmmo){ lastShot = now; SFX.dryFire(); return; }
   lastShot = now;
-  w.ammo--; setAmmoHUD();
+  if(!admin.infAmmo) w.ammo--;
+  setAmmoHUD();
   if(w.slingAnim){ w.pullT = 1; w.animT = 0; } // (re)triggers the draw/release cycle in animate()
   // distinct player weapon sound
   if(w.name==='Zahra Gun') SFX.playerZahra();
@@ -12920,7 +13180,7 @@ function fire(){
   }
   spawnTracer(mw, end, w.tracer);
   if(hit && hit.bot){
-    damageBot(hit.bot, w.damage, hit.point);
+    damageBot(hit.bot, admin.instaKill?1e9:w.damage, hit.point);
     showHitmarker(); SFX.hitmark();
   }
 }
@@ -13226,6 +13486,23 @@ function animate(){
     camera.position.z += vel.z * dt;
     camera.position.x = Math.max(-playClamp, Math.min(playClamp, camera.position.x));
     camera.position.z = Math.max(-playClamp, Math.min(playClamp, camera.position.z));
+    // ---- flight (admin panel) ----
+    // Space rises, Shift descends, and both collision and the terrain climb are skipped: a flight toggle
+    // that still walked into walls would not be flight. The play-area clamp above still applies, so you
+    // cannot leave the map — and turning flight off lands you on real ground (see the toggle's setter).
+    // targetGroundY is read by the stuck watchdog further down, outside this branch, so it is declared
+    // here rather than inside the walking path. Flying, it is set to playerHeight so the watchdog sees no
+    // mismatch -- being above the ground is the entire point, not a fault to correct.
+    let targetGroundY = playerHeight;
+    if(admin.fly){
+      const FLY = 9;
+      if(keys['Space']) flyY += FLY*dt;
+      if(keys['ShiftLeft'] || keys['ShiftRight']) flyY -= FLY*dt;
+      playerHeight = getTerrainHeight(camera.position.x, camera.position.z, undefined);
+      if(flyY < 0) flyY = 0;                       // never below the ground under you
+      camera.position.y = playerHeight + 1.7 + flyY;
+      targetGroundY = playerHeight;
+    } else {
     // solid buildings/props: push the player out of any collider (unless standing on its roof already)
     let [rx,rz] = resolveCollision(camera.position.x, camera.position.z, 0.45, playerHeight);
     if(rx!==camera.position.x) vel.x=0;   // kill velocity into a wall so you don't stutter against it
@@ -13243,9 +13520,9 @@ function animate(){
     // getTerrainHeight() is passed the player's current height so it can ignore a ramp zone entirely when
     // walking under/beside it at ground level (see the continuity check inside it) — you no longer float up
     // just from passing underneath a ramp — plus a rate cap as a second layer against any remaining edge case.
-    const targetGroundY = getTerrainHeight(camera.position.x, camera.position.z, playerHeight);
+    targetGroundY = getTerrainHeight(camera.position.x, camera.position.z, playerHeight);
     const maxHeightStep = CLIMB_RATE*dt;
-    playerHeight += Math.max(-maxHeightStep, Math.min(maxHeightStep, (targetGroundY - playerHeight) * Math.min(1, dt*10)));
+    playerHeight += Math.max(-maxHeightStep, Math.min(maxHeightStep, (targetGroundY - playerHeight) * Math.min(1, dt*HEIGHT_EASE)));
     // The jump is an offset ON TOP of the eased terrain height, never a replacement for it: walking off
     // a ledge mid-jump still hands you back to the terrain, and colliders are full-height regardless of
     // the mesh, so jumping can never carry you over a wall.
@@ -13255,6 +13532,7 @@ function animate(){
       if(jumpY <= 0){ jumpY = 0; jumpV = 0; }
     }
     camera.position.y = playerHeight + 1.7 + jumpY;
+    }   // end of the non-flying movement path
     // camera shake (the colossus's quake stomp triggers this) — decays each frame, applied as a pure visual
     // offset on top of the real position so it never affects movement/collision state
     if(shakeAmt > 0){
@@ -13822,7 +14100,12 @@ function animate(){
     // beside, it has to walk the ramp like anyone else.
     {
       const tgt = getTerrainHeight(b.mesh.position.x, b.mesh.position.z, b.groundY || 0);
-      const step = CLIMB_RATE*dt;
+      // Asymmetric on purpose. Climbing is a smooth ease at the same rate the player gets, because a
+      // stair should be walked up rather than snapped up. Falling is NOT: at the climb rate a bot that
+      // steps off a ramp glides down over a third of a second, and while that reads as fine in first
+      // person, from the outside it is an enemy hanging in mid-air. BOT_FALL is quick enough to read as
+      // falling and still not a teleport.
+      const step = (tgt > (b.groundY||0) ? CLIMB_RATE : BOT_FALL) * dt;
       b.groundY = (b.groundY === undefined) ? tgt
                 : b.groundY + Math.max(-step, Math.min(step, tgt - b.groundY));
       b.mesh.position.y = b.groundY + (ud.hoverBase !== undefined
