@@ -499,6 +499,15 @@ class AudioContextStub {
   createStereoPanner(){ return audioNode({pan:new AudioParamStub()}); }
   createWaveShaper(){ return audioNode({curve:null,oversample:'none'}); }
   createConvolver(){ return audioNode(); }
+  // startGame() builds the audio graph, so a missing node type here makes the whole real start path
+  // untestable -- which is how the campaign went unexercised end to end for so long.
+  createDelay(){ return audioNode({delayTime:new AudioParamStub()}); }
+  createChannelSplitter(){ return audioNode(); }
+  createChannelMerger(){ return audioNode(); }
+  createPanner(){ return audioNode({positionX:new AudioParamStub(),positionY:new AudioParamStub(),
+                                    positionZ:new AudioParamStub(),setPosition(){},setOrientation(){}}); }
+  createConstantSource(){ return audioNode({offset:new AudioParamStub()}); }
+  decodeAudioData(){ return Promise.resolve(this.createBuffer(1,1,44100)); }
   createAnalyser(){ return audioNode({fftSize:2048,frequencyBinCount:1024,getByteFrequencyData(){},getByteTimeDomainData(){}}); }
   resume(){ return Promise.resolve(); }
   close(){ return Promise.resolve(); }

@@ -136,6 +136,27 @@
   #wcera{font-size:12px;opacity:0.78;margin-top:3px}
   #wcstate{font-size:14px;font-weight:800;margin-top:7px}
   #boothhint{margin-top:14px;font-size:13px;text-align:center;opacity:0.7}
+  /* ---- admin panel (Z,X,C) ---- */
+  #adminoverlay{position:absolute;inset:0;z-index:12;display:none;align-items:center;justify-content:center;
+    background:radial-gradient(120% 130% at 50% 40%, rgba(4,10,8,0.92) 0%, rgba(2,5,4,0.97) 100%)}
+  body.admin #adminoverlay{display:flex}
+  body.admin #crosshair,body.admin #prompt,body.admin #boothmarker{display:none !important}
+  #adminbox{min-width:min(440px,92vw);padding:22px 26px;border:2px solid #3fd08a;border-radius:12px;
+    background:rgba(6,16,12,0.92);box-shadow:0 14px 50px rgba(0,0,0,0.8), inset 0 0 60px rgba(0,0,0,0.5);
+    color:#dff5e8;font-family:inherit}
+  #admintitle{font-size:20px;font-weight:900;letter-spacing:3px;color:#7fffc4;text-align:center;
+    text-shadow:0 2px 0 #06301f,0 0 18px rgba(70,255,180,0.3);margin-bottom:4px}
+  #adminsub{font-size:12px;text-align:center;opacity:0.62;margin-bottom:16px}
+  .adminrow{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;
+    padding:10px 12px;margin-bottom:8px;border:1px solid rgba(63,208,138,0.35);border-radius:8px;
+    background:rgba(0,0,0,0.3);font-size:15px;font-weight:700;cursor:pointer;
+    font-family:inherit;color:#dff5e8;text-align:left}
+  .adminrow:hover{background:rgba(63,208,138,0.14);border-color:rgba(63,208,138,0.7)}
+  .adminrow .state{font-size:13px;font-weight:900;letter-spacing:1px;padding:3px 10px;border-radius:12px;
+    background:rgba(255,255,255,0.07);color:#8c9a93;white-space:nowrap}
+  .adminrow.on .state{background:rgba(63,208,138,0.22);color:#7fffc4}
+  .adminrow.act .state{background:rgba(255,200,90,0.18);color:#ffd978}
+  #adminhint{margin-top:14px;font-size:12px;text-align:center;opacity:0.6}
 </style>
 </head>
 <body>
@@ -164,6 +185,12 @@
     <div id="worldcard"><div id="wcname"></div><div id="wcera"></div><div id="wcstate"></div></div>
   </div>
   <div id="boothhint">Hover a destination · click to buy passage · [E] or [Esc] to leave</div>
+</div></div>
+<div id="adminoverlay"><div id="adminbox">
+  <div id="admintitle">ADMIN</div>
+  <div id="adminsub">Z · X · C</div>
+  <div id="adminrows"></div>
+  <div id="adminhint">click a row to toggle · [Esc] or [C] to close</div>
 </div></div>
 <div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button></div>
 <div id="mobile">
@@ -6799,15 +6826,21 @@ heightZoneTarget = heightZonesMexico;
   (function boundaryBarrier(){
     const P=128, c=_mkCanvas(P), bx=c.getContext('2d');
     const g=bx.createLinearGradient(0,P,0,0);
+    // fades out far lower than the Greek map's version: there the barrier stands over open water, here
+    // it stands in front of a treeline, and tint carried up the full height washed all of it out
     g.addColorStop(0.00,'rgba(255,255,255,0.95)');
-    g.addColorStop(0.25,'rgba(255,255,255,0.85)');
-    g.addColorStop(0.45,'rgba(255,255,255,0.50)');
-    g.addColorStop(0.70,'rgba(255,255,255,0.18)');
+    g.addColorStop(0.12,'rgba(255,255,255,0.62)');
+    g.addColorStop(0.28,'rgba(255,255,255,0.26)');
+    g.addColorStop(0.45,'rgba(255,255,255,0.07)');
     g.addColorStop(1.00,'rgba(255,255,255,0.00)');
     bx.fillStyle=g; bx.fillRect(0,0,P,P);
     const tex=new THREE.CanvasTexture(c); tex.anisotropy=maxAniso;
     const H=90, B=31;
-    const mat=new THREE.MeshBasicMaterial({map:tex, color:0x9fd9a8, transparent:true, opacity:0.30,
+    // 0.14, not 0.30. The whole treeline and every canopy band sits BEHIND this pane, so at 0.30 the
+    // barrier was not marking a limit so much as laying a sheet of green glass over the entire horizon —
+    // the jungle outside read as translucent slabs rather than as jungle. At 0.14 the limit is still
+    // visible where you walk into it and the scenery beyond keeps its own colour.
+    const mat=new THREE.MeshBasicMaterial({map:tex, color:0xbfe8c6, transparent:true, opacity:0.14,
                                            depthWrite:false, side:THREE.DoubleSide, fog:true});
     [[0,-B,0],[0,B,0],[-B,0,Math.PI/2],[B,0,Math.PI/2]].forEach(([px,pz,ry])=>{
       const m=new THREE.Mesh(new THREE.PlaneGeometry(B*2,H), mat);
@@ -11895,10 +11928,15 @@ startBtn.addEventListener('click', pressStart);
 startBtn.addEventListener('touchstart', pressStart, {passive:false});
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === renderer.domElement;
-  // The booth releases pointer lock on purpose. Without this guard that would raise the START overlay
-  // over the panel, and the click that dismissed it would land as a fresh startGame().
-  lockEl.style.display = (locked || boothOpen) ? 'none' : 'flex';
-  if(locked && !boothOpen && (!gameStarted || gameWon)) startGame();
+  // losing the lock (the booth, the admin panel, Esc) is the third way a keyup never arrives
+  if(!locked) releaseAllInput();
+  // The booth and the admin panel both release pointer lock on purpose. Without this guard that raises
+  // the START overlay OVER the panel — so the panel looks like it never opened, the click that dismisses
+  // the overlay lands as a fresh startGame(), and you are left unlocked and unable to move. Any future
+  // overlay that drops pointer lock has to be listed here too.
+  const overlayUp = boothOpen || adminOpen;
+  lockEl.style.display = (locked || overlayUp) ? 'none' : 'flex';
+  if(locked && !overlayUp && (!gameStarted || gameWon)) startGame();
 });
 
 let yaw = 0, pitch = 0;              // actual (smoothed) camera angles
@@ -11933,6 +11971,7 @@ const CLIMB_RATE = MAXSPEED * RAMP_SLOPE * 1.2;
 // 30 -> 0.086. 30 keeps it under a fifth of a step. Large drops are still smooth because CLIMB_RATE,
 // not this, is what limits them.
 const HEIGHT_EASE = 30;
+const BOT_FALL = 22;   // how fast an enemy drops to ground it has walked off, units/second
 const lastPos = {x:0, z:0};          // previous frame's position, to measure actual displacement
 let netTimer = 0;                    // seconds of continuous movement input, for the net-displacement check
 const netAnchor = {x:0, z:0};        // where that window started
@@ -12271,6 +12310,102 @@ function returnToHub(){
   clearBots();                         // anything still standing out there does not follow you home
   enterHub('🛶 Home in Cairo — the booth is in the bazaar');
 }
+// ===================== ADMIN PANEL =====================
+// Opened by pressing Z, X, C in order. Replaces the old single-key cheats, which fired on a bare keypress
+// and so could alter a run by accident, and which were invisible unless you read the source.
+//
+// Everything here is a flag read at the point it matters -- fire() for ammo and damage, damagePlayer() for
+// god mode, the movement block for flight. Nothing here reaches into game state directly except "skip to
+// the end", which is a one-shot action rather than a toggle.
+const admin = { infAmmo:false, instaKill:false, fly:false };
+let adminOpen = false;
+let flyY = 0;                       // height above the terrain while flying, in units
+
+// ---- the Z,X,C unlock ----
+// Order matters and the run resets on any other key, so it cannot be hit by accident while moving. There
+// is no timeout: a timer would make it fail under a lag spike, and there is nothing to protect here.
+const ADMIN_SEQ = ['KeyZ','KeyX','KeyC'];
+let adminSeqAt = 0;
+function adminSeqStep(code){
+  if(code === ADMIN_SEQ[adminSeqAt]){
+    adminSeqAt++;
+    if(adminSeqAt === ADMIN_SEQ.length){ adminSeqAt = 0; return true; }
+    return false;
+  }
+  // a wrong key restarts the run -- but if that key is itself the first of the sequence, it starts a new one
+  adminSeqAt = (code === ADMIN_SEQ[0]) ? 1 : 0;
+  return false;
+}
+
+const ADMIN_ITEMS = [
+  {key:'infAmmo',   label:'♾  Infinite ammo',  get:()=>admin.infAmmo,   set:v=>{ admin.infAmmo=v; setAmmoHUD(); }},
+  {key:'god',       label:'🛡  God mode',       get:()=>godMode,         set:v=>{ godMode=v; }},
+  {key:'instaKill', label:'💀  Insta kill',     get:()=>admin.instaKill, set:v=>{ admin.instaKill=v; }},
+  {key:'fly',       label:'🕊  Flight',         get:()=>admin.fly,       set:v=>{
+      admin.fly=v;
+      if(v){ flyY = 0; jumpY = 0; jumpV = 0; }
+      else {
+        // Dropping out of flight inside geometry would leave the player sealed in it, so land them on the
+        // ground under wherever they are and, if that spot is solid, on the nearest clear one.
+        flyY = 0;
+        const sp = insideCollider(camera.position.x, camera.position.z, 0.45, playerHeight)
+                 ? nearestFreeSpot(camera.position.x, camera.position.z, 0.45, playerHeight)
+                 : [camera.position.x, camera.position.z];
+        camera.position.x = sp[0]; camera.position.z = sp[1];
+        playerHeight = getTerrainHeight(sp[0], sp[1], undefined);
+        camera.position.y = playerHeight + 1.7;
+        vel.set(0,0,0);
+      }
+    }},
+  // The one action rather than a toggle: the campaign's end state, which is walking into Cairo with the
+  // Egypt arc behind you. Carries enough stars to actually use the travel booth when you get there.
+  {key:'skip', action:true, label:'⏭  Skip to the end', state:'RUN',
+   run:()=>{
+     clearBots();
+     currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
+     bossActive=false; showBossBar(false); pending=null;
+     tripDest=null; tripWave=0; tripCleared=false;
+     if(player.score < 200) player.score = 200;
+     closeAdmin();
+     enterHub('🏆 Skipped to Cairo — the booth in the bazaar sells passage onward 🎟');
+   }},
+];
+
+function renderAdmin(){
+  const host = document.getElementById('adminrows'); if(!host) return;
+  host.innerHTML = '';
+  ADMIN_ITEMS.forEach(it=>{
+    const on = it.action ? false : it.get();
+    const row = document.createElement('button');
+    row.className = 'adminrow' + (it.action ? ' act' : (on ? ' on' : ''));
+    row.innerHTML = '<span>' + it.label + '</span><span class="state">' +
+                    (it.action ? it.state : (on ? 'ON' : 'OFF')) + '</span>';
+    row.addEventListener('click', ()=>{
+      if(it.action) it.run(); else { it.set(!it.get()); renderAdmin(); }
+    });
+    host.appendChild(row);
+  });
+}
+function openAdmin(){
+  if(adminOpen || paused) return;
+  adminOpen = true; firing = false;
+  document.body.classList.add('admin');
+  if(document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+  releaseAllInput();          // no key may be left held down behind the panel
+  renderAdmin();
+}
+function closeAdmin(){
+  if(!adminOpen) return;
+  adminOpen = false;
+  document.body.classList.remove('admin');
+  if(!isTouch && !paused) renderer.domElement.requestPointerLock();   // same as closeBooth()
+}
+// clicking the backdrop (not the box) closes it, matching the booth overlay
+{
+  const ao = document.getElementById('adminoverlay');
+  if(ao) ao.addEventListener('click', e => { if(e.target === ao) closeAdmin(); });
+}
+// ======================================================
 function openBooth(){
   if(boothOpen || paused) return;
   boothOpen = true; firing = false;
@@ -12298,6 +12433,10 @@ document.addEventListener('keydown', e => {
     if (e.code==='Escape' || e.code==='KeyE'){ e.preventDefault(); closeBooth(); }
     return;
   }
+  if (adminOpen){
+    if (e.code==='Escape' || e.code==='KeyC'){ e.preventDefault(); closeAdmin(); }
+    return;                       // the panel swallows everything else while it is up
+  }
   if (e.code==='KeyP' || e.code==='Escape'){
     if (gameStarted && !gameWon){ paused?resumeGame():pauseGame(); }
   }
@@ -12310,28 +12449,14 @@ document.addEventListener('keydown', e => {
   if (paused) return;
   if (e.code==='KeyE' && nearBooth()){ openBooth(); return; }
   if (e.code==='KeyE' && nearRaft()){ returnToHub(); return; }
-  // ==================== DEBUG KEYS ====================
-  // Shipped deliberately: the owner wants these available on the public build. They are undocumented
-  // in the HUD, but this is a single unminified HTML file, so treat them as public knowledge — anyone
-  // who opens the source can find them. Do not build anything that assumes a run was played honestly.
-  // K: instantly kills every living enemy on screen (wave, boss, Nile wave — whatever's active).
-  if (e.code==='KeyK' && player.alive){
-    bots.forEach(b=>{ if(b.alive) damageBot(b, 99999, b.mesh.position); });
-  }
-  // H: jump straight to the Cairo hub, exactly as beating the Colosseum Champion does.
-  if (e.code==='KeyH' && player.alive){
-    clearBots();
-    currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
-    if(player.score < 120) player.score = 120;   // enough ⭐ in hand to exercise the booth's prices
-    enterHub('🕌 Jumped to the Cairo hub — booth is at (0, -6)');
-  }
-  // G: toggles infinite health — damagePlayer() no-ops while godMode is true.
-  if (e.code==='KeyG'){
-    godMode = !godMode;
-    setBanner(godMode ? '🛡 GOD MODE ON' : '🛡 god mode off');
-    setTimeout(()=>{ if(bannerEl && bannerEl.textContent.toLowerCase().includes('god mode')) setBanner(''); },1200);
-  }
-  // ====================================================
+  // ==================== ADMIN PANEL UNLOCK ====================
+  // The single-key cheats (K kill-all, H skip-to-hub, G god mode) are gone. They fired on a bare keypress,
+  // which meant a stray finger during a fight silently altered the run, and they were undiscoverable
+  // except by reading the source. Everything they did now lives behind Z, X, C pressed in that order and
+  // is visible and toggleable in one place. This is still a single unminified HTML file, so treat the
+  // sequence as public knowledge: do not build anything that assumes a run was played honestly.
+  if (!boothOpen && adminSeqStep(e.code)) { openAdmin(); return; }
+  // ============================================================
   keys[e.code]=true;
   if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && document.pointerLockElement===renderer.domElement) setScope(true);
   if (e.code==='Digit1') selectWeapon(0);
@@ -12382,6 +12507,15 @@ if(pauseOverlay){
 
 // ===================== MOBILE TOUCH CONTROLS =====================
 const moveVec = {x:0, z:0};          // analog movement from the left joystick (-1..1)
+// Drop every held input. A keyup is only delivered to a focused document, so alt-tabbing, clicking away,
+// or anything that takes pointer lock (the booth, the admin panel) while W is down leaves keys['KeyW']
+// true forever -- you come back to the game walking with nothing pressed. The trigger already had a
+// safety net for exactly this; the keyboard did not.
+function releaseAllInput(){
+  for(const k in keys) keys[k] = false;
+  moveVec.x = 0; moveVec.z = 0;
+  vel.set(0,0,0);
+}
 let touchPlaying = false;            // mobile "playing" flag (no pointer lock on touch)
 const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints>0) || matchMedia('(pointer: coarse)').matches;
 const mobileEl = document.getElementById('mobile');
@@ -12996,7 +13130,7 @@ function fire(){
     gunGroup.rotation.x -= 0.13;
     camera.getWorldDirection(_fwd);
     const hit = firstHit(camera.position, _fwd, w.hybridRange);
-    if(hit && hit.bot){ damageBot(hit.bot, w.hybridMelee, hit.point); showHitmarker(); SFX.hitmark(); }
+    if(hit && hit.bot){ damageBot(hit.bot, admin.instaKill?1e9:w.hybridMelee, hit.point); showHitmarker(); SFX.hitmark(); }
     return;                      // a jab spends no dart, which is the point of carrying it
   }
   if(now - lastShot < w.fireRate) return;
@@ -13008,13 +13142,14 @@ function fire(){
     gunGroup.rotation.x -= 0.16; // swing kick — every weapon gets a visible kick now, not just the position punch
     camera.getWorldDirection(_fwd);
     const hit = firstHit(camera.position, _fwd, w.range||2.4);
-    if(hit && hit.bot){ damageBot(hit.bot, w.damage, hit.point); showHitmarker(); SFX.hitmark(); }
+    if(hit && hit.bot){ damageBot(hit.bot, admin.instaKill?1e9:w.damage, hit.point); showHitmarker(); SFX.hitmark(); }
     return;
   }
-  if(w.reloading) return;
-  if(w.ammo<=0){ lastShot = now; SFX.dryFire(); return; }
+  if(w.reloading && !admin.infAmmo) return;
+  if(w.ammo<=0 && !admin.infAmmo){ lastShot = now; SFX.dryFire(); return; }
   lastShot = now;
-  w.ammo--; setAmmoHUD();
+  if(!admin.infAmmo) w.ammo--;
+  setAmmoHUD();
   if(w.slingAnim){ w.pullT = 1; w.animT = 0; } // (re)triggers the draw/release cycle in animate()
   // distinct player weapon sound
   if(w.name==='Zahra Gun') SFX.playerZahra();
@@ -13045,7 +13180,7 @@ function fire(){
   }
   spawnTracer(mw, end, w.tracer);
   if(hit && hit.bot){
-    damageBot(hit.bot, w.damage, hit.point);
+    damageBot(hit.bot, admin.instaKill?1e9:w.damage, hit.point);
     showHitmarker(); SFX.hitmark();
   }
 }
@@ -13351,6 +13486,23 @@ function animate(){
     camera.position.z += vel.z * dt;
     camera.position.x = Math.max(-playClamp, Math.min(playClamp, camera.position.x));
     camera.position.z = Math.max(-playClamp, Math.min(playClamp, camera.position.z));
+    // ---- flight (admin panel) ----
+    // Space rises, Shift descends, and both collision and the terrain climb are skipped: a flight toggle
+    // that still walked into walls would not be flight. The play-area clamp above still applies, so you
+    // cannot leave the map — and turning flight off lands you on real ground (see the toggle's setter).
+    // targetGroundY is read by the stuck watchdog further down, outside this branch, so it is declared
+    // here rather than inside the walking path. Flying, it is set to playerHeight so the watchdog sees no
+    // mismatch -- being above the ground is the entire point, not a fault to correct.
+    let targetGroundY = playerHeight;
+    if(admin.fly){
+      const FLY = 9;
+      if(keys['Space']) flyY += FLY*dt;
+      if(keys['ShiftLeft'] || keys['ShiftRight']) flyY -= FLY*dt;
+      playerHeight = getTerrainHeight(camera.position.x, camera.position.z, undefined);
+      if(flyY < 0) flyY = 0;                       // never below the ground under you
+      camera.position.y = playerHeight + 1.7 + flyY;
+      targetGroundY = playerHeight;
+    } else {
     // solid buildings/props: push the player out of any collider (unless standing on its roof already)
     let [rx,rz] = resolveCollision(camera.position.x, camera.position.z, 0.45, playerHeight);
     if(rx!==camera.position.x) vel.x=0;   // kill velocity into a wall so you don't stutter against it
@@ -13368,7 +13520,7 @@ function animate(){
     // getTerrainHeight() is passed the player's current height so it can ignore a ramp zone entirely when
     // walking under/beside it at ground level (see the continuity check inside it) — you no longer float up
     // just from passing underneath a ramp — plus a rate cap as a second layer against any remaining edge case.
-    const targetGroundY = getTerrainHeight(camera.position.x, camera.position.z, playerHeight);
+    targetGroundY = getTerrainHeight(camera.position.x, camera.position.z, playerHeight);
     const maxHeightStep = CLIMB_RATE*dt;
     playerHeight += Math.max(-maxHeightStep, Math.min(maxHeightStep, (targetGroundY - playerHeight) * Math.min(1, dt*HEIGHT_EASE)));
     // The jump is an offset ON TOP of the eased terrain height, never a replacement for it: walking off
@@ -13380,6 +13532,7 @@ function animate(){
       if(jumpY <= 0){ jumpY = 0; jumpV = 0; }
     }
     camera.position.y = playerHeight + 1.7 + jumpY;
+    }   // end of the non-flying movement path
     // camera shake (the colossus's quake stomp triggers this) — decays each frame, applied as a pure visual
     // offset on top of the real position so it never affects movement/collision state
     if(shakeAmt > 0){
@@ -13947,7 +14100,12 @@ function animate(){
     // beside, it has to walk the ramp like anyone else.
     {
       const tgt = getTerrainHeight(b.mesh.position.x, b.mesh.position.z, b.groundY || 0);
-      const step = CLIMB_RATE*dt;
+      // Asymmetric on purpose. Climbing is a smooth ease at the same rate the player gets, because a
+      // stair should be walked up rather than snapped up. Falling is NOT: at the climb rate a bot that
+      // steps off a ramp glides down over a third of a second, and while that reads as fine in first
+      // person, from the outside it is an enemy hanging in mid-air. BOT_FALL is quick enough to read as
+      // falling and still not a teleport.
+      const step = (tgt > (b.groundY||0) ? CLIMB_RATE : BOT_FALL) * dt;
       b.groundY = (b.groundY === undefined) ? tgt
                 : b.groundY + Math.max(-step, Math.min(step, tgt - b.groundY));
       b.mesh.position.y = b.groundY + (ud.hoverBase !== undefined
