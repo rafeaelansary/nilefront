@@ -37,7 +37,13 @@ FLOAT_TOUCH_EPS = 0.03
 
 # Which spawn points apply to which map. SPAWN_POINTS is shared by every wave-bearing
 # overworld; arenas and the Nile spawn their own way and are excluded.
-WAVE_MAPS = {"pyramidOverworld", "greekOverworld", "romanOverworld", "islamicOverworld"}
+# Maps whose spawn points get checked. mexicoOverworld was missing from this set, which meant its
+# "blocked spawns: ok" line was printed without anything being tested -- and it hid three enemy spawns
+# standing inside the pyramid. A destination is a wave-bearing map like any other.
+WAVE_MAPS = {"pyramidOverworld", "greekOverworld", "romanOverworld", "islamicOverworld",
+             "mexicoOverworld"}
+# Maps that use their own spawn coordinates instead of the shared SPAWN_POINTS list.
+MAP_SPAWNS = {"mexicoOverworld": "__laVentaSpawns"}
 PLAYER_ENTRY = {
     "pyramidOverworld": (0, 18),
     "greekOverworld": (0, 10),
@@ -268,12 +274,23 @@ def main():
         # blocked spawns
         bad_spawns = []
         if name in WAVE_MAPS:
+            pool = spawns
+            if name in MAP_SPAWNS:
+                pool = json.loads(ctx.eval("JSON.stringify(globalThis.%s||[])" % MAP_SPAWNS[name])) or spawns
             pts = [("player entry", PLAYER_ENTRY.get(name, (0, 10)), 0.9)]
-            pts += [(f"SPAWN[{i}]", tuple(p), 0.55) for i, p in enumerate(spawns)]
+            # 0.85 is the measured widest enemy radius, not 0.55: a spawn that only clears a narrow
+            # enemy still drops a manticore or a mud golem inside the scenery.
+            pts += [(f"SPAWN[{i}]", tuple(p), 0.85) for i, p in enumerate(pool)]
             for label, (sx, sz), rr in pts:
                 for b in cols:
                     x0, x1, z0, z1 = rect(b)
-                    if x0 - rr < sx < x1 + rr and z0 - rr < sz < z1 + rr:
+                    # Circular distance to the nearest point on the box -- the same test insideCollider()
+                    # uses in the game. Expanding the box as a SQUARE, which this did, is stricter at the
+                    # corners than the game is: it flagged spawns a clear 1.03 away as blocked because
+                    # they were inside a square that the circle never reaches.
+                    nx = min(max(sx, x0), x1)
+                    nz = min(max(sz, z0), z1)
+                    if (sx - nx) ** 2 + (sz - nz) ** 2 < rr * rr:
                         bad_spawns.append((label, (sx, sz), b))
                         break
 

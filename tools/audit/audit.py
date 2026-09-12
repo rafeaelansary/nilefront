@@ -52,6 +52,8 @@ def build_ctx(html_path):
 
 # Runs at the END of the game script, inside its scope, so every builder is in scope here.
 EXPORTS = """
+globalThis.__laVentaSpawns = (typeof LA_VENTA_WEST!=='undefined' && typeof LA_VENTA_EAST!=='undefined')
+  ? LA_VENTA_WEST.concat(LA_VENTA_EAST) : null;
 globalThis.__builders = {
   makeVoxelBot: typeof makeVoxelBot==='function' ? makeVoxelBot : null,
   makeMinotaur: typeof makeMinotaur==='function' ? makeMinotaur : null,
