@@ -14655,7 +14655,14 @@ function explodeAt(point){
   bots.forEach(b=>{
     if(!b.alive) return;
     const d = b.mesh.position.distanceTo(point);
-    if(d <= w.splashRadius){ damageBot(b, w.splashDamage * (1 - d/w.splashRadius*0.6), point); }
+    // admin.instaKill has to be honoured HERE too, not just on the hitscan paths. Greek Fire, the Grenade
+    // Launcher and the Naft Pot all carry damage:0 and do their killing entirely through this splash, so
+    // the three checks in fire() never applied to them — turning insta kill on did nothing at all for a
+    // third of the game's weapons. Damage falls off with distance, so a plain 1e9 is right: the whole
+    // point of the toggle is that anything caught in the blast dies.
+    if(d <= w.splashRadius){
+      damageBot(b, admin.instaKill ? 1e9 : w.splashDamage * (1 - d/w.splashRadius*0.6), point);
+    }
   });
   // visual fireball: expanding orange sphere + brief light + smoke puff, all faded via a shared pool
   const fMat = new THREE.MeshBasicMaterial({color:0xffa020, transparent:true, opacity:0.95, fog:false});
