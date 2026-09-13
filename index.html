@@ -157,6 +157,23 @@
   .adminrow.on .state{background:rgba(63,208,138,0.22);color:#7fffc4}
   .adminrow.act .state{background:rgba(255,200,90,0.18);color:#ffd978}
   #adminhint{margin-top:14px;font-size:12px;text-align:center;opacity:0.6}
+  /* ---- wave jump grid ---- */
+  /* One button per wave rather than a stepper: the eras are what you actually navigate by, and a grid
+     can group and colour them. Four rows of three falls out of the campaign's shape for free — each era
+     IS three waves, so every row is exactly one era. */
+  #adminjump{margin-top:14px;padding-top:12px;border-top:1px solid rgba(63,208,138,0.22)}
+  #adminjumplbl{font-size:12px;letter-spacing:2px;font-weight:900;opacity:0.72;margin-bottom:8px;text-align:center}
+  .jumpera{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .jumpera .eraname{flex:0 0 88px;font-size:11px;letter-spacing:1px;opacity:0.66;text-align:right}
+  .jumpera .waves{display:flex;gap:6px;flex:1}
+  .jumpbtn{flex:1;padding:7px 0;border-radius:6px;border:1px solid rgba(63,208,138,0.3);
+    background:rgba(0,0,0,0.3);color:#dff5e8;font-family:inherit;font-size:14px;font-weight:900;
+    cursor:pointer}
+  .jumpbtn:hover{background:rgba(63,208,138,0.18);border-color:rgba(63,208,138,0.75)}
+  .jumpbtn.here{background:rgba(63,208,138,0.26);border-color:#7fffc4;color:#7fffc4}
+  /* Cairo has no enemies by design, so its three waves are marked as the quiet ones rather than looking
+     like fights you can jump into and then wonder why nothing comes. */
+  .jumpbtn.quiet{opacity:0.5}
 </style>
 </head>
 <body>
@@ -190,7 +207,11 @@
   <div id="admintitle">ADMIN</div>
   <div id="adminsub">Z · X · C</div>
   <div id="adminrows"></div>
-  <div id="adminhint">click a row to toggle · [Esc] or [C] to close</div>
+  <div id="adminjump">
+    <div id="adminjumplbl">⏩ JUMP TO WAVE</div>
+    <div id="adminjumprows"></div>
+  </div>
+  <div id="adminhint">click a row to toggle · click a wave to jump · [Esc] or [C] to close</div>
 </div></div>
 <div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button></div>
 <div id="mobile">
@@ -244,8 +265,15 @@ const BOOTH_POS = {x:0, z:0};
 let inHub = false;
 let boothOpen = false;
 let boothBeacon = null;   // the crystal at the head of the booth's light shaft; spun by the animate loop
-const RAFT_POS = {x:0, z:0};   // La Venta's landing raft — the way home, filled in when that map builds
+// There is no raft. A trip used to end at a physical return interactable — walk to the landing, press [E],
+// sail home — and both Mexican maps carried one. It is gone: the Mexico arc now MOVES you, at the two
+// moments that matter. The Jade-Heart Shaman's death carries you from La Venta to Tenochtitlan, and
+// clearing Tenochtitlan carries you home to Cairo. Nothing to walk back to, so no RAFT_POS/AZTEC_RAFT,
+// no nearRaft(), and no [E] handler for it.
 let tripDest = null;      // which destination you are currently away in, or null when home
+// Which leg of a multi-map trip you are on — an index into the destination's `legs`. Mexico is the first
+// destination with more than one (La Venta, then Tenochtitlan); single-map destinations just stay at 0.
+let tripLeg = 0;
 let godMode = false;   // toggled by [G] — see the debug keys in the keydown handler
 // ---- collision registry (top-down AABB rectangles; buildings/props are full-height blockers) ----
 const colliders = [];            // original overworld colliders
@@ -260,6 +288,7 @@ const colosseumColliders = [];   // Roman boss arena colliders (Boss III — the
 const ifritColliders = [];       // Islamic boss arena colliders (Boss IV — the Ifrit King; the Citadel courtyard)
 const islamicColliders = [];     // Islamic/Mamluk Cairo overworld colliders (waves 10-12)
 const mexicoColliders = [];      // La Venta basin colliders (Olmec Mexico — the first booth destination)
+const aztecColliders = [];       // Tenochtitlan colliders (the Mexico trip's second leg, reached from La Venta)
 let addTarget = colliders;       // where addBox pushes during world build
 let activeColliders = colliders; // which set physics currently uses
 function addBox(cx,cz,w,d,roofY){ addTarget.push({x1:cx-w/2, z1:cz-d/2, x2:cx+w/2, z2:cz+d/2, roofY}); }
@@ -277,6 +306,7 @@ const heightZonesGreek = [];
 const heightZonesRoman = [];
 const heightZonesIslamic = [];
 const heightZonesMexico = [];    // the Great Pyramid's stair and summit
+const heightZonesAztec = [];     // the Templo Mayor's twin stair and summit deck
 let heightZoneTarget = heightZonesOriginal;   // where sniperTower()/plaza() push during world build
 let activeHeightZones = heightZonesPyramid;   // which set getTerrainHeight() reads at runtime (pyramid phase starts active)
 function getTerrainHeight(x,z,curH){
@@ -1102,6 +1132,24 @@ function lateriteTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
     const n=Math.abs(Math.sin(i*18.3+j*57.1)*43758.5%1);
     x.fillStyle=tones[(n*4)|0]; x.fillRect(i,j,1,1);
     if(n>0.94){ x.fillStyle='#c08a5a'; x.fillRect(i,j,1,1); }   // gravel flecks
+  }
+  return c;
+}
+// Tezontle: the porous red volcanic rock Tenochtitlan was actually built out of. Its vesicles are the
+// whole character of the stone, so the holes are drawn rather than left to voxMat's noise — at the size a
+// temple tier is drawn, noise alone resolves to a flat wash (the same failure the Nile banks had).
+function tezontleTex(){ const P=32,c=_mkCanvas(P),x=c.getContext('2d');
+  const tones=['#8a3c2e','#7a3326','#9a4736','#6b2b20'];
+  for(let j=0;j<P;j++)for(let i=0;i<P;i++){
+    const n=Math.abs(Math.sin(i*21.7+j*43.3)*43758.5%1);
+    x.fillStyle=tones[(n*4)|0]; x.fillRect(i,j,1,1);
+  }
+  // the vesicles themselves: dark pits with a lit lower lip, which is what makes the rock read as porous
+  for(let k=0;k<46;k++){
+    const n=Math.abs(Math.sin(k*7.13)*9371.3%1), m=Math.abs(Math.sin(k*3.91)*4375.7%1);
+    const px=(n*P)|0, py=(m*P)|0, s=1+((k%3)===0?1:0);
+    x.fillStyle='rgba(0,0,0,0.42)'; x.fillRect(px,py,s,s);
+    x.fillStyle='rgba(255,190,160,0.20)'; x.fillRect(px,py+s,s,1);
   }
   return c;
 }
@@ -2932,7 +2980,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 // the invariant "at most one world group in the scene" holds no matter what state the flags are in.
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
-  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
 }
 function enterDungeon(){
   dungeonWasPyramid = pyramidPhase; // false during era 1 (Greek) — the only other era currently reachable
@@ -6911,19 +6959,9 @@ heightZoneTarget = heightZonesMexico;
     }
   }
 
-  // ---- the landing raft: how you got here, and how you leave ----
-  // A bound-log raft with its pole, at the south approach beside the processional stair. The Olmec moved
-  // multi-tonne basalt heads by river raft, so it is the right vehicle for this place — and it gives the
-  // trip a physical way home instead of a menu. Registered as the return interactable below.
-  (function raft(x,z){
-    for(let i=0;i<7;i++) lb(0.42, 0.26, 4.4, barkMat, x - 1.26 + i*0.42, 0.11, z);   // bound logs
-    [-1.9,1.9].forEach(oz=> lb(3.1, 0.16, 0.22, clayDark, x, 0.26, z+oz));            // lashings
-    lcy(0.09,0.11, 3.4, 6, barkMat, x+1.5, 1.7, z-0.6);                               // punt pole
-    lb(0.6,0.5,0.6, clayDark, x-1.0, 0.44, z+1.2);                                    // a bundle of cargo
-    lb(0.44,0.34,0.44, jadeMat, x-1.0, 0.86, z+1.2);
-    RAFT_POS.x = x; RAFT_POS.z = z;
-    addBox(x, z, 3.2, 4.6);
-  })(6.5, 25.5);
+  // No raft at the south approach. There used to be one here and it was the way home; the Mexico arc now
+  // moves the player itself (Shaman down → Tenochtitlan, Tenochtitlan clear → Cairo), so a boat on the
+  // shore would be a prop promising an interaction that no longer exists.
 
   // ---- torches on the pyramid's stair, so the climb reads at a distance ----
   [[-4.2,19.0],[4.2,19.0],[-4.2,15.4],[4.2,15.4]].forEach(([tx,tz])=>{
@@ -7076,6 +7114,456 @@ scene.children.slice().forEach(o=>{
   if(o===sky || o.isLight || o===distantGround || o===horizonHaze) return;
   if(o===overworld || o===pyramidOverworld || o===greekOverworld || o===romanOverworld || o===islamicOverworld) return;
   mexicoOverworld.add(o);
+});
+
+// ============ TENOCHTITLAN (Aztec Mexico) — the Mexico trip's SECOND LEG ============
+// Reached from La Venta, not from the booth: killing the Jade-Heart Shaman carries the player straight
+// here. One country, one purchase, two maps — the same mid-arc swap Egypt already does three times.
+//
+// The island is the map and the lake is the border. Every other world in this game ends in a wall, a
+// cliff or a soft pane; here the ground simply runs out at a quay and the water goes on to the horizon,
+// which is the one thing the crossing has to pay off. Three causeways break the quay (Tepeyac north,
+// Tlacopan west, Iztapalapa south) and run out over the water into the fog.
+//
+// Palette is deliberately the opposite of La Venta's: red tezontle and white lime plaster on blue water,
+// against that basin's green-on-green. Two Mexican maps in one trip have to be told apart at a glance.
+addTarget = aztecColliders;
+heightZoneTarget = heightZonesAztec;
+(function buildTenochtitlan(){
+  const tezontle   = new THREE.MeshLambertMaterial({map:_finish(tezontleTex(),6)});
+  const tezDark    = voxMat(0x5a2a20,{noise:16});
+  const plaster    = voxMat(0xe4dcc4,{noise:10});
+  const plasterDk  = voxMat(0xbfb49a,{noise:12});
+  const basaltMat  = new THREE.MeshLambertMaterial({map:_finish(basaltTex(),3)});
+  const basaltDark = voxMat(0x26262a,{noise:12});
+  const shrineRed  = voxMat(0xb23a2c,{noise:12});    // Huitzilopochtli's house, on the south half of the deck
+  const shrineBlue = voxMat(0x2f79a8,{noise:12});    // Tlaloc's, on the north — the rain god took the wet side
+  const ochre      = voxMat(0xc89440,{noise:14});
+  const gold       = voxMat(0xd8a838,{noise:10});
+  const jadeMat    = voxMat(0x3f8f6a,{noise:12});
+  const boneMat    = voxMat(0xe0d8bc,{noise:8});
+  const plankMat   = new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(),2)});
+  const barkMat    = new THREE.MeshLambertMaterial({map:_finish(logTex(),2)});
+  const leafMat    = new THREE.MeshLambertMaterial({map:_finish(leavesTex(),2)});
+  const cropMat    = voxMat(0x6f9c3e,{noise:16});
+  const maizeMat   = voxMat(0xb0a044,{noise:14});
+  const thatchMat  = voxMat(0x9a8348,{noise:18});
+
+  const lb=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  const lcy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+
+  // ---- the island, and the lake it sits in ----
+  // The island slab is 58 across, which is exactly the +/-29 the player is clamped to: the rim of the
+  // ground IS the edge of the world. It is kept thin (bottom at -0.5) so it does not read as buried
+  // geometry to the "nothing solid under the map" sweep — La Venta's slab escapes that check only by
+  // being wider than the window the check looks through, which is luck rather than design.
+  const groundMat = new THREE.MeshLambertMaterial({map:_finish(claySurfaceTex(),40)});
+  const ground = new THREE.Mesh(new THREE.BoxGeometry(58,0.5,58), groundMat);
+  ground.position.set(0,-0.25,0); ground.receiveShadow=true; scene.add(ground);
+  // Lake Texcoco. Huge on purpose: it has to still be water where the fog takes over, or the island reads
+  // as floating on nothing. Its surface sits BELOW the island's, so the quay has a visible freeboard.
+  const lakeMat = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),90), transparent:true, opacity:0.92});
+  const lake = new THREE.Mesh(new THREE.BoxGeometry(300,0.5,300), lakeMat);
+  lake.position.set(0,-0.60,0); lake.receiveShadow=true; scene.add(lake);   // top face at -0.35
+
+  // Ground overlays, stacked exactly as La Venta stacks them: 0.05 thick on a 0.06 step from 0.04, so
+  // every layer clears the one beneath and nothing is left to fight for pixels. polygonOffset biases
+  // depth; it does not separate geometry, and two overlays lying on each other are both biased against
+  // the ground and neither against the other.
+  const OVERLAY_H = 0.05, OVERLAY_STEP = 0.06, OVERLAY_BASE = 0.04;
+  const flat=(tex,repeat,x,z,w,d,layer,extra)=>{
+    const L = layer||0;
+    const o = Object.assign({map:_finish(tex,repeat), polygonOffset:true,
+                             polygonOffsetFactor:-(2+L*2), polygonOffsetUnits:-(2+L*2)}, extra||{});
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w,OVERLAY_H,d), new THREE.MeshLambertMaterial(o));
+    m.position.set(x, OVERLAY_BASE + L*OVERLAY_STEP, z); m.receiveShadow=true; scene.add(m); return m;
+  };
+
+  // ---- paving: the sacred precinct round the temple, the great plaza south of it ----
+  flat(harbourFlagstoneTex(), 14, 0, -1.0, 30.0, 26.0, 0);    // precinct floor
+  flat(cobbleTex(),           16, 0, 18.5, 40.0, 17.0, 1);    // the great plaza, laid over it where they meet
+
+  // ================= THE TEMPLO MAYOR — twin pyramid, dead centre =================
+  // Two shrines on one platform is the whole point of the building: Tlaloc and Huitzilopochtli side by
+  // side, and TWO stairways up the south face to reach them, divided by a shared central balustrade.
+  // That double stair is what stops it reading as another La Venta pyramid.
+  //
+  // Height 8 and a stair run of 8*1.45, for the same reason La Venta's is 9: getTerrainHeight() ignores a
+  // ramp whose height is more than 1.5 from where the player currently is, and the climb is rate-capped,
+  // so anything steeper than ~0.69 locks the player out partway up and stops them dead at the wall.
+  const TM_TOP = 8.0;
+  const TM_TIERS = [
+    {w:22.0, d:17.0, h:2.2, y:0.0},
+    {w:18.6, d:14.2, h:2.0, y:2.2},
+    {w:15.2, d:11.4, h:1.9, y:4.2},
+    {w:11.8, d: 8.6, h:1.9, y:6.1},
+  ];
+  TM_TIERS.forEach((t,i)=>{
+    // -0.06 on the bottom tier: it stands on a ground slab whose top face IS y=0, and a base plane at
+    // exactly 0 would share that plane across the whole footprint.
+    const y0 = i===0 ? -0.06 : t.y;
+    const h  = i===0 ? t.h+0.06 : t.h;
+    lb(t.w, h, t.d, tezontle, 0, y0 + h/2, 0);
+    // Each tier is finished with a plastered talud band and a darker capping course, so the silhouette
+    // steps clearly instead of merging into one red mass at distance.
+    lb(t.w+0.22, 0.30, t.d+0.22, plaster,  0, t.y + t.h - 0.30, 0);
+    lb(t.w+0.36, 0.22, t.d+0.36, tezDark,  0, t.y + t.h - 0.04, 0);
+  });
+  // summit deck: plastered floor with a low parapet round the back and sides
+  lb(11.8, 0.26, 8.6, plaster, 0, TM_TOP - 0.05, 0);
+  // The parapets used to be built on the deck's own dimensions — same 11.8 width, same 8.6 depth, and a
+  // base sitting exactly on the deck's top face. That gave each one THREE coplanar planes with the deck
+  // (both ends in x, the back in z, and the seam in y) and they are the four dead-zero entries the
+  // coplanar check reports at (0, 8.3, -4). Inset slightly and sunk 0.03 into the deck instead, so every
+  // face has somewhere of its own to be and the join is an overlap rather than a shared plane.
+  // The north and side parapets also have to clear EACH OTHER where they meet at the corners, not just the
+  // deck — matching them to one another simply moved the coplanar pair from deck-vs-parapet to
+  // parapet-vs-parapet. The north run is deliberately a different height, depth and inset from the sides,
+  // so all three boxes overlap at the corners without any two faces landing within 0.006.
+  lb(11.0, 0.46, 0.46, plasterDk, 0, TM_TOP + 0.29, -4.05);                  // north parapet
+  [-1,1].forEach(sd=> lb(0.5, 0.42, 8.54, plasterDk, sd*5.6, TM_TOP + 0.26, 0));   // east/west parapets
+
+  // The collider is FOUR boxes with a notch cut for the twin stairway, never one slab over the footprint.
+  // A single box would block the building's own stair: the roof rule only switches a collider off once
+  // the terrain under it is within 0.4 of the roof, so the whole face below ~7.6 would stay solid and the
+  // player would stop dead partway up. The notch (x -5.7..5.7 south of the deck) is left uncovered, and
+  // everything standing inside it carries its own collider instead.
+  addBox(0,    -6.4, 22.0,  4.2, TM_TOP);    // north of the deck, full width
+  addBox(-8.35, 0.0,  5.3, 17.0, TM_TOP);    // west of the stair notch
+  addBox( 8.35, 0.0,  5.3, 17.0, TM_TOP);    // east of the stair notch
+  heightZoneTarget.push({type:'plateau', x1:-5.7, z1:-4.3, x2:5.7, z2:4.3, y:TM_TOP});
+
+  // ---- the twin stair, running SOUTH off the deck edge and out across the precinct ----
+  // Both flights start at the DECK edge (z=4.3), not the base edge, so each ramp zone runs continuously
+  // from the top to the ground. A gap between the zone and the deck strands the player at the wall with
+  // nothing to step up onto — the failure the Roman temple and the Pharos both taught.
+  const ST_Z0 = 4.3, ST_Z1 = 4.3 + TM_TOP*1.45, ST_N = 24;
+  const ST_DZ = (ST_Z1-ST_Z0)/ST_N;
+  // Across x the stair has to TILE: outer balustrade, flight, central balustrade, flight, outer
+  // balustrade, laid edge to edge with nothing left over. It did not. The flight width was written as
+  // 3.2 — the same number as the flight CENTRE — so each flight spanned only 1.6..4.8 and four slots ran
+  // the full length of the stair: 0.85 wide either side of the central balustrade, 0.10 outside each
+  // flight. They went all the way down, so you could see through the stair to the ground under it.
+  // Every width below is now DERIVED from the neighbouring edges rather than written independently, so
+  // the pieces cannot drift out of contact again.
+  const BAL_C = 1.5, BAL_O = 0.9;                   // central (a shared double) and outer balustrade widths
+  const ST_XOUT = 5.7;                              // the stair's outer edge — the pyramid collider's edge
+  const FL_X0 = BAL_C/2, FL_X1 = ST_XOUT - BAL_O;   // 0.75 .. 4.8: one flight's inner and outer edge
+  const FL_W  = FL_X1 - FL_X0, FL_C = (FL_X0 + FL_X1)/2;
+  const FLIGHT = [-FL_C, FL_C];                     // the two stairway centres
+  FLIGHT.forEach(fx=>{
+    for(let i=0;i<ST_N;i++){
+      const f = i/(ST_N-1);
+      const z = ST_Z1 - f*(ST_Z1-ST_Z0);
+      const y = f*TM_TOP;
+      const h = Math.max(0.18, y);
+      lb(FL_W, h, ST_DZ + 0.12, i%2 ? tezontle : tezDark, fx, h/2 - 0.05, z);
+    }
+  });
+  // Three balustrades: one outside each flight and the shared double one down the middle. They stand in
+  // the collider notch that makes the stair climbable, so each needs a collider of its own — without one
+  // the player walks straight into a balustrade, which reads as a height glitch and used to trip the
+  // stuck-recovery watchdog on La Venta's stair.
+  // Centres derived from the same edges the flights use: the outer pair sit flush against ST_XOUT, which
+  // also stops them poking 0.1 into the pyramid's own collider the way the old ±5.35 did.
+  [[-(ST_XOUT-BAL_O/2), BAL_O], [0, BAL_C], [ST_XOUT-BAL_O/2, BAL_O]].forEach(([bx,bw])=>{
+    for(let i=0;i<ST_N;i+=2){
+      const f=i/(ST_N-1), z=ST_Z1-f*(ST_Z1-ST_Z0), y=f*TM_TOP;
+      lb(bw, Math.max(0.55,y+0.55), ST_DZ+0.1, plasterDk, bx, Math.max(0.275,(y+0.55)/2)-0.05, z);
+      addBox(bx, z, bw, ST_DZ+0.1);
+    }
+    // the serpent head each balustrade terminates in, at the foot of the stair
+    const sy = 0.34;
+    lb(bw+0.34, 0.62, 1.5, tezDark,  bx, sy+0.31, ST_Z1+0.85);
+    lb(bw+0.16, 0.30, 0.6, plaster,  bx, sy+0.90, ST_Z1+1.20);      // the snout
+    [-1,1].forEach(sd=> lb(0.20,0.18,0.18, gold, bx+sd*(bw*0.28), sy+0.80, ST_Z1+1.44));   // eyes
+    for(let k=0;k<4;k++) lb(0.13,0.22,0.10, boneMat, bx-0.30+k*0.20, sy+0.62, ST_Z1+1.50); // fangs
+    // ST_Z1+1.25 / depth 1.7, not +1.0 / 2.2: at 2.2 the head's collider reached back to z=15.8 and lapped
+    // 0.39 into the bottom balustrade block's own collider, which ends at 16.19. Two solids fighting over
+    // the same ground at the foot of the stair is exactly where a player gets shoved sideways.
+    addBox(bx, ST_Z1+1.25, bw+0.34, 1.7);
+  });
+  // One ramp zone per flight, with the central balustrade's collider between them: you have to pick a
+  // side, which is what a double stairway is for.
+  // Same derived edges as the flight meshes, so the climbable strip is exactly the stair you can see —
+  // it used to be the old 1.6..4.8 flight, which is why widening the treads alone would not have been enough.
+  heightZoneTarget.push({type:'ramp', x1:-FL_X1, x2:-FL_X0, z1:ST_Z0, z2:ST_Z1, y1:TM_TOP, y2:0});
+  heightZoneTarget.push({type:'ramp', x1: FL_X0, x2: FL_X1, z1:ST_Z0, z2:ST_Z1, y1:TM_TOP, y2:0});
+
+  // ---- the two shrines on the deck ----
+  // Tlaloc north in blue and white, Huitzilopochtli south in red. Their colliders carry no roofY, so they
+  // are solid at every height — they sit inside the summit plateau, which no ground-level collider covers,
+  // and the only way anyone reaches that ground is by climbing the stair to it.
+  const shrine=(sx, col, trimA, trimB)=>{
+    lb(4.0, 0.26, 3.4, plaster, sx, TM_TOP+0.21, -0.5);           // its own low platform
+    lb(3.6, 2.30, 3.0, col,     sx, TM_TOP+1.49, -0.5);           // the house
+    lb(1.2, 1.70, 0.3, basaltDark, sx, TM_TOP+1.19, 0.86);        // the doorway, facing the stair
+    lb(3.9, 0.26, 3.3, plaster, sx, TM_TOP+2.77, -0.5);           // cornice
+    // the roof comb: the tall pierced crest that made these visible across the whole lake
+    lb(3.3, 1.25, 0.45, trimA,  sx, TM_TOP+3.52, -0.5);
+    for(let k=0;k<4;k++) lb(0.34, 0.60, 0.52, trimB, sx-1.20+k*0.80, TM_TOP+4.42+(k%2)*0.16, -0.5);
+    lb(3.5, 0.20, 0.60, plaster, sx, TM_TOP+3.00, -0.5);          // the comb's footing
+    addBox(sx, -0.5, 4.0, 3.4);
+  };
+  shrine(-3.05, shrineBlue, plaster,  shrineBlue);
+  shrine( 3.05, shrineRed,  plaster,  shrineRed);
+  // a sacrificial stone between the two doorways, which is where the boss makes his entrance
+  lcy(0.62,0.72,0.55,10, basaltMat, 0, TM_TOP+0.40, 1.55);
+  lb(1.5,0.12,1.5, jadeMat, 0, TM_TOP+0.74, 1.55);
+
+  // ================= THE QUAY, AND THE THREE CAUSEWAYS =================
+  // The island's rim. Waist-high so it stops you without closing the view: the lake past it is the whole
+  // reason this map looks different from the basin you just left.
+  const QUAY = 28.2, GATE = 3.6;
+  const wall=(cx,cz,w,d)=>{
+    lb(w, 1.10, d, tezontle,   cx, 0.52, cz);
+    lb(w+0.20, 0.18, d+0.20, plasterDk, cx, 1.13, cz);   // plastered capping, seated over the wall's top
+    addBox(cx, cz, w, d);
+  };
+  // North, west and south each break for a causeway; the east shore is unbroken, as it was.
+  // The side walls stop at +/-27.8 rather than running to the corner, so no two of these overlap — the
+  // collider audit treats any overlap over 0.02 as a fault, and a lapped corner is the easy way to get one.
+  [[-1,'z'],[1,'z']].forEach(()=>{});
+  const RUN = 29.0 - 0.0;
+  // north (z = -QUAY) and south (z = +QUAY), split either side of their gate
+  [-1, 1].forEach(sd=>{
+    const cz = sd*QUAY;
+    const halfLen = (RUN - GATE)/2;
+    [-1,1].forEach(sx=> wall(sx*(GATE + halfLen/1)/1*0 + sx*(GATE+halfLen)/1*0 + sx*((GATE+RUN)/2), cz, RUN-GATE, 0.8));
+  });
+  // west (x = -QUAY), split either side of its gate; east (x = +QUAY) unbroken
+  {
+    const halfLen = (RUN - GATE)/2;
+    [-1,1].forEach(sz=> wall(-QUAY, sz*((GATE+RUN)/2), 0.8, RUN-GATE));
+    wall(QUAY, 0, 0.8, 2*27.8);
+  }
+
+  // The causeways themselves: a paved road flush with the ground (so nothing has to be climbed), kerbed
+  // in stone, running out past the clamp and into the fog. Only the kerbs inside the play area get
+  // colliders; past +/-29 the player cannot reach them anyway.
+  const causeway=(axisX, sd)=>{
+    const OUT = 62;
+    for(let t=0;t<26;t++){
+      // 27.7, not 27.0: the tile is 1.4 deep and centred on `at`, so starting at 27.0 put its near edge at
+      // 26.3 — 0.7 INSIDE the great plaza, which ends at 27.0 and sits on the same overlay layer. Two
+      // co-planar surfaces over the full 7.2 width of the road, which is the streaked mess you walk onto.
+      // At 27.7 the first tile's near edge lands exactly on the plaza's far edge: they meet, they do not lap.
+      const at = sd*(27.7 + t*1.4);
+      if(Math.abs(at) > OUT) break;
+      const x = axisX ? at : 0, z = axisX ? 0 : at;
+      flat(harbourFlagstoneTex(), 2, x, z, axisX?1.4:GATE*2, axisX?GATE*2:1.4, 1);
+      [-1,1].forEach(k=>{
+        const kx = axisX ? at : k*GATE, kz = axisX ? k*GATE : at;
+        lb(axisX?1.4:0.5, 0.42, axisX?0.5:1.4, tezDark, kx, 0.18, kz);
+        if(Math.abs(at) < 28.6) addBox(kx, kz, axisX?1.4:0.5, axisX?0.5:1.4);
+      });
+    }
+  };
+  causeway(false, -1);   // Tepeyac, north
+  causeway(false,  1);   // Iztapalapa, south — the one the player lands on
+  causeway(true,  -1);   // Tlacopan, west
+
+  // No raft on the southern causeway either. Clearing the city IS the way home — see onAllDead()'s trip
+  // branch, which sends the player straight to Cairo once Tenochtitlan's last wave falls. The causeway is
+  // left open and empty on purpose: it runs out into the fog, which is the crossing, not a boat.
+
+  // ================= THE BALL COURT — west flank =================
+  // Tlachtli: an I-shaped court between two battered walls with a stone ring set high in each. The walls
+  // are the cover on this side of the map, which is why the west spawn pool sits behind them.
+  (function ballCourt(cx,cz){
+    [-1,1].forEach(sd=>{
+      lb(1.6, 2.60, 13.0, plaster,  cx + sd*3.6, 1.24, cz);        // the playing wall
+      lb(1.9, 0.26, 13.3, tezDark,  cx + sd*3.6, 2.67, cz);        // its capping
+      lb(1.2, 1.00, 13.0, plasterDk,cx + sd*2.9, 0.44, cz);        // the sloping bench at its foot
+      addBox(cx + sd*3.6, cz, 1.6, 13.0);
+      // The bench's collider covers only the part of it standing PROUD of the wall (0.5 of its 1.2), not
+      // its whole footprint: the bench mesh deliberately laps into the wall's base, so a full-width
+      // collider double-covered 0.7 x 13.0 of ground the wall already owned — the single biggest collider
+      // overlap on the map, running the entire length of the court on both sides.
+      addBox(cx + sd*2.55, cz, 0.5, 13.0);
+      // The ring, set INTO the wall's face. At sd*2.18 it hung 0.45 clear of the wall with nothing behind
+      // it — a stone hoop floating in the air over the bench, which is what the float check was reporting
+      // at (-18.2,10) and (-13.8,10). sd*2.8 is the wall's inner face, so the torus straddles it.
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62,0.17,7,14), basaltMat);
+      ring.position.set(cx + sd*2.8, 2.35, cz); ring.rotation.y = Math.PI/2; scene.add(ring);
+      // the end zones that make the court an I rather than a corridor
+      [-1,1].forEach(ez=> lb(5.4, 0.90, 2.0, plasterDk, cx + sd*2.6, 0.40, cz + ez*7.5));
+    });
+    flat(harbourFlagstoneTex(), 5, cx, cz, 4.6, 13.0, 2);          // the alley floor, over the precinct
+  })(-16.0, 10.0);
+
+  // ================= THE TZOMPANTLI — east flank =================
+  // The skull rack: rows of skulls threaded on horizontal poles between two uprights, on a low platform.
+  (function tzompantli(cx,cz){
+    lb(9.0, 0.80, 4.4, tezontle,  cx, 0.34, cz);
+    lb(9.4, 0.22, 4.8, plasterDk, cx, 0.85, cz);
+    addBox(cx, cz, 9.4, 4.8);
+    [-1,1].forEach(sd=> lcy(0.22,0.26, 4.0, 8, barkMat, cx + sd*3.9, 2.94, cz));   // uprights
+    for(let r=0;r<4;r++){
+      const ry = 1.34 + r*0.86;
+      lcy(0.11,0.11, 7.6, 6, barkMat, cx, ry, cz).rotation.z = Math.PI/2;          // the pole
+      for(let k=0;k<13;k++){
+        const n = Math.abs(Math.sin((r*7.1+k*3.3))*4375.7%1);
+        const sx = cx - 3.3 + k*0.55;
+        lb(0.36,0.38,0.34, boneMat, sx, ry + 0.30, cz + (n-0.5)*0.10);             // the skull
+        lb(0.26,0.10,0.06, basaltDark, sx, ry + 0.24, cz + 0.19);                  // its teeth
+        [-1,1].forEach(e=> lb(0.09,0.09,0.05, basaltDark, sx + e*0.09, ry + 0.38, cz + 0.18));  // sockets
+      }
+    }
+  })(16.0, 11.0);
+
+  // ================= THE ROUND TEMPLE OF EHECATL — north =================
+  // Ehecatl's temples were round so the wind would not catch a corner. A cylinder among all these
+  // rectangles is the landmark that orients you on the north half of the island.
+  (function ehecatl(cx,cz){
+    lcy(4.6,5.0, 1.60, 14, tezontle,  cx, 0.74, cz);
+    lcy(4.9,4.9, 0.24, 14, plasterDk, cx, 1.66, cz);
+    lcy(3.4,3.7, 2.40, 14, plaster,   cx, 2.98, cz);
+    lcy(3.7,3.7, 0.26, 14, tezDark,   cx, 4.31, cz);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(3.5, 2.6, 14), thatchMat);
+    cone.position.set(cx, 5.74, cz); cone.castShadow = true; scene.add(cone);
+    lb(1.4, 1.9, 0.4, basaltDark, cx, 2.86, cz + 3.62);     // the doorway, a serpent's open mouth
+    for(let k=0;k<5;k++) lb(0.20,0.26,0.12, boneMat, cx-0.52+k*0.26, 3.68, cz+3.74);
+    addBox(cx, cz, 10.0, 10.0);
+    // a short stair up to the door, with its own ramp zone — a stair with none is just a wall
+    for(let i=0;i<7;i++){
+      const y=(1-i/6)*1.55, h=Math.max(0.16,y);
+      lb(3.0, h, 0.62, tezDark, cx, h/2-0.05, cz + 5.2 + i*0.62);
+    }
+    heightZoneTarget.push({type:'ramp', x1:cx-1.4, x2:cx+1.4, z1:cz+5.0, z2:cz+9.4, y1:1.55, y2:0});
+    heightZoneTarget.push({type:'plateau', x1:cx-3.2, z1:cz-3.2, x2:cx+3.2, z2:cz+4.9, y:1.55});
+  })(0.0, -18.5);
+
+  // ================= CANALS =================
+  // Flat and walkable, with no colliders, for the same reason La Venta's tar seeps are: the enemies here
+  // path by walking into things and sliding along them (moveActor -> resolveCollision), and a long
+  // wall-like collider is exactly what makes a chaser pile up against it rather than come at you. The
+  // bridges are the reading, not the rule — the cover on this map is the buildings, which are compact.
+  // Layers 1 and 2, not 0 and 1. A canal is cut THROUGH the paving, so it has to sit above it in the
+  // overlay stack — at layer 0 the mud bed shared its exact top face with the precinct floor (a 5.25 x 3.30
+  // overlap where the north-west canal crosses it) and the two fought for every pixel. Layers are the only
+  // thing that separates overlays here: polygonOffset biases each one against the GROUND, so two overlays
+  // lying on each other are both biased and neither is biased against the other.
+  const canal=(x,z,w,d)=>{
+    flat(bogMudTex(), 5, x, z, w+0.5, d+0.5, 1);
+    flat(waterRippleTex(), 6, x, z, w, d, 2, {transparent:true, opacity:0.86});
+  };
+  canal(-19.0, -7.0, 18.0, 2.8);        // the north-west canal, running in from the west quay
+  canal( 21.0, -16.0, 2.8, 20.0);       // and the north-east, running down from the north quay
+  const bridge=(x,z,axisX)=>{
+    for(let i=0;i<7;i++) lb(axisX?0.56:4.4, 0.16, axisX?4.4:0.56,
+                            plankMat, x + (axisX? -1.68+i*0.56 : 0), 0.30, z + (axisX? 0 : -1.68+i*0.56));
+    [-1,1].forEach(sd=>{
+      const hx = axisX ? x + sd*2.0 : x, hz = axisX ? z : z + sd*2.0;
+      lb(axisX?0.3:4.6, 0.5, axisX?4.6:0.3, barkMat, hx, 0.62, hz);
+    });
+  };
+  bridge(-19.0, -7.0, false);
+  bridge(21.0, -16.0, true);
+
+  // ================= HOUSES AND PLATFORMS — the lived-in quarters =================
+  // Low flat-roofed adobe blocks in the two northern quarters. These are the map's real cover: compact,
+  // separately colliding, and nowhere near long enough for anything to get stuck sliding along.
+  const house=(x,z,w,d,h,rot)=>{
+    lb(w, h, d, plaster, x, h/2 - 0.04, z, rot);
+    lb(w+0.24, 0.22, d+0.24, plasterDk, x, h + 0.05, z, rot);     // the roof parapet
+    lb(w*0.24, h*0.62, 0.22, basaltDark, x, h*0.31, z + d/2 + 0.02, rot);   // a dark doorway
+    addBox(x, z, w + 0.24, d + 0.24);
+  };
+  [[-20.5,-15.5,5.0,4.2,2.4],[-13.5,-18.5,4.4,4.0,2.0],[-23.5,-21.0,4.6,3.8,2.2],
+   // -23.0, not -22.0: at -22 this house's collider reached x=-19.78 and clipped 0.62 x 0.92 into the ball
+   // court's west wall. Moved west rather than south, because south runs it into the house at (-24,-2.5).
+   [-12.0,-12.0,3.8,3.6,2.6],[-23.0,2.0,4.2,4.6,2.2],[-24.0,-2.5,3.6,3.4,1.9],
+   [ 13.0,-20.5,4.6,4.0,2.3],[ 24.0,-22.0,4.4,4.2,2.0],[ 14.5,-8.0,4.0,3.8,2.5],
+   [ 24.5,-6.0,4.2,4.4,2.2],[ 22.0, 20.0,4.6,4.0,2.4],[-21.5, 20.5,4.4,3.8,2.2]]
+    .forEach(([x,z,w,d,h])=> house(x,z,w,d,h,0));
+
+  // ---- braziers along the plaza, the map's warm light against all that blue ----
+  [[-9.5,19.0],[9.5,19.0],[-9.5,24.5],[9.5,24.5],[-13.0,-1.0],[13.0,-1.0]].forEach(([tx,tz])=>{
+    lcy(0.36,0.44, 1.10, 8, tezontle, tx, 0.50, tz);
+    const bowl = lcy(0.54,0.38,0.34,10, basaltDark, tx, 1.22, tz);
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.40,0.86,8),
+      new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false}));
+    fl.position.set(tx,1.76,tz); scene.add(fl);
+    const L = new THREE.PointLight(0xffa040, 1.2, 12); L.position.set(tx,1.8,tz); scene.add(L);
+    addBox(tx,tz,1.0,1.0);
+  });
+
+  // ---- banner standards flanking the stair foot ----
+  [-7.0, 7.0].forEach(bx=>{
+    lcy(0.09,0.11, 5.0, 6, barkMat, bx, 2.44, ST_Z1 + 3.0);
+    const fabric = lb(0.10, 1.5, 1.2, ochre, bx + 0.12, 4.10, ST_Z1 + 3.0);
+    fabric.rotation.y = 0.12;
+    lb(0.12, 0.34, 1.3, shrineRed, bx + 0.13, 3.28, ST_Z1 + 3.0);
+    addBox(bx, ST_Z1 + 3.0, 0.5, 0.5);
+  });
+
+  // ================= CHINAMPAS — the floating gardens, out on the water =================
+  // Past the quay, so they are scenery rather than terrain: no colliders, nothing to walk onto, and the
+  // player is clamped well short of them. They are what tells you the lake is farmed and not empty.
+  const chinampa=(x,z,w,d)=>{
+    lb(w, 0.34, d, voxMat(0x6a5a3a,{noise:16}), x, -0.20, z);      // the raised bed, just proud of the water
+    lb(w-0.5, 0.16, d-0.5, cropMat, x, 0.02, z);
+    for(let k=0;k<10;k++){
+      const n=Math.abs(Math.sin((x*3.1+z*7.7+k*2.3))*4375.7%1);
+      lb(0.16, 0.7+n*0.5, 0.16, maizeMat, x-w/2+0.6+((k*0.97)%(w-1.2)), 0.42+n*0.25, z-d/2+0.6+((k*1.73)%(d-1.2)));
+    }
+    [-1,1].forEach(sd=>{ for(let k=0;k<4;k++)
+      lcy(0.07,0.07,1.0,5, barkMat, x - w/2 + 0.3 + k*(w-0.6)/3, 0.12, z + sd*d/2); });   // willow stakes
+  };
+  for(let i=0;i<26;i++){
+    const n=Math.abs(Math.sin(i*12.9)*43758.5%1), m=Math.abs(Math.sin(i*7.7)*9371.3%1);
+    const a = i/26*Math.PI*2 + n*0.2;
+    const r = 33 + m*16;
+    const cx2 = Math.cos(a)*r, cz2 = Math.sin(a)*r;
+    if(Math.abs(cx2) < 31 && Math.abs(cz2) < 31) continue;          // never inside the play area
+    if(Math.abs(cx2) < 5.5 || Math.abs(cz2) < 5.5) continue;        // and never across a causeway
+    chinampa(cx2, cz2, 5.0 + n*2.5, 3.6 + m*2.0);
+  }
+
+  // ---- canoes on the water, a few of them under way ----
+  for(let i=0;i<14;i++){
+    const n=Math.abs(Math.sin(i*5.3)*4375.7%1), m=Math.abs(Math.sin(i*9.1)*9371.3%1);
+    const a = i/14*Math.PI*2 + n, r = 31.5 + m*24;
+    const cx2 = Math.cos(a)*r, cz2 = Math.sin(a)*r;
+    if(Math.abs(cx2) < 30.5 && Math.abs(cz2) < 30.5) continue;
+    const hull = lb(1.0, 0.34, 4.2, barkMat, cx2, -0.22, cz2, a);
+    hull.rotation.y = a;
+    lb(0.7, 0.12, 3.4, tezDark, cx2, -0.05, cz2, a).rotation.y = a;
+  }
+
+  // ================= THE HORIZON =================
+  // Popocatepetl and Iztaccihuatl, snow-capped, south-east across the lake. The valley of Mexico is ringed
+  // by volcanoes and they are the single most recognisable thing about the view from this island — far
+  // more so than another band of haze hills.
+  const rockFar = voxMat(0x4e4a58,{noise:10}), snowFar = voxMat(0xe8eef4,{noise:6});
+  const volcano=(vx,vz,h,r)=>{
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10), rockFar);
+    cone.position.set(vx, h/2 - 6, vz); scene.add(cone);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(r*0.34, h*0.30, 10), snowFar);
+    cap.position.set(vx, h - 6 - h*0.15 + 0.4, vz); scene.add(cap);
+  };
+  volcano(74, 96, 58, 30);      // Popocatepetl
+  volcano(30, 112, 47, 26);     // Iztaccihuatl, the lower of the pair
+  volcano(-104, 62, 40, 28);
+  // and a low far shore all the way round, so the lake ends in land rather than in fog alone
+  const shoreFar = voxMat(0x5b6250,{noise:12});
+  for(let a=0; a<Math.PI*2; a+=0.11){
+    const r = 118 + Math.sin(a*3.1)*14;
+    const h = 5 + Math.abs(Math.sin(a*2.7))*7;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(30, h, 30), shoreFar);
+    m.position.set(Math.cos(a)*r, h/2 - 3.2, Math.sin(a)*r); scene.add(m);
+  }
+})();
+
+const aztecOverworld = new THREE.Group();
+scene.children.slice().forEach(o=>{
+  if(o===sky || o.isLight || o===distantGround || o===horizonHaze) return;
+  if(o===overworld || o===pyramidOverworld || o===greekOverworld || o===romanOverworld ||
+     o===islamicOverworld || o===mexicoOverworld) return;
+  aztecOverworld.add(o);
 });
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
@@ -7342,6 +7830,10 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='vanguard') return makeMonolithVanguard();
   if(skinName==='mudgolem') return makeMudGolem();
   if(skinName==='jadeshaman') return makeJadeShaman();
+  // Tenochtitlan creatures — the Mexico trip's second leg
+  if(skinName==='eagleknight') return makeEagleKnight();
+  if(skinName==='jaguarknight') return makeJaguarKnight();
+  if(skinName==='cuachic') return makeCuachic();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -9968,6 +10460,313 @@ function makeJadeShaman(){
   return rig;
 }
 
+// ---- Tenochtitlan creatures (Aztec Mexico) — the Mexico trip's second leg ----
+// These are deliberately MEN, not monsters. La Venta's roster is were-jaguars, mud golems and stone
+// vanguards — things out of the swamp. The Aztec military orders were uniformed soldiers who took their
+// rank from an animal and wore it, so the read has to be "a warrior dressed as a jaguar", not "a jaguar".
+// That is the whole visual argument for the second leg being a different place, and it is carried in the
+// silhouette: helmets you look OUT of, regalia that sits ON a human frame, and standards on their backs.
+// All three use the same _mexRig contract as the basin's creatures.
+
+// EAGLE KNIGHT (cuāuhtli) — the ranged order. The head sits inside an open eagle beak, which is how the
+// real regalia worked: the face shows in the bird's mouth. Feathered wings off the shoulder yoke and a
+// bundle of atlatl darts on the hip.
+function makeEagleKnight(){
+  const g=new THREE.Group();
+  const skin=voxMat(0x9a6f4a,{noise:14}), skinDark=voxMat(0x6d4c31,{noise:12});
+  const feather=voxMat(0xe8e2d2,{noise:8});        // pale eagle down over the suit
+  const featherDk=voxMat(0xb9ae95,{noise:10});
+  const quill=voxMat(0xd8a838,{noise:10});         // gold-ochre flight feathers
+  const beakMat=voxMat(0xe0a026,{noise:8});
+  const cloth=voxMat(0xc4452e,{noise:14});         // red cotton under the suit
+  const jade=voxMat(0x3f8f6a,{noise:12});
+  const cane=voxMat(0x9a8f4a,{noise:12});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.12,0.72,0); g.add(l);   // 0.72, not 0.74: puts the sole exactly on y=0
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.16,0.30,0.17, feather,  -0.16,0);           // feathered thigh of the suit
+    p(0.134,0.09,0.144,featherDk,-0.34,0);          // knee
+    p(0.112,0.30,0.122,feather,  -0.52,0);          // shin
+    p(0.138,0.06,0.148,quill,    -0.45,0);          // gold anklet band
+    p(0.09,0.08,0.10,  skinDark, -0.66,0.024);      // bare ankle — the suit stops here
+    p(0.15,0.07,0.23,  skin,     -0.685,0.06);      // sandalled foot
+    p(0.10,0.04,0.06,  skinDark, -0.695,0.16);      // toes
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  b(0.34,0.15,0.21, cloth,    0,0.78,0);            // hip wrap
+  b(0.32,0.09,0.234,featherDk,0,0.71,0);            // its hem
+  b(0.17,0.21,0.07, cloth,    0,0.67,0.115);        // hanging front panel
+  b(0.32,0.27,0.20, feather,  0,0.98,0);            // belly
+  b(0.36,0.25,0.22, feather,  0,1.21,0);            // chest
+  b(0.38,0.09,0.246,featherDk,0,1.14,0);            // a band of darker down across the ribs
+  b(0.33,0.07,0.252,quill,    0,1.275,0);           // gold collar
+  b(0.32,0.17,0.18, feather,  0,1.34,-0.01);        // shoulder yoke
+  // ---- the wings: three flight feathers swept back off each shoulder.
+  // The wing ROOT first. Without it the outermost feather (i=2) sits at z=-0.17, and nothing else on the
+  // body reaches past z=-0.11 — it hung in the air behind the shoulder with no visible attachment. The
+  // root is what the feathers grow out of, and it bridges the yoke to them.
+  [-1,1].forEach(sd=> b(0.12,0.16,0.14, featherDk, sd*0.19, 1.28, -0.12));
+  [-1,1].forEach(sd=>{
+    for(let i=0;i<3;i++){
+      const len=0.40-i*0.07;
+      const w=new THREE.Mesh(new THREE.BoxGeometry(0.075,len,0.055), i%2?quill:feather);
+      // each feather steps out in x and back in z so they layer instead of sharing faces
+      w.position.set(sd*(0.20+i*0.055), 1.30-i*0.05, -0.10-i*0.035);
+      w.rotation.z = sd*(0.5+i*0.16); w.castShadow=true; g.add(w);
+    }
+  });
+  // ---- dart bundle on the hip
+  for(let i=0;i<4;i++) b(0.02,0.34,0.02, cane, -0.155+i*0.032, 0.95, -0.13);
+  b(0.12,0.05,0.10, cloth, -0.10,1.13,-0.13);       // the tie holding them
+
+  b(0.13,0.09,0.13, skinDark, 0,1.44,0);            // neck
+  b(0.23,0.22,0.21, skin,     0,1.57,0);            // the face, showing inside the beak
+  b(0.10,0.05,0.06, skinDark, 0,1.53,0.11);         // nose
+  [-1,1].forEach(sd=> b(0.045,0.035,0.03, jade, sd*0.06,1.60,0.107));  // jade eye inlays on the cheeks
+  // ---- the helmet: a beak that OPENS around the face, upper mandible over, lower under
+  b(0.29,0.13,0.27, feather,  0,1.73,-0.01);        // the bird's crown, sitting on top of the head
+  b(0.25,0.09,0.20, beakMat,  0,1.70,0.13);         // upper mandible root
+  b(0.17,0.08,0.16, beakMat,  0,1.735,0.24);        // and its hooked tip, angled down over the brow
+  // lower mandible, under the chin. y1.44/z0.16, not y1.415/z0.19: out there it reached past the face box
+  // in z AND sat below it in y, so it touched nothing and hung in front of the throat on its own.
+  b(0.19,0.07,0.15, beakMat,  0,1.44,0.16);
+  b(0.30,0.10,0.24, featherDk,0,1.82,-0.05);        // feathered crest over the crown
+  [-1,1].forEach(sd=> b(0.05,0.16,0.05, quill, sd*0.10,1.93,-0.07));   // two plumes standing off it
+  [-1,1].forEach(sd=> b(0.045,0.07,0.05, skinDark, sd*0.125,1.55,-0.01)); // ears inside the helm opening
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.225,1.31,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.132,0.26,0.132,feather,  -0.13,0);          // feathered upper arm
+    p(0.108,0.07,0.108,featherDk,-0.28,0);          // elbow
+    p(0.086,0.24,0.086,skin,     -0.41,0);          // bare forearm
+    p(0.112,0.05,0.112,quill,    -0.37,0);          // gold armlet
+    p(0.114,0.11,0.124,skinDark, -0.56,0.01);       // hand
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+  // the atlatl in the right hand: a short throwing board with a dart laid along it
+  const spear=new THREE.Group(); spear.position.set(0,-0.56,-0.02); armR.add(spear);
+  const sp=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); spear.add(m); return m; };
+  sp(0.05,0.035,0.42, cane, 0,0,-0.14);             // the board
+  sp(0.028,0.028,0.66, cane, 0,0.035,-0.22);        // the dart riding on it
+  sp(0.036,0.036,0.07, jade, 0,0.035,-0.55);        // its obsidian-green head
+  sp(0.06,0.05,0.05, quill, 0,0,0.04);              // the finger loops
+
+  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.09),
+    new THREE.MeshBasicMaterial({color:0xffe7a0, transparent:true, opacity:0, fog:false}));
+  muzzle.position.set(0,-0.525,-0.60); armR.add(muzzle);   // at the dart's head, in arm-local space
+  muzzle.visible=false;
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  g.userData.botMuzzle=muzzle;
+  return rig;
+}
+
+// JAGUAR KNIGHT (ocēlōtl) — the fast melee order. Same human frame as the Eagle Knight on purpose: the
+// two orders were ranks of one army, and building them off a shared silhouette is what makes the pelt and
+// the beak read as UNIFORM rather than as species. Face shows in the jaguar's open jaws.
+function makeJaguarKnight(){
+  const g=new THREE.Group();
+  const skin=voxMat(0x9a6f4a,{noise:14}), skinDark=voxMat(0x6d4c31,{noise:12});
+  const pelt=voxMat(0xc8912e,{noise:14}), peltDk=voxMat(0x9a6a1c,{noise:12});
+  const spot=voxMat(0x2e2318,{noise:6});            // rosettes
+  const cloth=voxMat(0x2f6fa8,{noise:14});          // blue cotton — the opposite of the eagle's red
+  const bone=voxMat(0xe4dcc0,{noise:8});
+  const obsid=voxMat(0x2a2632,{noise:8});
+  const wood=voxMat(0x7a5a33,{noise:14});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+  // rosettes are scattered by a fixed hash, not at random, so the pelt is identical on every spawn
+  const spots=(cx,cy,cz,w,h,n,seed)=>{
+    for(let i=0;i<n;i++){
+      const r1=Math.abs(Math.sin((i+seed)*12.9898)*43758.5453)%1;
+      const r2=Math.abs(Math.sin((i+seed)*78.233)*43758.5453)%1;
+      b(0.045,0.045,0.012, spot, cx+(r1-0.5)*w, cy+(r2-0.5)*h, cz);
+    }
+  };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.12,0.72,0); g.add(l);   // 0.72, not 0.74: puts the sole exactly on y=0
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.16,0.30,0.17, pelt,    -0.16,0);
+    p(0.134,0.09,0.144,peltDk, -0.34,0);
+    p(0.112,0.30,0.122,pelt,   -0.52,0);
+    p(0.138,0.06,0.148,bone,   -0.45,0);            // bone anklet
+    p(0.09,0.08,0.10, skinDark,-0.66,0.024);
+    p(0.15,0.07,0.23, skin,    -0.685,0.06);
+    p(0.10,0.04,0.06, skinDark,-0.695,0.16);
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  b(0.34,0.15,0.21, cloth,  0,0.78,0);
+  b(0.32,0.09,0.234,peltDk, 0,0.71,0);
+  b(0.17,0.21,0.07, cloth,  0,0.67,0.115);
+  b(0.32,0.27,0.20, pelt,   0,0.98,0);              // belly
+  b(0.36,0.25,0.22, pelt,   0,1.21,0);              // chest
+  spots(0,1.21,0.113,0.30,0.20,7,1);                // rosettes across the chest
+  spots(0,0.98,0.103,0.26,0.20,5,9);                // and the belly
+  b(0.38,0.09,0.246,peltDk, 0,1.14,0);
+  b(0.33,0.07,0.252,bone,   0,1.275,0);             // bone collar
+  b(0.32,0.17,0.18, pelt,   0,1.34,-0.01);
+  // the pelt's own tail, hanging behind
+  for(let i=0;i<5;i++) b(0.075-i*0.008,0.11,0.075-i*0.008, i%2?pelt:peltDk, 0,1.16-i*0.10,-0.155-i*0.012);
+
+  b(0.13,0.09,0.13, skinDark,0,1.44,0);
+  b(0.23,0.22,0.21, skin,    0,1.57,0);             // the face, in the jaws
+  b(0.10,0.05,0.06, skinDark,0,1.53,0.11);
+  // ---- the helmet: a jaguar head whose jaws open around the face
+  b(0.30,0.14,0.28, pelt,    0,1.74,-0.01);         // the cat's skull over the crown
+  spots(0,1.74,0.132,0.24,0.10,4,21);
+  b(0.24,0.10,0.19, peltDk,  0,1.70,0.13);          // upper jaw
+  b(0.20,0.08,0.16, peltDk,  0,1.42,0.18);          // lower jaw under the chin
+  for(let k=0;k<4;k++){                             // fangs, upper row down and lower row up
+    b(0.035,0.075,0.035, bone, -0.075+k*0.05, 1.645, 0.20);
+    b(0.030,0.060,0.030, bone, -0.065+k*0.043,1.465, 0.205);
+  }
+  [-1,1].forEach(sd=>{                              // ears on the cat's skull
+    b(0.085,0.10,0.05, pelt,   sd*0.105,1.845,-0.02);
+    b(0.045,0.055,0.03, skinDark,sd*0.105,1.835,0.005);
+  });
+  [-1,1].forEach(sd=> b(0.045,0.07,0.05, skinDark, sd*0.125,1.55,-0.01));
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.225,1.31,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.132,0.26,0.132,pelt,   -0.13,0);
+    p(0.108,0.07,0.108,peltDk, -0.28,0);
+    p(0.086,0.24,0.086,skin,   -0.41,0);
+    p(0.112,0.05,0.112,bone,   -0.37,0);
+    p(0.114,0.11,0.124,skinDark,-0.56,0.01);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+  // a macuahuitl in the right hand — the obsidian-edged club, the same weapon the player carries
+  const club=new THREE.Group(); club.position.set(0,-0.60,-0.02); armR.add(club);
+  const cb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); club.add(m); return m; };
+  cb(0.05,0.16,0.05, wood, 0,-0.06,0);              // grip
+  cb(0.085,0.46,0.032, wood, 0,0.25,0);             // the paddle
+  [-1,1].forEach(sd=>{ for(let i=0;i<6;i++){
+    const t=cb(0.028,0.05,0.046, obsid, sd*0.049, 0.08+i*0.076, (i%2)*0.004); t.rotation.z=sd*0.2;
+  }});
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  return rig;
+}
+
+// CUĀCHIC — the shaven-headed veteran shock trooper, sworn never to retreat. The heavy of the roster: he
+// carries a war shield and takes the front-immunity branch the minotaur and the Monolith Vanguard already
+// share, so the answer to him is to get around him rather than to out-trade him. No animal order and no
+// helmet at all — his rank was the scalp-lock and the paint, which makes him read as the odd one out of
+// the three at a glance, which is exactly what a heavy should do.
+function makeCuachic(){
+  const g=new THREE.Group();
+  const skin=voxMat(0x9a6f4a,{noise:14}), skinDark=voxMat(0x6d4c31,{noise:12});
+  const paintY=voxMat(0xd8b427,{noise:10});         // the half-and-half body paint the cuāchic wore
+  const paintR=voxMat(0xb8352a,{noise:10});
+  const cloth=voxMat(0x6a5a3a,{noise:16});
+  const hide=voxMat(0xa88a58,{noise:14});
+  const bone=voxMat(0xe4dcc0,{noise:8});
+  const wood=voxMat(0x7a5a33,{noise:14});
+  const obsid=voxMat(0x2a2632,{noise:8});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.145,0.785,0); g.add(l);   // 0.785: the sole sat 0.006 under the floor at 0.78
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.19,0.32,0.20, sd>0?paintY:paintR, -0.17,0); // painted half and half, left leg one colour, right the other
+    p(0.16,0.10,0.17, skinDark,-0.37,0);
+    p(0.135,0.32,0.145,sd>0?paintY:paintR, -0.56,0);
+    p(0.165,0.07,0.175,hide,   -0.49,0);            // hide greave strap
+    p(0.105,0.09,0.115,skinDark,-0.72,0.024);
+    p(0.175,0.08,0.25, skin,   -0.745,0.06);
+    p(0.115,0.045,0.07,skinDark,-0.755,0.17);
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  b(0.40,0.16,0.24, cloth,  0,0.82,0);              // heavy hip wrap
+  b(0.38,0.10,0.266,hide,   0,0.745,0);
+  b(0.20,0.23,0.08, cloth,  0,0.70,0.13);
+  b(0.40,0.30,0.24, paintY, 0,1.05,0);              // belly — broader than the knights
+  b(0.44,0.28,0.26, paintR, 0,1.32,0);              // chest
+  b(0.46,0.10,0.286,hide,   0,1.24,0);              // a hide band across the ribs
+  b(0.40,0.08,0.292,bone,   0,1.395,0);             // bone collar
+  b(0.40,0.19,0.21, paintR, 0,1.47,-0.01);          // heavy shoulder yoke
+  // ---- the ichcahuipilli: a quilted cotton cuirass, drawn as stitched courses down the chest.
+  // These stand PROUD of the chest on a shallow depth rather than being near-full-depth slabs sharing the
+  // torso's own footprint — at depth 0.272 their front and back faces landed within 0.003 of the rib band's
+  // and the chest's, which is a z-fight. Quilting sits on top of armour anyway, so this is also the truer
+  // shape: they overlap the chest solidly at the back and clear every other face at the front.
+  for(let i=0;i<4;i++) b(0.40,0.045,0.09, cloth, 0, 1.20+i*0.075, 0.13);
+
+  b(0.15,0.10,0.15, skinDark,0,1.58,0);             // neck
+  b(0.25,0.24,0.23, skin,    0,1.73,0);             // the bare head — no helmet
+  b(0.272,0.075,0.252,paintR,0,1.755,0);            // paint band across the eyes
+  // z 0.14, not 0.12: at 0.12 the nose's front face landed on exactly the same plane as the jaw's (both
+  // at 0.155) — a dead-on coplanar pair, the worst kind, and right in the middle of the face.
+  b(0.11,0.06,0.07, skinDark,0,1.68,0.14);          // nose
+  b(0.20,0.10,0.11, skinDark,0,1.62,0.10);          // heavy jaw
+  // the scalp-lock: shaven but for one bound hank standing off the crown
+  b(0.09,0.16,0.09, skinDark,0,1.92,-0.01);
+  b(0.11,0.05,0.11, paintY,  0,1.87,-0.01);         // its binding
+  [-1,1].forEach(sd=> b(0.05,0.08,0.06, skinDark, sd*0.135,1.71,-0.01));
+  [-1,1].forEach(sd=> b(0.05,0.06,0.05, bone,     sd*0.15,1.65,-0.01));   // bone ear plugs
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.265,1.44,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.155,0.28,0.155,sd>0?paintR:paintY, -0.14,0);
+    p(0.125,0.08,0.125,skinDark,-0.30,0);
+    p(0.105,0.26,0.105,skin,   -0.45,0);
+    p(0.132,0.06,0.132,hide,   -0.40,0);
+    p(0.13,0.12,0.14, skinDark,-0.61,0.01);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+  // the chīmalli on the left arm — the round war shield, and the reason his front is armoured
+  const shield=new THREE.Group(); shield.position.set(0,-0.50,0.13); armL.add(shield);
+  // Three concentric discs stacked on one axis is the easiest place in a model to get coplanar faces, and
+  // the rim's back face landed 0.0006 off the shield's. Depths are chosen so no two of the six flat faces
+  // land near each other: the board sits at ±0.03, the rim straddles it at ±0.05, and the boss stands off
+  // the front at 0.015..0.095. Closest pair is 0.015 apart, well clear of the 0.005 that shimmers.
+  const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.06,14), hide);
+  sh.rotation.x=Math.PI/2; sh.castShadow=true; shield.add(sh);
+  const shRim=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.36,0.10,14), wood);
+  shRim.rotation.x=Math.PI/2; shRim.position.z=0; shield.add(shRim);
+  const shBoss=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.13,0.08,10), paintY);
+  shBoss.rotation.x=Math.PI/2; shBoss.position.z=0.055; shield.add(shBoss);
+  // the feather fringe hung along its lower edge
+  for(let i=0;i<6;i++){
+    const f=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.14,0.02), i%2?paintR:paintY);
+    f.position.set(-0.16+i*0.064, -0.38, 0.01); shield.add(f);
+  }
+  // a cuauhololli — the ball-headed war club — in the right hand
+  // The club's z was worth solving properly rather than nudging: its stone head is 0.19 deep and its haft
+  // 0.06, and BOTH have to miss the arm's faces (±0.0775 upper, ±0.0525 forearm, -0.06..0.08 hand) and the
+  // torso's (±0.13 chest, ±0.143 ribs, ±0.146 collar). At -0.02 the head fought the arm; at -0.045 it
+  // fought the rib band instead. z=0 clears every one of them by at least 0.015 and still seats the haft
+  // inside the hand.
+  const club=new THREE.Group(); club.position.set(0,-0.64,0); armR.add(club);
+  const cb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); club.add(m); return m; };
+  cb(0.06,0.44,0.06, wood, 0,0.14,0);               // the haft
+  cb(0.19,0.19,0.19, obsid, 0,0.44,0);              // the stone head
+  cb(0.21,0.06,0.21, paintY, 0,0.345,0);            // its collar binding
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  return rig;
+}
+
 function makeGhoul(){
   const g = new THREE.Group();
   const skinMat = voxMat(0x93a08c,{noise:16});   // corpse-pale grey-green
@@ -11622,6 +12421,7 @@ function makeNaftPot(){
 
 const DEFAULT_FOV = 75;
 let scoped = false; // declared here (before selectWeapon's initial call) to avoid a temporal-dead-zone crash
+let guarding = false; // same reason as `scoped` above: selectWeapon() runs during init and reads it
 const originalWeapons = [makeGrenadeLauncher(), makeZahraGun()];
 const pyramidWeapons = [makeBow(), makeKhopesh(), makeWasScepter()];
 const nileWeapons = [makeHarpoon()];
@@ -11728,9 +12528,159 @@ function makeAtlatl(){
   return g;
 }
 const mexicoWeapons = [makeMacana(), makeBlowgun(), makeAtlatl()];
+
+// ===================== TENOCHTITLAN LOADOUT (Aztec Mexico — the trip's second leg) =====================
+// The first pass at this loadout was a spear, a bow and an incendiary — which is to say a second Javelin,
+// a second Bow and a second Greek Fire. Three weapons that already existed in the game wearing Nahuatl
+// names. This set is built the other way round: each one is an archetype the game does NOT have, and each
+// is drawn from Mexica ritual rather than from a generic armoury.
+
+// TECPATL — the sacrificial flint knife. Fast and short, and the only weapon in the game that pays you
+// back: a KILL with it returns health. That is the whole idea of the object, so it is the mechanic rather
+// than a damage number. The blade is a broad flint leaf, not a straight dagger, and the handle is a
+// crouching eagle-knight worked in turquoise mosaic — the Templo Mayor's own tecpatl handles are figures
+// like this, which is what keeps it from reading as "a knife".
+function makeTecpatl(){
+  const g=new THREE.Group();
+  const flint=voxMat(0xe8e0d0,{noise:10}), flintDk=voxMat(0xbdb4a2,{noise:12});
+  const turq=voxMat(0x3fa8a0,{noise:12}), turqDk=voxMat(0x2b7a76,{noise:10});
+  const shell=voxMat(0xe4c8a0,{noise:10}), coral=voxMat(0xc4452e,{noise:12});
+  const gold=voxMat(0xd8a838,{noise:10}), obsid=voxMat(0x2a2632,{noise:8});
+  const kb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
+  // ---- the handle: a crouching figure, read from the knuckles up ----
+  kb(0.075,0.10,0.085, turqDk, 0,-0.05,0);                 // its haunches, where the hand closes
+  kb(0.085,0.12,0.09,  turq,   0, 0.06,0);                 // the body
+  // Mosaic tesserae over the body — alternating turquoise, shell and coral, which is how these were inlaid.
+  // Each tessera is narrower than the face it sits on and stands clearly PROUD of it. They used to be
+  // slightly WIDER and only 0.003 off the body's own faces, which is a z-fight you see the whole time
+  // because a viewmodel is 0.4 from the camera. Inlay sits on a surface, so proud is also the truer shape.
+  // Body is x +/-0.0425, z +/-0.045; these clear both by 0.02 and bed into it at the back.
+  for(let i=0;i<4;i++){
+    kb(0.060,0.022,0.028, i%2?shell:coral, 0,     0.015+i*0.032, 0.051);   // down the chest
+    kb(0.028,0.022,0.070, i%2?coral:shell, 0.0485,0.015+i*0.032, 0);       // and down the flank
+  }
+  kb(0.055,0.05,0.06, turqDk, 0.045,0.10,0);               // a folded arm
+  kb(0.055,0.05,0.06, turqDk,-0.045,0.10,0);
+  kb(0.07,0.07,0.075, turq,   0, 0.155,0);                 // the head
+  kb(0.05,0.035,0.045,gold,   0, 0.155,0.05);              // its beak, thrust forward
+  [-1,1].forEach(sd=> kb(0.022,0.022,0.02, obsid, sd*0.022,0.172,0.04));   // obsidian eyes
+  kb(0.085,0.03,0.09,  gold,   0, 0.20,0);                 // the gold collar the blade seats in
+  // ---- the blade: a broad flint leaf, widest a third of the way up, drawn to a point ----
+  // Consecutive segments alternate DEPTH, not just width. Built at one shared depth (0.022) every segment
+  // carried the same two z planes, and since each laps 10% into the next, that is a coplanar pair down the
+  // whole centre line of the blade — 183 of them, the worst z-fight in the game, on the weapon held closest
+  // to the camera. Alternating the depth also reads as knapping, which is what a flaked blade looks like.
+  // Segment i and i+2 share a depth but never touch in y, so a two-step cycle is enough.
+  // The per-segment edge bevels are gone with it: at 0.013 deep they sat 0.0005 off the segment's own z
+  // faces, which is the same fault again, and they add nothing at the size this is actually seen.
+  const widths=[0.055,0.085,0.105,0.112,0.108,0.092,0.070,0.044];
+  let by=0.215; const segLen=0.045;
+  widths.forEach((w,i)=>{
+    kb(w, segLen, i%2?0.018:0.030, i%2?flint:flintDk, 0, by+segLen/2, 0);
+    by += segLen*0.9;
+  });
+  kb(0.030,0.05,0.032, flint, 0, by+0.02, 0);              // the point
+  kb(0.018,0.22,0.046, flintDk, 0, 0.33, 0);               // the central ridge left by the flaking
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.21,-0.25,-0.36),recoil:0.12,name:'Tecpatl',
+    melee:true, range:2.0, damage:135, fireRate:0.26,
+    // health returned per KILL (not per hit) — see fire()'s melee branch
+    lifesteal:14};
+  return g;
+}
+
+// CHIMALLI — the feathered war shield. Nothing else in this game blocks, which is the point: hold the
+// right mouse button (or Shift) and you raise it, taking a fraction of incoming damage instead of the
+// whole of it; click and you bash with its rim. It occupies the slot a second melee weapon would, and it
+// changes how a Cuachic line is fought rather than how fast it dies.
+function makeChimalli(){
+  const g=new THREE.Group();
+  const hide=voxMat(0xa88a58,{noise:14}), wood=voxMat(0x7a5a33,{noise:14});
+  const turq=voxMat(0x3fa8a0,{noise:12});
+  const gold=voxMat(0xd8a838,{noise:10});
+  const plumeR=voxMat(0xc4452e,{noise:12}), plumeB=voxMat(0x2f79a8,{noise:12});
+  const plumeG=voxMat(0x3f8f4a,{noise:12}), down=voxMat(0xe8e2d2,{noise:8});
+  const cb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
+  const cdisc=(rt,rb,h,seg,mat,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(0,0,z); m.rotation.x=Math.PI/2; g.add(m); return m; };
+  // Three concentric discs on one axis, with depths chosen so no two flat faces land near each other —
+  // the mistake that cost the Cuachic's own shield a z-fight. Board ±0.035, rim ±0.06, device 0.02..0.10.
+  cdisc(0.30,0.30,0.07, 16, hide, 0);                      // the woven board
+  cdisc(0.325,0.325,0.12,16, wood, 0);                     // the wooden rim, straddling it
+  cdisc(0.10,0.12,0.08, 12, turq, 0.06);                   // the turquoise device at its centre
+  cdisc(0.045,0.045,0.10,10, gold, 0.075);                 // and its gold boss
+  // the feather-work band: plumes laid round the face in a ring, which is what made these objects famous
+  for(let i=0;i<14;i++){
+    const a=i/14*Math.PI*2, r=0.215;
+    const f=cb(0.055,0.115,0.035, [plumeR,plumeB,plumeG][i%3], Math.cos(a)*r, Math.sin(a)*r, 0.045);
+    f.rotation.z = a - Math.PI/2;
+  }
+  // the long fringe hanging off the lower edge
+  for(let i=0;i<7;i++){
+    const f=cb(0.05,0.20,0.03, i%2?down:plumeR, -0.18+i*0.06, -0.38, 0.01);
+    f.rotation.z = (i-3)*0.05;
+  }
+  // the arm straps behind it, and the fist gripping the inner one
+  cb(0.06,0.30,0.035, wood, 0,0,-0.075);
+  cb(0.30,0.06,0.035, wood, 0,0,-0.075);
+  cb(0.10,0.10,0.08,  hide, 0,-0.02,-0.115);
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.26,-0.22,-0.46),recoil:0.10,name:'Chimalli',
+    melee:true, range:2.1, damage:105, fireRate:0.40,
+    // raising it cuts incoming damage by this fraction — read in damagePlayer()
+    shieldBlock:0.65};
+  return g;
+}
+
+// SMOKING MIRROR — Tezcatlipoca, whose name IS "smoking mirror": a disc of polished obsidian that shows
+// what it should not. The game's only beam weapon. It fires continuously in a thin dark line rather than
+// in shots, hits for little per tick and a lot over time, and has no reload — it overheats instead, which
+// is spelled with the existing magazine fields so the HUD needs no new state.
+function makeSmokingMirror(){
+  const g=new THREE.Group();
+  const obsid=metalMatP(0x1d1a24,140,0x8f86ad);            // polished volcanic glass, very sharp highlight
+  const obsidDk=voxMat(0x14121a,{noise:6});
+  const gold=voxMat(0xd8a838,{noise:10});
+  const jade=voxMat(0x3f8f6a,{noise:12});
+  const bone=voxMat(0xe4dcc0,{noise:8});
+  const smoke=new THREE.MeshBasicMaterial({color:0x6a5f8a, transparent:true, opacity:0.32, fog:false});
+  const mb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
+  const mdisc=(rt,rb,h,seg,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(0,y,z); m.rotation.x=Math.PI/2; g.add(m); return m; };
+  // the handle, gripped low, with the mirror raised on it
+  mb(0.05,0.20,0.05, jade, 0,-0.16,-0.02);
+  // 0.066, not 0.058: at 0.058 each band's x and z faces stood only 0.004 outside the handle's own, which
+  // is inside the 0.005 that shimmers. A binding ring should clearly stand off the shaft anyway.
+  for(let i=0;i<3;i++) mb(0.066,0.025,0.066, gold, 0,-0.10-i*0.055,-0.02);
+  // The mirror faces -z, because -z is forward here — built facing +z it pointed its polished face at the
+  // player and showed the target its dull back, and the muzzle ended up inside the model. Depths are still
+  // all distinct: face -0.055..-0.015, frame -0.09..0.01, dull back 0.025..0.065.
+  mdisc(0.175,0.175,0.04, 18, obsid,   0.04,-0.035);       // the polished face, looking down the sights
+  mdisc(0.205,0.205,0.10, 18, gold,    0.04,-0.040);       // its frame
+  mdisc(0.16,0.16,0.04,  18, obsidDk,  0.04, 0.020);       // the dull back, lapped into the frame
+  // the ring of gold rays worked round the frame
+  for(let i=0;i<12;i++){
+    const a=i/12*Math.PI*2;
+    const r=mb(0.035,0.075,0.028, gold, Math.cos(a)*0.225, 0.04+Math.sin(a)*0.225, -0.04);
+    r.rotation.z=a;
+  }
+  // The smoke curling off its upper edge — the thing it is named for. Consecutive puffs have to OVERLAP,
+  // not merely sit near each other: the connectivity check joins parts within 0.004, so a 0.02 gap that
+  // looks continuous on screen still counts as a floating block. The rise (0.042) is smaller than each
+  // puff's own height, and the lateral stagger is a constant 0.022 rather than growing with i.
+  for(let i=0;i<4;i++){
+    const s=mb(0.07-i*0.010, 0.07-i*0.010, 0.05, smoke, (i%2?1:-1)*0.022, 0.20+i*0.042, -0.03);
+    s.rotation.z=(i%2?1:-1)*0.3;
+  }
+  // a bone flint set at the base of the frame, the mirror's own tecpatl
+  mb(0.05,0.09,0.03, bone, 0,-0.13,-0.05);
+  g.userData={muzzleZ:-0.12,muzzleY:0.04,pos:new THREE.Vector3(0.23,-0.28,-0.40),recoil:0.03,name:'Smoking Mirror',
+    damage:19, fireRate:0.07, auto:true, spread:0.002, tracer:0x8f6fd0,
+    magSize:90, ammo:90, reloadTime:2.4, reloading:false, reloadT:0};
+  return g;
+}
+const aztecWeapons = [makeTecpatl(), makeChimalli(), makeSmokingMirror()];
 let weapons = pyramidWeapons; // waves 1-3 + Boss I start on the pyramid loadout; swapped back after Boss I
 const gunGroup = new THREE.Group();
-originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons).concat(romanWeapons).concat(islamicWeapons).concat(mexicoWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
+originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons).concat(romanWeapons).concat(islamicWeapons).concat(mexicoWeapons).concat(aztecWeapons).forEach(w=>{ w.visible=false; gunGroup.add(w); });
 gunGroup.add(muzzle);
 let currentWeapon = 0; // start on the bow
 function setAmmoHUD(){
@@ -11761,6 +12711,10 @@ function selectWeapon(i){
   setAmmoHUD();
   if(window.syncWeaponButtons) window.syncWeaponButtons();
   if(!active.userData.scoped) setScope(false); // auto-unscope when switching away from the sniper
+  // and drop the guard when switching away from the shield, or you would keep its damage reduction while
+  // holding something else. Cleared before the pose restore below, so the new weapon sits where it should.
+  if(!active.userData.shieldBlock && guarding){ guarding = false; }
+  if(!active.userData.shieldBlock){ active.rotation.set(0,0,0); }
 }
 // called once Boss I is defeated: swap from the 3-weapon pyramid loadout to the 3-weapon Greek loadout
 function switchToGreekLoadout(){
@@ -11834,6 +12788,31 @@ const LA_VENTA_STATS = {
   vanguard:   {hp:300, speed:1.00, wt:'knife',  scale:1.00, west:false},
   mudgolem:   {hp:380, speed:0.70, wt:'knife',  scale:1.25, west:true },
 };
+// ---- Tenochtitlan's garrison (the Mexico trip's SECOND leg) ----
+// Searched the same way La Venta's were, against aztecColliders and heightZonesAztec: at least 1.3 clear
+// of anything solid, never on the Templo Mayor's stair or summit deck, at least 9 from the causeway the
+// player arrives on at (0,24), and at least 7 from each other. West is the ball-court side, where the
+// court's two battered walls give cover; east is the open precinct in front of the skull rack.
+const TENOCH_WEST = [[-17.0,-5.5], [-14.5,21.5], [-23.5,-9.0], [-9.0,-24.0], [-17.5,-24.0]];
+const TENOCH_EAST = [[19.5,2.0], [21.0,-14.0], [14.5,21.5], [9.5,-14.0], [24.0,7.5]];
+// Three waves and no boss of its own — clearing the last one is what ends the whole Mexico arc and sends
+// the player home. The city is fought by the Aztec military orders rather than by the basin's creatures:
+// Eagle Knights holding the open precinct at range, Jaguar Knights closing fast, and a Cuachic or two
+// anchoring the line from the second wave on. Carries a flat difficulty step over the basin, because this
+// is the far end of the journey rather than the start.
+const TENOCH_WAVES = [
+  {eagleknight:3, jaguarknight:2},
+  {eagleknight:3, jaguarknight:3, cuachic:1},
+  {eagleknight:4, jaguarknight:4, cuachic:2},
+];
+// west is the ball-court side, where the court's walls give the ranged order cover; east is the open
+// precinct in front of the skull rack, where the Jaguar Knights' speed actually tells.
+const TENOCH_STATS = {
+  eagleknight:  {hp:130, speed:1.20, wt:'pistol', scale:1.00, west:true },
+  jaguarknight: {hp:200, speed:2.45, wt:'knife',  scale:1.00, west:false},
+  cuachic:      {hp:420, speed:0.85, wt:'knife',  scale:1.15, west:false},
+};
+const TENOCH_DIFF = 1.25;   // flat step over the basin, applied on top of the per-wave ramp
 const TRIP_CLEAR_BONUS = 40;          // ⭐ for clearing a destination, so a trip pays back part of its fare
 let tripWave = 0, tripCleared = false;
 // The Jade-Heart Shaman is fought in the basin itself, on the offering court south of the pyramid —
@@ -11850,35 +12829,66 @@ const TRIP_BOSS = {skin:'jadeshaman', col:0x3fa88a, hp:2400, scale:1.9, speed:1.
 // so this brings his mask down to roughly the player's eyeline. The smoke column sinks with him and
 // pools on the ground, which is the intended read — it is what was holding him up.
 const SHAMAN_DESCENT = -0.55;
+// ---- the legs of a trip ----
+// A destination is a LIST of maps, not one map. Each leg carries its own world, garrison, spawn pools and
+// HUD name; clearing one carries the player straight to the next, and clearing the last carries them home
+// to Cairo. Mexico is the first destination built this way, and DESTINATIONS already describes China &
+// Japan as the same shape (Yuan China, the sea crossing, then Kyushu), so this is the general form rather
+// than a Mexico special case.
+const MEXICO_LEGS = [
+  {place:'La Venta', icon:'🗿', diff:1,
+   waves:LA_VENTA_WAVES, stats:LA_VENTA_STATS, west:LA_VENTA_WEST, east:LA_VENTA_EAST, boss:TRIP_BOSS,
+   enter(b){ enterMexicoWorld(b || '🗿 The basin of La Venta — the pyramid stands at its centre'); }},
+  {place:'Tenochtitlan', icon:'🏔', diff:TENOCH_DIFF,
+   waves:TENOCH_WAVES, stats:TENOCH_STATS, west:TENOCH_WEST, east:TENOCH_EAST, boss:null,
+   enter(b){ enterAztecWorld(b || '🏔 Tenochtitlan — the Templo Mayor stands over the lake'); }},
+];
+// The leg currently underway. Clamped rather than indexed raw so a stale tripLeg can never return
+// undefined and take the spawn/HUD code down with it.
+function curLeg(){
+  if(!tripDest || !tripDest.legs || !tripDest.legs.length) return null;
+  return tripDest.legs[Math.min(Math.max(tripLeg,0), tripDest.legs.length-1)];
+}
 function spawnTripBoss(){
+  const leg = curLeg(); if(!leg || !leg.boss) return;
   clearBots();
   bossActive = true;
   // deliberately does NOT touch bossNum: that counts campaign bosses and gates the Cairo/win transitions.
   // patrol kept to +-4: east of x=5 the approach narrows to 1.2 units of clearance, which is the whole
   // of a boss's minimum radius. He chases the player anyway; these only matter before he notices you.
-  const m = spawnBot(TRIP_BOSS.x, TRIP_BOSS.z, TRIP_BOSS.col, [-4,0,TRIP_BOSS.z], [4,0,TRIP_BOSS.z],
-                     'pistol', {skin:TRIP_BOSS.skin, hp:TRIP_BOSS.hp, scale:TRIP_BOSS.scale,
-                                speed:TRIP_BOSS.speed, boss:true, diff:1});
+  const B = leg.boss;
+  const m = spawnBot(B.x, B.z, B.col, [-4,0,B.z], [4,0,B.z],
+                     'pistol', {skin:B.skin, hp:B.hp, scale:B.scale,
+                                speed:B.speed, boss:true, diff:1});
   showBossBar(true); setBossBar(m.userData.data);
   SFX.boss();
   setTripHUD();
 }
-// One entry point for "put the right thing in the basin", so arriving, respawning after a death, and
-// advancing a wave all agree on what stage the trip is at.
+// One entry point for "put the right thing on this map", so arriving, respawning after a death, crossing
+// to the next leg, and advancing a wave all agree on what stage the trip is at.
 function spawnTripStage(){
-  if(tripCleared){ clearBots(); setTripHUD(); return; }
-  if(tripWave >= LA_VENTA_WAVES.length) spawnTripBoss();
-  else spawnTripWave();
+  const leg = curLeg();
+  if(tripCleared || !leg){ clearBots(); setTripHUD(); return; }
+  if(tripWave >= leg.waves.length){
+    // a leg with no boss of its own has nothing left to spawn once its waves are done — its last wave
+    // falling is what ends it, handled in onAllDead()
+    if(leg.boss) spawnTripBoss(); else { clearBots(); setTripHUD(); }
+    return;
+  }
+  spawnTripWave();
 }
 function spawnTripWave(){
+  const leg = curLeg(); if(!leg) return;
   clearBots();
-  const roster = LA_VENTA_WAVES[Math.min(tripWave, LA_VENTA_WAVES.length-1)];
-  const diff = 1 + tripWave*0.12;     // the garrison toughens a little each wave, as waveDiff() does
+  const roster = leg.waves[Math.min(tripWave, leg.waves.length-1)];
+  // the garrison toughens a little each wave, as waveDiff() does, on top of whatever flat step the leg
+  // itself carries — the second leg starts harder than the first one ended
+  const diff = (1 + tripWave*0.12) * (leg.diff || 1);
   let wi=0, ei=0, n=0;
   Object.keys(roster).forEach(skin=>{
-    const st = LA_VENTA_STATS[skin];
+    const st = leg.stats[skin];
     for(let i=0;i<roster[skin];i++){
-      const pool = st.west ? LA_VENTA_WEST : LA_VENTA_EAST;
+      const pool = st.west ? leg.west : leg.east;
       const sp = pool[(st.west ? wi++ : ei++) % pool.length];
       spawnBot(sp[0], sp[1], ENEMY_COLORS[n++ % ENEMY_COLORS.length],
                [sp[0]-2.5,0,sp[1]], [sp[0]+2.5,0,sp[1]], st.wt,
@@ -11888,14 +12898,17 @@ function spawnTripWave(){
   setTripHUD();
 }
 // While away, the stats bar's #wave/#enemies spans carry the destination's own progress instead of the
-// campaign's. Once the basin is clear they hand over to the way home.
+// campaign's — and the CURRENT LEG's name, so crossing from the basin to the city is visible in the HUD
+// and not just in the banner.
 function setTripHUD(){
   const w=document.getElementById('wave'), e=document.getElementById('enemies');
-  const place = tripDest ? tripDest.place : 'La Venta';
+  const leg = curLeg();
+  const place = leg ? leg.place : 'La Venta';
+  const total = leg ? leg.waves.length : 0;
   if(w) w.textContent = tripCleared ? place
                       : bossActive  ? place + ' — the Shaman'
-                      : place + ' ' + Math.min(tripWave+1, LA_VENTA_WAVES.length) + '/' + LA_VENTA_WAVES.length;
-  if(e) e.textContent = tripCleared ? 'raft at the landing'
+                      : place + ' ' + Math.min(tripWave+1, total) + '/' + total;
+  if(e) e.textContent = tripCleared ? 'homeward'
                       : bossActive  ? '☠'
                       : bots.filter(b=>b.alive).length;
 }
@@ -11922,6 +12935,42 @@ function enterMexicoWorld(banner){
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   weapons = mexicoWeapons;
+  selectWeapon(0);
+  spawnTripStage();
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
+// Tenochtitlan — the Mexico trip's second leg. Built exactly like enterMexicoWorld() above, because it is
+// the same kind of move: an open transition into a destination map, not a dungeon exit, so world, lighting,
+// loadout and garrison all happen in the one call.
+function enterAztecWorld(banner){
+  clearWorldGroups();
+  scene.add(aztecOverworld);
+  sky.visible = true;
+  activeColliders = aztecColliders;
+  activeHeightZones = heightZonesAztec;
+  // The valley of Mexico sits at 2,200m and the map is built on a lake: thin, clean, high-altitude air
+  // over a lot of water. So the sky goes deeper and colder than the basin's, the haze goes pale blue
+  // rather than warm green, and the fog reaches much further — the causeways have to run visibly out over
+  // the water before they are lost, which is the whole read of the island as an island.
+  scene.background.set(0x4f9fdc); scene.fog.color.set(0xbcd4e4); scene.fog.near=42; scene.fog.far=210;
+  // the land past the lake is the ring of mountains, not more ground: a cool desaturated slope tone
+  setDistantGround(0x6a7486);
+  skyTint(0xffffff);          // neutral: the colour here is in the water and the tezontle, not in a wash
+  // bounce off red volcanic rock and white lime plaster, under a hard high-altitude sun
+  // 1.12 was the brightest sun in the game and this is the palest map in it — lime plaster at 0xe4dcc4
+  // over white-ish flagstone. It clipped: the precinct floor and the shrine walls came out as flat white
+  // with no texture left in them. 0.98 keeps the hard high-altitude feel without burning the plaster out.
+  hemi.intensity=0.66; hemi.color.set(0xcfe4f4); hemi.groundColor.set(0x6a3a2e);
+  sun.intensity=0.98; fill.intensity=0.20; fill.color.set(0xd4e0ea);
+  // On the Iztapalapa causeway at the south quay, looking north up the length of the precinct at the
+  // Templo Mayor's twin stair. Searched clear: 4.06 units to anything solid, and off every height zone.
+  camera.position.set(0,1.7,24); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  weapons.forEach(w=>w.visible=false);
+  // Its own loadout, not the basin's. Crossing into the city hands you an army's kit — reach spear, war
+  // bow, censer — which is the clearest signal available that this is a second place and not more of the
+  // first one, and it is the same mid-arc swap Egypt already does three times.
+  weapons = aztecWeapons;
   selectWeapon(0);
   spawnTripStage();
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
@@ -11956,7 +13005,7 @@ function enterIslamicWorld(banner){
 // ends here; the travel booth in the bazaar is what leads onward.
 function enterHub(banner){
   inHub = true;
-  tripDest = null;        // coming home always ends any trip, however it was entered
+  tripDest = null; tripLeg = 0;   // coming home always ends any trip, however it was entered
   enterIslamicWorld(banner);
   pending = null; betweenTimer = 0;
   // holster everything: no viewmodel, no crosshair, no ammo counter, no scope
@@ -12142,6 +13191,30 @@ function setScope(on){
   gunGroup.visible = !scoped; // hide the viewmodel while looking through the scope
   const adsBtn = document.getElementById('adsbtn'); if(adsBtn) adsBtn.classList.toggle('active', scoped);
 }
+// ---- raising a shield, on the same input as aiming down sights ----
+// The Chimalli has no sights to look through, so right-click/Shift means "guard" instead of "zoom". Both
+// go through setAim() below so the two can never both be up at once, and so a weapon that is neither
+// scoped nor a shield simply ignores the input, exactly as it did before.
+function setGuard(on){
+  const w = weapons[currentWeapon] && weapons[currentWeapon].userData;
+  if(on && !(w && w.shieldBlock)) on = false;
+  if(on === guarding) return;
+  guarding = on;
+  const active = weapons[currentWeapon];
+  if(active && w){
+    // Swing it across the view rather than fading a screen effect in: the shield is the feedback. Position
+    // and rotation are set outright (not lerped) because nothing else writes to the weapon's own transform
+    // between weapon switches — the recoil punch is applied to gunGroup, one level up.
+    if(on){ active.position.set(0.06, -0.16, -0.30); active.rotation.set(0, 0.55, -0.20); }
+    else   { active.position.copy(w.pos); active.rotation.set(0,0,0); }
+  }
+  const adsBtn = document.getElementById('adsbtn'); if(adsBtn) adsBtn.classList.toggle('active', guarding);
+}
+// the single entry point the aim inputs call: a shield guards, everything else scopes
+function setAim(on){
+  const w = weapons[currentWeapon] && weapons[currentWeapon].userData;
+  if(w && w.shieldBlock) setGuard(on); else setScope(on);
+}
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 // ===================== CAIRO HUB: INTERACT + TRAVEL BOOTH =====================
@@ -12175,10 +13248,10 @@ const DESTINATIONS = [
   // The first destination actually built. La Venta is Olmec, not Aztec — the Olmec are the older
   // civilisation the Aztec inherited from, and its colossal heads and earthen pyramid are far more
   // distinctive to build than another stepped-stone city.
-  {flag:'🗿', name:'Mexico',        era:'Olmec La Venta · 1200–400 BC',           price:50, ready:true,
+  // Two maps on one ticket: the Olmec basin, then Aztec Tenochtitlan. See MEXICO_LEGS.
+  {flag:'🗿', name:'Mexico',        era:'Olmec La Venta to Tenochtitlan · 1200 BC–1521', price:50, ready:true,
    lon:-94, lat: 18,
-   go(){ travelTo({place:'La Venta', icon:'🗿',
-                   enter(){ enterMexicoWorld('🗿 The basin of La Venta — the pyramid stands at its centre'); }}); }},
+   go(){ travelTo({name:'Mexico', legs:MEXICO_LEGS}); }},
   {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka & Uppsala, 800–1050', price:60, ready:false,
    lon: 17, lat: 60},
   {flag:'🐉', name:'China & Japan', era:'Yuan China to Kyushu · 1271–1281',       price:70, ready:false,
@@ -12320,21 +13393,14 @@ function nearBooth(){
   const dx = camera.position.x - BOOTH_POS.x, dz = camera.position.z - BOOTH_POS.z;
   return (dx*dx + dz*dz) < BOOTH_RADIUS*BOOTH_RADIUS;
 }
-// The return raft, the other end of the same journey. Only live while actually away on a trip, so it can
-// never be triggered from a map that merely happens to sit at those coordinates.
-function nearRaft(){
-  if(!tripDest || !player.alive) return false;
-  const dx = camera.position.x - RAFT_POS.x, dz = camera.position.z - RAFT_POS.z;
-  return (dx*dx + dz*dz) < BOOTH_RADIUS*BOOTH_RADIUS;
-}
+// There is no nearRaft(). A trip has no return interactable at all now: the arc moves the player on its
+// own when a leg is cleared, so the only thing [E] ever opens is the booth back in Cairo.
 // Called once per frame from the animate loop.
 function updateInteract(){
   if(promptEl){
     const booth = nearBooth() && !boothOpen && !paused;
-    const raft  = nearRaft() && !paused;
-    promptEl.textContent = booth ? '\u{1F39F} Travel Booth — press [E]'
-                         : raft  ? '\u{1F6F6} Take the raft home to Cairo — press [E]' : '';
-    promptEl.style.opacity = (booth || raft) ? '1' : '0';
+    promptEl.textContent = booth ? '\u{1F39F} Travel Booth — press [E]' : '';
+    promptEl.style.opacity = booth ? '1' : '0';
   }
   updateBoothMarker();
 }
@@ -12343,16 +13409,16 @@ function updateInteract(){
 // Projects the booth into screen space every frame. In view it sits over the booth with the walking
 // distance; out of view it pins to the screen edge with an arrow turned toward it, so there is never a
 // moment in the hub where you cannot tell which way to walk.
+// Hub only. It used to double as a pointer to the raft home while away on a trip; with the raft gone
+// there is nothing out there to walk to, so away from Cairo the marker simply stays off.
 const bmEl   = document.getElementById('boothmarker');
 const bmDist = document.getElementById('bmdist');
 const bmArrow= document.getElementById('bmarrow');
 const _bmVec = new THREE.Vector3();
 function updateBoothMarker(){
   if(!bmEl) return;
-  if((!inHub && !tripDest) || boothOpen || paused || !player.alive){ bmEl.style.opacity='0'; return; }
-  // In the hub it tracks the booth; away on a trip it tracks the raft home. Same widget, same reasoning:
-  // there should never be a moment where you cannot tell which way the way out is.
-  const tgt = tripDest ? RAFT_POS : BOOTH_POS;
+  if(!inHub || boothOpen || paused || !player.alive){ bmEl.style.opacity='0'; return; }
+  const tgt = BOOTH_POS;
   const dx = camera.position.x - tgt.x, dz = camera.position.z - tgt.z;
   const dist = Math.sqrt(dx*dx + dz*dz);
   if(dist < BOOTH_RADIUS){ bmEl.style.opacity='0'; return; }   // close enough that [E] takes over
@@ -12378,7 +13444,7 @@ function updateBoothMarker(){
   bmEl.style.top  = sy + 'px';
   bmEl.style.opacity = '1';
   if(bmDist) bmDist.textContent = Math.round(dist) + 'm';
-  const bi = document.getElementById('bmicon'); if(bi) bi.textContent = tripDest ? '\u{1F6F6}' : '\u{1F39F}';
+  const bi = document.getElementById('bmicon'); if(bi) bi.textContent = '\u{1F39F}';   // hub-only now: always the booth
 }
 
 
@@ -12437,25 +13503,45 @@ function buyTicket(d){
   setBanner('🎟 Passage bought — ' + d.name);
   if(typeof d.go === 'function') d.go();
 }
-// ---- travelling out, and coming home ----
-// A trip is deliberately symmetrical: buying passage takes the hub's chrome off and hands the player their
-// weapons back, and the destination always carries a physical way home (La Venta's landing raft) so no
-// destination can strand you. Everything a trip changes is undone by returnToHub().
+// ---- travelling out, crossing between legs, and coming home ----
+// Buying passage takes the hub's chrome off and hands the player their weapons back; clearing the
+// destination's last leg is what brings them home. No destination can strand you because none of them
+// asks you to find your own way out — the arc moves you at each end.
 function travelTo(dest){
   inHub = false;
   tripDest = dest;
-  tripWave = 0; tripCleared = false;   // every trip starts the destination's ladder at its first wave
+  tripLeg = 0;                         // always start a destination at its first map
+  tripWave = 0; tripCleared = false;   // ...and that map's ladder at its first wave
   closeBooth();
   exitHubChrome();                       // weapons out of the holster, crosshair and ammo back
-  setHubStats(true, dest.place, 'raft at the landing', dest.icon);
-  dest.enter();
+  const leg = curLeg();
+  setHubStats(true, leg.place, '', leg.icon);
+  leg.enter();
+}
+// A leg is finished (its boss is down, or its last wave fell and it has no boss). Either cross to the next
+// map or, if that was the last one, go home. Both go through `pending` so the player gets the same beat to
+// breathe that every other transition in the game gives them, rather than being yanked mid-kill.
+function advanceTripLeg(){
+  if(!tripDest) return;
+  if(tripLeg + 1 < tripDest.legs.length){
+    tripLeg++;
+    tripWave = 0;
+    const next = tripDest.legs[tripLeg];
+    setHubStats(true, next.place, '', next.icon);
+    pending='legcross'; betweenTimer=4.6;
+    return;
+  }
+  tripCleared = true;
+  setTripHUD();
+  pending='triphome'; betweenTimer=4.6;
 }
 function returnToHub(){
   tripDest = null;
+  tripLeg = 0;
   tripWave = 0; tripCleared = false;   // clears the guard in updateWaves() as well as the ladder
   bossActive = false; showBossBar(false);   // leaving mid-fight must not carry the Shaman's bar to Cairo
   clearBots();                         // anything still standing out there does not follow you home
-  enterHub('🛶 Home in Cairo — the booth is in the bazaar');
+  enterHub('🏠 Home in Cairo — the booth is in the bazaar');
 }
 // ===================== ADMIN PANEL =====================
 // Opened by pressing Z, X, C in order. Replaces the old single-key cheats, which fired on a bare keypress
@@ -12516,7 +13602,7 @@ const ADMIN_ITEMS = [
      clearBots();
      currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
      bossActive=false; showBossBar(false); pending=null;
-     tripDest=null; tripWave=0; tripCleared=false;
+     tripDest=null; tripLeg=0; tripWave=0; tripCleared=false;
      if(player.score < 200) player.score = 200;
      closeAdmin();
      enterHub('🏆 Skipped to Cairo — the booth in the bazaar sells passage onward 🎟');
@@ -12537,6 +13623,63 @@ function renderAdmin(){
     });
     host.appendChild(row);
   });
+  renderWaveJump();
+}
+// One row per era. Egypt, Greece and Rome each get their three waves; Cairo gets a SINGLE button, because
+// its three "waves" spawn nothing by design — there is no difference between wave 10, 11 and 12 to choose
+// between, so offering three buttons was offering a choice that does not exist.
+//
+// While away on a multi-leg destination the panel grows that destination's own rows underneath, one per
+// leg, so Mexico can be navigated the same way the campaign can. Those rows only exist while you are
+// actually there: they drive the trip state machine, which means nothing from back home.
+function renderWaveJump(){
+  const host = document.getElementById('adminjumprows'); if(!host) return;
+  host.innerHTML = '';
+  const mkRow = (label)=>{
+    const row = document.createElement('div'); row.className = 'jumpera';
+    const nm = document.createElement('div'); nm.className = 'eraname'; nm.textContent = label;
+    const ws = document.createElement('div'); ws.className = 'waves';
+    row.appendChild(nm); row.appendChild(ws); host.appendChild(row);
+    return ws;
+  };
+  const mkBtn = (ws, text, title, here, quiet, onClick)=>{
+    const b = document.createElement('button');
+    b.className = 'jumpbtn' + (here?' here':'') + (quiet?' quiet':'');
+    b.textContent = text; b.title = title;
+    b.addEventListener('click', ()=>{ onClick(); closeAdmin(); });
+    ws.appendChild(b);
+    return b;
+  };
+  // ---- the campaign ----
+  ERA_START_WAVE.forEach((start, era)=>{
+    const ws = mkRow(ERA_NAMES[era]);
+    if(era===3){
+      // "here" for Cairo covers all three of its waves, since one button now stands for all of them
+      const here = !tripDest && !inHub && waveIdx>=start;
+      mkBtn(ws, 'Cairo', 'Cairo — the hub; no enemies spawn here by design', here, true, ()=>jumpToWave(start));
+      return;
+    }
+    for(let n=start; n<start+3 && n<WAVES.length; n++){
+      const here = !tripDest && !inHub && n===waveIdx;
+      mkBtn(ws, String(n+1), 'Jump to wave '+(n+1), here, false, ()=>jumpToWave(n));
+    }
+  });
+  // ---- the destination you are currently in, leg by leg ----
+  if(tripDest && tripDest.legs){
+    tripDest.legs.forEach((leg, li)=>{
+      const ws = mkRow(leg.place);
+      for(let n=0; n<leg.waves.length; n++){
+        const here = tripLeg===li && tripWave===n && !bossActive;
+        mkBtn(ws, String(n+1), leg.place+' wave '+(n+1), here, false, ()=>jumpToTripStage(li, n));
+      }
+      // a leg that ends on a boss gets a button for it, so the crossing it triggers can be reached directly
+      if(leg.boss){
+        const here = tripLeg===li && bossActive;
+        mkBtn(ws, '☠', 'Jump straight to '+leg.place+"'s boss", here, false,
+              ()=>jumpToTripStage(li, leg.waves.length));
+      }
+    });
+  }
 }
 function openAdmin(){
   if(adminOpen || paused) return;
@@ -12574,9 +13717,9 @@ function closeBooth(){
 if(boothOverlay) boothOverlay.addEventListener('click', e => { if(e.target === boothOverlay) closeBooth(); });
 document.addEventListener('mousedown', e => {
   if (paused) return;
-  if (e.button===2 && document.pointerLockElement===renderer.domElement) setScope(true);
+  if (e.button===2 && document.pointerLockElement===renderer.domElement) setAim(true);
 });
-document.addEventListener('mouseup', e => { if(e.button===2) setScope(false); });
+document.addEventListener('mouseup', e => { if(e.button===2) setAim(false); });
 
 const keys = {};
 document.addEventListener('keydown', e => {
@@ -12600,7 +13743,6 @@ document.addEventListener('keydown', e => {
   }
   if (paused) return;
   if (e.code==='KeyE' && nearBooth()){ openBooth(); return; }
-  if (e.code==='KeyE' && nearRaft()){ returnToHub(); return; }
   // ==================== ADMIN PANEL UNLOCK ====================
   // The single-key cheats (K kill-all, H skip-to-hub, G god mode) are gone. They fired on a bare keypress,
   // which meant a stray finger during a fight silently altered the run, and they were undiscoverable
@@ -12610,7 +13752,7 @@ document.addEventListener('keydown', e => {
   if (!boothOpen && adminSeqStep(e.code)) { openAdmin(); return; }
   // ============================================================
   keys[e.code]=true;
-  if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && document.pointerLockElement===renderer.domElement) setScope(true);
+  if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && document.pointerLockElement===renderer.domElement) setAim(true);
   if (e.code==='Digit1') selectWeapon(0);
   if (e.code==='Digit2') selectWeapon(1);
   if (e.code==='Digit3') selectWeapon(2);
@@ -12624,7 +13766,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => {
   keys[e.code]=false;
-  if (e.code==='ShiftLeft' || e.code==='ShiftRight') setScope(false);
+  if (e.code==='ShiftLeft' || e.code==='ShiftRight') setGuard(false), setScope(false);
 });
 // a touchpad fires dozens of tiny wheel events per physical scroll gesture (unlike a mouse's discrete notches),
 // so switching weapons on every single event flew through the whole loadout in one swipe — debounce it instead
@@ -12848,6 +13990,82 @@ let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWo
 // boss-defeat transition (see the pyramidPhase branch in onAllDead()).
 let currentEra=0;
 const ERA_START_WAVE=[0,3,6,9]; // waveIdx where each era begins — era 0 (pyramid) starts at wave 1, era 1 (Greek) at wave 4, era 2 (Roman) at wave 7, era 3 (Islamic) at wave 10
+const ERA_NAMES=['Egypt','Greece','Rome','Cairo'];   // labels for the admin panel's wave-jump grid
+function eraOfWave(n){ return n>=9 ? 3 : n>=6 ? 2 : n>=3 ? 1 : 0; }
+// Drop the run straight into any wave, for the admin panel. This is respawnPlayer()'s era-restore logic
+// with the target wave chosen instead of forced to the era's first: same world/loadout swaps, same
+// "which era owns this wave" question. Kept beside them rather than in the panel because the panel is a
+// list of buttons and this is wave-manager business.
+function jumpToWave(n){
+  n = Math.max(0, Math.min(WAVES.length-1, n|0));
+  // Leave whatever we are currently inside FIRST — a trip, the hub, the Nile wave, a boss fight — so the
+  // era swap below lands in a clean state rather than layering a campaign wave over a destination.
+  if(inNileArea){
+    inNileArea=false; scene.remove(nileWorld);
+    weapons.forEach(w=>w.visible=false); weapons=weaponsBeforeNile||weapons; selectWeapon(currentWeaponBeforeNile||0);
+  }
+  tripDest=null; tripLeg=0; tripWave=0; tripCleared=false;
+  if(inHub){ inHub=false; setHubStats(false); exitHubChrome(); }
+  pending=null; betweenTimer=0; bossActive=false; showBossBar(false);
+  gameWon=false; gameStarted=true;
+  clearBots();
+  currentEra = eraOfWave(n);
+  waveIdx = n;
+  bossNum = currentEra;          // keep credit for the bosses that era implies, as respawnPlayer() does
+  // The pyramid pairing is a separate flag from the era because exitDungeon() reads it; both have to agree
+  // or jumping back to wave 1 restores the Greek map.
+  pyramidPhase = (currentEra===0);
+  dungeonWasPyramid = pyramidPhase;
+  // Cairo is the HUB, not a wave. enterIslamicWorld() is the combat version of that map — what
+  // respawnPlayer() uses for an era-3 death — and going there instead of enterHub() was wrong in two
+  // visible ways: it never set inHub, which is the one thing nearBooth() checks, so [E] did nothing at
+  // the travel booth; and it ran selectWeapon(0), so you stood in the bazaar holding a weapon that is
+  // supposed to be holstered there. enterHub() does the map swap itself and then adds the hub chrome.
+  // It also owns the stats bar and the player's position, so this returns rather than falling through
+  // to the spawnWave/placePlayerAt below — both of which would undo it.
+  if(currentEra>=3){
+    enterHub('⏩ Cairo — the booth is in the bazaar');
+    setHUD();
+    return;
+  }
+  if(currentEra>=2) enterRomanWorld('⏩ Wave '+(n+1)+' — the Roman frontier');
+  else {
+    exitDungeon();               // restores the pyramid or Greek overworld per dungeonWasPyramid
+    weapons.forEach(w=>w.visible=false);
+    weapons = pyramidPhase ? pyramidWeapons : greekWeapons;
+    selectWeapon(0);
+  }
+  spawnWave(n);
+  placePlayerAt(pickSpawnPoint());
+  yaw=0; pitch=0; targetYaw=0; targetPitch=0; vel.set(0,0,0);
+  jumpY=0; jumpV=0;
+  player.hp=player.maxHp; player.alive=true; player.lastHit=-99;
+  weapons.forEach(wp=>{ wp.userData.ammo=wp.userData.magSize; wp.userData.reloading=false; wp.userData.reloadT=0; });
+  setAmmoHUD(); setHUD();
+  if(currentEra<3){ setBanner('⏩ WAVE '+(n+1)); setTimeout(()=>{ if(!gameWon) setBanner(''); },1500); }
+}
+// The same idea for the destination you are away in: pick a leg and a stage within it. `wave` may equal
+// that leg's wave count, which is how spawnTripStage() already spells "the boss" — so this needs no
+// separate boss path, it just sets the counter past the last wave and lets the existing code read it.
+// Only reachable while a trip is live; the panel does not draw these rows otherwise.
+function jumpToTripStage(leg, wave){
+  if(!tripDest || !tripDest.legs || !tripDest.legs.length) return;
+  tripLeg = Math.max(0, Math.min(tripDest.legs.length-1, leg|0));
+  const L = curLeg();
+  tripWave = Math.max(0, Math.min(L.waves.length, wave|0));
+  tripCleared = false;
+  pending = null; betweenTimer = 0;
+  bossActive = false; showBossBar(false);
+  clearBots();
+  setHubStats(true, L.place, '', L.icon);
+  // enter*World() ends in spawnTripStage(), which reads tripLeg/tripWave — so the map, the loadout and the
+  // right stage of the ladder all come up from this one call, exactly as arriving or respawning does.
+  L.enter('⏩ ' + L.place + ' — ' + (tripWave >= L.waves.length ? 'the boss' : 'wave ' + (tripWave+1)));
+  player.hp = player.maxHp; player.alive = true; player.lastHit = -99;
+  jumpY = 0; jumpV = 0;
+  weapons.forEach(wp=>{ wp.userData.ammo=wp.userData.magSize; wp.userData.reloading=false; wp.userData.reloadT=0; });
+  setAmmoHUD(); setHUD();
+}
 function clearBots(){ bots.forEach(b=>scene.remove(b.mesh)); bots.length=0; }
 function setEnemyCount(txt){ const e=document.getElementById('enemies'); if(e) e.textContent = txt!==undefined?txt:bots.filter(b=>b.alive).length; }
 function spawnWave(n){
@@ -12956,7 +14174,7 @@ function startGame(){
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
   jumpY = 0; jumpV = 0;
-  inHub=false; tripDest=null; closeBooth(); setHubStats(false); exitHubChrome();  // fresh run: wave HUD and weapon back
+  inHub=false; tripDest=null; tripLeg=0; closeBooth(); setHubStats(false); exitHubChrome();  // fresh run: wave HUD and weapon back
   // drain any leftover fire meteors from a previous run so one can't fire into the fresh game (quakeEffects,
   // the older analogous VFX-effect array, has this same gap on restart — out of scope here, only fixing
   // fireMeteors, this feature's own code)
@@ -12975,23 +14193,37 @@ function onAllDead(){
   // Away on a trip: run the destination's own ladder and return. Nothing below this line applies out
   // here — falling through is what used to walk the campaign's waveIdx into an empty Islamic wave.
   if(tripDest){
-    // the Shaman is down: that ends the trip, and only then is the basin clear
+    const leg = curLeg();
+    // This leg's boss is down. On La Venta that is the Jade-Heart Shaman, and killing him no longer ends
+    // the trip — it CARRIES YOU ON to Tenochtitlan. Only the destination's last leg ends anything.
     if(bossActive){
       bossActive = false; showBossBar(false);
-      tripCleared = true;
       player.score += TRIP_CLEAR_BONUS;
-      setBanner('🗿 The jade heart goes dark — the raft waits at the south landing');
+      setBanner(tripLeg + 1 < tripDest.legs.length
+        ? '🗿 The jade heart goes dark — the road runs north, to the lake…'
+        : '🗿 The jade heart goes dark');
       setTripHUD(); setHUD();
+      advanceTripLeg();
       return;
     }
     tripWave++;
-    if(tripWave >= LA_VENTA_WAVES.length){
-      pending='tripboss'; betweenTimer=4.2;
-      setBanner('⚠ The pyramid answers — K’Inich rises over the offering court…');
+    if(tripWave >= leg.waves.length){
+      // Out of waves. A leg with a boss hands over to it; one without (Tenochtitlan, for now) is finished,
+      // and finishing the LAST leg is what sends the player home.
+      if(leg.boss){
+        pending='tripboss'; betweenTimer=4.2;
+        setBanner('⚠ The pyramid answers — K’Inich rises over the offering court…');
+        return;
+      }
+      player.score += TRIP_CLEAR_BONUS;
+      setBanner('🏔 Tenochtitlan holds — the precinct is yours');
+      setHUD();
+      advanceTripLeg();
       return;
     }
     pending='tripwave'; betweenTimer=4.0;
-    setBanner('WAVE ' + (tripWave+1) + ' — they come from the treeline…');
+    setBanner('WAVE ' + (tripWave+1) + (tripLeg===0 ? ' — they come from the treeline…'
+                                                    : ' — they come along the causeways…'));
     return;
   }
   if(bossActive){
@@ -13063,6 +14295,11 @@ function updateWaves(dt){
       else if(pending==='nile'){ enterNileWave(); }
       else if(pending==='tripwave'){ spawnTripWave(); setBanner('WAVE '+(tripWave+1)); setTimeout(()=>{ if(!gameWon) setBanner(''); },1200); }
       else if(pending==='tripboss'){ spawnTripBoss(); setBanner('🗿 THE JADE-HEART SHAMAN'); setTimeout(()=>{ if(!gameWon) setBanner(''); },1800); }
+      // the crossing between two maps of one destination: La Venta → Tenochtitlan. enterAztecWorld()
+      // calls spawnTripStage() itself, so the new leg's first wave comes up with the map.
+      else if(pending==='legcross'){ const leg=curLeg(); if(leg) leg.enter(); }
+      // the last leg is clear: that IS the way home, in place of the raft that used to be
+      else if(pending==='triphome'){ returnToHub(); }
       pending=null;
     }
     // !tripCleared: onAllDead() returns without arming `pending` when a destination is finished, so
@@ -13298,7 +14535,17 @@ function fire(){
     gunGroup.rotation.x -= 0.16; // swing kick — every weapon gets a visible kick now, not just the position punch
     camera.getWorldDirection(_fwd);
     const hit = firstHit(camera.position, _fwd, w.range||2.4);
-    if(hit && hit.bot){ damageBot(hit.bot, admin.instaKill?1e9:w.damage, hit.point); showHitmarker(); SFX.hitmark(); }
+    if(hit && hit.bot){
+      // Read alive BEFORE the hit so a kill can be told from a wound — the tecpatl pays out per kill, not
+      // per hit, which is what stops it healing you to full by chipping at a boss.
+      const wasAlive = hit.bot.alive;
+      damageBot(hit.bot, admin.instaKill?1e9:w.damage, hit.point);
+      showHitmarker(); SFX.hitmark();
+      if(w.lifesteal && wasAlive && !hit.bot.alive && player.alive){
+        player.hp = Math.min(player.maxHp, player.hp + w.lifesteal);
+        setHUD();
+      }
+    }
     return;
   }
   if(w.reloading && !admin.infAmmo) return;
@@ -13502,6 +14749,13 @@ function damageBot(bd, dmg, point){
 }
 function damagePlayer(dmg){
   if(!player.alive || godMode) return;   // godMode is the [G] debug toggle
+  // A raised Chimalli takes the hit instead of you. Applied here rather than at each damage source so it
+  // covers every one of them — melee, ranged, AoE telegraphs, the bosses' specials — without each having
+  // to know the shield exists.
+  if(guarding){
+    const w = weapons[currentWeapon] && weapons[currentWeapon].userData;
+    if(w && w.shieldBlock){ dmg = Math.max(1, Math.round(dmg * (1 - w.shieldBlock))); SFX.hitmark(); }
+  }
   player.hp -= dmg; player.lastHit = performance.now()*0.001; showDamage(); setHUD(); SFX.hurt();
   if(player.hp <= 0){
     player.alive = false; player.respawn = 2.5;
@@ -13525,7 +14779,8 @@ function respawnPlayer(){
   // Dying away on a trip respawns you at that destination, not in Cairo. Without this it falls through
   // to the era branches below and lands you in the Islamic map with tripDest still set — home, but
   // with the trip's HUD and a live raft prompt at coordinates that mean nothing there.
-  if(tripDest){ tripDest.enter(); placePlayerAt(pickSpawnPoint()); setHUD(); return; }
+  // ...and on the leg you died on, not back at the start of the destination
+  if(tripDest){ const leg=curLeg(); if(leg) leg.enter(); placePlayerAt(pickSpawnPoint()); setHUD(); return; }
   if(inHub){ enterHub('💀 you wake in Cairo'); placePlayerAt(pickSpawnPoint()); setHUD(); return; }
   if(currentEra >= 3) enterIslamicWorld('💀 back to Wave 10');
   else if(currentEra >= 2) enterRomanWorld('💀 back to Wave 7');
