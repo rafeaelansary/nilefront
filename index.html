@@ -136,7 +136,7 @@
   #wcera{font-size:12px;opacity:0.78;margin-top:3px}
   #wcstate{font-size:14px;font-weight:800;margin-top:7px}
   #boothhint{margin-top:14px;font-size:13px;text-align:center;opacity:0.7}
-  /* ---- admin panel (Z,X,C) ---- */
+  /* ---- admin panel (Z,X,X,C,C,C) ---- */
   #adminoverlay{position:absolute;inset:0;z-index:12;display:none;align-items:center;justify-content:center;
     background:radial-gradient(120% 130% at 50% 40%, rgba(4,10,8,0.92) 0%, rgba(2,5,4,0.97) 100%)}
   body.admin #adminoverlay{display:flex}
@@ -205,7 +205,7 @@
 </div></div>
 <div id="adminoverlay"><div id="adminbox">
   <div id="admintitle">ADMIN</div>
-  <div id="adminsub">Z · X · C</div>
+  <div id="adminsub">Z · X · X · C · C · C</div>
   <div id="adminrows"></div>
   <div id="adminjump">
     <div id="adminjumplbl">⏩ JUMP TO WAVE</div>
@@ -13544,7 +13544,7 @@ function returnToHub(){
   enterHub('🏠 Home in Cairo — the booth is in the bazaar');
 }
 // ===================== ADMIN PANEL =====================
-// Opened by pressing Z, X, C in order. Replaces the old single-key cheats, which fired on a bare keypress
+// Opened by pressing Z, X, X, C, C, C in order. Replaces the old single-key cheats, which fired on a bare keypress
 // and so could alter a run by accident, and which were invisible unless you read the source.
 //
 // Everything here is a flag read at the point it matters -- fire() for ammo and damage, damagePlayer() for
@@ -13554,10 +13554,10 @@ const admin = { infAmmo:false, instaKill:false, fly:false };
 let adminOpen = false;
 let flyY = 0;                       // height above the terrain while flying, in units
 
-// ---- the Z,X,C unlock ----
+// ---- the Z,X,X,C,C,C unlock ----
 // Order matters and the run resets on any other key, so it cannot be hit by accident while moving. There
 // is no timeout: a timer would make it fail under a lag spike, and there is nothing to protect here.
-const ADMIN_SEQ = ['KeyZ','KeyX','KeyC'];
+const ADMIN_SEQ = ['KeyZ','KeyX','KeyX','KeyC','KeyC','KeyC'];
 let adminSeqAt = 0;
 function adminSeqStep(code){
   if(code === ADMIN_SEQ[adminSeqAt]){
@@ -13746,7 +13746,7 @@ document.addEventListener('keydown', e => {
   // ==================== ADMIN PANEL UNLOCK ====================
   // The single-key cheats (K kill-all, H skip-to-hub, G god mode) are gone. They fired on a bare keypress,
   // which meant a stray finger during a fight silently altered the run, and they were undiscoverable
-  // except by reading the source. Everything they did now lives behind Z, X, C pressed in that order and
+  // except by reading the source. Everything they did now lives behind Z, X, X, C, C, C in that order and
   // is visible and toggleable in one place. This is still a single unminified HTML file, so treat the
   // sequence as public knowledge: do not build anything that assumes a run was played honestly.
   if (!boothOpen && adminSeqStep(e.code)) { openAdmin(); return; }
