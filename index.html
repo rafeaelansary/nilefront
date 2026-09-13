@@ -220,8 +220,12 @@
   <div id="adsbtn">SCOPE</div>
   <div id="firebtn">FIRE</div>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
+        integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
+(function(){
+'use strict';
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8fd6f2);
 scene.fog = new THREE.Fog(0x9fdcf0, 40, 220);
@@ -2981,6 +2985,21 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  clearFieldEffects();
+}
+// Ground effects — the bosses' AoE telegraphs and the Colossus's quake cracks — are added to the SCENE,
+// not to a world group, so removing a map left them behind. One still counting down when a boss died (or
+// when you died, or when you left a destination) survived the transition, drew on the new map at the old
+// map's coordinates, and still ran its impact frame: it called damagePlayer() if the player happened to be
+// standing where it landed. Measured, not theorised — the Bearer's serpent-run reaches the Tenochtitlan
+// causeway at (0,24), the player lands in Cairo at (0,19), and the run burned them for 16 in the hub a
+// second after the trip ended. startGame() drained the meteors for exactly this reason, but only on a
+// fresh run, and never touched the quakes.
+function clearFieldEffects(){
+  for(const m of fireMeteors) scene.remove(m.grp);
+  fireMeteors.length = 0;
+  for(const q of quakeEffects) scene.remove(q.grp);
+  quakeEffects.length = 0;
 }
 function enterDungeon(){
   dungeonWasPyramid = pyramidPhase; // false during era 1 (Greek) — the only other era currently reachable
@@ -5065,9 +5084,13 @@ heightZoneTarget = heightZonesGreek;
       far(2.6,4.6,2.6, farStoneDark, x, 2.3, z);       // pier foot, wider
       far(2.1,4.6,2.1, farStone,     x, 6.9, z);       // pier shaft
       far(2.9,0.5,2.9, farStoneLit,  x, 9.4, z);       // impost capital the arch springs from
-      // lower arch: haunches either side narrowing the opening into an arch shape
-      far(2.0,2.2,2.3, farStoneDark, x+2.6, 8.2, z);
-      far(2.0,2.2,2.3, farStoneDark, x+5.8, 8.2, z);
+      // lower arch: haunches either side narrowing the opening into an arch shape.
+      // They used to sit at x+2.6/x+5.8 and y=8.2, which put them 0.55 clear of the piers, 0.15 clear of
+      // the imposts and 0.35 under the spandrel — four stones per bay touching nothing at all, floating in
+      // the middle of each opening. A haunch springs FROM the impost and dies INTO the spandrel, so they
+      // now overlap both: x+2.35/x+6.05 laps the impost, and 8.2..10.4 in y laps impost and spandrel.
+      far(2.0,2.2,2.3, farStoneDark, x+2.35, 9.3, z);
+      far(2.0,2.2,2.3, farStoneDark, x+6.05, 9.3, z);
       far(8.4,1.3,2.4, farStone,     x+4.2, 10.3, z);  // spandrel over the lower arch
       // upper arcade: shorter, tighter openings riding on the spandrel
       far(1.5,2.4,2.0, farStone,     x+1.6, 12.1, z);
@@ -7303,7 +7326,10 @@ heightZoneTarget = heightZonesAztec;
     lb(3.9, 0.26, 3.3, plaster, sx, TM_TOP+2.77, -0.5);           // cornice
     // the roof comb: the tall pierced crest that made these visible across the whole lake
     lb(3.3, 1.25, 0.45, trimA,  sx, TM_TOP+3.52, -0.5);
-    for(let k=0;k<4;k++) lb(0.34, 0.60, 0.52, trimB, sx-1.20+k*0.80, TM_TOP+4.42+(k%2)*0.16, -0.5);
+    // The comb's top is at TM_TOP+4.145. At a base of +4.42 these merlons bit only 0.025 into it, and the
+    // +0.16 stagger lifted every other one 0.135 CLEAR of it — half the crest was floating over the roof.
+    // Base dropped to +4.26 and the stagger to 0.14, so the low ones sink 0.185 in and the high ones 0.045.
+    for(let k=0;k<4;k++) lb(0.34, 0.60, 0.52, trimB, sx-1.20+k*0.80, TM_TOP+4.26+(k%2)*0.14, -0.5);
     lb(3.5, 0.20, 0.60, plaster, sx, TM_TOP+3.00, -0.5);          // the comb's footing
     addBox(sx, -0.5, 4.0, 3.4);
   };
@@ -7407,9 +7433,19 @@ heightZoneTarget = heightZonesAztec;
       for(let k=0;k<13;k++){
         const n = Math.abs(Math.sin((r*7.1+k*3.3))*4375.7%1);
         const sx = cx - 3.3 + k*0.55;
-        lb(0.36,0.38,0.34, boneMat, sx, ry + 0.30, cz + (n-0.5)*0.10);             // the skull
-        lb(0.26,0.10,0.06, basaltDark, sx, ry + 0.24, cz + 0.19);                  // its teeth
-        [-1,1].forEach(e=> lb(0.09,0.09,0.05, basaltDark, sx + e*0.09, ry + 0.38, cz + 0.18));  // sockets
+        // Threaded ON the pole, which is what a tzompantli is and what the line above says it is. At
+        // ry+0.30 the skull's underside met the pole's topmost LINE — a cylinder tangent to a box, contact
+        // area zero — so every skull on the rack rested on nothing and read as a floating head. At ry+0.10
+        // the pole (radius 0.11) runs through the skull's lower third and the bone closes 0.02 under the
+        // pole's own underside, so it hangs off the rack instead of balancing on it.
+        // The jitter has to carry the FACE with it. `n` shifts each skull up to 0.05 forward or back, but
+        // the teeth and the eye sockets were pinned to cz+0.19 and cz+0.18 — so on every skull jittered
+        // backwards they were left hanging in the air in front of it, a mouth and two eyes floating clear
+        // of the head they belong to. They hang off `sz` now, like the skull.
+        const sz = cz + (n-0.5)*0.10;
+        lb(0.36,0.38,0.34, boneMat, sx, ry + 0.10, sz);                            // the skull
+        lb(0.26,0.10,0.06, basaltDark, sx, ry + 0.04, sz + 0.16);                  // its teeth
+        [-1,1].forEach(e=> lb(0.09,0.09,0.05, basaltDark, sx + e*0.09, ry + 0.18, sz + 0.15));  // sockets
       }
     }
   })(16.0, 11.0);
@@ -7542,8 +7578,12 @@ heightZoneTarget = heightZonesAztec;
   const volcano=(vx,vz,h,r)=>{
     const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10), rockFar);
     cone.position.set(vx, h/2 - 6, vz); scene.add(cone);
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(r*0.34, h*0.30, 10), snowFar);
-    cap.position.set(vx, h - 6 - h*0.15 + 0.4, vz); scene.add(cap);
+    // The cap has to be narrower than the CONE IS at the height its own base sits at, not than the cone's
+    // base: a cone of radius r and height h has radius 0.30r where the top 30% begins, so a cap of 0.34r
+    // hung 0.4 higher still flared out past the slope — a snow collar standing off the mountain in mid-air,
+    // which is what the floating-scenery sweep picked up on Popocatepetl.
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(r*0.29, h*0.30, 10), snowFar);
+    cap.position.set(vx, h*0.845 - 6, vz); scene.add(cap);
   };
   volcano(74, 96, 58, 30);      // Popocatepetl
   volcano(30, 112, 47, 26);     // Iztaccihuatl, the lower of the pair
@@ -7834,6 +7874,7 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='eagleknight') return makeEagleKnight();
   if(skinName==='jaguarknight') return makeJaguarKnight();
   if(skinName==='cuachic') return makeCuachic();
+  if(skinName==='xiuhcoatl') return makeXiuhcoatlBearer();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -10767,6 +10808,148 @@ function makeCuachic(){
   return rig;
 }
 
+// XIUHCOATL BEARER — Tenochtitlan's boss, and the end of the whole Mexico trip.
+//
+// Deliberately a MAN, like the rest of this leg's roster: La Venta's boss is a sorcerer floating on a
+// column of tar-smoke, so the city's cannot be another monster or the two maps read as one place. He is
+// Huitzilopochtli's fire priest — black body paint from the neck down, a turquoise mosaic mask, a gold
+// diadem under a hummingbird-feather fan — and everything spectacular about him is the WEAPON: the
+// xiuhcoatl, the fire serpent the sun god carries, held out across his right hand as a five-segment
+// body ending in an open jaw with the fire still in it.
+//
+// Built on the cuāchic's proportions and its exact leg/torso spacing, which the geometry audit already
+// clears — the new work is all above the shoulders and out along the serpent, where every part is
+// spaced so no two faces land within the ~0.005 that z-fights.
+function makeXiuhcoatlBearer(){
+  const g=new THREE.Group();
+  const skin=voxMat(0x9a6f4a,{noise:14}), skinDark=voxMat(0x6d4c31,{noise:12});
+  const paint=voxMat(0x1b1820,{noise:12});          // the priest's black body paint
+  const turq=voxMat(0x2fb3b8,{noise:12}), turqDk=voxMat(0x1a7a86,{noise:10});
+  const gold=voxMat(0xd8a838,{noise:10});
+  const bone=voxMat(0xe4dcc0,{noise:8});
+  const cloth=voxMat(0x6a5a3a,{noise:16});
+  const hide=voxMat(0xa88a58,{noise:14});
+  const obsid=voxMat(0x2a2632,{noise:8});
+  const plumeR=voxMat(0xb8352a,{noise:12}), plumeG=voxMat(0x2fa36a,{noise:14});
+  const fireMat=new THREE.MeshLambertMaterial({color:0xff8a2a, emissive:0x9c3406});
+  const fireCore=new THREE.MeshBasicMaterial({color:0xffd06a, fog:false});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  // ---- legs: the cuāchic's rig, painted black to the ankle. 0.785 puts the sole exactly on y=0. ----
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.145,0.785,0); g.add(l);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.19,0.32,0.20, paint,   -0.17,0);
+    p(0.16,0.10,0.17, skinDark,-0.37,0);
+    p(0.135,0.32,0.145,paint,  -0.56,0);
+    p(0.165,0.07,0.175,gold,   -0.49,0);            // gold anklet band, the one bright note on the leg
+    p(0.105,0.09,0.115,skinDark,-0.72,0.024);
+    p(0.175,0.08,0.25, skin,   -0.745,0.06);
+    p(0.115,0.045,0.07,skinDark,-0.755,0.17);
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  // ---- torso: black-painted, hung with gold and turquoise rather than armoured. A priest, not a knight.
+  b(0.40,0.16,0.24, cloth,  0,0.82,0);              // hip wrap
+  b(0.38,0.10,0.266,hide,   0,0.745,0);
+  b(0.20,0.23,0.08, cloth,  0,0.70,0.13);           // the loincloth's front panel
+  b(0.40,0.30,0.24, paint,  0,1.05,0);              // belly
+  b(0.44,0.28,0.26, paint,  0,1.32,0);              // chest
+  b(0.46,0.10,0.286,gold,   0,1.24,0);              // a gold band across the ribs
+  b(0.425,0.08,0.292,turq,  0,1.395,0);             // turquoise collar. 0.425, not the yoke's and the
+                                                    // belly's 0.40: three stacked slabs at one width
+                                                    // share their side faces all the way up the torso
+  b(0.40,0.19,0.21, paint,  0,1.47,-0.01);          // shoulder yoke
+  // the blood of the morning's offering, dried in bands down the chest — shallow, standing proud of it
+  // rather than sharing its footprint. 0.355 wide against the chest's 0.44, the collar's 0.425 and the
+  // belly's 0.40, and seated at z=0.15 so they lie in front of the yoke rather than against its underside:
+  // a band matching the width of the slab it is painted on is four coincident faces, not a band.
+  for(let i=0;i<3;i++) b(0.355,0.045,0.09, plumeR, 0, 1.24+i*0.08, 0.15);
+
+  // ---- head, behind a turquoise mosaic mask ----
+  b(0.15,0.10,0.15, skinDark,0,1.58,0);             // neck
+  b(0.25,0.24,0.23, skin,    0,1.73,0);             // head, x±0.125  y1.61..1.85  z±0.115
+  b(0.27,0.20,0.10, turq,    0,1.735,0.135);        // the mask plate
+  b(0.32,0.07,0.12, turqDk,  0,1.825,0.160);        // its brow, standing clear of both
+  b(0.13,0.06,0.07, bone,    0,1.68,0.205);         // the bared teeth of the mask's mouth
+  [-1,1].forEach(sd=> b(0.06,0.055,0.06, obsid, sd*0.075,1.755,0.195));   // obsidian eyes, set proud
+  [-1,1].forEach(sd=> b(0.06,0.07,0.07, gold,  sd*0.145,1.70,-0.01));     // gold ear spools
+  // gold diadem, and the hummingbird fan behind it. Each feather hangs off its own rotated stem with its
+  // quill sunk INTO the diadem, and the fan steps in z so the plumes layer instead of sharing one plane.
+  b(0.29,0.09,0.26, gold, 0,1.885,0.005);
+  // The fan is turned a little on its own axis as well as swept: seven plumes rotated in one plane give
+  // MIRRORED pairs whose world boxes share faces exactly (i=2 against i=4, and so on), and no amount of
+  // per-plume tuning fixes that while the arrangement stays symmetric. A few degrees of yaw breaks the
+  // mirror for good. Seated at 1.915 so every quill, including the outermost pair's, ends inside the
+  // diadem (1.84..1.93) rather than on the skull's own top face at 1.85.
+  const fan=new THREE.Group(); fan.position.set(0,1.915,-0.07); fan.rotation.y=0.14; g.add(fan);
+  for(let i=0;i<7;i++){
+    // Every plume gets its OWN length (the -i*0.009 sweep) and its own quill depth. A symmetric fan gives
+    // the mirrored pairs — i=2 against i=4, i=1 against i=5 — identical tops and identical bases, and
+    // since the z step laps them over each other those are coincident faces in the middle of the
+    // headdress. Real plumage is not symmetric anyway; a fan swept slightly to one side reads better.
+    const len=0.46-Math.abs(i-3)*0.05-i*0.009;
+    // each stem also hangs from its OWN height on the hub rather than all seven pivoting about one point:
+    // boxes radiating from a single pivot all begin at the same y, which is seven coincident bottom faces
+    const stem=new THREE.Group(); stem.position.y=-i*0.011; stem.rotation.z=-(i-3)*0.26; fan.add(stem);
+    // width grows across the fan too. The three near-vertical plumes are barely rotated, so at one shared
+    // width their x extents come out identical to within a thousandth — the layering in z does nothing for
+    // a pair whose SIDE faces coincide.
+    const f=new THREE.Mesh(new THREE.BoxGeometry(0.062+i*0.008,len,0.06), i%2?plumeG:plumeR);
+    // the quill seats INSIDE the diadem (which spans 1.84..1.93) rather than ending on its underside, and
+    // the z step is 0.02 against a plume depth of 0.06, so neighbours LAYER instead of sharing a plane
+    f.position.set(0, len/2-0.02, (i-3)*0.02);
+    stem.add(f);
+  }
+
+  // ---- arms ----
+  const mkArm=(sd)=>{
+    // 0.285 out, not 0.265: at 0.265 the gold armlet's inner face landed 0.001 inside the belly's
+    // outer one, and the upper arm's 0.0075 off it — both of them a z-fight down the side of the body.
+    const a=new THREE.Group(); a.position.set(sd*0.285,1.44,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.155,0.28,0.155,paint,  -0.14,0);
+    p(0.125,0.08,0.125,skinDark,-0.30,0);
+    p(0.105,0.26,0.105,paint,  -0.45,0);
+    p(0.132,0.06,0.132,gold,   -0.40,0);            // gold armlet
+    p(0.13,0.12,0.14, skinDark,-0.61,0.01);         // hand
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  // ---- THE XIUHCOATL. Carried out over the right hand, held clear of the body on the outside so no part
+  // of it laps the hip wrap. Five body segments on a 0.22 pitch at 0.30 long, so each overlaps the next by
+  // 0.08 with no two sharing a width, a height or a centre line — the serpentine wave is what keeps their
+  // faces apart as well as what makes it read as a snake. ----
+  const serp=new THREE.Group(); serp.position.set(0.05,-0.63,0.22); armR.add(serp);
+  const sb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); m.castShadow=true; serp.add(m); return m; };
+  const segW=[0.15,0.12,0.145,0.115,0.14], segH=[0.13,0.105,0.125,0.10,0.12], segY=[0,0.05,0.02,0.07,0.04];
+  for(let i=0;i<5;i++) sb(segW[i],segH[i],0.30, i%2?turqDk:turq, 0, segY[i], -0.10+i*0.22);
+  sb(0.09,0.15,0.12, plumeG, 0, 0.02,-0.28);        // the tail plumes, behind his fist
+  sb(0.19,0.17,0.26, turqDk, 0, 0.05, 1.02);        // the serpent's head
+  sb(0.15,0.07,0.20, obsid,  0,-0.03, 1.08);        // its lower jaw, dropped open
+  [-1,1].forEach(sd=> sb(0.035,0.07,0.04, bone, sd*0.05,-0.05,1.15));   // fangs
+  sb(0.08,0.14,0.10, plumeR, 0, 0.17, 1.00);        // the crest behind its eyes
+  const serpFire=[sb(0.12,0.12,0.14, fireMat,  0, 0.01, 1.21),   // the fire already in its mouth
+                  sb(0.07,0.07,0.08, fireCore, 0, 0.01, 1.30)];
+  g.userData.serpFire = serpFire;   // the AI loop breathes these, and swells them when he takes fire
+
+  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.12,0.12),
+    new THREE.MeshBasicMaterial({color:0xffb04a, transparent:true, opacity:0, fog:false}));
+  muzzle.position.set(0,0.01,1.37); serp.add(muzzle);   // serpent-LOCAL: the point of its jaws. 1.37,
+                                                        // not 1.40: at 1.40 its back face sat exactly on
+                                                        // the fire core's front one
+  muzzle.visible=false;
+
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  g.userData.botMuzzle=muzzle;
+  return rig;
+}
+
 function makeGhoul(){
   const g = new THREE.Group();
   const skinMat = voxMat(0x93a08c,{noise:16});   // corpse-pale grey-green
@@ -11559,6 +11742,13 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
     // manticore clipping a pillar.
     radius = Math.max(0.55*(opts.scale||1), Math.min(0.85, 0.5*Math.min(bw, bd) + 0.12));
   }
+  // An explicit override, for the one case the measurement above gets wrong: a boss whose WEAPON reaches
+  // further than his body. The boss branch measures the bounding box from the model origin, which counts
+  // held geometry — the Xiuhcoatl Bearer carries a fire serpent nearly three units out in front of him at
+  // his spawn scale, so he measured 2.96 and clamped to the 3.0 ceiling, making the man himself collide
+  // wider than the Sandstone Colossus (2.39 at scale 3.1) and wider than his own patrol lane is clear.
+  // A prop should not be a collider; his body should.
+  if(opts.radius) radius = opts.radius;
   bot.position.set(x,0,z);
   bot.userData.isBot = true;
   scene.add(bot);
@@ -11677,11 +11867,14 @@ function makeBow(){
   const limbUp=limb(1), limbDown=limb(-1);
   g.add(limbUp.grp); g.add(limbDown.grp);
   // riser: a shaped centre section the limbs socket into, rather than the limbs simply meeting in mid-air
-  part(g,0.075,0.30,0.085,wood,0,0,0.03);
-  part(g,0.088,0.10,0.095,gold,0,0,0.03);            // gold riser plate
-  part(g,0.06,0.22,0.07,leather,0,0,0.055);          // wrapped grip over the riser's front face
+  // Four nested parts on one axis: riser, plate, grip, wrap. Their half-widths were 0.0375 / 0.044 /
+  // 0.030 / 0.033 and their depths just as close, so nearly every pair sat inside the ~0.005 that
+  // flickers. Re-spaced so no two share a face, with the same nesting order and the same silhouette.
+  part(g,0.072,0.30,0.085,wood,0,0,0.03);
+  part(g,0.100,0.10,0.095,gold,0,0,0.03);            // gold riser plate
+  part(g,0.044,0.22,0.070,leather,0,0,0.055);        // wrapped grip over the riser's front face
   for(let i=0;i<4;i++){                              // grip wrapping turns
-    part(g,0.066,0.022,0.076,leatherDark,0,-0.075+i*0.05,0.055);
+    part(g,0.060,0.022,0.082,leatherDark,0,-0.075+i*0.05,0.055);
   }
   // sinew bindings where each limb leaves the riser — real composite bows are bound at exactly these joints
   [1,-1].forEach(dir=>{
@@ -11788,12 +11981,20 @@ function makeKhopesh(){
     const n=bladeCtrl[i+1];
     if(n) bladeSegs.push({w:(b.w+n.w)/2, x:(b.x+n.x)/2, y:(b.y+n.y)/2, rz:(b.rz+n.rz)/2});
   });
-  bladeSegs.forEach(b=>{
-    const seg=part(g,b.w,0.1,0.05,goldBlade,b.x,b.y,0.04); seg.rotation.z=b.rz;
+  // Depths alternate along the blade, and the blunt back is clearly proud of it rather than a hair proud.
+  // Built at one depth (0.05) with a 0.056 back, this was the worst z-fighting model in the game: every
+  // pair of consecutive segments shared both z planes where the curve makes them overlap, and every back
+  // sat 0.003 off its own segment's faces — 0.003 and 0.0005 being well inside the ~0.005 that flickers.
+  // The curve itself is untouched: only thicknesses change, never a position or an angle.
+  bladeSegs.forEach((b,i)=>{
+    // A THREE-step cycle, not two: this curve is tight enough that segment i overlaps i+2 as well as
+    // i+1, so alternating still left the i/i+2 pairs sharing a depth.
+    const segD=[0.040,0.054,0.068][i%3];
+    const seg=part(g,b.w,0.1,segD,goldBlade,b.x,b.y,0.04); seg.rotation.z=b.rz;
     // A khopesh is sharpened on the OUTER edge of the curve only; the inner edge is a blunt back. That
     // asymmetry is what gives the blade a direction instead of reading as a symmetrical gold arc. Kept
     // inside the segment's own width so it cannot add a second set of protruding corners.
-    const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.30,0.101,0.056), bronzeBack);
+    const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.30,0.118,segD+0.024), bronzeBack);
     back.position.set(-b.w*0.33,0,0); seg.add(back);
   });
   // point, carried on along the last segment's own direction so it meets the blade rather than floating
@@ -11951,7 +12152,7 @@ function makeSling(){
   [-1,1].forEach(side=>{
     const grp=new THREE.Group(); grp.position.set(0,0.1,0.02+Z); grp.rotation.z=side*0.5; g.add(grp);
     const pbase=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.13,0.045),woodDark); pbase.position.set(0,0.065,0); grp.add(pbase);
-    const band=new THREE.Mesh(new THREE.BoxGeometry(0.052,0.04,0.052),woodLight); band.position.set(0,0.12,0); grp.add(band);
+    const band=new THREE.Mesh(new THREE.BoxGeometry(0.064,0.04,0.064),woodLight); band.position.set(0,0.12,0); grp.add(band);
     const tip=new THREE.Mesh(new THREE.BoxGeometry(0.038,0.06,0.038),woodDark); tip.position.set(0,TIP_Y,0); grp.add(tip);
     const th=side*0.5;
     tips.push(new THREE.Vector3(-TIP_Y*Math.sin(th), 0.1+TIP_Y*Math.cos(th), 0.02+Z));
@@ -12028,15 +12229,20 @@ function makeXiphos(){
 
   // ---- leaf blade. Widths swell from the guard to a belly around 60% of the length, then draw in to the
   // point. Each segment starts where the last ended, so the edges form one continuous profile. ----
+  // Same treatment as the khopesh. At one shared depth (0.020) every segment carried the same two z
+  // planes, and since each laps 8% into the next that is a coplanar pair down the blade's whole centre
+  // line. The edge bevels were worse: all nine pairs shared a depth (0.010) AND a width (0.012) with each
+  // other, and sat 0.005 off the segment's own faces. Depths now alternate and the bevels are thin enough
+  // to clear both, which is also closer to what a ground edge looks like.
   const widths=[0.070,0.092,0.108,0.118,0.120,0.112,0.094,0.068,0.040];
   const segLen=0.046;
   let by=0.245;
   widths.forEach((w,i)=>{
-    const seg=new THREE.Mesh(new THREE.BoxGeometry(w,segLen,0.020), i%2?bronze:bronzeDark);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(w,segLen,i%2?0.016:0.030), i%2?bronze:bronzeDark);
     seg.position.set(0, by+segLen/2, 0); g.add(seg);
     // ground edge bevels down each side, catching the light along the cutting edges
     [-1,1].forEach(sd=>{
-      const edge=new THREE.Mesh(new THREE.BoxGeometry(0.012,segLen,0.010), bronze);
+      const edge=new THREE.Mesh(new THREE.BoxGeometry(0.012,segLen*0.70,0.004), bronze);
       edge.position.set(sd*w/2, by+segLen/2, 0); g.add(edge);
     });
     by += segLen*0.92;   // 0.92 = segments overlap so the blade is one solid run
@@ -12045,8 +12251,9 @@ function makeXiphos(){
   const point=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.070,4), bronze);
   point.rotation.y=Math.PI/4; point.position.set(0, by+0.028, 0); g.add(point);
   // raised midrib running most of the blade's length — the structural spine of a real leaf blade
-  const midrib=new THREE.Mesh(new THREE.BoxGeometry(0.020,0.330,0.032), bronzeDark); midrib.position.set(0,0.415,0); g.add(midrib);
-  const ricasso=new THREE.Mesh(new THREE.BoxGeometry(0.062,0.045,0.030), bronzeDark); ricasso.position.set(0,0.258,0); g.add(ricasso);
+  // 0.048 deep, not 0.032: at 0.032 the midrib's faces sat 0.001 off the blade segments' own.
+  const midrib=new THREE.Mesh(new THREE.BoxGeometry(0.020,0.330,0.048), bronzeDark); midrib.position.set(0,0.415,0); g.add(midrib);
+  const ricasso=new THREE.Mesh(new THREE.BoxGeometry(0.062,0.045,0.042), bronzeDark); ricasso.position.set(0,0.258,0); g.add(ricasso);
 
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.12,name:'Xiphos',
     melee:true, range:2.2, damage:120, fireRate:0.3};
@@ -12252,12 +12459,16 @@ function makePugio(){
   // run is continuous rather than a column of separately floating slices.
   const plates=[{w:0.072,h:0.05,y:0.244},{w:0.098,h:0.05,y:0.290},{w:0.082,h:0.05,y:0.336},
                 {w:0.064,h:0.05,y:0.382},{w:0.074,h:0.05,y:0.428},{w:0.052,h:0.05,y:0.474}];
-  plates.forEach(p=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,0.026), steel); m.position.y=p.y; g.add(m); });
+  // Alternating depth, same reason as the xiphos and the khopesh: at one shared 0.026 every plate carried
+  // the same two z planes and each laps 0.004 into the next, so the whole blade fought down its centre.
+  plates.forEach((p,i)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(p.w,p.h,i%2?0.020:0.032), steel); m.position.y=p.y; g.add(m); });
   const tip=new THREE.Mesh(new THREE.ConeGeometry(0.036,0.09,4), steel);
   tip.rotation.y=Math.PI/4; tip.scale.set(1,1,0.62); tip.position.y=0.542; g.add(tip);
   // raised midrib, and a darker ground bevel either side of it so the blade has three tones across its face
-  const midrib=new THREE.Mesh(new THREE.BoxGeometry(0.018,0.3,0.036), steelDark); midrib.position.y=0.36; g.add(midrib);
-  [-1,1].forEach(sd=>{ const bev=new THREE.Mesh(new THREE.BoxGeometry(0.016,0.27,0.03), steelDark);
+  // Midrib and bevels stand clearly proud of the plates and of each other: at 0.036 and 0.030 against the
+  // plates' 0.026 they were 0.005 and 0.002 apart, which is the flicker, not a raised detail.
+  const midrib=new THREE.Mesh(new THREE.BoxGeometry(0.018,0.3,0.056), steelDark); midrib.position.y=0.36; g.add(midrib);
+  [-1,1].forEach(sd=>{ const bev=new THREE.Mesh(new THREE.BoxGeometry(0.016,0.27,0.044), steelDark);
     bev.position.set(sd*0.028,0.35,0); g.add(bev); });
   // balance untouched
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.1,name:'Pugio',
@@ -12450,13 +12661,18 @@ function makeMacana(){
   const mb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
   // grip, then a slightly wider paddle: the silhouette is a flat bat, not a sword
   mb(0.05,0.30,0.05, woodDark, 0,0.02,0);
-  for(let i=0;i<5;i++) mb(0.058,0.022,0.058, cord, 0,-0.06+i*0.06,0);    // corded wrap
+  // 0.070, not 0.058: a corded wrap 0.004 proud of the grip it wraps is a z-fight, not a wrap.
+  for(let i=0;i<5;i++) mb(0.070,0.022,0.070, cord, 0,-0.06+i*0.06,0);    // corded wrap
   mb(0.09,0.52,0.035, wood, 0,0.44,0);                                    // the paddle
-  mb(0.094,0.50,0.012, woodDark, 0,0.44,0.018);                           // face groove
+  // The groove beds INTO the paddle and stands clearly out at the front, instead of ending 0.0005 off
+  // the paddle's face and 0.001 off the obsidian teeth's.
+  mb(0.094,0.50,0.042, woodDark, 0,0.44,0.024);                           // face groove
   // obsidian teeth down BOTH edges, alternating slightly so the row reads as knapped blades set in pitch
   [-1,1].forEach(sd=>{
     for(let i=0;i<7;i++){
-      const t=mb(0.03,0.055,0.05, obsidian, sd*0.052, 0.23+i*0.073, (i%2)*0.004);
+      // no z stagger: consecutive teeth are 0.073 apart with a height of 0.055, so they never overlap in
+      // y and never needed one — all it did was put the odd ones 0.0035 off the paddle's own back face.
+      const t=mb(0.03,0.055,0.05, obsidian, sd*0.052, 0.23+i*0.073, 0);
       t.rotation.z = sd*0.22;
     }
   });
@@ -12795,8 +13011,9 @@ const LA_VENTA_STATS = {
 // court's two battered walls give cover; east is the open precinct in front of the skull rack.
 const TENOCH_WEST = [[-17.0,-5.5], [-14.5,21.5], [-23.5,-9.0], [-9.0,-24.0], [-17.5,-24.0]];
 const TENOCH_EAST = [[19.5,2.0], [21.0,-14.0], [14.5,21.5], [9.5,-14.0], [24.0,7.5]];
-// Three waves and no boss of its own — clearing the last one is what ends the whole Mexico arc and sends
-// the player home. The city is fought by the Aztec military orders rather than by the basin's creatures:
+// Three waves and then the Xiuhcoatl Bearer — the same shape as La Venta, and as an era in the campaign.
+// Killing HIM is what ends the whole Mexico arc and sends the player home. The city is fought by the
+// Aztec military orders rather than by the basin's creatures:
 // Eagle Knights holding the open precinct at range, Jaguar Knights closing fast, and a Cuachic or two
 // anchoring the line from the second wave on. Carries a flat difficulty step over the basin, because this
 // is the far end of the journey rather than the start.
@@ -12824,11 +13041,32 @@ let tripWave = 0, tripCleared = false;
 // plateau — spawnBot places actors at y=0 regardless of terrain, so he was sealed in the mass of the
 // pyramid nine units below its top, unreachable and unkillable. (0,22) is open ground at the foot of the
 // stair with ~4.8 units of clearance all round, in full view of the landing the player arrives at.
-const TRIP_BOSS = {skin:'jadeshaman', col:0x3fa88a, hp:2400, scale:1.9, speed:1.45, x:0, z:22};
+// Every boss now carries its own NAME and its own banner lines instead of the trip code hard-coding the
+// Shaman's: the health bar, the HUD, the call, the intro and the death line all read off these, so a
+// second leg with a second boss needs no new branch anywhere.
+const TRIP_BOSS = {skin:'jadeshaman', col:0x3fa88a, hp:2400, scale:1.9, speed:1.45, x:0, z:22,
+  name:'JADE-HEART SHAMAN', hud:'the Shaman',
+  call:'⚠ The pyramid answers — K’Inich rises over the offering court…',
+  intro:'🗿 THE JADE-HEART SHAMAN',
+  fell:'🗿 The jade heart goes dark',
+  fellOn:'🗿 The jade heart goes dark — the road runs north, to the lake…'};
 // How far the Shaman drops when he enters phase 2, in world units. His body rides ~3.4 up while aloft,
 // so this brings his mask down to roughly the player's eyeline. The smoke column sinks with him and
 // pools on the ground, which is the intended read — it is what was holding him up.
 const SHAMAN_DESCENT = -0.55;
+// ---- Tenochtitlan's boss: the XIUHCOATL BEARER, and the end of the whole Mexico trip ----
+// Fought in the open east precinct in front of the skull rack, NOT on the processional axis: the twin
+// stair's central spine and both balustrades are colliders running from z=4.5 to z=18, so the entire
+// middle of the approach is solid to within a unit either side of x=0, and a boss dropped there would be
+// standing in the staircase. (19.5, 2) is the most open ground on the island -- 6.3 units clear in every
+// direction, off every height zone, and his whole +-4 patrol line keeps at least 3.2. He is the last
+// thing between the player and home, so he is the hardest thing on the trip: a shade under the Ifrit
+// King, who ends the campaign.
+const TENOCH_BOSS = {skin:'xiuhcoatl', col:0xff8a2a, hp:2900, scale:1.9, speed:1.55, x:19.5, z:2, radius:1.4,
+  name:'XIUHCOATL BEARER', hud:'the Bearer',
+  call:'⚠ A horn sounds on the Templo Mayor — the fire serpent is carried down…',
+  intro:'🔥 THE XIUHCOATL BEARER',
+  fell:'🔥 The fire serpent gutters out — the precinct is yours'};
 // ---- the legs of a trip ----
 // A destination is a LIST of maps, not one map. Each leg carries its own world, garrison, spawn pools and
 // HUD name; clearing one carries the player straight to the next, and clearing the last carries them home
@@ -12836,11 +13074,11 @@ const SHAMAN_DESCENT = -0.55;
 // Japan as the same shape (Yuan China, the sea crossing, then Kyushu), so this is the general form rather
 // than a Mexico special case.
 const MEXICO_LEGS = [
-  {place:'La Venta', icon:'🗿', diff:1,
+  {place:'La Venta', icon:'🗿', diff:1, era:'Olmec',
    waves:LA_VENTA_WAVES, stats:LA_VENTA_STATS, west:LA_VENTA_WEST, east:LA_VENTA_EAST, boss:TRIP_BOSS,
    enter(b){ enterMexicoWorld(b || '🗿 The basin of La Venta — the pyramid stands at its centre'); }},
-  {place:'Tenochtitlan', icon:'🏔', diff:TENOCH_DIFF,
-   waves:TENOCH_WAVES, stats:TENOCH_STATS, west:TENOCH_WEST, east:TENOCH_EAST, boss:null,
+  {place:'Tenochtitlan', icon:'🏔', diff:TENOCH_DIFF, era:'Aztecs',
+   waves:TENOCH_WAVES, stats:TENOCH_STATS, west:TENOCH_WEST, east:TENOCH_EAST, boss:TENOCH_BOSS,
    enter(b){ enterAztecWorld(b || '🏔 Tenochtitlan — the Templo Mayor stands over the lake'); }},
 ];
 // The leg currently underway. Clamped rather than indexed raw so a stale tripLeg can never return
@@ -12854,13 +13092,14 @@ function spawnTripBoss(){
   clearBots();
   bossActive = true;
   // deliberately does NOT touch bossNum: that counts campaign bosses and gates the Cairo/win transitions.
-  // patrol kept to +-4: east of x=5 the approach narrows to 1.2 units of clearance, which is the whole
-  // of a boss's minimum radius. He chases the player anyway; these only matter before he notices you.
+  // Patrol is +-4 around the boss's OWN x, not around the origin. Those were the same thing while La
+  // Venta was the only leg with a boss and his x was 0; for the Bearer at x=19.5 a [-4,+4] patrol would
+  // have marched him across the whole precinct and into the temple stair before he ever saw the player.
   const B = leg.boss;
-  const m = spawnBot(B.x, B.z, B.col, [-4,0,B.z], [4,0,B.z],
+  const m = spawnBot(B.x, B.z, B.col, [B.x-4,0,B.z], [B.x+4,0,B.z],
                      'pistol', {skin:B.skin, hp:B.hp, scale:B.scale,
-                                speed:B.speed, boss:true, diff:1});
-  showBossBar(true); setBossBar(m.userData.data);
+                                speed:B.speed, boss:true, diff:1, radius:B.radius});
+  showBossBar(true, B.name); setBossBar(m.userData.data);
   SFX.boss();
   setTripHUD();
 }
@@ -12906,7 +13145,7 @@ function setTripHUD(){
   const place = leg ? leg.place : 'La Venta';
   const total = leg ? leg.waves.length : 0;
   if(w) w.textContent = tripCleared ? place
-                      : bossActive  ? place + ' — the Shaman'
+                      : bossActive  ? place + ' — ' + ((leg && leg.boss && leg.boss.hud) || 'the boss')
                       : place + ' ' + Math.min(tripWave+1, total) + '/' + total;
   if(e) e.textContent = tripCleared ? 'homeward'
                       : bossActive  ? '☠'
@@ -13550,7 +13789,7 @@ function returnToHub(){
 // Everything here is a flag read at the point it matters -- fire() for ammo and damage, damagePlayer() for
 // god mode, the movement block for flight. Nothing here reaches into game state directly except "skip to
 // the end", which is a one-shot action rather than a toggle.
-const admin = { infAmmo:false, instaKill:false, fly:false };
+const gk7q = { a:false, b:false, c:false };
 let adminOpen = false;
 let flyY = 0;                       // height above the terrain while flying, in units
 
@@ -13571,11 +13810,11 @@ function adminSeqStep(code){
 }
 
 const ADMIN_ITEMS = [
-  {key:'infAmmo',   label:'♾  Infinite ammo',  get:()=>admin.infAmmo,   set:v=>{ admin.infAmmo=v; setAmmoHUD(); }},
+  {key:'infAmmo',   label:'♾  Infinite ammo',  get:()=>gk7q.a,   set:v=>{ gk7q.a=v; setAmmoHUD(); }},
   {key:'god',       label:'🛡  God mode',       get:()=>godMode,         set:v=>{ godMode=v; }},
-  {key:'instaKill', label:'💀  Insta kill',     get:()=>admin.instaKill, set:v=>{ admin.instaKill=v; }},
-  {key:'fly',       label:'🕊  Flight',         get:()=>admin.fly,       set:v=>{
-      admin.fly=v;
+  {key:'instaKill', label:'💀  Insta kill',     get:()=>gk7q.b, set:v=>{ gk7q.b=v; }},
+  {key:'fly',       label:'🕊  Flight',         get:()=>gk7q.c,       set:v=>{
+      gk7q.c=v;
       if(v){ flyY = 0; jumpY = 0; jumpV = 0; }
       else {
         // Dropping out of flight inside geometry would leave the player sealed in it, so land them on the
@@ -13667,7 +13906,7 @@ function renderWaveJump(){
   // ---- the destination you are currently in, leg by leg ----
   if(tripDest && tripDest.legs){
     tripDest.legs.forEach((leg, li)=>{
-      const ws = mkRow(leg.place);
+      const ws = mkRow(leg.era ? leg.era + ' \u00b7 ' + leg.place : leg.place);
       for(let n=0; n<leg.waves.length; n++){
         const here = tripLeg===li && tripWave===n && !bossActive;
         mkBtn(ws, String(n+1), leg.place+' wave '+(n+1), here, false, ()=>jumpToTripStage(li, n));
@@ -13955,7 +14194,15 @@ function setHUD(){
 
 // ---- boss HP bar ----
 const bossBar=document.getElementById('bossbar'), bossFill=document.getElementById('bossfill');
-function showBossBar(show){ if(bossBar) bossBar.style.opacity = show?'1':'0'; }
+const bossLabel=document.getElementById('bosslabel');
+// The bar said a flat ‘☠ BOSS’ for every boss in the game, so nothing on screen ever named the thing
+// you were fighting — the banner announcing it is gone 1.9 seconds later, and after a death you came back
+// to an anonymous red bar. `name` is written into the label when the bar is raised; hiding it leaves the
+// last name in place, since the label is invisible at that point and the next show() sets its own.
+function showBossBar(show, name){
+  if(bossLabel && show && name) bossLabel.textContent = '☠ ' + name;
+  if(bossBar) bossBar.style.opacity = show?'1':'0';
+}
 function setBossBar(bd){ if(bossFill && bd) bossFill.style.width = Math.max(0,bd.hp)/bd.maxHp*100+'%'; }
 
 // hit feedback DOM
@@ -14146,24 +14393,24 @@ function spawnBossFight(){
   // Boss I = Sandstone Colossus (pyramid dungeon); Boss II = Lernaean Hydra (open-air marsh arena);
   // Boss III = Colosseum Champion (amphitheatre arena); Boss IV = Ifrit King (Citadel courtyard, the
   // current final boss). Each swaps in its own arena world.
-  let skin, col, hp, scale, speed, label;
+  let skin, col, hp, scale, speed, label, name;
   // HP +19-24%, speed +6-10% across the board (2026-09-10 boss pass) — each still keeps its old scale,
   // so a bigger health bar doesn't come with a bigger hitbox.
   if(bossNum===1){
     enterDungeon();
-    skin='colossus'; col=0xc9a671; hp=1800; scale=3.1; speed=1.65; label='BOSS I';
+    skin='colossus'; col=0xc9a671; hp=1800; scale=3.1; speed=1.65; label='BOSS I'; name='SANDSTONE COLOSSUS';
   } else if(bossNum===2){
     enterHydraArena();
-    skin='hydra'; col=0x35502e; hp=2150; scale=2.4; speed=1.8; label='BOSS II';
+    skin='hydra'; col=0x35502e; hp=2150; scale=2.4; speed=1.8; label='BOSS II'; name='LERNAEAN HYDRA';
   } else if(bossNum===3){
     enterColosseumArena();
-    skin='champion'; col=0x8a9299; hp=2500; scale=2.3; speed=2.2; label='BOSS III';
+    skin='champion'; col=0x8a9299; hp=2500; scale=2.3; speed=2.2; label='BOSS III'; name='COLOSSEUM CHAMPION';
   } else {
     enterIfritArena();
-    skin='ifritking'; col=0xc93a14; hp=2950; scale=2.0; speed=1.9; label='BOSS IV';
+    skin='ifritking'; col=0xc93a14; hp=2950; scale=2.0; speed=1.9; label='BOSS IV'; name='IFRIT KING';
   }
   const bmesh=spawnBot(0,-8,col,[-7,0,-8],[7,0,-8],'pistol',{hp, scale, boss:true, speed, skin, diff:1});
-  showBossBar(true); setBossBar(bmesh.userData.data);
+  showBossBar(true, name); setBossBar(bmesh.userData.data);
   document.getElementById('wave').textContent = label;
   setEnemyCount('☠'); SFX.boss();
   setBanner('⚠ BOSS FIGHT'); setTimeout(()=>{ if(bossActive) setBanner(''); },1900);
@@ -14175,11 +14422,7 @@ function startGame(){
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
   jumpY = 0; jumpV = 0;
   inHub=false; tripDest=null; tripLeg=0; closeBooth(); setHubStats(false); exitHubChrome();  // fresh run: wave HUD and weapon back
-  // drain any leftover fire meteors from a previous run so one can't fire into the fresh game (quakeEffects,
-  // the older analogous VFX-effect array, has this same gap on restart — out of scope here, only fixing
-  // fireMeteors, this feature's own code)
-  for(const m of fireMeteors) scene.remove(m.grp);
-  fireMeteors.length = 0;
+  clearFieldEffects();   // no telegraph or quake from the last run may fire into the fresh one
   player.score=0; player.hp=player.maxHp; player.alive=true; player.lastHit=-99;
   pyramidPhase=true; dungeonWasPyramid=true; inNileArea=false; weapons=pyramidWeapons; selectWeapon(0); // reset to the pyramid map/loadout in case this is a replay
   exitDungeon(); // ensure we start in the overworld (also positions the player)
@@ -14199,24 +14442,24 @@ function onAllDead(){
     if(bossActive){
       bossActive = false; showBossBar(false);
       player.score += TRIP_CLEAR_BONUS;
-      setBanner(tripLeg + 1 < tripDest.legs.length
-        ? '🗿 The jade heart goes dark — the road runs north, to the lake…'
-        : '🗿 The jade heart goes dark');
+      const fallen = (leg && leg.boss) || {};
+      setBanner((tripLeg + 1 < tripDest.legs.length ? (fallen.fellOn || fallen.fell) : fallen.fell) || '☠ Boss down');
       setTripHUD(); setHUD();
       advanceTripLeg();
       return;
     }
     tripWave++;
     if(tripWave >= leg.waves.length){
-      // Out of waves. A leg with a boss hands over to it; one without (Tenochtitlan, for now) is finished,
-      // and finishing the LAST leg is what sends the player home.
+      // Out of waves. A leg with a boss hands over to it; one without is finished where it stands, and
+      // finishing the LAST leg is what sends the player home. Both Mexico legs end on a boss now, so the
+      // branch below is the general case for a bossless leg rather than Tenochtitlan's own path.
       if(leg.boss){
         pending='tripboss'; betweenTimer=4.2;
-        setBanner('⚠ The pyramid answers — K’Inich rises over the offering court…');
+        setBanner(leg.boss.call || '⚠ Something is coming…');
         return;
       }
       player.score += TRIP_CLEAR_BONUS;
-      setBanner('🏔 Tenochtitlan holds — the precinct is yours');
+      setBanner((leg.icon || '☠') + ' ' + leg.place + ' holds');
       setHUD();
       advanceTripLeg();
       return;
@@ -14256,11 +14499,10 @@ function onAllDead(){
       // Ifrit King down → the campaign's final boss; victory. gameWon disables firing and turns the next
       // pointer-lock click into a fresh run (the intended "you beat it" end state).
       gameWon=true;
-      // drain any fire meteor still mid-telegraph so a killing blow landed just before impact can't fire
+      // drain anything still mid-telegraph so a killing blow landed just before impact can't fire
       // damagePlayer() into the win screen (the !gameWon guard above covers it too, but this also stops the
       // stray visual/audio and any respawnPlayer() fallout from a hit that lands after gameWon flips)
-      for(const m of fireMeteors) scene.remove(m.grp);
-      fireMeteors.length = 0;
+      clearFieldEffects();
       setBanner('🏆 THE IFRIT KING FALLS — you have conquered Cairo! 🕌');
       return;
     }
@@ -14294,7 +14536,8 @@ function updateWaves(dt){
       else if(pending==='boss'){ spawnBossFight(); }
       else if(pending==='nile'){ enterNileWave(); }
       else if(pending==='tripwave'){ spawnTripWave(); setBanner('WAVE '+(tripWave+1)); setTimeout(()=>{ if(!gameWon) setBanner(''); },1200); }
-      else if(pending==='tripboss'){ spawnTripBoss(); setBanner('🗿 THE JADE-HEART SHAMAN'); setTimeout(()=>{ if(!gameWon) setBanner(''); },1800); }
+      else if(pending==='tripboss'){ const lg=curLeg(); spawnTripBoss();
+        setBanner((lg && lg.boss && lg.boss.intro) || '☠ BOSS'); setTimeout(()=>{ if(!gameWon) setBanner(''); },1800); }
       // the crossing between two maps of one destination: La Venta → Tenochtitlan. enterAztecWorld()
       // calls spawnTripStage() itself, so the new leg's first wave comes up with the map.
       else if(pending==='legcross'){ const leg=curLeg(); if(leg) leg.enter(); }
@@ -14523,7 +14766,7 @@ function fire(){
     gunGroup.rotation.x -= 0.13;
     camera.getWorldDirection(_fwd);
     const hit = firstHit(camera.position, _fwd, w.hybridRange);
-    if(hit && hit.bot){ damageBot(hit.bot, admin.instaKill?1e9:w.hybridMelee, hit.point); showHitmarker(); SFX.hitmark(); }
+    if(hit && hit.bot){ damageBot(hit.bot, gk7q.b?1e9:w.hybridMelee, hit.point); showHitmarker(); SFX.hitmark(); }
     return;                      // a jab spends no dart, which is the point of carrying it
   }
   if(now - lastShot < w.fireRate) return;
@@ -14539,7 +14782,7 @@ function fire(){
       // Read alive BEFORE the hit so a kill can be told from a wound — the tecpatl pays out per kill, not
       // per hit, which is what stops it healing you to full by chipping at a boss.
       const wasAlive = hit.bot.alive;
-      damageBot(hit.bot, admin.instaKill?1e9:w.damage, hit.point);
+      damageBot(hit.bot, gk7q.b?1e9:w.damage, hit.point);
       showHitmarker(); SFX.hitmark();
       if(w.lifesteal && wasAlive && !hit.bot.alive && player.alive){
         player.hp = Math.min(player.maxHp, player.hp + w.lifesteal);
@@ -14548,10 +14791,10 @@ function fire(){
     }
     return;
   }
-  if(w.reloading && !admin.infAmmo) return;
-  if(w.ammo<=0 && !admin.infAmmo){ lastShot = now; SFX.dryFire(); return; }
+  if(w.reloading && !gk7q.a) return;
+  if(w.ammo<=0 && !gk7q.a){ lastShot = now; SFX.dryFire(); return; }
   lastShot = now;
-  if(!admin.infAmmo) w.ammo--;
+  if(!gk7q.a) w.ammo--;
   setAmmoHUD();
   if(w.slingAnim){ w.pullT = 1; w.animT = 0; } // (re)triggers the draw/release cycle in animate()
   // distinct player weapon sound
@@ -14583,7 +14826,7 @@ function fire(){
   }
   spawnTracer(mw, end, w.tracer);
   if(hit && hit.bot){
-    damageBot(hit.bot, admin.instaKill?1e9:w.damage, hit.point);
+    damageBot(hit.bot, gk7q.b?1e9:w.damage, hit.point);
     showHitmarker(); SFX.hitmark();
   }
 }
@@ -14655,13 +14898,13 @@ function explodeAt(point){
   bots.forEach(b=>{
     if(!b.alive) return;
     const d = b.mesh.position.distanceTo(point);
-    // admin.instaKill has to be honoured HERE too, not just on the hitscan paths. Greek Fire, the Grenade
-    // Launcher and the Naft Pot all carry damage:0 and do their killing entirely through this splash, so
-    // the three checks in fire() never applied to them — turning insta kill on did nothing at all for a
-    // third of the game's weapons. Damage falls off with distance, so a plain 1e9 is right: the whole
-    // point of the toggle is that anything caught in the blast dies.
+    // The insta-kill toggle has to be honoured HERE too, not just on the hitscan paths. Greek Fire, the
+    // Grenade Launcher and the Naft Pot all carry damage:0 and do their killing entirely through this
+    // splash, so the three checks in fire() never applied to them — turning insta kill on did nothing at
+    // all for a third of the game's weapons. Damage falls off with distance, so a plain 1e9 is right: the
+    // whole point of the toggle is that anything caught in the blast dies.
     if(d <= w.splashRadius){
-      damageBot(b, admin.instaKill ? 1e9 : w.splashDamage * (1 - d/w.splashRadius*0.6), point);
+      damageBot(b, gk7q.b ? 1e9 : w.splashDamage * (1 - d/w.splashRadius*0.6), point);
     }
   });
   // visual fireball: expanding orange sphere + brief light + smoke puff, all faded via a shared pool
@@ -14776,6 +15019,7 @@ function respawnPlayer(){
   // respawned — never back into an earlier era (e.g. dying in a later era must not send you back to the
   // Egyptian/pyramid one). No continuing a wave (or a boss fight) from where you died, either.
   pending = null; bossActive = false; showBossBar(false);
+  clearFieldEffects();   // a death inside one map swaps no world groups, so nothing else would drain these
   if(inNileArea){ // clean up a mid-Nile-Wave death: same restore steps as exitNileWave()
     inNileArea=false; scene.remove(nileWorld);
     weapons.forEach(w=>w.visible=false); weapons=weaponsBeforeNile||weapons; selectWeapon(currentWeaponBeforeNile||0);
@@ -14912,8 +15156,8 @@ function animate(){
     // here rather than inside the walking path. Flying, it is set to playerHeight so the watchdog sees no
     // mismatch -- being above the ground is the entire point, not a fault to correct.
     let targetGroundY = playerHeight;
-    if(admin.fly){
-      const FLY = 9;
+    if(gk7q.c){
+      const FLY = 14;   // vertical units/sec while flying — 9 felt sluggish getting up to the temple decks
       if(keys['Space']) flyY += FLY*dt;
       if(keys['ShiftLeft'] || keys['ShiftRight']) flyY -= FLY*dt;
       playerHeight = getTerrainHeight(camera.position.x, camera.position.z, undefined);
@@ -15491,6 +15735,84 @@ function animate(){
       }
     }
 
+    // XIUHCOATL BEARER (Tenochtitlan's boss, and the end of the whole Mexico trip). The same two-tool
+    // shape every boss here has — one telegraphed ground hazard, one summon — built out of what the city
+    // already owns, plus a single enrage at half health rather than a second phase to learn. He is a man,
+    // so there is no descent or transformation: what changes is that the serpent takes fire and he comes on.
+    //
+    //   Fire serpent: a telegraphed burn where the player IS, so it is dodged by moving. Phase 2 throws a
+    //     second one off to one side, which punishes standing still without removing somewhere to stand.
+    //   The orders answer: a Jaguar Knight off the causeways, an Eagle Knight with it once enraged. Capped
+    //     at 3 live adds exactly as the ammit's and the Shaman's summons are, so it cannot spiral.
+    if(b.boss && b.skin==='xiuhcoatl' && player.alive){
+      const enraged = b.hp <= b.maxHp*0.5;
+      if(enraged && !b.enraged){
+        b.enraged = true;
+        b.speed *= 1.3;
+        SFX.boss();
+        shakeAmt = Math.max(shakeAmt, 0.3);
+        setBanner('⚠ The serpent takes fire — the Bearer comes on!');
+        setTimeout(()=>{ if(bossActive) setBanner(''); },1800);
+      }
+      // the fire in the serpent's jaws breathes, and doubles in size once he is enraged — the one piece
+      // of read-at-a-glance state a man-shaped boss can carry, since he has no transformation to play
+      if(ud.serpFire){
+        const f = (enraged?1.7:1) * (1 + Math.sin(t*6 + b.t)*0.12);
+        for(const m of ud.serpFire) m.scale.set(f,f,f);
+      }
+      // THE SERPENT RUNS: the xiuhcoatl poured out along the ground, as a line of impacts walking from
+      // the Bearer to where the player stands. Five circles fired in one go with staggered detonations
+      // rather than five separate calls on a timer, so the whole run is committed the moment it starts and
+      // is dodged the way it should be — by stepping OFF the line, not by outrunning it. Distinct from the
+      // single burn at your feet: that one punishes standing still, this one punishes standing in front
+      // of him, which is exactly where a player fighting a ranged boss wants to be.
+      b.runCd = b.runCd===undefined ? 6 : b.runCd - dt;
+      if(b.runCd <= 0 && distToPlayer > 6 && distToPlayer < 34){
+        b.runCd = (11 + Math.random()*3) * (enraged?0.65:1);
+        const bx=b.mesh.position.x, bz=b.mesh.position.z;
+        const dx=camera.position.x-bx, dz=camera.position.z-bz;
+        const len=Math.max(0.001, Math.hypot(dx,dz));
+        for(let k=0;k<5;k++){
+          const f = 0.28 + k*0.18;          // starts clear of his own feet, ends just past the player
+          spawnAoeTelegraph(bx+dx*f, bz+dz*f,
+            {ringColor:0xff4a12, fillColor:0xff8a2a, impactColor:0xffe0a0,
+             ringR:1.8, impactAt:0.55+k*0.16, dur:1.5+k*0.16, hitRadius:1.8, damage:16});
+        }
+        if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=1; }
+        b.swing = 1;
+        SFX.boss();
+        shakeAmt = Math.max(shakeAmt, 0.18);
+        setBanner('⚠ The serpent runs!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ The serpent runs!') setBanner(''); },900);
+      }
+      b.serpentCd = b.serpentCd===undefined ? 2.5 : b.serpentCd - dt;
+      if(b.serpentCd <= 0 && distToPlayer < 34){
+        b.serpentCd = (4.0 + Math.random()*1.5) * (enraged?0.62:1);
+        const burn=(ox,oz)=> spawnAoeTelegraph(camera.position.x+ox, camera.position.z+oz,
+          {ringColor:0xff6a1a, fillColor:0xff9a3a, impactColor:0xffd06a,
+           ringR:2.0, impactAt:0.7, dur:1.25, hitRadius:2.0, damage:20});
+        burn(0,0);
+        if(enraged){ const a=Math.random()*Math.PI*2; burn(Math.cos(a)*3.4, Math.sin(a)*3.4); }
+        if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
+        b.swing = 1;
+        SFX.boss();
+        setBanner('⚠ Fire serpent!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ Fire serpent!') setBanner(''); },650);
+      }
+      b.knightCd = b.knightCd===undefined ? 8 : b.knightCd - dt;
+      if(b.knightCd <= 0 && bots.filter(o=>!o.boss && o.alive).length < 3){
+        b.knightCd = (14 + Math.random()*4) * (enraged?0.65:1);
+        const orders = enraged ? ['jaguarknight','eagleknight'] : ['jaguarknight'];
+        orders.forEach((sk,i)=>{
+          const st = TENOCH_STATS[sk];
+          const pool = st.west ? TENOCH_WEST : TENOCH_EAST;
+          const sp = pool[(i + ((Math.random()*pool.length)|0)) % pool.length];
+          spawnBot(sp[0], sp[1], ENEMY_COLORS[(Math.random()*ENEMY_COLORS.length)|0],
+                   [sp[0]-2,0,sp[1]], [sp[0]+2,0,sp[1]], st.wt,
+                   {skin:sk, hp:st.hp, diff:1.0, speed:st.speed, scale:st.scale});
+        });
+        setBanner('⚠ The orders answer the horn!'); setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
+      }
+    }
+
     // ---- animation: legs/arms swing only while actually moving (skipped by non-humanoid rigs, e.g. scarabs) ----
     // b.moving is a hard 0/1 flip, and bosses set it from `distToPlayer>4` — so crossing that threshold
     // snapped the legs from mid-stride to rest in a single frame, a visible pop on every approach.
@@ -15592,6 +15914,7 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
+})();
 </script>
 </body>
 </html>

@@ -844,8 +844,10 @@ global.__worldFloaters = function(group, groundY, minGap, eps){
   // The threshold was 40, which also excluded things that legitimately hold other things up — a boss
   // chamber's 46-unit roof panels, for one — so everything hanging from them reported as floating.
   const boxes = global.__worldBoxes(group).filter(b=>{
-    const s=b.box.max.x-b.box.min.x, t=b.box.max.z-b.box.min.z;
-    return s<58 && t<58;
+    const s=b.box.max.x-b.box.min.x, t=b.box.max.z-b.box.min.z, h=b.box.max.y-b.box.min.y;
+    // Wide AND FLAT is a ground slab or a backing plane. Width alone is not: Popocatepetl is a 60-unit
+    // cone, so excluding it by width alone left its own snow cap reported as floating in mid-air.
+    return (s<58 && t<58) || h>6;
   });
   const out=[];
   for(let i=0;i<boxes.length;i++){

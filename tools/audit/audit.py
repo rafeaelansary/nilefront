@@ -26,7 +26,14 @@ def extract_script(html_path):
     blocks = re.findall(r"<script>(.*?)</script>", html, re.S)
     if not blocks:
         raise SystemExit("no inline <script> block found")
-    return max(blocks, key=len)
+    script = max(blocks, key=len)
+    # index.html wraps its whole body in its own IIFE so DevTools console can't reach game state
+    # (admin, player, etc aren't in global scope). build_ctx below re-wraps the body in ITS OWN
+    # IIFE + trailing export block, so that inner wrapper is redundant here and would just hide
+    # every builder from EXPORTS the same way it hides them from the console. Strip it back off.
+    script = re.sub(r"^\s*\(function\(\)\{\s*'use strict';\s*", "", script)
+    script = re.sub(r"\s*\}\)\(\);\s*$", "", script)
+    return script
 
 
 def build_ctx(html_path):
@@ -72,6 +79,7 @@ globalThis.__builders = {
   makeEagleKnight: typeof makeEagleKnight==='function' ? makeEagleKnight : null,
   makeJaguarKnight: typeof makeJaguarKnight==='function' ? makeJaguarKnight : null,
   makeCuachic: typeof makeCuachic==='function' ? makeCuachic : null,
+  makeXiuhcoatlBearer: typeof makeXiuhcoatlBearer==='function' ? makeXiuhcoatlBearer : null,
   makeTiger: typeof makeTiger==='function' ? makeTiger : null,
   makeXiphos: typeof makeXiphos==='function' ? makeXiphos : null,
   makeTrident: typeof makeTrident==='function' ? makeTrident : null,
@@ -175,6 +183,7 @@ ACTORS = [
     ("makeEagleKnight","b=>b()",                            1.00, 0.00, "Eagle Knight"),
     ("makeJaguarKnight","b=>b()",                           1.00, 0.00, "Jaguar Knight"),
     ("makeCuachic",  "b=>b()",                              1.15, 0.00, "Cuachic"),
+    ("makeXiuhcoatlBearer","b=>b()",                       1.90, 0.00, "XiuhcoatlBearer (boss)"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor
