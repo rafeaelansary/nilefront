@@ -304,7 +304,11 @@ class Texture { constructor(){ this.wrapS=0; this.wrapT=0; this.repeat={set(){}}
 class CanvasTexture extends Texture { constructor(c){ super(); this.image=c; } }
 class Light extends Object3D { constructor(color,intensity){ super(); this.color=new Color(color); this.intensity=intensity; this.shadow={mapSize:{width:0,height:0,set(){}},camera:{}}; } }
 class AmbientLight extends Light {}
-class HemisphereLight extends Light {}
+// groundColor is the second half of a hemisphere light and every enter*World() sets it; without it here
+// any code path that re-lights a map throws in the harness for a reason that does not exist in a browser.
+class HemisphereLight extends Light {
+  constructor(sky,ground,intensity){ super(sky,intensity); this.groundColor=new Color(ground); }
+}
 class PointLight extends Light { constructor(c,i,d){ super(c,i); this.distance=d; } }
 class DirectionalLight extends Light {
   constructor(c,i){ super(c,i); this.target = new Object3D(); }   // real three.js exposes .target

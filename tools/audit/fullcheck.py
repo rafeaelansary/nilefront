@@ -29,6 +29,11 @@ REPO = HERE.parents[1]
 # seam on a 40-unit wall is far more visible than the same seam on a 0.3-unit weapon part.
 WORLD_COPLANAR_EPS = 0.006
 WORLD_OVERLAP_MIN = 0.30
+# A viewmodel is held about 0.4 from the camera, so a shared face far too small to matter on a building
+# fills a chunk of the screen on a weapon. OVERLAP_MIN (0.12 m^2) was sized for world geometry and hid
+# real z-fighting on held models -- the tecpatl's mosaic handle passed as "ok" while visibly shimmering.
+# 0.0006 m^2 is roughly a 25mm square, about the smallest inlay detail any of these models carries.
+HELD_OVERLAP_MIN = 0.0006
 FLOAT_MIN_GAP = 0.45   # a mesh this far above the ground with nothing under it is floating
 # 0.03, not 0.004: a lot of geometry is deliberately seated with a hairline clearance above what
 # it rests on, precisely to avoid the coplanar z-fighting the check above hunts for. Those are
@@ -41,14 +46,16 @@ FLOAT_TOUCH_EPS = 0.03
 # "blocked spawns: ok" line was printed without anything being tested -- and it hid three enemy spawns
 # standing inside the pyramid. A destination is a wave-bearing map like any other.
 WAVE_MAPS = {"pyramidOverworld", "greekOverworld", "romanOverworld", "islamicOverworld",
-             "mexicoOverworld"}
+             "mexicoOverworld", "aztecOverworld"}
 # Maps that use their own spawn coordinates instead of the shared SPAWN_POINTS list.
-MAP_SPAWNS = {"mexicoOverworld": "__laVentaSpawns"}
+MAP_SPAWNS = {"mexicoOverworld": "__laVentaSpawns", "aztecOverworld": "__tenochtitlanSpawns"}
 PLAYER_ENTRY = {
     "pyramidOverworld": (0, 18),
     "greekOverworld": (0, 10),
     "romanOverworld": (0, 10),
     "islamicOverworld": (0, 10),
+    "mexicoOverworld": (0, 27),
+    "aztecOverworld": (0, 24),
 }
 # Built but never reached: startGame() drops the player straight into the pyramid
 # overworld, and enterDungeon() only ever runs with dungeonWasPyramid true.
@@ -61,6 +68,7 @@ HEIGHT_ZONES = {
     "greekOverworld": "heightZonesGreek",
     "romanOverworld": "heightZonesRoman",
     "islamicOverworld": "heightZonesIslamic",
+    "aztecOverworld": "heightZonesAztec",
 }
 
 
@@ -109,7 +117,7 @@ def main():
     print("-" * len(hdr))
     for builder, invoke, scale, floor, label in ACTORS:
         r = json.loads(fn(builder, invoke, scale, floor, TOLERANCE,
-                          CONNECT_EPS, COPLANAR_EPS, OVERLAP_MIN))
+                          CONNECT_EPS, COPLANAR_EPS, HELD_OVERLAP_MIN))
         bad = []
         if abs(r["gap"]) > TOLERANCE:
             bad.append("BURIED" if r["gap"] < 0 else "FLOATS")
@@ -148,7 +156,7 @@ def main():
       return JSON.stringify(out);
     })
     """)
-    weapons = json.loads(wfn(CONNECT_EPS, COPLANAR_EPS, OVERLAP_MIN))
+    weapons = json.loads(wfn(CONNECT_EPS, COPLANAR_EPS, HELD_OVERLAP_MIN))
     hdr = f"{'weapon':16} {'loadout':18} {'meshes':>7} {'orphans':>8} {'z-fights':>9}  verdict"
     print(hdr)
     print("-" * len(hdr))

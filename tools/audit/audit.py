@@ -54,6 +54,8 @@ def build_ctx(html_path):
 EXPORTS = """
 globalThis.__laVentaSpawns = (typeof LA_VENTA_WEST!=='undefined' && typeof LA_VENTA_EAST!=='undefined')
   ? LA_VENTA_WEST.concat(LA_VENTA_EAST) : null;
+globalThis.__tenochtitlanSpawns = (typeof TENOCH_WEST!=='undefined' && typeof TENOCH_EAST!=='undefined')
+  ? TENOCH_WEST.concat(TENOCH_EAST) : null;
 globalThis.__builders = {
   makeVoxelBot: typeof makeVoxelBot==='function' ? makeVoxelBot : null,
   makeMinotaur: typeof makeMinotaur==='function' ? makeMinotaur : null,
@@ -67,6 +69,9 @@ globalThis.__builders = {
   makeMonolithVanguard: typeof makeMonolithVanguard==='function' ? makeMonolithVanguard : null,
   makeMudGolem: typeof makeMudGolem==='function' ? makeMudGolem : null,
   makeJadeShaman: typeof makeJadeShaman==='function' ? makeJadeShaman : null,
+  makeEagleKnight: typeof makeEagleKnight==='function' ? makeEagleKnight : null,
+  makeJaguarKnight: typeof makeJaguarKnight==='function' ? makeJaguarKnight : null,
+  makeCuachic: typeof makeCuachic==='function' ? makeCuachic : null,
   makeTiger: typeof makeTiger==='function' ? makeTiger : null,
   makeXiphos: typeof makeXiphos==='function' ? makeXiphos : null,
   makeTrident: typeof makeTrident==='function' ? makeTrident : null,
@@ -112,13 +117,15 @@ globalThis.__world = {
   heightZonesRoman:   typeof heightZonesRoman   !== 'undefined' ? heightZonesRoman   : null,
   heightZonesIslamic: typeof heightZonesIslamic !== 'undefined' ? heightZonesIslamic : null,
   heightZonesMexico:  typeof heightZonesMexico  !== 'undefined' ? heightZonesMexico  : null,
+  aztecColliders:  typeof aztecColliders !== 'undefined' ? aztecColliders : null,
+  heightZonesAztec:typeof heightZonesAztec!== 'undefined' ? heightZonesAztec : null,
   heightZonesOriginal:typeof heightZonesOriginal!== 'undefined' ? heightZonesOriginal: null,
 };
 // Every world group and its collider array, for the whole-game sweep.
 globalThis.__worlds = {};
 [['overworld','colliders'],['pyramidOverworld','pyramidColliders'],['greekOverworld','greekColliders'],
  ['romanOverworld','romanColliders'],['islamicOverworld','islamicColliders'],
- ['mexicoOverworld','mexicoColliders'],
+ ['mexicoOverworld','mexicoColliders'],['aztecOverworld','aztecColliders'],
  ['dungeon','dungeonColliders'],['pyramidDungeon','pyramidDungeonColliders'],
  ['greekDungeon','greekDungeonColliders'],['nileWorld','nileColliders'],
  ['hydraArena','hydraColliders'],['colosseumArena','colosseumColliders'],
@@ -129,7 +136,7 @@ globalThis.__worlds = {};
   if(g) globalThis.__worlds[pair[0]] = {group:g, colliders:c};
 });
 globalThis.__loadouts = {};
-['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons','mexicoWeapons'].forEach(function(n){
+['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons','mexicoWeapons','aztecWeapons'].forEach(function(n){
   try { globalThis.__loadouts[n] = eval(n); } catch(e) {}
 });
 """
@@ -164,6 +171,10 @@ ACTORS = [
     ("makeMonolithVanguard","b=>b()",                       1.00, 0.00, "Monolith Vanguard"),
     ("makeMudGolem", "b=>b()",                              1.25, 0.00, "Mud Golem"),
     ("makeJadeShaman", "b=>b()",                            1.90, 0.00, "JadeShaman (La Venta)"),
+    # Tenochtitlan roster (Aztec Mexico). Scales come from TENOCH_STATS.
+    ("makeEagleKnight","b=>b()",                            1.00, 0.00, "Eagle Knight"),
+    ("makeJaguarKnight","b=>b()",                           1.00, 0.00, "Jaguar Knight"),
+    ("makeCuachic",  "b=>b()",                              1.15, 0.00, "Cuachic"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor
