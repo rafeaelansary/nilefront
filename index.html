@@ -260,15 +260,21 @@ sun.shadow.camera.top = 45;
 sun.shadow.camera.bottom = -45;
 sun.shadow.bias = -0.0004;
 scene.add(sun);
-// World position of Cairo's travel booth, filled in by travelBooth() when the Islamic map is built. The
-// hub's interact check reads it, so it lives out here rather than inside that map's IIFE.
+// World position of the CURRENT hub's travel booth. nearBooth()/updateBoothMarker() read this one live
+// object; whichever enter*Hub() function runs is responsible for copying its own hub's fixed coordinates
+// (below) into it. Each hub's own build IIFE fills in ITS constant when it places its booth, since build
+// order (both run once, at load) must not be allowed to decide which hub "wins" this shared position.
 const BOOTH_POS = {x:0, z:0};
+const CAIRO_BOOTH_POS = {x:0, z:0};
+const AZTEC_MARKET_BOOTH_POS = {x:0, z:0};
 // Hub state. Declared up here rather than beside the rest of the hub code because selectWeapon() reads
 // inHub and runs during initial weapon setup, long before that section — a `let` further down puts it in
 // the temporal dead zone at load time and throws.
 let inHub = false;
+let currentHub = 'cairo';   // which hub enter*Hub() last entered — 'cairo' or 'aztecMarket'
 let boothOpen = false;
-let boothBeacon = null;   // the crystal at the head of the booth's light shaft; spun by the animate loop
+let boothBeacon = null;   // the CURRENT hub's beacon crystal; spun by the animate loop
+let CAIRO_BOOTH_BEACON = null, AZTEC_MARKET_BOOTH_BEACON = null;   // each hub's own crystal, set at build time
 // There is no raft. A trip used to end at a physical return interactable — walk to the landing, press [E],
 // sail home — and both Mexican maps carried one. It is gone: the Mexico arc now MOVES you, at the two
 // moments that matter. The Jade-Heart Shaman's death carries you from La Venta to Tenochtitlan, and
@@ -293,6 +299,7 @@ const ifritColliders = [];       // Islamic boss arena colliders (Boss IV — th
 const islamicColliders = [];     // Islamic/Mamluk Cairo overworld colliders (waves 10-12)
 const mexicoColliders = [];      // La Venta basin colliders (Olmec Mexico — the first booth destination)
 const aztecColliders = [];       // Tenochtitlan colliders (the Mexico trip's second leg, reached from La Venta)
+const aztecMarketColliders = []; // Aztec Market colliders — the new hub reached once Tenochtitlan is cleared
 let addTarget = colliders;       // where addBox pushes during world build
 let activeColliders = colliders; // which set physics currently uses
 function addBox(cx,cz,w,d,roofY){ addTarget.push({x1:cx-w/2, z1:cz-d/2, x2:cx+w/2, z2:cz+d/2, roofY}); }
@@ -311,6 +318,7 @@ const heightZonesRoman = [];
 const heightZonesIslamic = [];
 const heightZonesMexico = [];    // the Great Pyramid's stair and summit
 const heightZonesAztec = [];     // the Templo Mayor's twin stair and summit deck
+const heightZonesAztecMarket = [];   // flat market plaza — no climbable geometry, stays empty
 let heightZoneTarget = heightZonesOriginal;   // where sniperTower()/plaza() push during world build
 let activeHeightZones = heightZonesPyramid;   // which set getTerrainHeight() reads at runtime (pyramid phase starts active)
 function getTerrainHeight(x,z,curH){
@@ -2984,7 +2992,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 // the invariant "at most one world group in the scene" holds no matter what state the flags are in.
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
-  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
   clearFieldEffects();
 }
 // Ground effects — the bosses' AoE telegraphs and the Colossus's quake cracks — are added to the SCENE,
@@ -6375,10 +6383,10 @@ heightZoneTarget = heightZonesIslamic;
       new THREE.MeshBasicMaterial({color:0xffe08a, fog:false}));
     crystal.position.set(0,14.4,0); B.add(crystal);
     const beaconLight=new THREE.PointLight(0xffcf72,0.9,14); beaconLight.position.set(0,13.4,0); B.add(beaconLight);
-    boothBeacon = crystal;
+    CAIRO_BOOTH_BEACON = crystal;
     const c=Math.cos(rot||0), s=Math.sin(rot||0), w=5.2, d=4.0;
     addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
-    BOOTH_POS.x=x; BOOTH_POS.z=z;
+    CAIRO_BOOTH_POS.x=x; CAIRO_BOOTH_POS.z=z;
   }
   // rot 0 so the counter faces +z — the direction you walk in from the gate
   travelBooth(0, -6, 0);
@@ -7608,6 +7616,191 @@ scene.children.slice().forEach(o=>{
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
+// ===================== AZTEC MARKET (the new hub reached once Tenochtitlan is cleared) =====================
+// Small and flat on purpose: this is a hub, not a leg — nothing to fight here, just a plaza to walk across
+// on the way to its own travel booth. Same voxel toolkit and Aztec-era materials as Tenochtitlan, reused
+// rather than reinvented, so it reads as the same world one step further down the road.
+addTarget = aztecMarketColliders;
+heightZoneTarget = heightZonesAztecMarket;
+(function buildAztecMarket(){
+  const tezontle  = new THREE.MeshLambertMaterial({map:_finish(tezontleTex(),5)});
+  const plaster   = voxMat(0xe4dcc4,{noise:10});
+  const timberMat = new THREE.MeshLambertMaterial({map:_finish(logTex(),2)});
+  const leafMat   = new THREE.MeshLambertMaterial({map:_finish(leavesTex(),2)});
+  const thatchMat = voxMat(0x9a8348,{noise:18});
+  const wallMat   = voxMat(0xc9a878,{noise:14});     // sun-baked adobe capping the tezontle plaza wall
+  const jadeMat   = voxMat(0x2f9e82,{noise:10});     // the market booth's own colour, distinct from Cairo's
+  const goldMat   = voxMat(0xd8a838,{noise:10});
+  const maizeMat  = voxMat(0xc8983c,{noise:14});
+  const chiliMat  = voxMat(0xb2402a,{noise:14});
+  const caoMat    = voxMat(0x6a4a2e,{noise:12});     // cacao beans, heaped like the maize/chili baskets
+  const clayMat   = voxMat(0xb2603a,{noise:12});     // fired-clay pottery
+  const saltMat   = voxMat(0xe8e2d4,{noise:8});
+  const cottonRed = voxMat(0xa8283c,{noise:8});      // cochineal-dyed cloth, folded and stacked
+  const cottonOch = voxMat(0xd4a828,{noise:8});      // marigold/ochre-dyed cloth
+  const featherA  = voxMat(0x2f9e6a,{noise:6});      // quetzal-green plumes
+  const featherB  = voxMat(0xc23a2a,{noise:6});      // macaw-red plumes
+
+  const lb=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  const lcy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  const lco=(r,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; scene.add(m); return m; };
+
+  // ---- the plaza ----
+  // 32 across: still small enough to cross in a few seconds, but the wall below needs the extra room —
+  // a boundary drawn right on top of the old 26-wide slab left no standing room between stalls and wall.
+  const HALF = 16;
+  lb(HALF*2,0.5,HALF*2, tezontle, 0,-0.25,0);
+  // Stacked exactly as Tenochtitlan/La Venta stack their overlays: a real 0.04 clearance above the
+  // ground's own top face, not flush against it — flush was a genuine zero-gap z-fight, not just theory.
+  lb(9,0.05,9, plaster, 0,0.065,0);   // a lighter swept-clean centre, the way La Venta's plaza has one
+
+  // ---- the wall: turns the plaza into an actual bounded market square, not just an open floor ----
+  // South side carries the only opening — the gate the player arrives through from Tenochtitlan. The
+  // other three sides run unbroken; there is nowhere else in the story this market needs to lead yet.
+  const WALL_H = 2.3, WALL_T = 0.6, GATE_HALF = 3.2;
+  // The south wall segments stop short of the gate pillars by more than a pillar radius, not right at
+  // GATE_HALF — a wall ending exactly where a round pillar is centred always overlaps it (a cylinder
+  // centred on a box's edge sticks halfway into that box), which was a real zero-gap z-fight at the base.
+  const GATE_CLEAR = GATE_HALF + 0.6;
+  const wallSeg = (cx,cz,w,d) => { lb(w,WALL_H,d, wallMat, cx,WALL_H/2,cz); addBox(cx,cz,w,d); };
+  wallSeg(-(HALF+GATE_CLEAR)/2, HALF, HALF-GATE_CLEAR, WALL_T);   // south, left of the gate
+  wallSeg( (HALF+GATE_CLEAR)/2, HALF, HALF-GATE_CLEAR, WALL_T);   // south, right of the gate
+  wallSeg(0, -HALF, HALF*2, WALL_T);                             // north
+  // Mitred short of the north/south walls' own thickness so the two don't share a corner cube with
+  // identical top/bottom faces — a real zero-gap z-fight where they met flush.
+  wallSeg(-HALF, 0, WALL_T, HALF*2-WALL_T);                      // west
+  wallSeg( HALF, 0, WALL_T, HALF*2-WALL_T);                      // east
+  // stone gate pillars, taller than the wall and jade-capped, with a woven rope-banner strung between —
+  // the market's own version of a threshold, echoing the booth's timber-and-jade palette from the far end
+  [-GATE_HALF, GATE_HALF].forEach(gx=>{
+    lcy(0.42,0.48,3.6,8, tezontle, gx,1.8,HALF);
+    lb(0.85,0.42,0.85, jadeMat, gx,3.78,HALF);
+    addBox(gx, HALF, 1.0, 1.0);
+  });
+  lb(GATE_HALF*2-0.3,0.14,0.14, cottonRed, 0,3.55,HALF);   // the strung banner itself, just under the caps
+
+  // ---- twelve goods stalls around the inside of the wall, no two selling quite the same thing ----
+  // Collision on every one: marketStall() in the Cairo bazaar registers an addBox for exactly this reason
+  // (a "solid stall you can't walk into" is the expectation this codebase already sets), and these didn't
+  // — a real gap, not a style choice, since nothing else here treats a stall as walk-through scenery.
+  const STALLS = [
+    {x:-12,z:-12, roof:thatchMat,  goods:[maizeMat, chiliMat]},
+    {x: 12,z:-12, roof:cottonOch,  goods:[clayMat, clayMat]},
+    {x:-12,z:  0, roof:thatchMat,  goods:[caoMat, saltMat]},
+    {x: 12,z:  0, roof:cottonRed,  goods:[featherA, featherB]},
+    {x: -6,z:-13, roof:thatchMat,  goods:[cottonRed, cottonOch]},
+    {x:  6,z:-13, roof:thatchMat,  goods:[jadeMat, clayMat]},
+    {x:-12,z: 11, roof:cottonOch,  goods:[maizeMat, caoMat]},
+    {x: 12,z: 11, roof:thatchMat,  goods:[saltMat, chiliMat]},
+    {x: -6,z:  0, roof:cottonRed,  goods:[jadeMat, featherA]},
+    {x:  6,z:  0, roof:thatchMat,  goods:[clayMat, maizeMat]},
+    {x: -6,z: 11, roof:thatchMat,  goods:[chiliMat, cottonOch]},
+    {x:  6,z: 11, roof:cottonOch,  goods:[featherB, caoMat]},
+  ];
+  STALLS.forEach(({x:sx,z:sz,roof,goods})=>{
+    [[-0.9,-0.9],[0.9,-0.9],[-0.9,0.9],[0.9,0.9]].forEach(([px,pz])=>
+      lcy(0.09,0.10,2.3,6, timberMat, sx+px,1.15,sz+pz));
+    lb(2.3,0.16,2.3, roof, sx,2.35,sz);
+    lb(1.5,0.62,1.1, timberMat, sx,0.55,sz);           // table
+    for(let g=0; g<4; g++)
+      lb(0.34,0.30,0.34, goods[g%goods.length], sx-0.5+g*0.34, 0.95, sz);
+    // a plume or two standing up out of one basket per stall reads as market clutter rather than a
+    // second identical box, and gives the feather/pottery stalls something their neighbours don't have
+    lco(0.10,0.42,6, goods[0], sx-0.5, 1.25, sz);
+    // a loose second pile on the ground behind the table, not just goods on top of it. Centred in x (the
+    // posts sit at sx±0.9, so this stays clear of them) and past the table's own z±0.55 footprint, the
+    // same clearance discipline the table itself already keeps from the posts.
+    lb(0.5,0.22,0.5, goods[goods.length-1], sx, 0.11, sz-0.85);
+    addBox(sx, sz, 2.4, 2.4);
+  });
+
+  // bunting strung between two neighbouring stalls' nearest posts — colour and movement cues, the same
+  // idea as the gate's rope banner. (-12,0)'s right-side post sits at x=-11.1; (-6,0)'s left-side post at
+  // x=-6.9 — a real 4.2-unit gap between actual posts, not a guessed span between stall centres.
+  lb(4.2,0.10,0.10, cottonOch, -9,2.0,-0.9);
+
+  // two shade trees, off the direct paths, so the plaza reads as lived-in rather than freshly swept
+  [[-9,4],[10,-4]].forEach(([tx,tz])=>{
+    lcy(0.22,0.28,2.6,7, timberMat, tx,1.3,tz);
+    const leaves=new THREE.Mesh(new THREE.SphereGeometry(1.7,8,6), leafMat);
+    leaves.position.set(tx,3.3,tz); leaves.castShadow=true; scene.add(leaves);
+  });
+
+  // ---- the market's own travel booth: tezontle stone and jade/turquoise, not Cairo's brass and lapis ----
+  function marketBooth(x,z,rot){
+    const B=new THREE.Group(); B.position.set(x,0,z); B.rotation.y=rot||0; scene.add(B);
+    const bb=(w,h,d,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(px,py,pz); m.castShadow=true; m.receiveShadow=true; B.add(m); return m; };
+    const bcy=(rt,rb,h,seg,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat); m.position.set(px,py,pz); m.castShadow=true; B.add(m); return m; };
+    bb(4.2,0.28,3.2, tezontle, 0,0.06,0);                        // stone dais
+    bb(4.4,0.20,3.4, plaster, 0,0.00,0);                         // its kerb
+    [[-1.55,-1.15],[1.55,-1.15],[-1.55,1.15],[1.55,1.15]].forEach(([px,pz])=>
+      bcy(0.11,0.13,3.6,8, timberMat, px,1.74,pz));              // timber posts, not brass
+    bb(3.6,0.22,2.65, jadeMat, 0,3.35,0);                        // jade/turquoise awning — the one in the market
+    bb(3.7,0.09,2.75, goldMat, 0,3.21,0);                        // gilt rim under it
+    bb(2.9,0.70,0.18, timberMat, 0,3.78,-1.05);                  // destination board
+    for(let i=0;i<4;i++)
+      bb(0.44,0.36,0.05, i%2?jadeMat:goldMat, -1.0+i*0.53, 3.78, -1.14);   // route plaques
+    bb(2.6,0.85,1.85, timberMat, 0,0.415,0);                     // counter
+    bb(2.72,0.12,1.95, plaster, 0,0.86,0);                       // counter lip
+    // a carved jade orb stands in for Cairo's brass globe — same "this is the travel stall" cue
+    const orb=new THREE.Mesh(new THREE.SphereGeometry(0.38,14,10), jadeMat); orb.position.set(-0.85,1.30,0.02); B.add(orb);
+    bb(0.44,0.16,0.44, timberMat, -0.85,0.90,0.02);              // orb stand
+    // amatl-bark ticket rolls, heaped on the counter the way Cairo's paper rolls are
+    for(let i=0;i<5;i++){ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.10,0.40,8), voxMat(0xd8c8a0,{noise:8}));
+      r.position.set(0.4+(i%3)*0.30, 0.94+Math.floor(i/3)*0.22, -0.25+(i%3)*0.26); r.rotation.z=Math.PI/2; B.add(r); }
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.85,12.4,12,1,true),
+      new THREE.MeshBasicMaterial({color:0x4fd8b8, transparent:true, opacity:0.17, side:THREE.DoubleSide, depthWrite:false, fog:false}));
+    beam.position.set(0,6.4,0); B.add(beam);
+    const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(0.70),
+      new THREE.MeshBasicMaterial({color:0x6ce8c8, fog:false}));
+    crystal.position.set(0,11.8,0); B.add(crystal);
+    const beaconLight=new THREE.PointLight(0x6ce8c8,0.9,13); beaconLight.position.set(0,11.0,0); B.add(beaconLight);
+    AZTEC_MARKET_BOOTH_BEACON = crystal;
+    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=4.2, d=3.2;
+    addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
+    AZTEC_MARKET_BOOTH_POS.x=x; AZTEC_MARKET_BOOTH_POS.z=z;
+  }
+  marketBooth(0, -5, 0);   // faces +z, toward the spawn point below
+
+  // ground slab thick/wide enough to clear the "nothing solid under the map" sweep, same margin as
+  // every other hub/leg ground plane in this file
+})();
+const aztecMarketOverworld = new THREE.Group();
+scene.children.slice().forEach(o=>{
+  if(o===sky || o.isLight || o===distantGround || o===horizonHaze) return;
+  if(o===overworld || o===pyramidOverworld || o===greekOverworld || o===romanOverworld ||
+     o===islamicOverworld || o===mexicoOverworld || o===aztecOverworld) return;
+  aztecMarketOverworld.add(o);
+});
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
+function enterAztecMarketWorld(banner){
+  clearWorldGroups();
+  scene.add(aztecMarketOverworld);
+  sky.visible = true;
+  activeColliders = aztecMarketColliders;
+  activeHeightZones = heightZonesAztecMarket;
+  playClamp = 15;   // the plaza is 32 across with a wall at ±16; clamp just inside it
+  // Warm midday market light — tezontle red and jade both need to read clearly, so this stays closer to
+  // Cairo's warm bazaar tone than Tenochtitlan's cool high-altitude lake palette.
+  scene.background.set(0x8fd0e8); scene.fog.color.set(0xe0c9a0); scene.fog.near=20; scene.fog.far=95;
+  setDistantGround(0xc9a878);
+  skyTint(0xffe6b8);
+  hemi.intensity=0.74; hemi.color.set(0xffe4b0); hemi.groundColor.set(0x5a4a2c);
+  sun.intensity=1.0; fill.intensity=0.22; fill.color.set(0xffdca0);
+  // Just inside the south gate, facing the booth across the whole plaza — the arrival reads as walking
+  // in from Tenochtitlan, not appearing already halfway across. yaw=0 is the -z heading everywhere else
+  // in this file (Cairo's and Tenochtitlan's own spawns both use it to face their own booth/boss the same
+  // way), and the booth sits far down at z=-5 from this z=13 spawn, so this needs the same yaw=0.
+  camera.position.set(0,1.7,13); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  weapons.forEach(w=>w.visible=false);
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
 
 // ---- voxel humanoid bot (Minecraft/Pixel-Gun proportions: blocky head+helmet, layered torso armor, segmented limbs) ----
 function makeVoxelTexture(baseHex, {noise=22, size=64, pattern=null, cell=6} = {}){
@@ -13239,24 +13432,43 @@ function enterIslamicWorld(banner){
   selectWeapon(0);
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
-// Cairo as the between-countries hub: the Islamic map with no wave queued and the wave/enemy counters
-// retitled, because "Wave 10/12  👾 0" is meaningless in a city with nothing to fight. Egypt's campaign
-// ends here; the travel booth in the bazaar is what leads onward.
-function enterHub(banner){
-  inHub = true;
-  tripDest = null; tripLeg = 0;   // coming home always ends any trip, however it was entered
-  enterIslamicWorld(banner);
+// Chrome shared by every hub, once its own map + camera + currentHub/BOOTH_POS are already set: holster
+// everything (no viewmodel, no crosshair, no ammo counter, no scope), swap in the hub CSS, retitle the
+// stats bar, and pre-paint the world map. Paint it NOW rather than on the first [E]: colouring 131072
+// cells costs about 0.4s, which is a visible freeze when the panel opens but invisible here, behind the
+// map swap and the arrival banner. drawWorldMap() caches the result, so every later open is a straight
+// putImageData.
+function applyHubChrome(){
   pending = null; betweenTimer = 0;
-  // holster everything: no viewmodel, no crosshair, no ammo counter, no scope
   setScope(false);
   weapons.forEach(w=>w.visible=false);
   gunGroup.visible = false;
   document.body.classList.add('hub');
   setHubStats(true);
-  // Paint the world map NOW rather than on the first [E]. Colouring 131072 cells costs about 0.4s, which
-  // is a visible freeze when the panel opens but invisible here, behind the map swap and the arrival
-  // banner. drawWorldMap() caches the result, so every later open is a straight putImageData.
   drawWorldMap();
+}
+// Cairo as the between-countries hub: the Islamic map with no wave queued and the wave/enemy counters
+// retitled, because "Wave 10/12  👾 0" is meaningless in a city with nothing to fight. Egypt's campaign
+// ends here; the travel booth in the bazaar is what leads onward.
+function enterHub(banner){
+  inHub = true;
+  currentHub = 'cairo';
+  BOOTH_POS.x = CAIRO_BOOTH_POS.x; BOOTH_POS.z = CAIRO_BOOTH_POS.z;
+  boothBeacon = CAIRO_BOOTH_BEACON;
+  tripDest = null; tripLeg = 0;   // coming home always ends any trip, however it was entered
+  enterIslamicWorld(banner);
+  applyHubChrome();
+}
+// The Aztec Market: the new home base once the Mexico trip is done, exactly the same shape as Cairo but
+// with its own map and its own booth position. Everything past "which map, which booth" is shared chrome.
+function enterAztecMarketHub(banner){
+  inHub = true;
+  currentHub = 'aztecMarket';
+  BOOTH_POS.x = AZTEC_MARKET_BOOTH_POS.x; BOOTH_POS.z = AZTEC_MARKET_BOOTH_POS.z;
+  boothBeacon = AZTEC_MARKET_BOOTH_BEACON;
+  tripDest = null; tripLeg = 0;
+  enterAztecMarketWorld(banner);
+  applyHubChrome();
 }
 // Undone by startGame() when a fresh run begins — see setHubStats(false) there.
 function exitHubChrome(){
@@ -13490,7 +13702,10 @@ const DESTINATIONS = [
   // Two maps on one ticket: the Olmec basin, then Aztec Tenochtitlan. See MEXICO_LEGS.
   {flag:'🗿', name:'Mexico',        era:'Olmec La Venta to Tenochtitlan · 1200 BC–1521', price:50, ready:true,
    lon:-94, lat: 18,
-   go(){ travelTo({name:'Mexico', legs:MEXICO_LEGS}); }},
+   // Mexico doesn't come home to Cairo: clearing Tenochtitlan lands the player in the Aztec Market, the
+   // new hub that sells passage onward from here (Sweden included, once it's built).
+   go(){ travelTo({name:'Mexico', legs:MEXICO_LEGS,
+     homeHub:enterAztecMarketHub, homeBanner:'🎪 The Aztec Market — a new booth stands ready'}); }},
   {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka & Uppsala, 800–1050', price:60, ready:false,
    lon: 17, lat: 60},
   {flag:'🐉', name:'China & Japan', era:'Yuan China to Kyushu · 1271–1281',       price:70, ready:false,
@@ -13774,13 +13989,17 @@ function advanceTripLeg(){
   setTripHUD();
   pending='triphome'; betweenTimer=4.6;
 }
+// Most trips come home to Cairo; a destination can override this by carrying its own homeHub/homeBanner
+// (see Mexico in DESTINATIONS below), for a trip whose ending is itself a new hub rather than a return.
 function returnToHub(){
+  const enterFn = (tripDest && tripDest.homeHub) || enterHub;
+  const banner  = (tripDest && tripDest.homeBanner) || '🏠 Home in Cairo — the booth is in the bazaar';
   tripDest = null;
   tripLeg = 0;
   tripWave = 0; tripCleared = false;   // clears the guard in updateWaves() as well as the ladder
-  bossActive = false; showBossBar(false);   // leaving mid-fight must not carry the Shaman's bar to Cairo
+  bossActive = false; showBossBar(false);   // leaving mid-fight must not carry the Shaman's bar home
   clearBots();                         // anything still standing out there does not follow you home
-  enterHub('🏠 Home in Cairo — the booth is in the bazaar');
+  enterFn(banner);
 }
 // ===================== ADMIN PANEL =====================
 // Opened by pressing Z, X, X, C, C, C in order. Replaces the old single-key cheats, which fired on a bare keypress
@@ -15032,7 +15251,12 @@ function respawnPlayer(){
   // with the trip's HUD and a live raft prompt at coordinates that mean nothing there.
   // ...and on the leg you died on, not back at the start of the destination
   if(tripDest){ const leg=curLeg(); if(leg) leg.enter(); placePlayerAt(pickSpawnPoint()); setHUD(); return; }
-  if(inHub){ enterHub('💀 you wake in Cairo'); placePlayerAt(pickSpawnPoint()); setHUD(); return; }
+  // Respawn back into whichever hub you actually died in -- Cairo and the Aztec Market are both "home".
+  if(inHub){
+    const enterFn = currentHub==='aztecMarket' ? enterAztecMarketHub : enterHub;
+    const banner  = currentHub==='aztecMarket' ? '💀 you wake in the market' : '💀 you wake in Cairo';
+    enterFn(banner); placePlayerAt(pickSpawnPoint()); setHUD(); return;
+  }
   if(currentEra >= 3) enterIslamicWorld('💀 back to Wave 10');
   else if(currentEra >= 2) enterRomanWorld('💀 back to Wave 7');
   else exitDungeon();
