@@ -330,9 +330,57 @@ class WebGLRenderer {
   }
   setSize(){} setPixelRatio(){} render(){} setClearColor(){} dispose(){}
 }
+// A real ray/box intersector. This used to be a stub that always returned [] -- which silently made every
+// weapon in the game untestable headlessly: firstHit() resolves every shot, swing and jab through
+// intersectObjects(), so with an empty result NOTHING can ever be hit and a damage test can only ever
+// report "dealt nothing". Each mesh is tested as its oriented box (the same box the audit's own helpers
+// use), by transforming the ray into the mesh's local space and running the slab method there, so a
+// rotated part is hit where it actually is rather than where its AABB is.
 class Raycaster {
   constructor(){ this.ray={origin:new Vector3(),direction:new Vector3()}; this.far=Infinity; this.near=0; }
-  set(){} setFromCamera(){} intersectObject(){ return []; } intersectObjects(){ return []; }
+  set(o,d){ this.ray.origin.copy(o); this.ray.direction.copy(d); return this; }
+  setFromCamera(){ return this; }
+  intersectObject(obj, recursive){ return this.intersectObjects([obj], recursive); }
+  intersectObjects(objs, recursive){
+    const out = [];
+    const ro = this.ray.origin, rd = this.ray.direction;
+    const visit = (o)=>{
+      if(o.isMesh) this._hitMesh(o, ro, rd, out);
+      if(recursive !== false) for(const c of o.children) visit(c);
+    };
+    for(const o of (objs||[])) if(o) visit(o);
+    out.sort((a,b)=>a.distance-b.distance);
+    return out;
+  }
+  _hitMesh(mesh, ro, rd, out){
+    const inv = matInvert(mesh.matrixWorld);
+    if(!inv) return;
+    const h = (mesh.geometry && mesh.geometry._half) || {x:0,y:0,z:0};
+    const off = (mesh.geometry && mesh.geometry._offset) || {x:0,y:0,z:0};
+    if(!(h.x||h.y||h.z)) return;                      // no extent: nothing to hit
+    // ray into the mesh's local frame
+    const o2 = applyMat(inv, ro.x, ro.y, ro.z);
+    const p2 = applyMat(inv, ro.x+rd.x, ro.y+rd.y, ro.z+rd.z);
+    const d2 = {x:p2.x-o2.x, y:p2.y-o2.y, z:p2.z-o2.z};
+    let tmin = -Infinity, tmax = Infinity;
+    for(const ax of ['x','y','z']){
+      const lo = off[ax]-h[ax], hi = off[ax]+h[ax];
+      if(Math.abs(d2[ax]) < 1e-12){ if(o2[ax] < lo || o2[ax] > hi) return; continue; }
+      let t1 = (lo-o2[ax])/d2[ax], t2 = (hi-o2[ax])/d2[ax];
+      if(t1 > t2){ const s=t1; t1=t2; t2=s; }
+      if(t1 > tmin) tmin = t1;
+      if(t2 < tmax) tmax = t2;
+      if(tmin > tmax) return;
+    }
+    let t = tmin >= 0 ? tmin : tmax;                  // origin inside the box -> use the exit face
+    if(t < 0) return;
+    // local t is in units of the (possibly scaled) local direction; recover the world distance
+    const wx = rd.x*t, wy = rd.y*t, wz = rd.z*t;
+    const dist = Math.hypot(wx,wy,wz);
+    if(dist > (this.far===undefined?Infinity:this.far) || dist < (this.near||0)) return;
+    out.push({object:mesh, distance:dist,
+              point:new Vector3(ro.x+rd.x*t, ro.y+rd.y*t, ro.z+rd.z*t)});
+  }
 }
 class Clock { constructor(){ this._t=0; } getDelta(){ return 0.016; } getElapsedTime(){ return this._t+=0.016; } }
 // Real enough for setFromObject(), which is what the game uses it for (measuring an actor's

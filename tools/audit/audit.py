@@ -109,6 +109,12 @@ globalThis.__builders = {
   makeIfrit: typeof makeIfrit==='function' ? makeIfrit : null,
   makeGhoul: typeof makeGhoul==='function' ? makeGhoul : null,
   makeRoc: typeof makeRoc==='function' ? makeRoc : null,
+  makeDraugr: typeof makeDraugr==='function' ? makeDraugr : null,
+  makeWarg: typeof makeWarg==='function' ? makeWarg : null,
+  makeNisse: typeof makeNisse==='function' ? makeNisse : null,
+  makeDaneAxe: typeof makeDaneAxe==='function' ? makeDaneAxe : null,
+  makeHunnishBow: typeof makeHunnishBow==='function' ? makeHunnishBow : null,
+  makeThrowingSeax: typeof makeThrowingSeax==='function' ? makeThrowingSeax : null,
 };
 // World state the placement checks need. Everything above runs inside an IIFE, so these are
 // otherwise unreachable from outside.
@@ -134,6 +140,7 @@ globalThis.__worlds = {};
 [['overworld','colliders'],['pyramidOverworld','pyramidColliders'],['greekOverworld','greekColliders'],
  ['romanOverworld','romanColliders'],['islamicOverworld','islamicColliders'],
  ['mexicoOverworld','mexicoColliders'],['aztecOverworld','aztecColliders'],
+ ['aztecMarketOverworld','aztecMarketColliders'],['swedenOverworld','swedenColliders'],
  ['dungeon','dungeonColliders'],['pyramidDungeon','pyramidDungeonColliders'],
  ['greekDungeon','greekDungeonColliders'],['nileWorld','nileColliders'],
  ['hydraArena','hydraColliders'],['colosseumArena','colosseumColliders'],
@@ -144,7 +151,7 @@ globalThis.__worlds = {};
   if(g) globalThis.__worlds[pair[0]] = {group:g, colliders:c};
 });
 globalThis.__loadouts = {};
-['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons','mexicoWeapons','aztecWeapons'].forEach(function(n){
+['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons','mexicoWeapons','aztecWeapons','swedenWeapons'].forEach(function(n){
   try { globalThis.__loadouts[n] = eval(n); } catch(e) {}
 });
 """
@@ -184,6 +191,10 @@ ACTORS = [
     ("makeJaguarKnight","b=>b()",                           1.00, 0.00, "Jaguar Knight"),
     ("makeCuachic",  "b=>b()",                              1.15, 0.00, "Cuachic"),
     ("makeXiuhcoatlBearer","b=>b()",                       1.90, 0.00, "XiuhcoatlBearer (boss)"),
+    # Birka roster (Viking Age Sweden). Scales come from SWEDEN_STATS.
+    ("makeDraugr",   "b=>b()",                              1.15, 0.00, "Draugr"),
+    ("makeWarg",     "b=>b()",                              1.00, 0.00, "Warg"),
+    ("makeNisse",    "b=>b()",                              1.00, 0.00, "Nisse"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor
