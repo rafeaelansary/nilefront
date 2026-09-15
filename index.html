@@ -7,6 +7,17 @@
   html,body{margin:0;height:100%;overflow:hidden;background:#87CEEB;font-family:sans-serif;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
   #hud{position:absolute;top:10px;left:10px;color:#fff;text-shadow:0 1px 2px #000;font-size:14px;z-index:2}
   #crosshair{position:absolute;top:50%;left:50%;width:10px;height:10px;margin:-5px 0 0 -5px;background:#fff;border-radius:50%;z-index:2;box-shadow:0 0 3px #000}
+  /* ---- charge ring: the draw indicator for charged weapons (the Hunnish Bow) ----
+     A conic-gradient ring around the crosshair that fills as the string is pulled, because a charge you
+     cannot see is a mechanic the player has no way to learn. Goes gold and glows at full draw. Hidden
+     unless actually drawing, and hidden while scoped (the scope overlay hides the crosshair too). */
+  #chargering{position:absolute;top:50%;left:50%;width:46px;height:46px;margin:-23px 0 0 -23px;z-index:2;
+    border-radius:50%;display:none;pointer-events:none;
+    -webkit-mask:radial-gradient(circle, transparent 13px, #000 14px, #000 18px, transparent 19px);
+    mask:radial-gradient(circle, transparent 13px, #000 14px, #000 18px, transparent 19px)}
+  body.drawing #chargering{display:block}
+  body.scoped #chargering, body.hub #chargering{display:none !important}
+  #chargering.full{filter:drop-shadow(0 0 5px #ffd45e)}
   #stats{position:absolute;top:8px;right:14px;color:#fff;text-shadow:0 1px 3px #000;font-size:20px;font-weight:700;z-index:2;letter-spacing:0.5px}
   #ammoBig{position:absolute;bottom:34px;right:28px;color:#fff;text-shadow:0 2px 6px #000;font-size:46px;font-weight:800;z-index:3;text-align:right;letter-spacing:1px}
   #ammoBig .max{font-size:22px;font-weight:700;opacity:0.75}
@@ -193,6 +204,7 @@
 <div id="ammoBig"></div>
 <div id="bossbar"><div id="bosslabel">☠ BOSS</div><div id="bosstrack"><div id="bossfill"></div></div></div>
 <div id="crosshair"></div>
+<div id="chargering"></div>
 <div id="hitmark">✕</div>
 <div id="dmg"></div>
 <div id="banner"></div>
@@ -7790,28 +7802,48 @@ addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
 // ===================== BIRKA (Viking Age Sweden) =====================
-// The trading town on Björkö: a palisaded longhouse settlement on the shore of Lake Mälaren, with the
-// jetties that made it a trading town and the burial field that makes it a place to fight draugr. Built
-// cold and grey-green on purpose — every other map in this game is desert, jungle or lake-lit, and the
-// Nordic arc has to read as a different climate the moment it loads, not just a different set of props.
+// The trading town on Björkö: a palisaded longhouse settlement on the shore of Lake Mälaren, under the
+// granite hillfort that guarded it, with the jetties that made it a trading town and the grave field that
+// makes it a place to fight draugr. Built cold and grey-green on purpose — every other map in this game is
+// desert, jungle or lake-lit, and the Nordic arc has to read as a different climate the moment it loads,
+// not just a different set of props.
+//
+// The map is laid out as four quarters around a central square, so every part of it is somewhere you would
+// go for a reason rather than scenery you run past:
+//   WEST   the Borg — a granite hillfort with a timber rampart and a ramp you can actually walk up. The
+//          only high ground on the map, and the reason the bow is worth drawing: from the rampart the whole
+//          square is a shooting lane.
+//   NORTH  the grave field: mounds, a standing-stone ship setting, and the rune stones. Where draugr spawn.
+//   EAST   the Black Earth — Birka's real occupation layer — worked as a craftsmen's row: a smithy with a
+//          live forge, a bone-worker, a weaver, drying racks.
+//   SOUTH  the harbour: three jetties, a beached knarr, a moored longship, and the cargo of a trading town.
 addTarget = swedenColliders;
 heightZoneTarget = heightZonesSweden;
+let birkaSnow = null, birkaForge = null, birkaBeacon = null;
 (function buildBirka(){
   const timber    = new THREE.MeshLambertMaterial({map:_finish(logTex(),2)});
   const timberDk  = voxMat(0x4a3521,{noise:16});
+  const timberPa  = voxMat(0x7a6242,{noise:14});     // sun-bleached timber, for contrast against the dark
   const plank     = new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(),2)});
-  const thatch    = voxMat(0x8a7340,{noise:18});
   const thatchDk  = voxMat(0x63512c,{noise:16});
-  const turfMat   = voxMat(0x5a7040,{noise:18});     // turf roofs — the Norse roofed with sod, not just straw
+  const turfMat   = voxMat(0x5a7040,{noise:18});     // turf roofs — the Norse roofed with sod, not straw
+  const turfDark  = voxMat(0x445731,{noise:16});
   const graniteM  = new THREE.MeshLambertMaterial({map:_finish(graniteTex(),3)});
+  const graniteD  = voxMat(0x5e6268,{noise:16});
   const runeMat   = voxMat(0x8e9298,{noise:12});
   const runePaint = voxMat(0xa83c2c,{noise:10});     // rune stones were painted; red ochre is the survivor
   const ironMat   = metalMatP(0x6a6f76,60,0xc8d0d8);
+  const ironDark  = voxMat(0x33373c,{noise:12});
   const shieldRed = voxMat(0xa8322c,{noise:12});
   const shieldYel = voxMat(0xd8b23c,{noise:12});
   const shieldBlu = voxMat(0x2f5f94,{noise:12});
+  const shieldGrn = voxMat(0x3f6a42,{noise:12});
   const leafDark  = voxMat(0x2f4a30,{noise:16});     // spruce, not the broadleaf green used further south
+  const birchBark = voxMat(0xd8d8cc,{noise:10});
+  const birchLeaf = voxMat(0x7a8f4a,{noise:16});
   const snowMat   = voxMat(0xe8ecf0,{noise:8});
+  const clothPale = voxMat(0xc8c0b0,{noise:12});
+  const furMat    = voxMat(0x6b5a44,{noise:18});
 
   const lb=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
@@ -7829,169 +7861,543 @@ heightZoneTarget = heightZonesSweden;
   const lake = new THREE.Mesh(new THREE.BoxGeometry(300,0.5,300), lakeMat);
   lake.position.set(0,-0.62,0); lake.receiveShadow=true; scene.add(lake);   // top at -0.37: the shore has freeboard
   // a beaten earth square in the middle of the settlement, where the longhouses face each other
-  lb(15,0.05,13, voxMat(0x6b5a3e,{noise:16}), 0,0.065,-1);
-
-  // ---- longhouses: the settlement itself ----
-  // Bowed walls, turf roof on a timber frame, a smoke-hole gable each end. Four of them around the square,
-  // which is what turns an open field into a street to be fought down.
-  function longhouse(cx,cz,rot){
-    const H=new THREE.Group(); H.position.set(cx,0,cz); H.rotation.y=rot||0; scene.add(H);
-    const hb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-      m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; H.add(m); return m; };
-    hb(7.4,2.5,4.6, timber, 0,1.25,0);                     // the hall body
-    hb(7.6,0.35,4.8, timberDk, 0,2.52,0);                  // wall plate the roof sits on
-    // turf roof: two pitched slabs meeting at a ridge, stepped so neither shares a plane with the other
-    [-1,1].forEach(sd=>{
-      const r=hb(7.7,0.42,2.7, turfMat, 0,3.18,sd*1.16); r.rotation.x = sd*0.52;
-    });
-    hb(7.9,0.30,0.5, timberDk, 0,3.92,0);                  // the ridge beam capping both slabs
-    hb(0.34,0.34,5.0, timber, -3.5,2.9,0);                 // gable posts
-    hb(0.34,0.34,5.0, timber,  3.5,2.9,0);
-    // carved gable finials — the prow-heads that make a hall read as Norse and not as a barn
-    [-1,1].forEach(sd=>{
-      const f=hb(0.26,0.9,0.26, timberDk, sd*3.5,4.35,0); f.rotation.z = sd*0.30;
-      hb(0.22,0.24,0.5, timberDk, sd*3.66,4.78,0);
-    });
-    hb(1.5,1.9,0.28, timberDk, 0,0.95,2.42);               // the door, in the long wall
-    hb(1.7,0.26,0.36, timber,  0,1.98,2.44);               // its lintel
-    // shields hung along the wall, the way a hall or a ship's rail carries them
-    [-2.3,-1.0,1.0,2.3].forEach((sx,i)=>{
-      const s=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.42,0.10,12),
-        [shieldRed,shieldYel,shieldBlu,shieldRed][i]);
-      s.position.set(sx,1.85,2.38); s.rotation.x=Math.PI/2; s.castShadow=true; H.add(s);
-      const boss=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,6), ironMat);
-      boss.position.set(sx,1.85,2.45); H.add(boss);
-    });
-    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=7.4, d=4.6;
-    addBox(cx, cz, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
+  lb(17,0.05,15, voxMat(0x6b5a3e,{noise:16}), 0,0.065,-1);
+  // snow lying in the lee of things, in the corners the sun does not reach
+  [[-25,-25,7,6],[24,-24,6,5],[-26,22,5,5],[26,20,4,4],[-6,-27,9,3],[13,-26,6,3]].forEach(([sx,sz,sw,sd])=>
+    lb(sw,0.06,sd, snowMat, sx,0.055,sz));
+  // shoreline boulders, so the turf does not simply stop at a clean edge
+  for(let i=0;i<26;i++){
+    const a=i/26*Math.PI*2, r=HALF-0.6+Math.sin(i*2.7)*0.8;
+    const bx=Math.cos(a)*r, bz=Math.sin(a)*r;
+    if(bz>HALF-9 && Math.abs(bx)<16) continue;          // leave the harbour frontage clear
+    const s=0.7+((i*13)%5)*0.22;
+    const rk=lb(s*1.5,s,s*1.4, graniteM, bx,s*0.28,bz);
+    rk.rotation.y=i*0.7;
   }
-  longhouse(-10.5,-9, 0);
-  longhouse( 10.5,-9, 0);
-  longhouse(-10.5, 7, 0);
-  longhouse( 10.5, 7, 0);
+
+  // ================= THE BORG — the hillfort on the west =================
+  // Birka's Borg is a granite outcrop above the town, walled in timber. It is the only high ground here and
+  // the only climbable geometry on the map: a ramp on its east face runs up to a rampart walk that looks
+  // straight down the length of the square. Everything about it exists to give the bow somewhere to be
+  // worth drawing from.
+  const BORG_X=-20, BORG_Z=-3, BORG_H=3.4, BORG_W=13, BORG_D=15;
+  (function borg(){
+    // The rock is ONE block the size of its own collider, with granite strata standing proud of its faces
+    // for relief. Stepped shelves were the first attempt and they cannot work here: a collider only covers
+    // one rectangle, so either the shelves are solid (and the ramp's foot is walled off) or they are not
+    // (and enemies spawn standing inside the rock). One clean mesa, decorated on its faces, is both.
+    lb(BORG_W, BORG_H, BORG_D, graniteM, BORG_X, BORG_H/2, BORG_Z);
+    // strata: thin bands of darker granite banded across each face, proud of it so they never share a plane
+    [-1,1].forEach(sd=>{
+      for(let i=0;i<4;i++){
+        lb(BORG_W*0.98, 0.26, 0.22, graniteD, BORG_X, 0.45+i*0.80, BORG_Z+sd*(BORG_D/2+0.10));
+        lb(0.22, 0.26, BORG_D*0.98, graniteD, BORG_X+sd*(BORG_W/2+0.10), 0.75+i*0.80, BORG_Z);
+      }
+    });
+    // ---- the collider is the tower pattern: solid from the ground, skipped once you are up on it ----
+    // roofY is what lets a player standing ON the crown walk around instead of being shoved off by the
+    // same box that blocks them at ground level. Exactly how sniperTower() does it.
+    addBox(BORG_X, BORG_Z, BORG_W, BORG_D, BORG_H);
+    heightZoneTarget.push({type:'plateau', x1:BORG_X-BORG_W/2, z1:BORG_Z-BORG_D/2,
+                                           x2:BORG_X+BORG_W/2, z2:BORG_Z+BORG_D/2, y:BORG_H});
+    // ---- the ramp up the east face ----
+    // A timber causeway on stone cribbing, running from the rock's east face out to ground. It sits
+    // ENTIRELY OUTSIDE the rock's footprint, so its height zone meets the plateau exactly at the rock's
+    // edge without the collider ever fighting it. Deliberately wide (4.4) — a narrow ramp against a wall
+    // is a place to get stuck.
+    const RX0=BORG_X+BORG_W/2, RX1=RX0+9.5, RZ=BORG_Z+3.5;
+    // ONE rotated slab, not a staircase of separate planks. Stepped planks each floated clear of their
+    // neighbours (the audit found all twelve, plus every post under them) because consecutive steps
+    // overlapped in x but not in y. A single tilted deck cannot have that problem, and it is also what a
+    // timber causeway actually looks like.
+    const RL=Math.hypot(RX1-RX0, BORG_H);
+    const ramp=lb(RL, 0.34, 4.4, plank, (RX0+RX1)/2, BORG_H/2, RZ);
+    ramp.rotation.z = -Math.atan2(BORG_H, RX1-RX0);
+    // cross-battens over the deck, for grip and so it does not read as one blank board
+    for(let i=0;i<9;i++){
+      const t=(i+0.5)/9, x=RX0+(RX1-RX0)*t, y=BORG_H*(1-t);
+      const bt=lb(0.30,0.12,4.5, timberDk, x, y+0.17, RZ);
+      bt.rotation.z = ramp.rotation.z;
+    }
+    // stone cribbing under the high end, each pier rising to meet the underside of the deck
+    for(let i=0;i<3;i++){
+      const t=(i+0.5)/5, x=RX0+(RX1-RX0)*t, y=BORG_H*(1-t);
+      lb(0.9, y+0.2, 4.0, graniteD, x, (y+0.2)/2, RZ);
+    }
+    heightZoneTarget.push({type:'ramp', axisX:true, x1:RX0, x2:RX1,
+                           z1:RZ-2.2, z2:RZ+2.2, y1:BORG_H, y2:0});
+    // handrail down the outer side of the ramp, so the drop reads as a drop
+    for(let i=0;i<10;i++){
+      const t=(i+0.5)/10, x=RX0+(RX1-RX0)*t, y=BORG_H*(1-t);
+      lcy(0.07,0.08,1.2,5, timberDk, x, y+0.55, RZ+1.95);   // inside the deck's edge, so it meets it
+    }
+    const rail=lb(RL,0.10,0.10, timberDk, (RX0+RX1)/2, BORG_H/2+1.05, RZ+1.95);
+    rail.rotation.z = ramp.rotation.z;
+    // loose boulders at the rock's foot, all clear of its footprint so nothing stands inside them
+    [[BORG_W/2+1.6,-5.5],[BORG_W/2+1.2,6.2],[-BORG_W/2-1.4,-6.0],[-BORG_W/2-1.1,5.0],[1.0,-BORG_D/2-1.5]]
+      .forEach(([ox,oz],i)=>{
+        const s=1.0+((i*17)%4)*0.30;
+        const rk=lb(s*1.5,s,s*1.3, graniteM, BORG_X+ox, s*0.3, BORG_Z+oz);
+        rk.rotation.y=i*0.8;
+      });
+    // ---- the rampart: a timber wall around the rock's crown, with a walk behind it ----
+    // Each face carries its own height. Given one shared height every corner where two faces meet has
+    // both its top and bottom planes in common — eight zero-gap pairs around the crown. Ramparts built on
+    // a rock are uneven anyway, so varying them is also the better look.
+    const rw=(cx,cz,w,d,h,base)=>{ lb(w,h,d, timber, cx,(base||0)+BORG_H+h/2,cz); addBox(cx,cz,w,d); };
+    rw(BORG_X, BORG_Z-BORG_D/2+0.5, BORG_W, 0.7, 1.62, 0);        // north face
+    rw(BORG_X, BORG_Z+BORG_D/2-0.5, BORG_W, 0.7, 1.44, 0.05);     // south face
+    rw(BORG_X-BORG_W/2+0.5, BORG_Z, 0.7, BORG_D-1.4, 1.53, 0.02); // west face
+    // the east face is open where the ramp arrives, walled either side of it
+    rw(BORG_X+BORG_W/2-0.5, BORG_Z-4.6, 0.7, BORG_D-9.6, 1.37, 0.08);
+    // stake tops along the rampart
+    for(let i=0;i<13;i++){
+      const t=i/12;
+      lco(0.19,0.55,5, timberDk, BORG_X-BORG_W/2+t*BORG_W, BORG_H+1.75, BORG_Z-BORG_D/2+0.5);
+      lco(0.19,0.55,5, timberDk, BORG_X-BORG_W/2+t*BORG_W, BORG_H+1.75, BORG_Z+BORG_D/2-0.5);
+    }
+    // shields hung on the inside of the north rampart, the way a hall or a ship's rail carries them
+    [shieldRed,shieldYel,shieldBlu,shieldGrn,shieldRed].forEach((mt,i)=>{
+      const s=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.10,12), mt);
+      s.position.set(BORG_X-4.4+i*2.2, BORG_H+0.95, BORG_Z-BORG_D/2+0.9);
+      s.rotation.x=Math.PI/2; s.castShadow=true; scene.add(s);
+      const bo=new THREE.Mesh(new THREE.SphereGeometry(0.13,8,6), ironMat);
+      bo.position.set(BORG_X-4.4+i*2.2, BORG_H+0.95, BORG_Z-BORG_D/2+0.98); scene.add(bo);
+    });
+    // ---- the beacon: a war-fire in an iron basket on the crown, the map's brightest point ----
+    lcy(0.30,0.34,1.5,8, timberDk, BORG_X-3.0, BORG_H+0.75, BORG_Z-1.0);
+    const basket=lcy(0.85,0.55,0.70,10, ironDark, BORG_X-3.0, BORG_H+1.78, BORG_Z-1.0);
+    for(let i=0;i<8;i++){ const a=i/8*Math.PI*2;
+      lcy(0.05,0.05,0.75,4, ironMat, BORG_X-3.0+Math.cos(a)*0.72, BORG_H+1.9, BORG_Z-1.0+Math.sin(a)*0.72); }
+    const bfl=new THREE.Mesh(new THREE.ConeGeometry(0.62,1.7,8),
+      new THREE.MeshBasicMaterial({color:0xffb347, fog:false}));
+    bfl.position.set(BORG_X-3.0, BORG_H+2.85, BORG_Z-1.0); scene.add(bfl);
+    birkaBeacon = bfl;
+    const bl=new THREE.PointLight(0xffa93a,1.5,26); bl.position.set(BORG_X-3.0,BORG_H+3.2,BORG_Z-1.0); scene.add(bl);
+    // ---- a lookout post at the north end of the crown ----
+    [[-3.2,-6.4],[3.2,-6.4],[-3.2,-2.4],[3.2,-2.4]].forEach(([ox,oz])=>
+      lcy(0.17,0.19,2.4,6, timber, BORG_X+ox, BORG_H+1.2, BORG_Z+oz));
+    lb(7.4,0.24,4.6, plank, BORG_X, BORG_H+2.4, BORG_Z-4.4);
+    lb(7.8,0.9,0.28, timberDk, BORG_X, BORG_H+2.95, BORG_Z-6.6);
+    lco(4.6,1.9,4, turfDark, BORG_X, BORG_H+3.35, BORG_Z-4.4);   // base laps the platform, not level with it
+    // a woodpile and a water butt on the crown — a manned fort, not an empty wall
+    for(let r=0;r<3;r++) for(let i=0;i<4-r;i++){
+      const lg=lcy(0.16,0.16,1.7,7, timberPa, BORG_X+4.6, BORG_H+0.17+r*0.30, BORG_Z+1.9+r*0.17+i*0.34);
+      lg.rotation.z=Math.PI/2;   // laid along x, so they stack like a real cord of wood
+    }
+    lcy(0.52,0.46,0.9,10, timberDk, BORG_X+4.6, BORG_H+0.45, BORG_Z+5.4);
+  })();
+
+  // ================= THE LONGHOUSES =================
+  // Bowed walls, turf roof on a timber frame, a carved gable each end. Built from stepped segments so the
+  // walls actually curve — a Norse hall is wider at the middle than at its doors, and a plain box loses the
+  // single most recognisable thing about the building.
+  function longhouse(cx,cz,rot,len){
+    const H=new THREE.Group(); H.position.set(cx,0,cz); H.rotation.y=rot||0; scene.add(H);
+    const hb=(w,h,d,mat,x,y,z,rz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); if(rz) m.rotation.z=rz; m.castShadow=true; m.receiveShadow=true; H.add(m); return m; };
+    const L=len||8.0;
+    // the bowed side walls: five segments per side, widest at the middle
+    for(let i=0;i<5;i++){
+      const t=(i/4-0.5)*2;                       // -1..1
+      const bow=2.35 + (1-t*t)*0.55;             // half-width, fattest at the centre
+      const segL=L/5;
+      [-1,1].forEach(sd=>{
+        hb(segL*1.02, 2.6, 0.42, timber, t*(L/2-segL/2), 1.3, sd*bow);
+        // The plate is wider and deeper than the wall it caps. Built at the SAME width it shared both of
+        // the wall's x faces exactly — 120 zero-gap coplanar pairs across the four halls, by far the worst
+        // thing on the map. A wall plate overhangs anyway, so this is also the truer shape.
+        // ...and alternate its height along the run, or each plate shares both y planes with the plate
+        // beside it, which is 64 coplanar pairs across four halls. Uneven plates are also the truer look.
+        hb(segL*1.02+0.14, 0.30+(i%2)*0.05, 0.54, timberDk, t*(L/2-segL/2), 2.66+(i%2)*0.05, sd*bow);
+      });
+    }
+    // end walls
+    // bedded 0.06 low and standing 0.06 proud, so neither y face lines up with the side walls' own
+    // pulled in to L/2-0.30: at L/2-0.20 this face sat 0.002 from the side wall's own outer face
+    [-1,1].forEach(sd=> hb(0.44, 2.72, 4.7, timber, sd*(L/2-0.30), 1.30, 0));
+    // ---- the roof: two pitched turf slabs meeting at a ridge, stepped in y so neither shares a plane ----
+    [-1,1].forEach(sd=>{
+      const r=hb(L+0.7, 0.46, 3.30, turfMat, 0, 3.30, sd*1.32); r.rotation.x = sd*0.56;
+      const r2=hb(L+0.5, 0.16, 3.10, turfDark, 0, 3.44, sd*1.30); r2.rotation.x = sd*0.56;
+    });
+    hb(L+0.9, 0.34, 0.56, timberDk, 0, 4.12, 0);          // the ridge beam capping both slabs
+    // the smoke hole, and the smoke going up out of it
+    hb(0.9,0.26,0.9, timberDk, L*0.18, 4.28, 0);
+    for(let i=0;i<4;i++){
+      const s=new THREE.Mesh(new THREE.BoxGeometry(0.5+i*0.30,0.5+i*0.24,0.5+i*0.30),
+        new THREE.MeshBasicMaterial({color:0xb8bcc0, transparent:true, opacity:0.20-i*0.04, fog:false, depthWrite:false}));
+      s.position.set(L*0.18+i*0.14, 4.58+i*0.85, i*0.10); H.add(s);   // puff 0 laps the smoke hole
+    }
+    // ---- carved gable finials: the prow-heads that make a hall read as Norse and not as a barn ----
+    [-1,1].forEach(sd=>{
+      const f=hb(0.28,1.05,0.28, timberDk, sd*(L/2-0.1), 4.55, 0); f.rotation.z = sd*0.34;
+      hb(0.24,0.26,0.62, timberDk, sd*(L/2+0.18), 5.05, 0);
+      hb(0.20,0.20,0.26, timberDk, sd*(L/2+0.34), 5.18, 0.18);      // the beast's snout
+      hb(0.10,0.16,0.10, timberDk, sd*(L/2+0.26), 5.24, -0.12);     // and an ear
+    });
+    // ---- the door in the long wall, with a carved frame and the fire showing inside ----
+    hb(1.55,2.06,0.34, timberDk, 0, 0.98, 2.62);        // bedded 0.05 low, clear of the wall's own base
+    hb(1.85,0.30,0.42, timberPa, 0, 2.12, 2.64);                     // lintel
+    [-1,1].forEach(sd=> hb(0.22,2.14,0.40, timberPa, sd*0.86, 1.02, 2.64));  // jambs, likewise
+    for(let i=0;i<3;i++) hb(0.14,0.14,0.44, runePaint, -0.5+i*0.5, 2.12, 2.66);  // painted carving
+    const glow=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.5,0.1),
+      new THREE.MeshBasicMaterial({color:0xff9a3a, transparent:true, opacity:0.55, fog:false}));
+    glow.position.set(0,0.85,2.53); H.add(glow);   // inside the doorway, not flush with its face
+    const dl=new THREE.PointLight(0xff9a3a,0.5,7); dl.position.set(0,1.1,3.2); H.add(dl);
+    // shields along the wall
+    [-2.6,-1.3,1.3,2.6].forEach((sx,i)=>{
+      const s=new THREE.Mesh(new THREE.CylinderGeometry(0.44,0.44,0.10,12),
+        [shieldRed,shieldYel,shieldBlu,shieldGrn][i]);
+      s.position.set(sx,1.95,2.62); s.rotation.x=Math.PI/2; s.castShadow=true; H.add(s);
+      const bo=new THREE.Mesh(new THREE.SphereGeometry(0.13,8,6), ironMat);
+      bo.position.set(sx,1.95,2.70); H.add(bo);
+    });
+    // roof-weight stones hanging on ropes down the eaves, a real turf-roof detail
+    [-1,1].forEach(sd=> [0,1,2].forEach(i=>{
+      lcyH(H, 0.04,0.04,0.55,4, timberDk, -2.2+i*2.2, 2.35, sd*3.10);
+      const st=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.24,0.22), graniteM);
+      st.position.set(-2.2+i*2.2, 1.96, sd*3.10); H.add(st);
+    }));
+    const c=Math.cos(rot||0), s2=Math.sin(rot||0), w=L, d=5.4;
+    addBox(cx, cz, Math.abs(w*c)+Math.abs(d*s2), Math.abs(w*s2)+Math.abs(d*c));
+  }
+  function lcyH(H,rt,rb,h,seg,mat,x,y,z){ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; H.add(m); return m; }
+  longhouse(-7.5,-11.5, 0, 9.0);
+  longhouse( 8.5,-11.5, 0, 8.0);
+  longhouse(-7.5,  9.0, 0, 8.0);
+  longhouse( 9.0,  9.0, 0, 9.0);
 
   // ---- the palisade: Birka really was walled, and it gives the fight a back wall ----
   // Open on the south (the water side) where the jetties are — you arrive by ship, which is the one way
   // into a lake town.
   const PAL_H=3.0, PAL_T=0.5;
-  const palis=(cx,cz,w,d)=>{
-    lb(w,PAL_H,d, timber, cx,PAL_H/2,cz); addBox(cx,cz,w,d);
-    // a sharpened stake line along the top, so it reads as a palisade and not a fence
+  const palis=(cx,cz,w,d,h,base)=>{
+    const H2=h||PAL_H, B2=base||0;
+    lb(w,H2,d, timber, cx,B2+H2/2,cz); addBox(cx,cz,w,d);
     const along = w>d;
     const n = Math.max(2, Math.round((along?w:d)/1.1));
     for(let i=0;i<n;i++){
       const t=(i+0.5)/n-0.5;
-      lco(0.26,0.7,5, timberDk, cx+(along?t*w:0), PAL_H+0.35, cz+(along?0:t*d));
+      lco(0.26,0.7,5, timberDk, cx+(along?t*w:0), B2+H2+0.30, cz+(along?0:t*d));
     }
   };
-  palis(0,-HALF+1, HALF*2-2, PAL_T);            // north
-  palis(-HALF+1,-6, PAL_T, (HALF-7)*2);         // west, stopping short of the shore
-  palis( HALF+-1,-6, PAL_T, (HALF-7)*2);        // east
+  // each run its own height, for the same reason the Borg's rampart faces are: shared corners otherwise
+  // share both their top and bottom planes
+  palis(0,-HALF+1, HALF*2-2, PAL_T, 3.06, -0.04); // north, bedded low so no corner shares a base plane
+  palis(-HALF+1,-6, PAL_T, (HALF-7)*2, 2.84);   // west, stopping short of the shore
+  palis( HALF-1,-6, PAL_T, (HALF-7)*2, 2.92);   // east
   // gate towers flanking the north road out of town
   [-3.6,3.6].forEach(gx=>{
-    lb(1.6,4.6,1.6, timber, gx,2.3,-HALF+1);
+    lb(1.6,4.66,1.6, timber, gx,2.27,-HALF+1);   // bedded low, clear of the palisade's own base plane
     lb(2.0,0.4,2.0, timberDk, gx,4.65,-HALF+1);
     lco(1.15,1.2,4, thatchDk, gx,5.45,-HALF+1);
     addBox(gx,-HALF+1,1.8,1.8);
   });
+  lb(7.2,0.34,0.34, timberDk, 0,4.55,-HALF+1);   // the lintel beam across the gate
+  lb(6.4,0.16,0.16, shieldRed, 0,4.25,-HALF+1);  // a banner strung under it
 
-  // ---- the jetties: what Birka was actually for ----
-  [-13,0,13].forEach((jx,i)=>{
+  // ================= THE HARBOUR — south =================
+  [-14,0,14].forEach((jx,i)=>{
     const len = 9 + (i===1?3:0);
     for(let s=0;s<len;s++){
-      lb(2.4,0.22,1.1, plank, jx, 0.22, HALF-3+s*1.1);
-      if(s%3===0){ lcy(0.14,0.16,1.4,6, timberDk, jx-1.0,-0.35,HALF-3+s*1.1);
-                   lcy(0.14,0.16,1.4,6, timberDk, jx+1.0,-0.35,HALF-3+s*1.1); }
+      lb(2.6,0.22,1.1, plank, jx, 0.22, HALF-3+s*1.1);
+      if(s%3===0){ lcy(0.14,0.16,1.4,6, timberDk, jx-1.1,-0.35,HALF-3+s*1.1);
+                   lcy(0.14,0.16,1.4,6, timberDk, jx+1.1,-0.35,HALF-3+s*1.1); }
     }
-    addBox(jx, HALF-3+len*0.55, 2.4, len*1.1);
+    // mooring posts at the jetty head
+    lcy(0.18,0.20,1.5,7, timberDk, jx-1.5, 0.75, HALF-3.6);
+    lcy(0.18,0.20,1.5,7, timberDk, jx+1.5, 0.75, HALF-3.6);
+    addBox(jx, HALF-3+len*0.55, 2.6, len*1.1);
   });
-  // a beached knarr drawn up on the shingle, because a trading town needs a ship in it
-  (function knarr(){
-    const K=new THREE.Group(); K.position.set(-21,0,20); K.rotation.y=0.5; scene.add(K);
-    const kb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-      m.position.set(x,y,z); m.castShadow=true; K.add(m); return m; };
-    kb(2.2,1.0,8.4, plank, 0,0.55,0);                        // hull
-    kb(2.5,0.26,8.0, timberDk, 0,1.10,0);                    // the sheer strake along the rail
+  // a beached knarr drawn up on the shingle — a trading town needs a ship in it
+  function ship(px,pz,rot,scale,sailMat){
+    const K=new THREE.Group(); K.position.set(px,0,pz); K.rotation.y=rot; K.scale.setScalar(scale||1); scene.add(K);
+    const kb=(w,h,d,mat,x,y,z,rx)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); if(rx) m.rotation.x=rx; m.castShadow=true; K.add(m); return m; };
+    // clinker hull: overlapping strakes, each one stepped out and up from the one below
+    for(let i=0;i<4;i++){
+      kb(2.05+i*0.16, 0.30, 8.6-i*0.25, i%2?plank:timberPa, 0, 0.26+i*0.26, 0);
+    }
+    kb(2.72,0.22,8.2, timberDk, 0,1.34,0);                   // the sheer strake along the rail
     [-1,1].forEach(sd=>{                                      // stem and stern rising to a point
-      const p=kb(1.5,1.5,1.6, plank, 0,1.0,sd*4.2); p.rotation.x = sd*0.55;
-      kb(0.34,1.1,0.34, timberDk, 0,2.05,sd*4.9);
+      kb(1.5,1.6,1.7, plank, 0,1.1,sd*4.3, sd*0.55);
+      kb(0.34,1.3,0.34, timberDk, 0,2.20,sd*5.0);
+      kb(0.26,0.30,0.5, timberDk, 0,2.85,sd*5.15);           // the carved head
+      kb(0.18,0.44,0.18, timberDk, 0,3.10,sd*5.0);
     });
-    kb(0.34,5.2,0.34, timber, 0,3.1,0);                      // mast
-    kb(3.6,2.6,0.22, voxMat(0xc8c0b0,{noise:12}), 0,3.9,0);  // furled sail
-    [-1,1].forEach(sd=> [0,1,2].forEach(i=>{                   // shields on the rail
-      const s=new THREE.Mesh(new THREE.CylinderGeometry(0.38,0.38,0.09,12), i%2?shieldBlu:shieldRed);
-      s.position.set(sd*1.28,1.45,-2.2+i*2.2); s.rotation.z=Math.PI/2; K.add(s);
+    kb(0.36,5.4,0.36, timber, 0,3.2,0);                      // mast
+    kb(3.9,2.8,0.24, sailMat||clothPale, 0,4.1,0);           // furled sail
+    for(let i=0;i<5;i++) kb(4.0,0.10,0.30, shieldRed, 0,3.0+i*0.56,0.02);  // its red stripes
+    kb(4.6,0.14,0.14, timberDk, 0,5.5,0);                    // the yard
+    // oars shipped along the rail
+    [-1,1].forEach(sd=> [0,1,2,3].forEach(i=>
+      kb(0.10,0.10,3.2, timberPa, sd*1.15, 1.5, -2.4+i*1.6)));
+    // shields on the rail
+    [-1,1].forEach(sd=> [0,1,2,3].forEach(i=>{
+      const s=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.42,0.09,12),
+        [shieldBlu,shieldRed,shieldYel,shieldGrn][i]);
+      s.position.set(sd*1.42,1.75,-2.6+i*1.75); s.rotation.z=Math.PI/2; K.add(s);
     }));
-    addBox(-21,20,6.0,8.4);
-  })();
+    const c=Math.cos(rot), s2=Math.sin(rot), w=2.9*(scale||1), d=9.0*(scale||1);
+    addBox(px,pz, Math.abs(w*c)+Math.abs(d*s2), Math.abs(w*s2)+Math.abs(d*c));
+  }
+  ship(-22, 19, 0.45, 1.0, clothPale);      // hauled out on the shingle
+  ship( 22, 21, -0.30, 0.9, voxMat(0xc4c8cc,{noise:12}));
+  // harbour cargo: barrels, crates, coiled rope, bales
+  const cargo=(cx,cz)=>{
+    lcy(0.42,0.38,0.85,10, timberPa, cx,0.42,cz);
+    lcy(0.45,0.45,0.07,10, ironDark, cx,0.68,cz);
+    lcy(0.45,0.45,0.07,10, ironDark, cx,0.18,cz);
+    addBox(cx,cz,0.9,0.9);
+  };
+  [[-11.5,23.5],[-10.2,24.6],[-12.4,25.1],[11.2,23.8],[12.6,24.9],[2.6,25.6],[-2.4,25.2]].forEach(([a,b])=>cargo(a,b));
+  [[-8.5,25.5],[9.0,26.0],[4.0,23.2]].forEach(([cx,cz])=>{
+    lb(1.15,0.85,0.95, timberPa, cx,0.43,cz);
+    lb(1.20,0.10,1.00, timberDk, cx,0.90,cz);
+    lb(0.14,0.88,0.14, timberDk, cx-0.46,0.44,cz);
+    lb(0.14,0.88,0.14, timberDk, cx+0.46,0.44,cz);
+    addBox(cx,cz,1.3,1.1);
+  });
+  // stacked furs and a sack pile — what Birka actually traded
+  [[-5.6,24.8],[6.2,25.2]].forEach(([cx,cz])=>{
+    for(let i=0;i<3;i++) lb(1.0-i*0.12,0.22,0.72-i*0.08, i%2?furMat:voxMat(0x8a7356,{noise:16}), cx,0.12+i*0.18,cz);
+    addBox(cx,cz,1.1,0.85);
+  });
 
-  // ---- the burial field: where the draugr come from ----
-  // Björkö's real draw is its grave mounds. Three low turf mounds and a scatter of standing stones on the
-  // west side, deliberately the one part of the map with no straight lines in it.
-  [[-19,-16,2.6],[-22,-6,3.2],[-14,-20,2.2]].forEach(([mx,mz,mr])=>{
+  // ================= THE GRAVE FIELD — north =================
+  // Björkö's real draw is its grave mounds. Three turf mounds, a standing-stone SHIP SETTING — the Norse
+  // buried under a ship outlined in stones when they could not spare a real one — and the rune stones.
+  // Deliberately the one part of the map with no straight lines in it.
+  [[-15,-22,3.0],[-8,-24.5,2.4],[-21,-19,2.6],[3,-25,2.2]].forEach(([mx,mz,mr])=>{
     const mound=new THREE.Mesh(new THREE.SphereGeometry(mr,10,6), turfMat);
     mound.scale.set(1,0.42,1); mound.position.set(mx,0.02,mz);
     mound.castShadow=true; mound.receiveShadow=true; scene.add(mound);
+    const cap=new THREE.Mesh(new THREE.SphereGeometry(mr*0.55,8,5), snowMat);
+    cap.scale.set(1,0.30,1); cap.position.set(mx,mr*0.30,mz); scene.add(cap);
     addBox(mx,mz,mr*1.5,mr*1.5);
   });
-  // standing stones, leaning at their own angles — a stone circle that has been there a thousand years
-  for(let i=0;i<9;i++){
-    const a=i/9*Math.PI*2, r=7.2;
-    const sx=-19+Math.cos(a)*r, sz=-13+Math.sin(a)*r;
-    const st=lb(0.7,2.2+((i*37)%7)*0.16,0.5, graniteM, sx,1.1,sz);
-    st.rotation.z=((i*53)%9-4)*0.035; st.rotation.x=((i*29)%7-3)*0.03;
-  }
-  // the rune stone: the one carved, painted object on the map, standing at the head of the square
-  (function runeStone(){
-    // The stone SITS ON its footing rather than sharing a base plane with it — both started at y=0, which
-    // is a zero-gap coplanar pair across their whole overlap. Raised 0.15 so its foot beds into the plinth.
-    lb(1.25,3.0,0.45, runeMat, 0,1.65,-11.5);      // front face at z=-11.275
-    // The carved band — a serpent loop with rune strokes inside it, in red ochre. The horizontal bands and
-    // the vertical bars used to be given the SAME depth at the same z, so every band/bar corner shared both
-    // z planes exactly: eight zero-gap pairs, the worst z-fight on the map. They now stand at deliberately
-    // different depths off the face, which is also how a real carving reads — the loop is not all one plane.
-    lb(1.0,0.16,0.06,  runePaint, 0,2.70,-11.260);
-    lb(1.0,0.16,0.06,  runePaint, 0,0.70,-11.260);
-    [-1,1].forEach(sd=> lb(0.16,2.16,0.056, runePaint, sd*0.42,1.70,-11.272));
+  // the ship setting: an elliptical outline of standing stones, tallest at stem and stern
+  (function shipSetting(cx,cz,rot){
+    const A=7.6, B=2.9, N=22;
+    for(let i=0;i<N;i++){
+      const a=i/N*Math.PI*2;
+      const lx=Math.cos(a)*A, lz=Math.sin(a)*B;
+      const x=cx+lx*Math.cos(rot)-lz*Math.sin(rot), z=cz+lx*Math.sin(rot)+lz*Math.cos(rot);
+      const end=Math.abs(Math.cos(a));
+      const h=0.9+end*end*2.0+((i*17)%5)*0.10;
+      const st=lb(0.52,h,0.42, graniteM, x,h/2,z);
+      st.rotation.z=((i*29)%7-3)*0.035; st.rotation.y=a;
+    }
+    // the burial itself: a low kerb of stones at the centre
+    for(let i=0;i<8;i++){ const a=i/8*Math.PI*2;
+      lb(0.5,0.34,0.44, graniteD, cx+Math.cos(a)*1.5, 0.17, cz+Math.sin(a)*1.0); }
+    addBox(cx,cz,3.0,2.2);
+  })(15,-21,0.35);
+  // the rune stones: the carved, painted objects at the head of the field and beside the square
+  function runeStone(px,pz,rot){
+    const R=new THREE.Group(); R.position.set(px,0,pz); R.rotation.y=rot||0; scene.add(R);
+    const rb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); m.castShadow=true; R.add(m); return m; };
+    rb(1.45,0.3,0.8, graniteM, 0,0.15,0);              // footing
+    rb(1.25,3.0,0.45, runeMat, 0,1.65,0);              // the stone, bedded into it (front face z=-0.225)
+    // the serpent loop, in red ochre. Bands, bars and strokes each stand at a DIFFERENT depth off the face:
+    // given the same depth they share both z planes exactly, which is eight zero-gap coplanar pairs.
+    rb(1.0,0.16,0.06,  runePaint, 0,2.70,-0.245);
+    rb(1.0,0.16,0.06,  runePaint, 0,0.70,-0.245);
+    [-1,1].forEach(sd=> rb(0.16,2.16,0.056, runePaint, sd*0.42,1.70,-0.257));
     for(let i=0;i<6;i++)
-      lb(0.09,0.34,0.044, runePaint, -0.28+((i*2)%3)*0.28, 1.20+Math.floor(i/3)*0.62, -11.262);
-    lb(1.45,0.3,0.7, graniteM, 0,0.15,-11.5);      // its footing
-    addBox(0,-11.5,1.5,0.8);
-  })();
+      rb(0.09,0.34,0.044, runePaint, -0.28+((i*2)%3)*0.28, 1.20+Math.floor(i/3)*0.62, -0.247);
+    addBox(px,pz,1.5,0.9);
+  }
+  runeStone(0,-11.5,0);
+  runeStone(-11,-25.5,0.5);
+  runeStone(20,-14,-0.4);
+  // a wooden idol — a god-pole with a carved face, at the edge of the grave field
+  (function idol(ix,iz){
+    lcy(0.42,0.50,3.2,8, timberDk, ix,1.6,iz);
+    lb(0.78,0.84,0.62, timberDk, ix,3.35,iz);                 // the head
+    lb(0.70,0.10,0.10, runePaint, ix,3.55,iz-0.30);           // brow
+    [-1,1].forEach(sd=> lb(0.16,0.14,0.10, runePaint, ix+sd*0.20,3.38,iz-0.31));   // eyes
+    lb(0.30,0.12,0.10, runePaint, ix,3.10,iz-0.30);           // mouth
+    lb(0.26,0.50,0.22, timberDk, ix,2.90,iz-0.02);            // beard, ending clear of the post's top
+    lco(0.56,0.50,6, timberDk, ix,3.95,iz);                   // a cap
+    // offering stones at its foot
+    for(let i=0;i<6;i++){ const a=i/6*Math.PI*2;
+      lb(0.36,0.26,0.32, graniteD, ix+Math.cos(a)*1.25, 0.13, iz+Math.sin(a)*1.25); }
+    addBox(ix,iz,1.2,1.2);
+  })(-25,-12);
 
-  // ---- spruce, at the edges where the town gives out ----
-  [[-25,-24],[25,-24],[-26,2],[26,-1],[-24,13],[24,14],[18,-25],[-8,-26]].forEach(([tx,tz],i)=>{
-    const h=4.6+((i*31)%5)*0.5;
-    lcy(0.20,0.28,h,6, timberDk, tx,h/2,tz);
-    for(let k=0;k<3;k++)
-      lco(1.5-k*0.36, 1.7, 7, leafDark, tx, h*0.62+k*1.05, tz);
-    lco(0.5,0.7,7, snowMat, tx, h*0.62+2.9, tz);    // a cap of snow on the crown
-  });
+  // ================= THE BLACK EARTH — the craftsmen's row, east =================
+  // A workshop shed: four posts, a low turf lean-to, and a bench of whatever the craftsman makes.
+  function shed(cx,cz,rot,benchMat){
+    const S=new THREE.Group(); S.position.set(cx,0,cz); S.rotation.y=rot||0; scene.add(S);
+    const sb=(w,h,d,mat,x,y,z,rx)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); if(rx) m.rotation.x=rx; m.castShadow=true; S.add(m); return m; };
+    [[-1.5,-1.3],[1.5,-1.3],[-1.5,1.3],[1.5,1.3]].forEach(([px,pz])=>{
+      const p=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.15,2.3,7), timberDk);
+      p.position.set(px,1.15,pz); p.castShadow=true; S.add(p);
+    });
+    const r=sb(3.5,0.30,3.3, turfMat, 0,2.50,0.1); r.rotation.x=0.24;   // the lean-to roof
+    sb(3.6,0.12,0.30, timberDk, 0,2.25,1.62);
+    sb(2.6,0.70,0.95, timberPa, 0,0.60,-0.8);                          // the bench
+    sb(2.7,0.10,1.05, timberDk, 0,0.98,-0.8);
+    for(let i=0;i<4;i++) sb(0.22,0.18,0.20, benchMat, -0.9+i*0.6,1.12,-0.8);   // goods on it
+    sb(3.2,0.10,0.10, timberDk, 0,1.95,-1.35);                         // a rail with wares hanging
+    for(let i=0;i<5;i++) sb(0.12,0.34,0.08, benchMat, -1.2+i*0.6,1.72,-1.35);
+    const c=Math.cos(rot||0), s2=Math.sin(rot||0);
+    addBox(cx,cz, Math.abs(3.4*c)+Math.abs(3.0*s2), Math.abs(3.4*s2)+Math.abs(3.0*c));
+  }
+  shed(21, 2, -Math.PI/2, voxMat(0xd8d2bc,{noise:10}));     // the bone/antler worker
+  shed(21, 8, -Math.PI/2, voxMat(0xb8863c,{noise:14}));     // the amber trader
+  shed(22,-5, -Math.PI/2, voxMat(0x8a5a9c,{noise:14}));     // the weaver, dyed cloth
+  // ---- the smithy: the only building with a live fire in it, and the warmest light on the map ----
+  (function smithy(sx,sz){
+    const S=new THREE.Group(); S.position.set(sx,0,sz); scene.add(S);
+    const sb=(w,h,d,mat,x,y,z,rx)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); if(rx) m.rotation.x=rx; m.castShadow=true; m.receiveShadow=true; S.add(m); return m; };
+    // low turf walls on three sides, open to the square so the forge is visible
+    // three different heights: given one, every corner where two runs meet shares both y planes
+    sb(5.0,1.98,0.5, timberDk, 0,0.99,-2.1);
+    sb(0.5,1.86,4.2, timberDk, -2.15,0.91,0);   // ±2.15, not ±2.25: at 2.25 their outer faces landed
+    sb(0.5,1.74,4.2, timberDk,  2.15,0.85,0);   // exactly on the back wall's own, and both began at y=0
+    [[-2.3,-2.0],[2.3,-2.0],[-2.3,2.0],[2.3,2.0]].forEach(([px,pz])=>{
+      const p=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.18,2.98,7), timber);
+      p.position.set(px,1.44,pz); p.castShadow=true; S.add(p);   // bedded 0.05 into the floor
+    });
+    [-1,1].forEach(sd=>{ const r=sb(5.4,0.34,2.6, turfMat, 0,3.05,sd*1.05); r.rotation.x=sd*0.48; });
+    sb(5.6,0.26,0.44, timberDk, 0,3.62,0);
+    // the forge: a stone hearth with glowing charcoal and a hood
+    sb(1.9,0.95,1.6, graniteM, -0.9,0.47,-1.0);
+    const coals=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.16,1.1),
+      new THREE.MeshBasicMaterial({color:0xff7a1a, fog:false}));
+    coals.position.set(-0.9,0.99,-1.0); S.add(coals);
+    birkaForge = coals;
+    const fl=new THREE.PointLight(0xff7a1a,1.5,14); fl.position.set(sx-0.9,1.5,sz-1.0); scene.add(fl);
+    sb(1.5,0.12,1.3, ironDark, -0.9,1.75,-1.0);                     // the hood
+    [-1,1].forEach(sd=> sb(0.12,0.70,0.12, ironDark, -0.9+sd*0.6,1.40,-1.0));
+    // the bellows
+    sb(0.9,0.34,0.62, furMat, -2.0,1.05,-1.0);
+    sb(0.5,0.16,0.44, timberPa, -2.5,1.10,-1.0);
+    // the anvil, on its stump
+    lcyS(S,0.34,0.38,0.75,9, timberDk, 0.7,0.37,-0.4);
+    sb(0.34,0.26,0.86, ironMat, 0.7,0.88,-0.4);
+    sb(0.30,0.14,0.34, ironMat, 0.7,1.06,-0.4);
+    sb(0.26,0.12,0.26, ironMat, 0.7,1.06,-0.86);
+    // the quench trough, tools, and a rack of finished blades
+    sb(0.7,0.42,1.5, timberPa, 1.6,0.21,0.9);
+    const qw=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.05,1.36),
+      new THREE.MeshLambertMaterial({color:0x2c3a44})); qw.position.set(1.6,0.40,0.9); S.add(qw);
+    sb(1.9,0.10,0.10, timberDk, -0.4,1.92,1.85);
+    for(let i=0;i<5;i++) sb(0.10,0.55,0.05, ironMat, -1.1+i*0.36,1.60,1.85);
+    for(let r=0;r<2;r++) for(let i=0;i<5-r;i++){
+      const lg=lcyS(S,0.12,0.12,1.4,6, timberPa, 1.95, 0.13+r*0.24, -1.9+r*0.14+i*0.28);
+      lg.rotation.z=Math.PI/2;
+    }
+    addBox(sx,sz,5.2,4.6);
+  })(19,-10);
+  function lcyS(S,rt,rb,h,seg,mat,x,y,z){ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; S.add(m); return m; }
 
-  // ---- firepit in the square: the one warm light source on a cold map ----
-  lcy(1.05,1.15,0.30,10, graniteM, 0,0.15,-1);
-  for(let i=0;i<7;i++){ const a=i/7*Math.PI*2;
-    lb(0.26,0.26,0.26, graniteM, Math.cos(a)*1.05, 0.40, -1+Math.sin(a)*1.05); }
-  [0,1,2].forEach(i=>{ const a=i/3*Math.PI*2+0.4;
-    const lg=lcy(0.10,0.12,1.2,5, timberDk, Math.cos(a)*0.26, 0.62, -1+Math.sin(a)*0.26);
+  // ---- the square's fire, the one warm light at the centre ----
+  lcy(1.15,1.25,0.32,10, graniteM, 0,0.16,-1);
+  for(let i=0;i<9;i++){ const a=i/9*Math.PI*2;
+    lb(0.28,0.28,0.28, graniteM, Math.cos(a)*1.15, 0.42, -1+Math.sin(a)*1.15); }
+  [0,1,2,3].forEach(i=>{ const a=i/4*Math.PI*2+0.4;
+    const lg=lcy(0.11,0.13,1.35,5, timberDk, Math.cos(a)*0.28, 0.66, -1+Math.sin(a)*0.28);
     lg.rotation.z=Math.cos(a)*0.5; lg.rotation.x=Math.sin(a)*0.5; });
-  const flame=new THREE.Mesh(new THREE.ConeGeometry(0.42,1.1,7),
+  const flame=new THREE.Mesh(new THREE.ConeGeometry(0.46,1.25,8),
     new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false}));
-  flame.position.set(0,0.95,-1); scene.add(flame);
-  const fireLight=new THREE.PointLight(0xff9a3a,1.1,16); fireLight.position.set(0,1.5,-1); scene.add(fireLight);
-  addBox(0,-1,2.4,2.4);
-
-  // drying racks for fish, strung between the jetties and the hall row
-  [[-17,11],[17,11]].forEach(([rx,rz])=>{
-    lcy(0.11,0.13,2.2,5, timberDk, rx-1.3,1.1,rz);
-    lcy(0.11,0.13,2.2,5, timberDk, rx+1.3,1.1,rz);
-    lb(2.9,0.12,0.12, timberDk, rx,2.1,rz);        // the crossbar, spanning 2.04..2.16
-    // The fish HANG from that bar, so they have to reach it: at y1.72 their tops stopped 0.07 short and
-    // ten of them floated in mid-air (the audit's floating-scenery sweep caught every one). 1.82 laps the
-    // bar by 0.03.
-    for(let i=0;i<5;i++) lb(0.16,0.5,0.1, voxMat(0xb8b0a0,{noise:12}), rx-1.0+i*0.5, 1.82, rz);
-    addBox(rx,rz,2.9,0.6);
+  flame.position.set(0,1.02,-1); scene.add(flame);
+  const fireLight=new THREE.PointLight(0xff9a3a,1.2,18); fireLight.position.set(0,1.6,-1); scene.add(fireLight);
+  addBox(0,-1,2.6,2.6);
+  // benches round the fire
+  [[0,3.2,0],[0,-5.4,0],[3.4,-1,Math.PI/2],[-3.4,-1,Math.PI/2]].forEach(([bx,bz,br])=>{
+    lb(3.0,0.26,0.6, timberPa, bx,0.42,bz, br);
+    lb(0.30,0.42,0.5, timberDk, bx+(br?0:-1.2), 0.21, bz+(br?-1.2:0), br);
+    lb(0.30,0.42,0.5, timberDk, bx+(br?0: 1.2), 0.21, bz+(br? 1.2:0), br);
   });
+
+  // ---- torches around the square, so the map has warm points to read distance against ----
+  [[-12,-4],[12,-4],[-12,4],[12,4],[-4,-16],[6,-16],[-16,-18],[17,-18],[-4,17],[6,17]].forEach(([tx,tz])=>{
+    lcy(0.11,0.13,2.5,6, timberDk, tx,1.25,tz);
+    lcy(0.20,0.14,0.34,7, ironDark, tx,2.55,tz);
+    const f=new THREE.Mesh(new THREE.ConeGeometry(0.21,0.62,7),
+      new THREE.MeshBasicMaterial({color:0xffb347, fog:false}));
+    f.position.set(tx,2.95,tz); scene.add(f);
+    const L=new THREE.PointLight(0xffa93a,0.75,11); L.position.set(tx,3.0,tz); scene.add(L);
+  });
+
+  // ---- drying racks for fish, strung between the harbour and the hall row ----
+  [[-18,14],[18,14]].forEach(([rx,rz])=>{
+    lcy(0.11,0.13,2.4,5, timberDk, rx-1.4,1.2,rz);
+    lcy(0.11,0.13,2.4,5, timberDk, rx+1.4,1.2,rz);
+    lb(3.1,0.12,0.12, timberDk, rx,2.3,rz);
+    for(let i=0;i<6;i++) lb(0.16,0.5,0.1, voxMat(0xb8b0a0,{noise:12}), rx-1.1+i*0.44, 2.02, rz);
+    addBox(rx,rz,3.1,0.6);
+  });
+  // woodpiles and hay
+  [[-13,-6],[13,-6],[-20,6]].forEach(([wx,wz])=>{
+    for(let r=0;r<3;r++) for(let i=0;i<5-r;i++){
+      const lg=lcy(0.17,0.17,2.0,7, timberPa, wx, 0.18+r*0.32, wz-0.7+r*0.18+i*0.36);
+      lg.rotation.z=Math.PI/2;
+    }
+    addBox(wx,wz,2.0,2.2);
+  });
+
+  // ---- fences between the quarters, so the plan reads as a town and not an open field ----
+  const fence=(x1,z1,x2,z2)=>{
+    const dx=x2-x1, dz=z2-z1, L=Math.hypot(dx,dz), n=Math.max(2,Math.round(L/1.7)), a=Math.atan2(dz,dx);
+    for(let i=0;i<=n;i++){
+      const t=i/n; lcy(0.09,0.11,1.5,5, timberDk, x1+dx*t, 0.75, z1+dz*t);
+    }
+    for(let k=0;k<2;k++){
+      const m=new THREE.Mesh(new THREE.BoxGeometry(L,0.10,0.10), timberPa);
+      m.position.set((x1+x2)/2, 0.65+k*0.5, (z1+z2)/2); m.rotation.y=-a; scene.add(m);
+    }
+  };
+  // NOT x=-14.5: that line runs clean through the Borg's own footprint (the rock spans -26.5..-13.5),
+  // so every post in it stood buried inside the hillfort.
+  fence(-12.0,-17.5,-12.0,-12.5);
+  fence(14.5,-17.5,14.5,-6.5);
+  fence(-12.0,6.0,-12.0,13.5);     // also clear of the Borg (rock spans x -26.5..-13.5, z -10.5..4.5)
+  fence(15.5,3.0,15.5,13.5);
+
+  // ---- trees: spruce at the edges, birch in clumps ----
+  [[-26,-26],[26,-27],[-26.2,10],[26.2,7],[-25,17],[25,15],[19,-25],[-4,-27],[9,-27],[-25.5,-20]].forEach(([tx,tz],i)=>{
+    const h=4.8+((i*31)%5)*0.55;
+    lcy(0.20,0.28,h,6, timberDk, tx,h/2,tz);
+    for(let k=0;k<4;k++)
+      lco(1.6-k*0.31, 1.7, 7, leafDark, tx, h*0.52+k*0.95, tz);
+    lco(0.52,0.75,7, snowMat, tx, h*0.52+3.5, tz);    // a cap of snow on the crown
+    addBox(tx,tz,0.7,0.7);
+  });
+  [[-18,20],[-16.5,22],[17,19],[18.6,21.4],[-23,-22],[23,-22]].forEach(([tx,tz],i)=>{
+    const h=3.9+((i*23)%4)*0.4;
+    lcy(0.14,0.17,h,6, birchBark, tx,h/2,tz);
+    for(let k=0;k<3;k++) lb(0.10,0.05,0.10, timberDk, tx+0.15,h*0.4+k*0.7,tz);   // the bark's dark flecks
+    const c=new THREE.Mesh(new THREE.SphereGeometry(1.25,8,6), birchLeaf);
+    c.scale.set(1,0.78,1); c.position.set(tx,h+0.55,tz); c.castShadow=true; scene.add(c);
+  });
+
+  // ================= falling snow =================
+  // 140 flakes recycling inside a box that follows the player. This is the single cheapest thing that makes
+  // a map feel like a different climate rather than a different set of props, and Birka is the only map in
+  // the game that gets it. Anchored in animate() so you never outrun the weather.
+  (function snow(){
+    const g2=new THREE.Group(); scene.add(g2);
+    const mat=new THREE.MeshBasicMaterial({color:0xf0f4f8, transparent:true, opacity:0.85, fog:true});
+    const flakes=[];
+    for(let i=0;i<140;i++){
+      const s=0.05+Math.random()*0.06;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(s,s,s), mat);
+      m.position.set((Math.random()-0.5)*56, Math.random()*22, (Math.random()-0.5)*56);
+      g2.add(m);
+      flakes.push({m, vy:0.9+Math.random()*1.5, ph:Math.random()*Math.PI*2, sw:0.25+Math.random()*0.5});
+    }
+    birkaSnow = {grp:g2, flakes};
+  })();
 })();
 const swedenOverworld = new THREE.Group();
 scene.children.slice().forEach(o=>{
@@ -13642,36 +14048,66 @@ function makeDaneAxe(){
   const steelDk = metalMatP(0x767d86,70,0xc8d0d8);
   const bronze  = metalMatP(0xad8730,85,0xfff2c8);
   const leather = voxMat(0x3c2c1c,{noise:14});
+  const silver  = metalMatP(0xd8dde2,150,0xffffff);
   const ab=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
-  // ---- the haft: long, because a Dane axe is a two-hander and the length is the silhouette ----
-  ab(0.045,0.90,0.045, haftMat, 0,0.16,0);
-  ab(0.050,0.16,0.050, leather, 0,-0.14,0);          // the grip binding, low down
-  ab(0.050,0.16,0.050, leather, 0,0.14,0);           // and the forward hand's
-  ab(0.058,0.04,0.058, bronze,  0,-0.26,0);          // a bronze butt-ferrule
-  // ---- the head: a broad, thin, sweeping bearded blade. Built as a fan of stepped slabs rather than one
-  // box, each alternating depth so no two neighbours ever share a face plane — the same knapping trick the
-  // Tecpatl's blade needed, and for the same reason: this sits 0.4 from the camera.
-  ab(0.075,0.16,0.085, steelDk, 0,0.60,0);           // the socket the haft passes through
-  ab(0.055,0.20,0.06,  steelDk, 0,0.60,0.055);       // its langets running down the haft
-  const spans=[0.10,0.15,0.19,0.215,0.225,0.215,0.185,0.14];
-  let az=0.085;
-  spans.forEach((s,i)=>{
-    ab(s, 0.040, i%2?0.055:0.070, i%2?steel:steelDk, 0, 0.60+ (i-3.5)*0.052, az);
-    az += 0.004;
+  const acy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat); m.position.set(x,y,z); g.add(m); return m; };
+  // ---- the haft: long and ROUND, because a Dane axe is a two-hander and the length is the silhouette.
+  // A cylinder rather than a box: an axe handle you hold a foot from your eye reads as carved timber only
+  // if it actually has a round section.
+  acy(0.024,0.027,0.98,10, haftMat, 0,0.16,0);
+  // the two hand-bindings, wound leather with a visible lip either end so they read as wraps not paint
+  [[-0.14,0.17],[0.16,0.15]].forEach(([hy,hh])=>{
+    acy(0.030,0.030,hh,10, leather, 0,hy,0);
+    acy(0.032,0.032,0.012,10, haftDk, 0,hy+hh/2,0);
+    acy(0.032,0.032,0.012,10, haftDk, 0,hy-hh/2,0);
   });
-  // the beard — the hook of blade hanging below the socket, the thing that names the weapon
-  ab(0.11,0.16,0.055, steel, 0,0.44,0.115);
-  ab(0.08,0.11,0.05,  steel, 0,0.34,0.135);
-  // the cutting edge itself, standing proud of the fan along its whole arc
-  ab(0.035,0.40,0.075, steel, 0,0.60,0.155);
-  ab(0.028,0.30,0.05,  steel, 0,0.60,0.175);
-  ab(0.09,0.05,0.06, bronze, 0,0.79,0.02);           // a bronze inlay band at the top of the socket
+  acy(0.033,0.030,0.05,10, bronze, 0,-0.29,0);       // a bronze butt-ferrule
+  acy(0.036,0.036,0.012,10, bronze, 0,-0.255,0);
+  // ---- the head ----
+  // The old head was a fan of stacked slabs that read as a saw blade. A real Dane axe head is a thin
+  // crescent: a narrow socket, two arms sweeping out and forward, and a wide shallow arc of edge between
+  // them. Built here as a run of segments whose WIDTH and FORWARD OFFSET both follow a curve, alternating
+  // depth so no two neighbours ever share a face plane (the same rule the Tecpatl's blade needed, and for
+  // the same reason: this sits 0.4 from the camera).
+  acy(0.040,0.044,0.19,8, steelDk, 0,0.60,0);        // the socket the haft passes through
+  acy(0.046,0.046,0.014,8, bronze, 0,0.695,0);       // its collars
+  acy(0.046,0.046,0.014,8, bronze, 0,0.505,0);
+  ab(0.026,0.20,0.048, steelDk, 0,0.585,0.046);      // langets running down the haft, front
+  ab(0.026,0.20,0.048, steelDk, 0,0.585,-0.046);     // and back
+  // the crescent. i runs top-to-bottom; the edge bows FORWARD at the middle and the horns pull back.
+  const N=11;
+  for(let i=0;i<N;i++){
+    const u = i/(N-1);                               // 0 at the upper horn, 1 at the lower
+    const s = Math.sin(u*Math.PI);                   // 0 at the horns, 1 at the belly
+    const y = 0.78 - u*0.40;                         // the head's vertical span
+    const reach = 0.055 + s*0.150;                   // how far forward this slice runs
+    const thick = (i%2 ? 0.030 : 0.042) * (0.45 + 0.55*s);
+    ab(reach, 0.042, thick, i%2?steel:steelDk, 0, y, 0.035 + reach/2);
+  }
+  // the bearded hook — the lower horn dropping below and behind the edge, the feature that names the axe
+  ab(0.052,0.10,0.034, steel, 0,0.345,0.115);
+  ab(0.040,0.075,0.028, steel, 0,0.285,0.155);
+  // the edge itself: a bright continuous bevel standing proud of the whole crescent's front
+  for(let i=0;i<N;i++){
+    const u=i/(N-1), s=Math.sin(u*Math.PI);
+    const y=0.78-u*0.40, reach=0.055+s*0.150;
+    ab(0.020, 0.042, (i%2?0.020:0.026), silver, 0, y, 0.035 + reach + 0.008);
+  }
+  // runic inlay worked into the flat of the blade, in silver wire — the one decorative note
+  for(let i=0;i<4;i++) ab(0.014,0.030,0.008, silver, 0, 0.66-i*0.055, 0.115);
+  ab(0.010,0.10,0.008, silver, 0, 0.605, 0.128);
   g.scale.setScalar(0.92);
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.24,-0.30,-0.44),recoil:0.24,name:'Dane Axe',
-    melee:true, range:2.9, damage:210, fireRate:0.92,
+    melee:true, range:3.0, damage:185, fireRate:0.92, sfx:'axeSwing',
     // the brief's "instantly smashes guards and armour": damage is multiplied against armoured targets.
     // Read in fire()'s melee branch, which is the only place this weapon can land a hit.
-    armourPierce:2.0};
+    armourPierce:2.0,
+    // A two-hander SWEEPS. cleaveArc fans this many rays across ~66 degrees of swing and hits everything
+    // standing in the arc, once each — the difference between an axe and a very slow knife. Per-hit damage
+    // came down from 210 to 185 to pay for it; against a single target that is a small loss, against the
+    // rank of draugr it is meant for it is a large gain, which is exactly the trade a great axe should make.
+    cleaveArc:1.15, cleaveRays:7,
+    swingAnim:true, swingT:99};
   return g;
 }
 
@@ -13696,36 +14132,63 @@ function makeHunnishBow(){
   // ---- the limbs: a recurve is built as a run of segments whose angle REVERSES near the tip. Each
   // segment steps in both y and z and alternates depth, so the run reads as one curved limb rather than
   // as a stack of shards — the failure mode the Saif's blade and the crossbow's lath both hit here.
+  // Each limb is parented to its OWN group so the draw can flex it: rotating a group rotates the whole
+  // run together, where rotating the segments individually would tear the limb apart.
+  const limbGroups=[], limbRest=[];
   [-1,1].forEach(sd=>{
+    const L=new THREE.Group(); g.add(L); limbGroups.push(L); limbRest.push(0);
     let y=sd*0.11, z=0, ang=sd*0.10;
     for(let i=0;i<6;i++){
       const seg=new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.115, i%2?0.052:0.064),
                                i%2?limbMat:limbPale);
-      seg.position.set(0,y,z); seg.rotation.x=ang; seg.castShadow=true; g.add(seg);
+      seg.position.set(0,y,z); seg.rotation.x=ang; seg.castShadow=true; L.add(seg);
+      // a sinew binding every other segment, so the laminate reads as built up rather than carved
+      if(i%2===0){ const w2=new THREE.Mesh(new THREE.BoxGeometry(0.048,0.020,i%4?0.058:0.070), leather);
+        w2.position.set(0,y,z); w2.rotation.x=ang; L.add(w2); }
       y += sd*0.105*Math.cos(ang); z -= 0.105*Math.sin(Math.abs(ang))*1.0;
       ang += sd*0.16;                                 // the limb bending forward
     }
     // the siyah: the stiff reversed tip, the single feature that makes this read as a composite bow
     const tip=new THREE.Mesh(new THREE.BoxGeometry(0.038,0.17,0.048), hornMat);
-    tip.position.set(0,y+sd*0.02,z-0.03); tip.rotation.x=-sd*0.55; g.add(tip);
-    bb(0.030,0.035,0.032, hornMat, 0, y+sd*0.10, z-0.10);   // the string nock on it
+    tip.position.set(0,y+sd*0.02,z-0.03); tip.rotation.x=-sd*0.55; L.add(tip);
+    const nk=new THREE.Mesh(new THREE.BoxGeometry(0.030,0.035,0.032), hornMat);
+    nk.position.set(0, y+sd*0.10, z-0.10); L.add(nk);  // the string nock on it
   });
   // ---- the string, and the nocked arrow riding it ----
-  bb(0.012,1.06,0.012, stringM, 0,0,-0.135);
-  bb(0.020,0.020,0.86, limbPale, 0,0,-0.30);         // the arrow shaft
-  bb(0.030,0.030,0.075, steel,  0,0,-0.74);          // its bodkin head
+  // These three are handed to animate() as drawParts: pulling them BACK in z as the charge builds is the
+  // whole visual of the mechanic. Without it the bow was completely static in the hands while charging,
+  // which is the single biggest reason it read as broken.
+  const stringMesh = bb(0.012,1.06,0.012, stringM, 0,0,-0.135);
+  // The whole arrow lives in its own group so shaft, head, fletching and nock travel together when the
+  // string comes back — an arrow whose head stayed put while its shaft slid would be worse than no
+  // animation at all.
+  const arrowGrp = new THREE.Group(); g.add(arrowGrp);
+  const arrowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.020,0.020,0.86), limbPale);
+  arrowMesh.position.set(0,0,-0.30); arrowGrp.add(arrowMesh);          // the shaft
+  const headM = new THREE.Mesh(new THREE.BoxGeometry(0.030,0.030,0.075), steel);
+  headM.position.set(0,0,-0.74); arrowGrp.add(headM);
   [-1,1].forEach(sd=>{                                // fletching, three vanes
-    const f=bb(0.012,0.055,0.11, featherM, sd*0.016,0,0.02); f.rotation.z=sd*0.3;
+    const f=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.055,0.11), featherM);
+    f.position.set(sd*0.016,0,0.02); f.rotation.z=sd*0.3; arrowGrp.add(f);
   });
-  bb(0.012,0.055,0.11, featherM, 0,0.022,0.02);
+  const f3=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.055,0.11), featherM);
+  f3.position.set(0,0.022,0.02); arrowGrp.add(f3);
+  const nockMesh = new THREE.Mesh(new THREE.BoxGeometry(0.026,0.026,0.03), hornMat);
+  nockMesh.position.set(0,0,0.075); arrowGrp.add(nockMesh);
   g.scale.setScalar(0.62);
   g.userData={muzzleZ:-0.48,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.36),recoil:0.16,name:'Hunnish Bow',
     damage:70, fireRate:0.30, auto:false, spread:0.010, tracer:0xd8d0c0, scoped:true, scopeFov:48,
-    magSize:8, ammo:8, reloadTime:1.6, reloading:false, reloadT:0,
+    magSize:8, ammo:8, reloadTime:1.6, reloading:false, reloadT:0, sfx:'bowLoose',
     // ---- the charge. chargeTime is how long a FULL draw takes; a shot loosed early scales between
     // chargeMin and chargeMax of the base damage, and the spread tightens over the same window. Held and
     // ticked in animate(); consumed in fire(). See chargeT on this same object.
-    charge:true, chargeTime:0.85, chargeMin:0.45, chargeMax:2.6, chargeT:0};
+    charge:true, chargeTime:0.85, chargeMin:0.45, chargeMax:2.6, chargeT:0,
+    // a FULL draw punches through this many bodies behind the first (see fire()'s pierce block)
+    pierceCount:2,
+    // ---- what animate() animates while the string is pulled ----
+    drawParts:{string:stringMesh, arrow:arrowGrp, nock:nockMesh, limbs:limbGroups},
+    drawRest:{string:stringMesh.position.z, arrow:arrowGrp.position.z, nock:nockMesh.position.z},
+    limbRest, drawPull:0.30, drawEase:0};
   return g;
 }
 
@@ -13759,26 +14222,33 @@ function makeThrowingSeax(){
   sb(0.026,0.030,0.07, steel, 0,0.018,bz-0.02);      // the drawn-out point
   sb(0.012,0.016,0.26, steel, 0,-0.016,-0.16);       // the bright single edge along the underside
   // ---- the rest of the handful, fanned in the off hand below: this is what makes it read as a STACK ----
+  // Six of them, each its own group, handed to animate() as stackKnives. They are hidden one at a time as
+  // the magazine empties and come back on reload, so the handful you are holding is the ammo you have —
+  // the counter on the HUD stops being the only way to know, which is the whole point of drawing a stack.
+  const stackKnives=[];
   [-1,1].forEach(sd=>{
-    for(let i=0;i<2;i++){
+    for(let i=0;i<3;i++){
       const k=new THREE.Group();
-      k.position.set(sd*(0.075+i*0.055), -0.105-i*0.035, 0.02);
-      k.rotation.z = sd*(0.28+i*0.16); k.rotation.x = -0.12;
-      g.add(k);
+      k.position.set(sd*(0.072+i*0.050), -0.100-i*0.030, 0.02);
+      k.rotation.z = sd*(0.26+i*0.15); k.rotation.x = -0.12;
+      g.add(k); stackKnives.push(k);
       const kb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); k.add(m); return m; };
       kb(0.032,0.036,0.15, haftMat, 0,0,0.08);
       kb(0.037,0.041,0.04, boneM,   0,0,0.15);
       kb(0.030,0.040,0.24, i%2?steel:steelDk, 0,0,-0.09);
       kb(0.011,0.014,0.22, steel, 0,-0.014,-0.09);
+      kb(0.034,0.038,0.022, bronze, 0,0,-0.005);       // its own little bolster
     }
   });
   sb(0.20,0.05,0.09, leather, 0,-0.20,0.03);         // the belt strip they are drawn from
+  for(let i=0;i<4;i++) sb(0.022,0.062,0.03, leather, -0.066+i*0.044,-0.205,0.062);  // its retaining loops
   g.userData={muzzleZ:-0.30,muzzleY:0,pos:new THREE.Vector3(0.23,-0.26,-0.38),recoil:0.06,name:'Throwing Seax',
-    damage:46, fireRate:0.13, auto:true, spread:0.020, tracer:0xd0d8e0,
+    damage:46, fireRate:0.13, auto:true, spread:0.020, tracer:0xd0d8e0, sfx:'knifeThrow',
     magSize:14, ammo:14, reloadTime:1.5, reloading:false, reloadT:0,
     // the close-range slash, on the same dual-mode mechanic the Atlatl uses: inside hybridRange the click
     // becomes a knife jab that spends no throwing knife at all
-    hybridRange:2.3, hybridMelee:62, hybridMeleeRate:0.22};
+    hybridRange:2.3, hybridMelee:62, hybridMeleeRate:0.22,
+    stackKnives};
   return g;
 }
 const swedenWeapons = [makeDaneAxe(), makeHunnishBow(), makeThrowingSeax()];
@@ -13928,11 +14398,14 @@ const TENOCH_DIFF = 1.25;   // flat step over the basin, applied on top of the p
 // and at least 8 from the arrival point at (0,24). West is the burial field — mounds and standing stones,
 // which is where the draugr belong and where there is cover to close through. East is the open ground
 // between the hall row and the palisade, where the wargs have room to run at you.
-// (-22.5,-5) and (-15,-20.5) were both inside a burial mound's own collider — the mounds carry addBox
-// footprints, and two of the five points landed in them. Verified clear against swedenColliders instead
-// of eyeballed off the coordinates the mounds are centred on.
-const SWEDEN_WEST = [[-18.0,-13.0], [-25.5,-5.0], [-18.5,-22.0], [-24.0,3.5], [-19.5,10.0]];
-const SWEDEN_EAST = [[18.5,-14.0], [22.0,-3.0], [16.0,1.5], [23.5,9.0], [17.0,15.5]];
+// Re-solved for the remodelled map, not carried over: the Borg now occupies the whole west side (x
+// -26.5..-13.5, z -10.5..4.5), so three of the old west points are inside a granite hillfort. Every point
+// below is machine-checked clear of swedenColliders at a 1.1 radius, at ground level (not up on the Borg),
+// and at least 11 from the player's arrival on the shore.
+// WEST is the grave field, where the draugr belong; EAST is the craftsmen's row and the open ground beside
+// it, where the wargs have room to run.
+const SWEDEN_WEST = [[-26.0,-24.5], [-19.0,-14.0], [-13.0,-18.5], [-8.0,-19.5], [-22.0,-14.5]];
+const SWEDEN_EAST = [[16.0,-18.0], [24.0,-16.0], [25.0,-1.0], [15.0,4.0], [20.0,-22.0]];
 // One wave, deliberately: the arc is being built a piece at a time, and this is the piece that proves the
 // map, the roster and the loadout all work together. The wave carries all three enemy types rather than
 // ramping them in across three waves, because with only one wave there is nowhere else to introduce them.
@@ -15738,6 +16211,34 @@ const SFX = (function(){
       noise(t,0.1,'bandpass',3400,0.22*v,2.2,1200);
       noise(t+0.05,0.08,'highpass',5200,0.14*v,3);
     },
+    // ---- Birka (Viking Age Sweden) ----
+    // A bow loosing is a low wooden THRUM off the limbs plus the string's own short buzz and the arrow's
+    // hiss — deliberately nothing like the percussive crack every firearm-shaped weapon in this game uses,
+    // because the whole point of the Norse loadout is that it predates all of them.
+    bowLoose(charge){ if(!actx)return; const t=actx.currentTime;
+      const c = Math.max(0, Math.min(1, charge===undefined?1:charge));
+      // a fuller draw is deeper, louder and rings longer — the sound carries the charge, same as the damage
+      tone(t,0.16+0.10*c,'triangle',150+40*c,52,0.20+0.16*c,{drive:3});
+      noise(t,0.05,'bandpass',900,0.16+0.10*c,1.6,420);          // the string's slap
+      noise(t+0.02,0.16+0.08*c,'highpass',3000,0.10+0.08*c,2.4); // the shaft leaving, hissing away
+    },
+    // the cue that the draw has reached full: a single quiet wooden creak-and-click, so a full pull is
+    // something you HEAR rather than something you have to watch the reticle for
+    bowFull(){ if(!actx)return; const t=actx.currentTime;
+      tone(t,0.05,'triangle',520,760,0.09,{attack:0.004});
+      noise(t,0.04,'bandpass',2200,0.07,3);
+    },
+    // a two-handed axe is mass moving through air: a deep slow whoosh, no metallic ring until it lands
+    axeSwing(){ if(!actx)return; const t=actx.currentTime;
+      noise(t,0.22,'bandpass',420,0.30,1.1,140);
+      tone(t,0.16,'sine',190,70,0.16);
+      noise(t+0.10,0.12,'bandpass',1500,0.14,2.0,700);
+    },
+    // a thrown knife is lighter and faster than a swung one — a short whip, higher and drier
+    knifeThrow(){ if(!actx)return; const t=actx.currentTime;
+      noise(t,0.07,'bandpass',4200,0.20,2.6,1800);
+      tone(t,0.05,'triangle',900,430,0.10);
+    },
     // ---- feedback ----
     hitmark(){ if(!actx)return; const t=actx.currentTime; tone(t,0.045,'square',1700,1150,0.16,{attack:0.001}); tone(t+0.045,0.05,'square',1500,1000,0.13,{attack:0.001}); },
     hurt(){    if(!actx)return; const t=actx.currentTime; tone(t,0.22,'sawtooth',260,90,0.22,{drive:6}); noise(t,0.12,'lowpass',650,0.18,0.7); },
@@ -15781,17 +16282,45 @@ function fire(){
   // A charged weapon does nothing on the press — the press only starts the draw (see the charge block in
   // animate(), which ticks chargeT while the button is held). The shot is loosed on RELEASE, by
   // releaseCharge() below, so this returns here rather than firing.
-  if(w.charge){ if(w.ammo>0 || gk7q.a) w.drawing = true; return; }
+  // A charged weapon does nothing on the press — the press only starts the draw. Refuse to start one while
+  // reloading or empty: otherwise you pull a full string, hear the ready cue, release, and nothing at all
+  // happens, with no indication why. A dry click says "no arrow" immediately instead.
+  if(w.charge){
+    if(w.reloading && !gk7q.a){ return; }
+    if(w.ammo<=0 && !gk7q.a){ if(now - lastShot > 0.25){ lastShot = now; SFX.dryFire(); } return; }
+    w.drawing = true;
+    return;
+  }
   if(now - lastShot < w.fireRate) return;
   if(w.melee){
     // khopesh: a short-range swing — same raycast every hitscan weapon uses, just a very short max distance and no ammo/reload
     lastShot = now;
-    SFX.knife(1.5);
+    // a melee weapon may name its own swing sound too; the light knife-whip is only right for light blades
+    if(w.sfx && SFX[w.sfx]) SFX[w.sfx](); else SFX.knife(1.5);
     gunGroup.position.z = gunBaseZ + w.recoil;
     gunGroup.rotation.x -= 0.16; // swing kick — every weapon gets a visible kick now, not just the position punch
     camera.getWorldDirection(_fwd);
-    const hit = firstHit(camera.position, _fwd, w.range||2.4);
-    if(hit && hit.bot){
+    const reach = w.range || 2.4;
+    // ---- the swing ----
+    // A one-handed blade stabs down a single line, which is one raycast. A two-handed axe SWEEPS, and a
+    // sweep that can only ever touch one man is the thing that made the Dane Axe feel like a slow knife.
+    // cleaveArc (radians) fans several rays across the swing's width and hits everything standing in it,
+    // each target once. Weapons without cleaveArc keep the exact single-ray behaviour they always had.
+    const dirs = [];
+    if(w.cleaveArc){
+      const N = w.cleaveRays || 7, half = w.cleaveArc/2;
+      for(let i=0;i<N;i++){
+        const a = -half + (N===1?0:(i/(N-1))*w.cleaveArc);
+        // rotate the forward vector about world Y by a — the swing is horizontal, as a real one is
+        const ca=Math.cos(a), sa=Math.sin(a);
+        dirs.push(new THREE.Vector3(_fwd.x*ca + _fwd.z*sa, _fwd.y, -_fwd.x*sa + _fwd.z*ca).normalize());
+      }
+    } else dirs.push(_fwd);
+    const struck = [];
+    for(const d of dirs){
+      const hit = firstHit(camera.position, d, reach);
+      if(!(hit && hit.bot) || struck.indexOf(hit.bot) >= 0) continue;
+      struck.push(hit.bot);
       // Read alive BEFORE the hit so a kill can be told from a wound — the tecpatl pays out per kill, not
       // per hit, which is what stops it healing you to full by chipping at a boss.
       const wasAlive = hit.bot.alive;
@@ -15806,6 +16335,7 @@ function fire(){
         setHUD();
       }
     }
+    if(w.swingAnim) { w.swingT = 0; }   // drives the viewmodel arc in animate()
     return;
   }
   if(w.reloading && !gk7q.a) return;
@@ -15815,7 +16345,14 @@ function fire(){
   setAmmoHUD();
   if(w.slingAnim){ w.pullT = 1; w.animT = 0; } // (re)triggers the draw/release cycle in animate()
   // distinct player weapon sound
-  if(w.name==='Zahra Gun') SFX.playerZahra();
+  // A weapon names its own firing sound via `sfx`. This used to be a chain of hardcoded name comparisons,
+  // which silently gave every weapon NOT in the list the grenade launcher's boom — including both of the
+  // new Viking ranged weapons, so the bow and the thrown knives each went off like a mortar. The chain is
+  // kept underneath as the fallback for the older weapons that still rely on it.
+  // _chargeFrac is how full the draw was (0..1), set by releaseCharge(); ignored by every sound that
+  // doesn't take it, so the call shape stays the same for all of them.
+  if(w.sfx && SFX[w.sfx]) SFX[w.sfx](w._chargeFrac);
+  else if(w.name==='Zahra Gun') SFX.playerZahra();
   else if(w.name==='Was Scepter') SFX.playerRay();
   else if(w.name==='Bow') SFX.playerRifle();
   else if(w.name==='Harpoon') SFX.playerSniper();
@@ -15841,12 +16378,43 @@ function fire(){
     launchGrenade(mw, end);
     return;
   }
-  spawnTracer(mw, end, w.tracer);
+  const shotDmg = gk7q.b ? 1e9 : (w._chargeDmg || w.damage);
+  let far = end;
   if(hit && hit.bot){
-    damageBot(hit.bot, gk7q.b?1e9:(w._chargeDmg || w.damage), hit.point);
+    damageBot(hit.bot, shotDmg, hit.point);
     showHitmarker(); SFX.hitmark();
+    // ---- pierce: a fully-drawn bodkin carries on through ----
+    // Re-cast from just past each body it passes through, ignoring the ones already hit, so a lined-up
+    // rank is punched through rather than stopping at the first man. Damage falls off per body so this
+    // rewards lining a shot up without making a single arrow a whole wave-clear.
+    let pierces = w._pierce || 0;
+    if(pierces > 0){
+      const struck = [hit.bot];
+      let p = hit.point.clone(), dmg = shotDmg, guard = 0;
+      // Walk forward along the shot. Re-hitting the body we are currently passing THROUGH is the normal
+      // case, not a stopping condition — an actor is a metre or more deep, so a single step past the entry
+      // point is still inside it. Those hits are stepped over without spending a pierce; only a NEW body
+      // costs one, and only scenery or running out of pierces ends the flight. (Breaking on the re-hit
+      // instead, which is what this did first, meant the arrow always stopped inside its first victim and
+      // the mechanic never fired at all.)
+      while(pierces > 0 && guard++ < 24){
+        p = p.clone().addScaledVector(_fwd, 0.30);
+        const nxt = firstHit(p, _fwd, 300);
+        if(!nxt){ far = p.clone().addScaledVector(_fwd, 120); break; }
+        far = nxt.point;
+        if(!nxt.bot) break;                                  // a wall behind them stops it
+        if(struck.indexOf(nxt.bot) >= 0){ p = nxt.point; continue; }   // still inside one already hit
+        struck.push(nxt.bot);
+        dmg *= 0.7;
+        damageBot(nxt.bot, gk7q.b?1e9:dmg, nxt.point);
+        showHitmarker();
+        p = nxt.point;
+        pierces--;
+      }
+    }
   }
-  w._chargeDmg = 0;   // consumed: the next uncharged shot must not inherit this one's draw
+  spawnTracer(mw, far, w.tracer);
+  w._chargeDmg = 0; w._pierce = 0;   // consumed: the next uncharged shot must not inherit this one's draw
 }
 // Loosing a charged shot. Called on mouse/touch RELEASE (and by anything that drops the input, so a draw
 // can never be left held). The draw scales both damage and accuracy between chargeMin and chargeMax, then
@@ -15858,6 +16426,23 @@ function cancelCharge(){
   const wp = weapons[currentWeapon]; if(!wp) return;
   wp.userData.drawing = false; wp.userData.chargeT = 0; wp.userData._chargeDmg = 0;
 }
+// The draw indicator around the crosshair. Driven every frame from animate(); the body.drawing class is
+// what makes the ring visible at all, so a weapon that is not a charged one never shows it.
+const chargeRingEl = document.getElementById('chargering');
+function updateChargeUI(){
+  const wp = weapons[currentWeapon];
+  const w = wp && wp.userData;
+  const on = !!(w && w.charge && w.drawing && !inHub);
+  document.body.classList.toggle('drawing', on);
+  if(!chargeRingEl || !on) return;
+  const f = Math.min(1, (w.chargeT||0) / w.chargeTime);
+  const full = f >= 0.999;
+  // conic-gradient sweep, masked to a ring by the CSS above. Gold at full, pale steel while building.
+  const col = full ? '#ffd45e' : '#bcd7e8';
+  chargeRingEl.style.background =
+    'conic-gradient(' + col + ' ' + (f*360).toFixed(1) + 'deg, rgba(255,255,255,0.10) 0deg)';
+  chargeRingEl.classList.toggle('full', full);
+}
 function releaseCharge(){
   const wp = weapons[currentWeapon]; if(!wp) return;
   const w = wp.userData;
@@ -15868,6 +16453,10 @@ function releaseCharge(){
   if(!player.alive || inHub) return;
   const mult = w.chargeMin + (w.chargeMax - w.chargeMin) * t;
   w._chargeDmg = w.damage * mult;
+  w._chargeFrac = t;                         // read by the loosing sound, which deepens with the draw
+  // A full pull drives a bodkin point clean through its target and into whatever is behind it. This is
+  // what a heavy war bow is FOR, and it is the reason to hold the string rather than spam snap shots.
+  w._pierce = t >= 0.999 ? (w.pierceCount||0) : 0;
   const baseSpread = w.spread;
   w.spread = baseSpread * (1 - 0.85*t);      // a full draw is nearly pinpoint; a snap shot sprays
   w.charge = false;                          // one pass through the normal path
@@ -16105,7 +16694,11 @@ function respawnPlayer(){
 // input: press to fire; hold for auto weapons
 let firing = false;
 document.addEventListener('mousedown', e => { if(paused || e.button!==0) return; if(document.pointerLockElement===renderer.domElement){ firing=true; fire(); } });
-document.addEventListener('mouseup', () => { firing=false; releaseCharge(); });
+// LEFT button only. This used to fire on any button, which meant right-click — the AIM button, which the
+// bow and sling both want held while shooting — released the trigger. Harmless when that only cleared
+// `firing`, but once a charged weapon existed it also loosed the arrow: scoping in mid-draw shot it for
+// you, at whatever charge happened to be on the string.
+document.addEventListener('mouseup', e => { if(e.button!==0) return; firing=false; releaseCharge(); });
 setHUD();
 
 // ---- enable shadow casting/receiving on all solid geometry (skip sky + distant skyline + transparent puffs) ----
@@ -16163,6 +16756,34 @@ function animate(){
   // tracks eye height too — the horizon is always at eye level, so a band pinned to a fixed y put its
   // densest part above the horizon line and left the line itself uncovered.
   horizonHaze.position.set(camera.position.x, camera.position.y, camera.position.z);
+
+  // ---- Birka's weather and its fires ----
+  // The snow box follows the player so you can never outrun the weather, and each flake recycles to the top
+  // once it lands. Gated on actually being in Birka: the flakes live in swedenOverworld, so they are only
+  // in the scene on that map anyway, but the per-frame walk over 140 of them should not run on every other.
+  if(birkaSnow){
+    const onBirka = activeColliders === swedenColliders;
+    birkaSnow.grp.visible = onBirka;
+    if(onBirka){
+      birkaSnow.grp.position.set(camera.position.x, 0, camera.position.z);
+      for(const f of birkaSnow.flakes){
+        f.m.position.y -= f.vy * dt;
+        // drift, so it falls on a wind rather than straight down
+        f.m.position.x += Math.sin(t*0.7 + f.ph) * f.sw * dt;
+        f.m.position.z += Math.cos(t*0.5 + f.ph) * f.sw * dt * 0.6;
+        if(f.m.position.y < -1){
+          f.m.position.set((Math.random()-0.5)*56, 20 + Math.random()*3, (Math.random()-0.5)*56);
+        }
+      }
+    }
+  }
+  // the forge coals breathe, and the hillfort beacon gutters — both are MeshBasicMaterial, so this is the
+  // only thing that makes them read as fire rather than as orange plastic
+  if(birkaForge) birkaForge.material.color.setHex(Math.sin(t*3.1)>0.1 ? 0xff7a1a : 0xff9a3a);
+  if(birkaBeacon){
+    birkaBeacon.scale.y = 1 + Math.sin(t*5.7)*0.16;
+    birkaBeacon.rotation.y = t*0.9;
+  }
 
   // shimmering water. Each surface bobs around its OWN authored height: this used to hard-set every one of
   // them to 0.22, which dragged Cairo's raised fountain basin (authored at 0.52) down to street level every
@@ -16344,13 +16965,59 @@ function animate(){
       const cw = weapons[currentWeapon].userData;
       if(cw.charge && cw.drawing){
         if(firing && player.alive && !paused && !boothOpen && !adminOpen){
-          cw.chargeT = Math.min(cw.chargeTime, (cw.chargeT||0) + dt);
+          const was = cw.chargeT || 0;
+          cw.chargeT = Math.min(cw.chargeTime, was + dt);
+          // the moment the draw tops out, once per draw — an audible "it's ready" so a full pull doesn't
+          // have to be timed by watching the reticle
+          if(was < cw.chargeTime && cw.chargeT >= cw.chargeTime && SFX.bowFull) SFX.bowFull();
         } else {
           // the button is no longer down (or the run is interrupted) and no release ever landed —
           // drop the draw rather than leaving it stuck at full
           cancelCharge();
         }
       }
+      updateChargeUI();
+      // ---- the bow's own viewmodel draw: string and arrow ride the charge ----
+      // Without this the mechanic is invisible in the world as well as on the HUD — you hold the button
+      // and the weapon in your hands does not move at all, which is why the bow read as broken.
+      // ---- the axe's swing: a real horizontal arc, not just the shared recoil punch ----
+      // A two-hander that cleaves a 66-degree arc has to LOOK like it travelled that arc, or the extra
+      // targets it hits read as the axe hitting things it never touched.
+      weapons.forEach(wp=>{
+        const wd = wp.userData;
+        if(!wd.swingAnim) return;
+        wd.swingT = (wd.swingT===undefined) ? 99 : wd.swingT + dt;
+        const D = 0.34;                                   // the whole arc, inside the 0.92s fire rate
+        if(wd.swingT >= D){ wp.rotation.set(0,0,0); wp.position.x = 0; return; }
+        const f = wd.swingT / D;
+        // wind up across the body, then sweep through and settle — eased so the middle is the fastest part
+        const s = f < 0.28 ? -(f/0.28)*0.55 : 1.2*Math.sin(((f-0.28)/0.72)*Math.PI*0.5) - 0.55;
+        wp.rotation.y = -s*0.9;
+        wp.rotation.z = s*0.45;
+        wp.position.x = -s*0.10;
+      });
+      // ---- the seax's handful: the drawn stack IS the magazine ----
+      weapons.forEach(wp=>{
+        const wd = wp.userData;
+        if(!wd.stackKnives) return;
+        const n = wd.stackKnives.length;
+        // how many of the spare knives are still on the belt, as a share of the magazine
+        const shown = wd.reloading ? 0 : Math.round((Math.max(0,wd.ammo)/wd.magSize) * n);
+        wd.stackKnives.forEach((k,i)=>{ k.visible = i < shown; });
+      });
+      weapons.forEach(wp=>{
+        const wd = wp.userData;
+        if(!wd.drawParts) return;
+        const f = (wd.charge && wd.drawing) ? Math.min(1, (wd.chargeT||0)/wd.chargeTime) : 0;
+        // ease it so the string doesn't snap linearly to full
+        wd.drawEase = (wd.drawEase===undefined) ? f : wd.drawEase + (f - wd.drawEase) * Math.min(1, dt*18);
+        const d = wd.drawEase * wd.drawPull;
+        wd.drawParts.string.position.z = wd.drawRest.string + d;
+        wd.drawParts.arrow.position.z  = wd.drawRest.arrow  + d;
+        wd.drawParts.nock.position.z   = wd.drawRest.nock   + d;
+        // the limbs bend as the string comes back, which is what makes a bow read as a bow under tension
+        wd.drawParts.limbs.forEach((L,i)=>{ L.rotation.x = wd.limbRest[i] + (i%2?-1:1)*wd.drawEase*0.16; });
+      });
     }
     // health regen: start ~2.5s after last hit, refill steadily
     if (t - player.lastHit > 2.5 && player.hp < player.maxHp){

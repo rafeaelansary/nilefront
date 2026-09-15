@@ -479,7 +479,15 @@ function makeElement(tag){
     tagName:(tag||'div').toUpperCase(), style:{}, dataset:{}, children:[], width:0, height:0,
     textContent:'', innerHTML:'', value:'', checked:false, id:'',
     classList:{ _s:new Set(), add(...c){c.forEach(x=>this._s.add(x));}, remove(...c){c.forEach(x=>this._s.delete(x));},
-                toggle(c){ this._s.has(c)?this._s.delete(c):this._s.add(c); }, contains(c){ return this._s.has(c); } },
+                // toggle(c, force) must honour `force` the way the real DOM does. Ignoring it (which this
+                // did) silently INVERTS every call the game makes as classList.toggle(name, bool) — so a
+                // flag being set true could clear the class instead, and a test reading it back sees the
+                // opposite of what the browser would do.
+                toggle(c, force){
+                  const on = (force===undefined) ? !this._s.has(c) : !!force;
+                  if(on) this._s.add(c); else this._s.delete(c);
+                  return on;
+                }, contains(c){ return this._s.has(c); } },
     appendChild(c){ this.children.push(c); return c; },
     removeChild(c){ const i=this.children.indexOf(c); if(i>=0) this.children.splice(i,1); return c; },
     addEventListener(){}, removeEventListener(){}, dispatchEvent(){ return true; },
