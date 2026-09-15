@@ -7854,17 +7854,22 @@ let birkaSnow = null, birkaForge = null, birkaBeacon = null;
 
   // ---- the ground: turf island, with the lake running out past it ----
   const HALF = 29;
-  lb(HALF*2,0.5,HALF*2, turfMat, 0,-0.25,0);
+  // Snow-covered, not green. Birka is the winter map; a bright turf field under a pale sky was the single
+  // biggest reason it did not read as Nordic at all.
+  lb(HALF*2,0.5,HALF*2, snowMat, 0,-0.25,0);
   // Lake Mälaren. Wide enough to still be water where the fog closes, the same reason Tenochtitlan's lake
   // is 300 across — a shoreline that ends in nothing reads as a floating slab.
-  const lakeMat = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),90), transparent:true, opacity:0.90});
+  const lakeMat = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),90),
+    color:0x5f86a8, transparent:true, opacity:0.97});   // cold slate-blue, and opaque over the turf
   const lake = new THREE.Mesh(new THREE.BoxGeometry(300,0.5,300), lakeMat);
   lake.position.set(0,-0.62,0); lake.receiveShadow=true; scene.add(lake);   // top at -0.37: the shore has freeboard
   // a beaten earth square in the middle of the settlement, where the longhouses face each other
   lb(17,0.05,15, voxMat(0x6b5a3e,{noise:16}), 0,0.065,-1);
-  // snow lying in the lee of things, in the corners the sun does not reach
-  [[-25,-25,7,6],[24,-24,6,5],[-26,22,5,5],[26,20,4,4],[-6,-27,9,3],[13,-26,6,3]].forEach(([sx,sz,sw,sd])=>
-    lb(sw,0.06,sd, snowMat, sx,0.055,sz));
+  // turf and frozen heather showing through where the snow has been walked off or blown clear — the
+  // inverse of what was here before, now that the ground itself is snow
+  [[-25,-25,7,6],[24,-24,6,5],[-26,22,5,5],[26,20,4,4],[-6,-27,9,3],[13,-26,6,3],
+   [-18,16,8,5],[17,-6,5,7],[-3,20,7,4]].forEach(([sx,sz,sw,sd],i)=>
+    lb(sw,0.06,sd, i%2?turfMat:turfDark, sx,0.055,sz));
   // shoreline boulders, so the turf does not simply stop at a clean edge
   for(let i=0;i<26;i++){
     const a=i/26*Math.PI*2, r=HALF-0.6+Math.sin(i*2.7)*0.8;
@@ -7980,6 +7985,7 @@ let birkaSnow = null, birkaForge = null, birkaBeacon = null;
     lb(7.4,0.24,4.6, plank, BORG_X, BORG_H+2.4, BORG_Z-4.4);
     lb(7.8,0.9,0.28, timberDk, BORG_X, BORG_H+2.95, BORG_Z-6.6);
     lco(4.6,1.9,4, turfDark, BORG_X, BORG_H+3.35, BORG_Z-4.4);   // base laps the platform, not level with it
+    lco(3.5,1.1,4, snowMat,  BORG_X, BORG_H+4.05, BORG_Z-4.4);   // snow on its cap
     // a woodpile and a water butt on the crown — a manned fort, not an empty wall
     for(let r=0;r<3;r++) for(let i=0;i<4-r;i++){
       const lg=lcy(0.16,0.16,1.7,7, timberPa, BORG_X+4.6, BORG_H+0.17+r*0.30, BORG_Z+1.9+r*0.17+i*0.34);
@@ -8022,6 +8028,12 @@ let birkaSnow = null, birkaForge = null, birkaBeacon = null;
       const r2=hb(L+0.5, 0.16, 3.10, turfDark, 0, 3.44, sd*1.30); r2.rotation.x = sd*0.56;
     });
     hb(L+0.9, 0.34, 0.56, timberDk, 0, 4.12, 0);          // the ridge beam capping both slabs
+    // snow lying along both roof slopes and the ridge — the roofs are the largest surfaces on the map and
+    // leaving them bare green was most of why the town still read as summer
+    [-1,1].forEach(sd=>{
+      const sn=hb(L+0.4, 0.16, 2.55, snowMat, 0, 3.60, sd*1.24); sn.rotation.x = sd*0.56;
+    });
+    hb(L+0.6, 0.16, 0.44, snowMat, 0, 4.34, 0);
     // the smoke hole, and the smoke going up out of it
     hb(0.9,0.26,0.9, timberDk, L*0.18, 4.28, 0);
     for(let i=0;i<4;i++){
@@ -8422,11 +8434,13 @@ function enterSwedenWorld(banner){
   // Cold northern light: a pale washed sky, low grey-blue sun, and fog that closes much nearer than any
   // other map in the game. This is the one climate cue that has to land before the player reads a single
   // prop — Birka should feel cold the frame it loads.
-  scene.background.set(0xa8c0d0); scene.fog.color.set(0xb8c6ce); scene.fog.near=26; scene.fog.far=125;
-  setDistantGround(0x6a7a68);
-  skyTint(0xdce8f0);
-  hemi.intensity=0.70; hemi.color.set(0xc4d6e4); hemi.groundColor.set(0x3f4a38);
-  sun.intensity=0.74; fill.intensity=0.26; fill.color.set(0xb8c8d8);
+  scene.background.set(0xbcd0dc); scene.fog.color.set(0xd2dde4); scene.fog.near=22; scene.fog.far=110;
+  setDistantGround(0xccdae4);          // snow running out past the shore, not green scrub
+  skyTint(0xe8f0f6);
+  // ground bounce comes off SNOW here, so the hemisphere's lower colour is pale, not dark earth. That one
+  // value is most of why a snow map either reads as cold daylight or as green ground with white paint.
+  hemi.intensity=0.82; hemi.color.set(0xd4e4f0); hemi.groundColor.set(0xa8bcc8);
+  sun.intensity=0.70; fill.intensity=0.30; fill.color.set(0xc8d8e8);
   // Just up the shore from the jetty heads, facing into the town — you arrive by water, as everyone did.
   camera.position.set(0,1.7,24); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
@@ -13038,7 +13052,7 @@ function makeBow(){
   // a small bronze aiming ring mounted just above the grip — a peep sight, not a glass sniper scope, but
   // wired to the same scoped/scopeFov mechanic (right-click/hold-shift zooms in, same as the sniper rifle)
   const sightRing=new THREE.Mesh(new THREE.TorusGeometry(0.045,0.009,6,12), gold); sightRing.position.set(-0.05,0.16,0.03); g.add(sightRing);
-  g.scale.setScalar(0.58); // a touch smaller than before
+  g.scale.setScalar(0.46); // sized against the screen: at 0.58 this stood 140% of its height
   g.userData={muzzleZ:-0.55,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.35),recoil:0.1,name:'Bow',
     damage:80, fireRate:0.5, auto:false, spread:0.008, tracer:0xd9b872, scoped:true, scopeFov:45,
     magSize:6, ammo:6, reloadTime:1.3, reloading:false, reloadT:0};
@@ -13719,6 +13733,7 @@ function makeScimitar(){
   const tip=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.075,4), steelDark);
   tip.position.set(0, by+Math.cos(t)*0.037, bz-Math.sin(t)*0.037); tip.rotation.x=-t; g.add(tip);
 
+  g.scale.setScalar(0.80);   // was 124% of screen height unscaled
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.1,name:'Saif',
     melee:true, range:1.7, damage:160, fireRate:0.2};
   return g;
@@ -13812,6 +13827,7 @@ function makeMacana(){
     }
   });
   mb(0.10,0.05,0.05, woodDark, 0,0.72,0);                                 // butt cap at the tip
+  g.scale.setScalar(0.70);   // was 143% of screen height unscaled
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.26,-0.40),recoil:0.16,name:'Macana',
     melee:true, range:1.9, damage:190, fireRate:0.46};
   return g;
@@ -13932,6 +13948,7 @@ function makeTecpatl(){
   });
   kb(0.030,0.05,0.032, flint, 0, by+0.02, 0);              // the point
   kb(0.018,0.22,0.046, flintDk, 0, 0.33, 0);               // the central ridge left by the flaking
+  g.scale.setScalar(0.80);   // was 124% of screen height unscaled
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.21,-0.25,-0.36),recoil:0.12,name:'Tecpatl',
     melee:true, range:2.0, damage:135, fireRate:0.26,
     // health returned per KILL (not per hit) — see fire()'s melee branch
@@ -14096,8 +14113,13 @@ function makeDaneAxe(){
   // runic inlay worked into the flat of the blade, in silver wire — the one decorative note
   for(let i=0;i<4;i++) ab(0.014,0.030,0.008, silver, 0, 0.66-i*0.055, 0.115);
   ab(0.010,0.10,0.008, silver, 0, 0.605, 0.128);
-  g.scale.setScalar(0.92);
-  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.24,-0.30,-0.44),recoil:0.24,name:'Dane Axe',
+  // Held across the body, head high and to the right, the way a two-hander is carried. At 0.92 and bolt
+  // upright this stood 154% of the screen's height straight down the middle of the view and blotted out
+  // half the map — which is what it looked like in the browser.
+  g.scale.setScalar(0.52);
+  g.rotation.z = -0.42; g.rotation.y = 0.34; g.rotation.x = 0.10;
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.30,-0.40,-0.50),recoil:0.24,name:'Dane Axe',
+    restRot:{x:0.10,y:0.34,z:-0.42},
     melee:true, range:3.0, damage:185, fireRate:0.92, sfx:'axeSwing',
     // the brief's "instantly smashes guards and armour": damage is multiplied against armoured targets.
     // Read in fire()'s melee branch, which is the only place this weapon can land a hit.
@@ -14134,6 +14156,13 @@ function makeHunnishBow(){
   // as a stack of shards — the failure mode the Saif's blade and the crossbow's lath both hit here.
   // Each limb is parented to its OWN group so the draw can flex it: rotating a group rotates the whole
   // run together, where rotating the segments individually would tear the limb apart.
+  // ---- the limbs ----
+  // ORIENTATION, which the first build got inside out. -z is forward (toward the target), +z is back
+  // toward the archer's face. A bow's GRIP is the point furthest FORWARD; the limbs sweep back toward the
+  // archer as they run out to the tips, and the string spans tip to tip on the archer's side of the grip.
+  // Built the other way — tips and string pushed to -z — the bow is bent inside out and the string sits in
+  // front of the riser, which is exactly what "the bow is backwards" looked like. z now INCREASES along
+  // each limb.
   const limbGroups=[], limbRest=[];
   [-1,1].forEach(sd=>{
     const L=new THREE.Group(); g.add(L); limbGroups.push(L); limbRest.push(0);
@@ -14145,43 +14174,48 @@ function makeHunnishBow(){
       // a sinew binding every other segment, so the laminate reads as built up rather than carved
       if(i%2===0){ const w2=new THREE.Mesh(new THREE.BoxGeometry(0.048,0.020,i%4?0.058:0.070), leather);
         w2.position.set(0,y,z); w2.rotation.x=ang; L.add(w2); }
-      y += sd*0.105*Math.cos(ang); z -= 0.105*Math.sin(Math.abs(ang))*1.0;
-      ang += sd*0.16;                                 // the limb bending forward
+      y += sd*0.105*Math.cos(ang); z += 0.105*Math.sin(Math.abs(ang));   // sweeping BACK toward the archer
+      ang += sd*0.16;
     }
-    // the siyah: the stiff reversed tip, the single feature that makes this read as a composite bow
+    // the siyah: the stiff tip, recurving forward again — the feature that makes this a composite bow
     const tip=new THREE.Mesh(new THREE.BoxGeometry(0.038,0.17,0.048), hornMat);
-    tip.position.set(0,y+sd*0.02,z-0.03); tip.rotation.x=-sd*0.55; L.add(tip);
+    tip.position.set(0,y+sd*0.02,z+0.02); tip.rotation.x=sd*0.55; L.add(tip);
     const nk=new THREE.Mesh(new THREE.BoxGeometry(0.030,0.035,0.032), hornMat);
-    nk.position.set(0, y+sd*0.10, z-0.10); L.add(nk);  // the string nock on it
+    nk.position.set(0, y+sd*0.10, z+0.06); L.add(nk);  // the string nock on it
   });
   // ---- the string, and the nocked arrow riding it ----
-  // These three are handed to animate() as drawParts: pulling them BACK in z as the charge builds is the
-  // whole visual of the mechanic. Without it the bow was completely static in the hands while charging,
-  // which is the single biggest reason it read as broken.
-  const stringMesh = bb(0.012,1.06,0.012, stringM, 0,0,-0.135);
+  // These are handed to animate() as drawParts: pulling them BACK in z as the charge builds is the whole
+  // visual of the mechanic. The string rests BEHIND the grip now (+z, the archer's side), which is both
+  // correct and what makes the draw read as a draw rather than as the arrow sliding through the riser.
+  const stringMesh = bb(0.012,1.06,0.012, stringM, 0,0,0.185);
   // The whole arrow lives in its own group so shaft, head, fletching and nock travel together when the
   // string comes back — an arrow whose head stayed put while its shaft slid would be worse than no
   // animation at all.
   const arrowGrp = new THREE.Group(); g.add(arrowGrp);
+  // nock at the string (+0.185), shaft running forward past the grip, head out in front
   const arrowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.020,0.020,0.86), limbPale);
-  arrowMesh.position.set(0,0,-0.30); arrowGrp.add(arrowMesh);          // the shaft
+  arrowMesh.position.set(0,0,-0.24); arrowGrp.add(arrowMesh);          // the shaft
   const headM = new THREE.Mesh(new THREE.BoxGeometry(0.030,0.030,0.075), steel);
-  headM.position.set(0,0,-0.74); arrowGrp.add(headM);
-  [-1,1].forEach(sd=>{                                // fletching, three vanes
+  headM.position.set(0,0,-0.70); arrowGrp.add(headM);
+  [-1,1].forEach(sd=>{                                // fletching, three vanes, back at the nock
     const f=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.055,0.11), featherM);
-    f.position.set(sd*0.016,0,0.02); f.rotation.z=sd*0.3; arrowGrp.add(f);
+    f.position.set(sd*0.016,0,0.12); f.rotation.z=sd*0.3; arrowGrp.add(f);
   });
   const f3=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.055,0.11), featherM);
-  f3.position.set(0,0.022,0.02); arrowGrp.add(f3);
+  f3.position.set(0,0.022,0.12); arrowGrp.add(f3);
   const nockMesh = new THREE.Mesh(new THREE.BoxGeometry(0.026,0.026,0.03), hornMat);
-  nockMesh.position.set(0,0,0.075); arrowGrp.add(nockMesh);
-  g.scale.setScalar(0.62);
+  nockMesh.position.set(0,0,0.185); arrowGrp.add(nockMesh);
+  // Held canted, the way a bow actually is in the hand, and small enough to leave the sight line clear.
+  // At 0.62 it stood 170% of the screen's height dead in the middle of the view.
+  g.scale.setScalar(0.42);
+  g.rotation.z = 0.30; g.rotation.y = 0.10;
   g.userData={muzzleZ:-0.48,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.36),recoil:0.16,name:'Hunnish Bow',
     damage:70, fireRate:0.30, auto:false, spread:0.010, tracer:0xd8d0c0, scoped:true, scopeFov:48,
     magSize:8, ammo:8, reloadTime:1.6, reloading:false, reloadT:0, sfx:'bowLoose',
     // ---- the charge. chargeTime is how long a FULL draw takes; a shot loosed early scales between
     // chargeMin and chargeMax of the base damage, and the spread tightens over the same window. Held and
     // ticked in animate(); consumed in fire(). See chargeT on this same object.
+    restRot:{x:0,y:0.10,z:0.30},
     charge:true, chargeTime:0.85, chargeMin:0.45, chargeMax:2.6, chargeT:0,
     // a FULL draw punches through this many bodies behind the first (see fire()'s pierce block)
     pierceCount:2,
@@ -14292,7 +14326,12 @@ function selectWeapon(i){
   // and drop the guard when switching away from the shield, or you would keep its damage reduction while
   // holding something else. Cleared before the pose restore below, so the new weapon sits where it should.
   if(!active.userData.shieldBlock && guarding){ guarding = false; }
-  if(!active.userData.shieldBlock){ active.rotation.set(0,0,0); }
+  // Restore the weapon's own rest pose. A flat zero here un-cants every weapon that is deliberately held
+  // at an angle (the axe across the body, the bow in the hand) the instant you switch to it.
+  if(!active.userData.shieldBlock){
+    const r = active.userData.restRot;
+    active.rotation.set(r?r.x:0, r?r.y:0, r?r.z:0);
+  }
 }
 // called once Boss I is defeated: swap from the 3-weapon pyramid loadout to the 3-weapon Greek loadout
 function switchToGreekLoadout(){
@@ -14762,6 +14801,8 @@ function enterIfritArena(){
 }
 // ==========================================================================
 let gunBaseZ = -0.5;
+// viewmodel motion state (walk bob phase, look-lag, the raise that plays when you switch weapon)
+let vmBobT = 0, vmSwayX = 0, vmSwayY = 0, vmLastYaw = 0, vmLastPitch = 0, vmRaise = 0, vmLastWeapon = -1;
 camera.add(gunGroup);
 scene.add(camera);
 selectWeapon(0);
@@ -16164,25 +16205,36 @@ const SFX = (function(){
   return {
     init,
     // ---- PLAYER weapons: layered body+crack+sub-thump, bright and punchy up front ----
+    // Every one of these is built the same way now: a TRANSIENT (the crack, 10-30ms), a BODY (the tone
+    // that gives it weight), and a TAIL (the room answering back, a beat later and quieter). The old
+    // versions had body and transient stacked on the same instant with no tail at all, which is why they
+    // read as flat clicks rather than as shots going off in a place.
     playerSniper(){ if(!actx)return; const t=actx.currentTime;
-      tone(t,0.22,'sawtooth',180,55,0.4,{drive:18});
-      noise(t,0.08,'highpass',2600,0.34,0.8,7000);
-      thump(t,0.22,110,30,0.32);
+      noise(t,0.012,'highpass',5200,0.55,0.6);                  // the crack
+      tone(t,0.26,'sawtooth',190,48,0.42,{drive:20});           // body
+      thump(t,0.30,120,26,0.38);                                // the shoulder of it
+      noise(t+0.02,0.30,'lowpass',1800,0.16,0.5,160,true);      // tail, sent to the delay bus
+      tone(t+0.05,0.34,'sine',90,40,0.10,{send:true});
     },
     playerGrenade(){ if(!actx)return; const t=actx.currentTime;
-      tone(t,0.14,'square',180,90,0.28,{drive:6});
-      noise(t,0.12,'lowpass',900,0.3,0.7);
-      thump(t,0.16,110,35,0.26);
+      noise(t,0.015,'bandpass',1800,0.36,1.2,700);              // the launch pop
+      tone(t,0.16,'square',170,84,0.30,{drive:7});
+      thump(t,0.20,105,32,0.30);
+      noise(t+0.03,0.22,'lowpass',700,0.14,0.6,120,true);       // the hollow tube after it
     },
     explosion(){ if(!actx)return; const t=actx.currentTime;
-      noise(t,0.5,'lowpass',1400,0.5,0.6,120,true);
-      tone(t,0.35,'sawtooth',140,35,0.32,{drive:12,send:true});
-      thump(t,0.4,90,25,0.34);
+      noise(t,0.020,'highpass',3600,0.50,0.7);                  // the initial rip
+      noise(t,0.60,'lowpass',1500,0.52,0.55,110,true);          // the blast
+      tone(t,0.40,'sawtooth',135,32,0.34,{drive:14,send:true});
+      thump(t,0.46,85,22,0.38);
+      noise(t+0.12,0.55,'lowpass',420,0.20,0.5,80,true);        // the rumble rolling away
+      tone(t+0.16,0.50,'sine',70,34,0.12,{send:true});
     },
     playerRifle(){ if(!actx)return; const t=actx.currentTime;
-      tone(t,0.07,'sawtooth',320,110,0.26,{drive:14,detune:7});
-      noise(t,0.05,'bandpass',2400,0.32,1.4,900);
-      thump(t,0.06,130,40,0.16);
+      noise(t,0.008,'highpass',6000,0.40,0.5);                  // crack
+      tone(t,0.08,'sawtooth',330,105,0.28,{drive:15,detune:7});
+      thump(t,0.07,135,38,0.18);
+      noise(t+0.015,0.14,'bandpass',1500,0.13,1.0,600,true);    // short tail, keeps rapid fire from muddying
     },
     playerRay(){ if(!actx)return; const t=actx.currentTime;
       fmZap(t,0.32,1500,220,340,420,0.34,true);
@@ -16196,20 +16248,30 @@ const SFX = (function(){
       thump(t,0.3,120,32,0.36);
     },
     dryFire(){ if(!actx)return; const t=actx.currentTime;
-      tone(t,0.04,'square',900,700,0.12,{});
+      tone(t,0.03,'square',880,640,0.13,{attack:0.001});
+      noise(t,0.02,'highpass',4200,0.10,2);                     // the dead click of a mechanism, not a beep
+      tone(t+0.035,0.03,'square',560,430,0.07,{attack:0.001});
     },
+    // a three-beat reload: release, seat, close. One flat pair of beeps said nothing about what was
+    // happening; three separated hits with noise on each read as hands doing something.
     reload(){ if(!actx)return; const t=actx.currentTime;
-      tone(t,0.05,'square',500,380,0.16,{});
-      tone(t+0.12,0.05,'square',420,300,0.16,{});
+      noise(t,0.03,'bandpass',2600,0.16,2.2,1200); tone(t,0.05,'square',520,390,0.13,{});
+      noise(t+0.16,0.05,'lowpass',1200,0.20,0.9,300); tone(t+0.16,0.06,'triangle',300,210,0.15,{});
+      noise(t+0.34,0.035,'bandpass',3200,0.18,2.6,1500); tone(t+0.34,0.05,'square',620,460,0.12,{});
     },
     // ---- ENEMY guns: duller, quieter, distance-attenuated so they never sound like yours ----
     enemyShot(dist){ if(!actx)return; const t=actx.currentTime; const v=Math.max(0.05, 0.6*(1-Math.min(dist,34)/34));
-      tone(t,0.11,'triangle',210,65,0.2*v,{});
-      noise(t,0.1,'lowpass',480,0.42*v,0.6,220);
+      tone(t,0.11,'triangle',205,62,0.20*v,{});
+      noise(t,0.10,'lowpass',460,0.42*v,0.6,220);
+      // a distance tail: the further away it is, the more of it is room and the less of it is the shot.
+      // This is what stops every enemy sounding like it is standing next to you.
+      const far=Math.min(1,dist/34);
+      if(far>0.15) noise(t+0.03+far*0.05, 0.16+far*0.22, 'lowpass', 900-far*500, 0.16*far, 0.5, 120, true);
     },
     knife(dist){ if(!actx)return; const t=actx.currentTime; const v=Math.max(0.1,1-Math.min(dist,6)/6);
-      noise(t,0.1,'bandpass',3400,0.22*v,2.2,1200);
-      noise(t+0.05,0.08,'highpass',5200,0.14*v,3);
+      noise(t,0.10,'bandpass',3400,0.22*v,2.2,1200);            // the swing through air
+      tone(t,0.05,'triangle',420,260,0.09*v,{});                // a little weight behind it
+      noise(t+0.05,0.08,'highpass',5200,0.15*v,3);              // the edge singing
     },
     // ---- Birka (Viking Age Sweden) ----
     // A bow loosing is a low wooden THRUM off the limbs plus the string's own short buzz and the arrow's
@@ -16240,9 +16302,22 @@ const SFX = (function(){
       tone(t,0.05,'triangle',900,430,0.10);
     },
     // ---- feedback ----
-    hitmark(){ if(!actx)return; const t=actx.currentTime; tone(t,0.045,'square',1700,1150,0.16,{attack:0.001}); tone(t+0.045,0.05,'square',1500,1000,0.13,{attack:0.001}); },
-    hurt(){    if(!actx)return; const t=actx.currentTime; tone(t,0.22,'sawtooth',260,90,0.22,{drive:6}); noise(t,0.12,'lowpass',650,0.18,0.7); },
-    death(){   if(!actx)return; const t=actx.currentTime; tone(t,0.35,'sawtooth',280,55,0.2,{detune:12,send:true}); noise(t,0.2,'lowpass',900,0.12,0.5,150); },
+    // a tight two-tick, brighter and shorter than before so it cuts through sustained fire
+    hitmark(){ if(!actx)return; const t=actx.currentTime;
+      tone(t,0.030,'square',2000,1400,0.17,{attack:0.001});
+      noise(t,0.012,'highpass',5000,0.10,1.5);
+      tone(t+0.038,0.038,'square',1650,1080,0.12,{attack:0.001}); },
+    // taking a hit: an impact, then the breath knocked out of you
+    hurt(){    if(!actx)return; const t=actx.currentTime;
+      noise(t,0.05,'lowpass',900,0.30,0.7,200);
+      tone(t,0.24,'sawtooth',250,84,0.24,{drive:7});
+      noise(t+0.06,0.20,'bandpass',420,0.12,0.8,180);
+      tone(t+0.04,0.26,'sine',120,62,0.10,{send:true}); },
+    death(){   if(!actx)return; const t=actx.currentTime;
+      noise(t,0.06,'lowpass',1400,0.26,0.6,260);
+      tone(t,0.42,'sawtooth',270,48,0.22,{detune:14,send:true});
+      tone(t+0.05,0.40,'sine',150,40,0.10,{send:true});
+      noise(t+0.10,0.30,'lowpass',700,0.12,0.5,120,true); },
     boss(){    if(!actx)return; const t=actx.currentTime;
       tone(t,0.9,'sawtooth',110,36,0.3,{drive:10,detune:14,send:true});
       tone(t,0.9,'square',58,26,0.18,{send:true});
@@ -16987,13 +17062,13 @@ function animate(){
         const wd = wp.userData;
         if(!wd.swingAnim) return;
         wd.swingT = (wd.swingT===undefined) ? 99 : wd.swingT + dt;
+        const R = wd.restRot || {x:0,y:0,z:0};
         const D = 0.34;                                   // the whole arc, inside the 0.92s fire rate
-        if(wd.swingT >= D){ wp.rotation.set(0,0,0); wp.position.x = 0; return; }
+        if(wd.swingT >= D){ wp.rotation.set(R.x,R.y,R.z); wp.position.x = 0; return; }
         const f = wd.swingT / D;
         // wind up across the body, then sweep through and settle — eased so the middle is the fastest part
         const s = f < 0.28 ? -(f/0.28)*0.55 : 1.2*Math.sin(((f-0.28)/0.72)*Math.PI*0.5) - 0.55;
-        wp.rotation.y = -s*0.9;
-        wp.rotation.z = s*0.45;
+        wp.rotation.set(R.x + s*0.22, R.y - s*0.95, R.z + s*0.5);
         wp.position.x = -s*0.10;
       });
       // ---- the seax's handful: the drawn stack IS the magazine ----
@@ -17104,7 +17179,46 @@ function animate(){
   // recoil recovery toward the active weapon's base position + idle sway
   gunGroup.position.z += (gunBaseZ - gunGroup.position.z) * Math.min(1, dt*10);
   gunGroup.rotation.x += (0 - gunGroup.rotation.x) * Math.min(1, dt*9); // eases the muzzle-rise/swing kick back level
-  gunGroup.position.y = weapons[currentWeapon].userData.pos.y + Math.sin(t*3)*0.008;
+  // ================= VIEWMODEL MOTION =================
+  // Everything below applies to EVERY weapon in the game, not just the Viking ones. Until now the only
+  // motion a weapon had was the fire kick and a 0.008 idle bob, which is why they all felt like decals
+  // pinned to the camera: no weight when you walk, no acknowledgement of a reload, no raise on a switch.
+  {
+    const wdA = weapons[currentWeapon].userData;
+    const base = wdA.pos;
+    // ---- walk bob: a figure-of-eight, driven by how fast you are ACTUALLY moving ----
+    const spd = Math.min(1, Math.hypot(vel.x, vel.z) / 7);
+    vmBobT += dt * (2.0 + spd*9.0);
+    const bobAmt = spd * (scoped ? 0.25 : 1);        // scoping steadies the weapon, as it should
+    const bobX = Math.sin(vmBobT) * 0.016 * bobAmt;
+    const bobY = -Math.abs(Math.cos(vmBobT)) * 0.014 * bobAmt;
+    // ---- idle sway when standing still: a slow drift so the thing is never perfectly frozen ----
+    const idle = 1 - spd;
+    const swayX = Math.sin(t*0.9) * 0.006 * idle;
+    const swayY = Math.sin(t*1.3 + 1.1) * 0.005 * idle;
+    // ---- look sway: the weapon lags behind a fast turn and catches up ----
+    vmSwayX += ((yaw   - vmLastYaw)   - vmSwayX) * Math.min(1, dt*8);
+    vmSwayY += ((pitch - vmLastPitch) - vmSwayY) * Math.min(1, dt*8);
+    vmLastYaw = yaw; vmLastPitch = pitch;
+    const lagX = Math.max(-0.05, Math.min(0.05, vmSwayX * 1.2));
+    const lagY = Math.max(-0.05, Math.min(0.05, vmSwayY * 1.2));
+    // ---- reload: the weapon drops out of the sight line and rolls while hands work on it ----
+    let rlY = 0, rlRot = 0;
+    if(wdA.reloading && wdA.reloadTime){
+      const f = Math.min(1, (wdA.reloadT||0) / wdA.reloadTime);
+      const dip = Math.sin(f * Math.PI);             // down and back up across the whole reload
+      rlY = -0.20 * dip; rlRot = 0.75 * dip;
+    }
+    // ---- raise on switch: the new weapon comes up into frame instead of appearing ----
+    if(currentWeapon !== vmLastWeapon){ vmRaise = 1; vmLastWeapon = currentWeapon; }
+    vmRaise = Math.max(0, vmRaise - dt*4.5);
+    const rz = vmRaise * vmRaise;                     // eased, so the last of it is gentle
+    gunGroup.position.x = base.x + bobX + swayX - lagX;
+    gunGroup.position.y = base.y + bobY + swayY - lagY + rlY - rz*0.32;
+    gunGroup.rotation.z = rlRot*0.5 + lagX*1.6;
+    gunGroup.rotation.y = -lagX*0.9;
+    gunGroup.rotation.x += rlRot*0.35 + rz*0.55;      // += : the fire kick already wrote this
+  }
   if (muzzleTimer > 0){ muzzleTimer -= dt; muzzle.material.opacity = Math.max(0, muzzleTimer/0.05); if (muzzleTimer<=0) muzzle.visible=false; }
   // tick any weapon currently reloading (not just the active one, so switching away mid-reload doesn't pause it)
   weapons.forEach((wp,idx)=>{
