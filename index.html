@@ -13783,6 +13783,9 @@ function makeNaftPot(){
 const DEFAULT_FOV = 75;
 let scoped = false; // declared here (before selectWeapon's initial call) to avoid a temporal-dead-zone crash
 let guarding = false; // same reason as `scoped` above: selectWeapon() runs during init and reads it
+// Viewmodel motion state. Declared up here for the same reason those two are: selectWeapon() writes
+// vmRaise/vmLastWeapon and runs during initial weapon setup, long before the animate loop exists.
+let vmBobT = 0, vmSwayX = 0, vmSwayY = 0, vmLastYaw = 0, vmLastPitch = 0, vmRaise = 0, vmLastWeapon = -1;
 const originalWeapons = [makeGrenadeLauncher(), makeZahraGun()];
 const pyramidWeapons = [makeBow(), makeKhopesh(), makeWasScepter()];
 const nileWeapons = [makeHarpoon()];
@@ -14113,12 +14116,16 @@ function makeDaneAxe(){
   // runic inlay worked into the flat of the blade, in silver wire — the one decorative note
   for(let i=0;i<4;i++) ab(0.014,0.030,0.008, silver, 0, 0.66-i*0.055, 0.115);
   ab(0.010,0.10,0.008, silver, 0, 0.605, 0.128);
-  // Held across the body, head high and to the right, the way a two-hander is carried. At 0.92 and bolt
-  // upright this stood 154% of the screen's height straight down the middle of the view and blotted out
-  // half the map — which is what it looked like in the browser.
-  g.scale.setScalar(0.52);
+  // BIG, and held across the body with the head high and to the right.
+  // What made this unusable before was not its size — it was that it stood bolt upright dead down the
+  // middle of the view. Measured in screen space, the cant is what fixes that: even at full size the
+  // axe's nearest edge sits at +0.19 of half-screen-width, so it never crosses the centre line and the
+  // crosshair stays clear. So it gets to stay a proper two-hander that fills the right side of the frame.
+  // 0.88 rather than 0.92, and dropped slightly, only so the head itself stays inside the top of frame
+  // instead of being clipped off by it.
+  g.scale.setScalar(0.88);
   g.rotation.z = -0.42; g.rotation.y = 0.34; g.rotation.x = 0.10;
-  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.30,-0.40,-0.50),recoil:0.24,name:'Dane Axe',
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.30,-0.50,-0.50),recoil:0.24,name:'Dane Axe',
     restRot:{x:0.10,y:0.34,z:-0.42},
     melee:true, range:3.0, damage:185, fireRate:0.92, sfx:'axeSwing',
     // the brief's "instantly smashes guards and armour": damage is multiplied against armoured targets.
@@ -14307,6 +14314,10 @@ function reloadWeapon(idx){
   if(idx===currentWeapon) setAmmoHUD();
 }
 function selectWeapon(i){
+  // Raise the new weapon into frame. Driven from here rather than from animate()'s per-frame comparison,
+  // because two switches between two frames (a fast scroll through the loadout) left currentWeapon back
+  // where the loop last saw it, and the raise was silently skipped.
+  if(((i+weapons.length)%weapons.length) !== vmLastWeapon){ vmRaise = 1; }
   // Drop any half-drawn charge on the weapon being put away. Without this the bow keeps drawing:true and
   // its accumulated chargeT while holstered, so switching back mid-hold hands you a free full-power shot
   // you never pulled for. Runs BEFORE currentWeapon moves, so it clears the OUTGOING weapon.
@@ -14801,8 +14812,6 @@ function enterIfritArena(){
 }
 // ==========================================================================
 let gunBaseZ = -0.5;
-// viewmodel motion state (walk bob phase, look-lag, the raise that plays when you switch weapon)
-let vmBobT = 0, vmSwayX = 0, vmSwayY = 0, vmLastYaw = 0, vmLastPitch = 0, vmRaise = 0, vmLastWeapon = -1;
 camera.add(gunGroup);
 scene.add(camera);
 selectWeapon(0);
@@ -17209,8 +17218,8 @@ function animate(){
       const dip = Math.sin(f * Math.PI);             // down and back up across the whole reload
       rlY = -0.20 * dip; rlRot = 0.75 * dip;
     }
-    // ---- raise on switch: the new weapon comes up into frame instead of appearing ----
-    if(currentWeapon !== vmLastWeapon){ vmRaise = 1; vmLastWeapon = currentWeapon; }
+    // ---- raise on switch: set by selectWeapon(), decayed here ----
+    vmLastWeapon = currentWeapon;
     vmRaise = Math.max(0, vmRaise - dt*4.5);
     const rz = vmRaise * vmRaise;                     // eased, so the last of it is gentle
     gunGroup.position.x = base.x + bobX + swayX - lagX;
