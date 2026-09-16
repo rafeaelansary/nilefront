@@ -56,6 +56,9 @@ class Vector3 {
   applyQuaternion(){ return this; }
   setFromMatrixPosition(m){ this.x=m[12]; this.y=m[13]; this.z=m[14]; return this; }
   lerp(v,a){ this.x+=(v.x-this.x)*a; this.y+=(v.y-this.y)*a; this.z+=(v.z-this.z)*a; return this; }
+  // lerpVectors was missing, which made every grenade in the game untestable headlessly: the flight
+  // path calls it once per frame per grenade, so the harness threw before reaching any of that code.
+  lerpVectors(a,b,t){ this.x=a.x+(b.x-a.x)*t; this.y=a.y+(b.y-a.y)*t; this.z=a.z+(b.z-a.z)*t; return this; }
   setScalar(s){ this.x=this.y=this.z=s; return this; }
   negate(){ this.x=-this.x; this.y=-this.y; this.z=-this.z; return this; }
   setX(v){ this.x=v; return this; } setY(v){ this.y=v; return this; } setZ(v){ this.z=v; return this; }
