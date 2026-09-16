@@ -3254,7 +3254,7 @@ function waterRippleTex(){
     // random base heights collided too. Each layer's top is now derived from the one below it.
     const h1=2.6+((i*0.83)%3.2), h2=2.2+((i*0.53)%2.4), h3=1.5+((i*0.31)%1.1);
     const t1=h1, t2=t1+0.9, t3=t2+0.8;
-    nblock(w,      h1, d,       0xd8b982, x, t1-h1/2, z, {noise:18});
+    nblock(w,      h1, d,       0xd8b982, x, t1-h1/2 - ((i*0.037)%0.31), z, {noise:18});
     nblock(w*0.6,  h2, d*0.6,   0xe0c48f, x, t2-h2/2, z, {noise:16});
     nblock(w*0.3,  h3, d*0.35,  0xcfa96a, x, t3-h3/2, z, {noise:14});
   }
@@ -3341,14 +3341,21 @@ function waterRippleTex(){
         const m = Math.abs(Math.cos(z*0.13 + ti*1.7 + nearX)*911%1);
         const w = t.w * (0.78 + n*0.5);
         const h = t.h * (0.72 + m*0.7);
-        const off = t.off + (n-0.5)*2.4;
-        // height is derived so each chunk's TOP varies while its base stays buried, rather than the whole
-        // run sharing one flat top plane
-        bankMesh(w, h, CHUNK*1.06, (n>0.5?mat:matLo), nearX + dir*off, t.y + (h-t.h)/2, z + CHUNK/2);
+        // (m-0.5)*1.5 is an INDEPENDENT hash, deliberately: the width and the (n-0.5)*2.4 offset nearly
+        // cancel in xmin = nearX + off - w/2, leaving it almost constant across the run.
+        const off = t.off + (n-0.5)*2.4 + (m-0.5)*1.5;
+        // Height is derived so each chunk's TOP varies. Its BASE has to vary too: centring at
+        // t.y + (h-t.h)/2 puts min y at exactly t.y - t.h/2 regardless of h, so every chunk in a terrace
+        // shared one buried plane with every neighbour it overlaps — about 900 coplanar pairs across the
+        // two banks, and the single largest fault in the game. Each chunk is now buried to its OWN depth.
+        const bury = 0.05 + n*0.30 + m*0.22;   // two hashes, so near-equal n alone no longer collides
+        const cDep = CHUNK*(1.02 + ti*0.035);          // each band its own chunk depth...
+        const cZ   = z + CHUNK/2 + ti*0.73;            // ...and its own phase along the river
+        bankMesh(w, h, cDep, (n>0.5?mat:matLo), nearX + dir*off, t.y + (h-t.h)/2 - bury, cZ);
         // an occasional higher shelf sitting on top, so the profile is stepped rather than a single ledge
         if(n > 0.66){
-          bankMesh(w*0.55, h*0.5, CHUNK*0.7, matLo,
-                   nearX + dir*(off + (m-0.5)*1.8), t.y + (h-t.h)/2 + h*0.72, z + CHUNK/2 + (m-0.5)*2);
+          bankMesh(w*0.55, h*0.5, CHUNK*(0.66+ti*0.03), matLo,
+                   nearX + dir*(off + (m-0.5)*1.8), t.y + (h-t.h)/2 - bury + h*0.72, cZ + (m-0.5)*2);
         }
       }
     });
@@ -3369,9 +3376,14 @@ function waterRippleTex(){
         if(r===0 && n<0.28) return;                       // gaps in the front rank, so it is not a wall
         const bx = nearX + dir*(off + (m-0.5)*7);
         const d  = w*0.8;
-        bankMesh(w,       h,       d,       duneA, bx,            h/2 - 0.6,        z);
-        bankMesh(w*0.66,  h*0.55,  d*0.68,  duneB, bx + dir*w*0.1, h*0.78 - 0.6,    z + (n-0.5)*3);
-        bankMesh(w*0.34,  h*0.34,  d*0.38,  duneC, bx - dir*w*0.06, h*1.05 - 0.6,   z - (m-0.5)*3);
+        // each dune buried to its own depth: h/2 - 0.6 pins min y at exactly -0.6 for every one of the
+        // 240 of them, and they overlap each other, so the whole desert was one coplanar sheet
+        const dBury = 0.6 + ((i*7+r*3)%9)*0.075;
+        bankMesh(w,       h,       d,       duneA, bx,            h/2 - dBury,      z);
+        bankMesh(w*0.66,  h*0.55,  d*0.68,  duneB, bx + dir*w*0.1, h*0.78 - dBury,  z + (n-0.5)*3);
+        // 0.13, not 0.06: at 0.06 this layer's left face lands on exactly duneB's (0.10-0.33 == -0.06-0.17),
+        // which is one shared plane per dune across the whole +x bank.
+        bankMesh(w*0.34,  h*0.34,  d*0.38,  duneC, bx - dir*w*0.13, h*1.05 - dBury, z - (m-0.5)*3);
       });
     }
 
@@ -3382,7 +3394,7 @@ function waterRippleTex(){
       const n = Math.abs(Math.sin(z*0.37 + nearX)*4375.5%1);
       if(n < 0.25) continue;                                   // gaps, so the edge is ragged
       const reach = 1.2 + n*3.0;
-      bankMesh(reach, 0.42, 3.2+n*1.4, tongueMat, nearX - dir*(reach/2 - 0.6), -0.14, z + n*1.5);
+      bankMesh(reach, 0.42, 3.2+n*1.4, tongueMat, nearX - dir*(reach/2 - 0.6), -0.14 - n*0.26, z + n*1.5);
     }
     // Bank detail: boulders, driftwood and dry scrub, clustered rather than evenly spread.
     const rockMat = voxMat(0x8a7c62,{noise:20});
