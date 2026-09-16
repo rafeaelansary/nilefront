@@ -7644,30 +7644,46 @@ scene.children.slice().forEach(o=>{
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
-// ===================== AZTEC MARKET (the new hub reached once Tenochtitlan is cleared) =====================
-// Small and flat on purpose: this is a hub, not a leg — nothing to fight here, just a plaza to walk across
-// on the way to its own travel booth. Same voxel toolkit and Aztec-era materials as Tenochtitlan, reused
-// rather than reinvented, so it reads as the same world one step further down the road.
+// ===================== THE TIANQUIZTLI (the Aztec Market) =====================
+// The great market of Tlatelolco, the hub reached once Tenochtitlan is cleared. The first pass at this was
+// an open square with twelve identical stalls around a wall, which is a courtyard, not a market. A
+// tianquiztli was the largest marketplace in the Americas and it had a SHAPE: a colonnaded arcade running
+// round the square, goods laid out in numbered aisles by commodity, judges sitting on a raised platform to
+// settle disputes on the spot, and a canal along one side with canoes unloading straight onto the stones.
+// All of that is here, and all of it is a reason to look somewhere.
+//
+//   NORTH  the arcade and the judges' platform, raised three steps above the floor
+//   CENTRE four aisles of stalls, each aisle one trade — feather, jade and obsidian, cloth, food
+//   EAST   the canal, with canoes tied up and cargo stacked on the bank
+//   SOUTH  the gate you arrive through, and the travel booth beside it
 addTarget = aztecMarketColliders;
 heightZoneTarget = heightZonesAztecMarket;
 (function buildAztecMarket(){
-  const tezontle  = new THREE.MeshLambertMaterial({map:_finish(tezontleTex(),5)});
+  const tezontle  = new THREE.MeshLambertMaterial({map:_finish(tezontleTex(),6)});
+  const tezDark   = voxMat(0x5a2a20,{noise:16});
   const plaster   = voxMat(0xe4dcc4,{noise:10});
+  const plasterDk = voxMat(0xbfb49a,{noise:12});
   const timberMat = new THREE.MeshLambertMaterial({map:_finish(logTex(),2)});
+  const timberPa  = voxMat(0x9a7b4a,{noise:14});
   const leafMat   = new THREE.MeshLambertMaterial({map:_finish(leavesTex(),2)});
   const thatchMat = voxMat(0x9a8348,{noise:18});
-  const wallMat   = voxMat(0xc9a878,{noise:14});     // sun-baked adobe capping the tezontle plaza wall
-  const jadeMat   = voxMat(0x2f9e82,{noise:10});     // the market booth's own colour, distinct from Cairo's
+  const matMat    = voxMat(0xc2a468,{noise:16});     // woven reed mats — what goods were actually laid on
+  const jadeMat   = voxMat(0x2f9e82,{noise:10});
+  const jadeDk    = voxMat(0x1f6f5c,{noise:10});
   const goldMat   = voxMat(0xd8a838,{noise:10});
+  const obsid     = voxMat(0x2a2632,{noise:8});
   const maizeMat  = voxMat(0xc8983c,{noise:14});
   const chiliMat  = voxMat(0xb2402a,{noise:14});
-  const caoMat    = voxMat(0x6a4a2e,{noise:12});     // cacao beans, heaped like the maize/chili baskets
-  const clayMat   = voxMat(0xb2603a,{noise:12});     // fired-clay pottery
+  const caoMat    = voxMat(0x6a4a2e,{noise:12});
+  const clayMat   = voxMat(0xb2603a,{noise:12});
   const saltMat   = voxMat(0xe8e2d4,{noise:8});
-  const cottonRed = voxMat(0xa8283c,{noise:8});      // cochineal-dyed cloth, folded and stacked
-  const cottonOch = voxMat(0xd4a828,{noise:8});      // marigold/ochre-dyed cloth
-  const featherA  = voxMat(0x2f9e6a,{noise:6});      // quetzal-green plumes
-  const featherB  = voxMat(0xc23a2a,{noise:6});      // macaw-red plumes
+  const cottonRed = voxMat(0xa8283c,{noise:8});
+  const cottonOch = voxMat(0xd4a828,{noise:8});
+  const cottonBlu = voxMat(0x2f6f9c,{noise:10});
+  const featherA  = voxMat(0x2f9e6a,{noise:6});      // quetzal green
+  const featherB  = voxMat(0xc23a2a,{noise:6});      // macaw red
+  const featherC  = voxMat(0x3f7fc8,{noise:6});      // cotinga blue
+  const waterMat  = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),40), transparent:true, opacity:0.93, color:0x4f8fa8});
 
   const lb=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
@@ -7676,125 +7692,274 @@ heightZoneTarget = heightZonesAztecMarket;
   const lco=(r,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,seg),mat);
     m.position.set(x,y,z); m.castShadow=true; scene.add(m); return m; };
 
-  // ---- the plaza ----
-  // 32 across: still small enough to cross in a few seconds, but the wall below needs the extra room —
-  // a boundary drawn right on top of the old 26-wide slab left no standing room between stalls and wall.
-  const HALF = 16;
-  lb(HALF*2,0.5,HALF*2, tezontle, 0,-0.25,0);
-  // Stacked exactly as Tenochtitlan/La Venta stack their overlays: a real 0.04 clearance above the
-  // ground's own top face, not flush against it — flush was a genuine zero-gap z-fight, not just theory.
-  lb(9,0.05,9, plaster, 0,0.065,0);   // a lighter swept-clean centre, the way La Venta's plaza has one
+  const HALF = 22;                                   // the market square, 44 across
+  // ---- the floor: swept flagstone, with the aisles worn paler where everyone walks ----
+  lb(HALF*2, 0.5, HALF*2, tezontle, 0,-0.25,0);
+  lb(HALF*2-3, 0.06, HALF*2-3, plasterDk, 0,0.06,0);
+  // the four walking aisles between the stall rows, worn pale
+  [-10.5,-3.5,3.5,10.5].forEach(ax=> lb(3.0,0.05,32, plaster, ax,0.10,-1));
+  lb(32,0.05,3.0, plaster, 0,0.13,13);   // 0.13, not 0.10: at the same height it shared both planes
+                                         // with all four aisles it crosses
 
-  // ---- the wall: turns the plaza into an actual bounded market square, not just an open floor ----
-  // South side carries the only opening — the gate the player arrives through from Tenochtitlan. The
-  // other three sides run unbroken; there is nowhere else in the story this market needs to lead yet.
-  const WALL_H = 2.3, WALL_T = 0.6, GATE_HALF = 3.2;
-  // The south wall segments stop short of the gate pillars by more than a pillar radius, not right at
-  // GATE_HALF — a wall ending exactly where a round pillar is centred always overlaps it (a cylinder
-  // centred on a box's edge sticks halfway into that box), which was a real zero-gap z-fight at the base.
-  const GATE_CLEAR = GATE_HALF + 0.6;
-  const wallSeg = (cx,cz,w,d) => { lb(w,WALL_H,d, wallMat, cx,WALL_H/2,cz); addBox(cx,cz,w,d); };
-  wallSeg(-(HALF+GATE_CLEAR)/2, HALF, HALF-GATE_CLEAR, WALL_T);   // south, left of the gate
-  wallSeg( (HALF+GATE_CLEAR)/2, HALF, HALF-GATE_CLEAR, WALL_T);   // south, right of the gate
-  wallSeg(0, -HALF, HALF*2, WALL_T);                             // north
-  // Mitred short of the north/south walls' own thickness so the two don't share a corner cube with
-  // identical top/bottom faces — a real zero-gap z-fight where they met flush.
-  wallSeg(-HALF, 0, WALL_T, HALF*2-WALL_T);                      // west
-  wallSeg( HALF, 0, WALL_T, HALF*2-WALL_T);                      // east
-  // stone gate pillars, taller than the wall and jade-capped, with a woven rope-banner strung between —
-  // the market's own version of a threshold, echoing the booth's timber-and-jade palette from the far end
-  [-GATE_HALF, GATE_HALF].forEach(gx=>{
-    lcy(0.42,0.48,3.6,8, tezontle, gx,1.8,HALF);
-    lb(0.85,0.42,0.85, jadeMat, gx,3.78,HALF);
-    addBox(gx, HALF, 1.0, 1.0);
+  // ================= THE ARCADE — north, east and west =================
+  // A colonnaded walk round three sides, raised two steps. This is the single thing that turns a square
+  // into a market: somewhere shaded to stand, with the trading floor below you.
+  const ARC_Y = 0.62;
+  function arcade(cx, cz, len, rot, bed){
+    const A=new THREE.Group(); A.position.set(cx,0,cz); A.rotation.y=rot||0; scene.add(A);
+    const ab=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; A.add(m); return m; };
+    const B0=bed||0;
+    // bed pushes the slab both down AND up a little, so neither the base nor the TOP plane of any two
+    // arcades line up where they meet at the corners
+    ab(len, 0.30+B0*1.6, 5.2, tezontle, 0, 0.15+B0*0.3, 0);   // the two steps up onto it
+    ab(len-1.2, 0.36, 4.4, tezDark, 0, 0.44, 0.2);
+    ab(len-1.8, 0.20, 3.8, plaster, 0, 0.72, 0.3);   // the swept walk itself
+    const n = Math.max(3, Math.round(len/3.6));
+    for(let i=0;i<n;i++){
+      const px = -len/2 + (i+0.5)*(len/n);
+      // bedded 0.20 INTO the walk, not standing exactly on its top face — at ARC_Y+1.55 every column
+      // shared its base plane with the floor it stands on, which is 25 pairs across the three arcades
+      lcyA(A, 0.34,0.38, 3.3, 9, plaster, px, ARC_Y+1.45, -1.3);   // the column
+      ab(0.86,0.24,0.86, plasterDk, px, ARC_Y+3.18, -1.3);         // its capital
+      ab(0.94,0.26,0.94, tezDark,   px, ARC_Y+0.10, -1.3);         // and its base block, bedded in
+    }
+    ab(len, 0.42, 2.1, timberMat, 0, ARC_Y+3.44, -1.3);            // the lintel beam
+    ab(len, 0.34, 2.6, thatchMat, 0, ARC_Y+3.78, -1.5);            // the roof over the walk
+    ab(len, 0.18, 0.5, tezDark,   0, ARC_Y+3.98, -2.6);            // its outer edge
+    // a painted band along the back wall, the way a precinct wall was
+    ab(len, 1.9, 0.42, plaster,  0, ARC_Y+1.05, -2.5);
+    // the bands stop short of the wall's ends; run full-length they shared both of its end planes
+    ab(len-0.8, 0.26, 0.48, cottonRed, 0, ARC_Y+1.72, -2.52);
+    ab(len-0.8, 0.26, 0.48, jadeMat,   0, ARC_Y+1.34, -2.52);
+    const c=Math.cos(rot||0), s=Math.sin(rot||0);
+    addBox(cx, cz, Math.abs(len*c)+Math.abs(5.2*s), Math.abs(len*s)+Math.abs(5.2*c));
+  }
+  function lcyA(A,rt,rb,h,seg,mat,x,y,z){ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; A.add(m); return m; }
+  arcade(0, -HALF+2.6, 38, 0, 0);                     // north
+  arcade(-HALF+2.6, 0, 34, Math.PI/2, 0.06);          // west
+  arcade( HALF-2.6, -8, 18, -Math.PI/2, 0.17);        // east, short — the canal takes the rest
+
+  // ================= THE JUDGES' PLATFORM — north, on the arcade =================
+  // Twelve judges sat here to settle disputes on the spot, which is the detail that makes a tianquiztli a
+  // civic institution rather than a car boot sale. A stepped dais under a cloth canopy, facing the floor.
+  (function judges(jx,jz){
+    // 5.6 wide at the base, not 6.8: the wider dais reached x +-3.4, and with the player's own radius
+    // that closed both of the inner aisles at +-3.5 completely.
+    [[5.6,0.40,5.2],[4.6,0.34,4.2],[3.6,0.34,3.2]].forEach(([w,h,d],i)=>
+      lb(w,h,d, i%2?tezDark:tezontle, jx, 0.17+i*0.34 - (i?0:0.03), jz));   // bottom step bedded low
+    lb(3.2,0.12,2.8, matMat, jx, 1.14, jz);
+    // four posts and a dyed cotton canopy
+    [[-1.4,-1.1],[1.4,-1.1],[-1.4,1.1],[1.4,1.1]].forEach(([ox,oz])=>
+      lcy(0.11,0.13,2.7,7, timberPa, jx+ox, 2.22, jz+oz));   // bedded through the mat, not resting on it
+    lb(3.8,0.16,3.0, cottonBlu, jx, 3.52, jz);
+    lb(4.0,0.10,3.2, cottonOch, jx, 3.40, jz);
+    for(let i=0;i<5;i++) lb(0.26,0.5,0.06, cottonRed, jx-1.4+i*0.7, 3.24, jz+1.55);  // its fringe
+    // the three seats, and a staff of office leaning on the back one
+    [-1.0,0,1.0].forEach(sx=> lb(0.68,0.34,0.7, tezDark, jx+sx, 1.37, jz-0.3));
+    lcy(0.07,0.08,1.9,6, timberPa, jx+1.5, 2.05, jz-0.9);
+    lco(0.20,0.42,7, goldMat, jx+1.5, 3.16, jz-0.9);
+    addBox(jx,jz,5.8,5.4);
+  })(0, -HALF+6.4);
+
+  // ================= THE STALL AISLES — the market itself =================
+  // Four rows, each row one trade. A stall is a reed mat on the stones under an awning, which is what these
+  // actually were — the goods ARE the decoration, so each row looks different because it sells different
+  // things rather than because it has been given a different colour.
+  function stall(sx, sz, awning, goods, tall){
+    const S=new THREE.Group(); S.position.set(sx,0,sz); scene.add(S);
+    const sb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; S.add(m); return m; };
+    sb(2.7,0.05,2.3, matMat, 0,0.09,0);                         // the reed mat, the stall's real footprint
+    [[-1.15,-0.95],[1.15,-0.95],[-1.15,0.95],[1.15,0.95]].forEach(([px,pz])=>{
+      const p=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.085,2.2,6), timberPa);
+      p.position.set(px,1.10,pz); p.castShadow=true; S.add(p);
+    });
+    sb(2.9,0.13,2.5, awning, 0,2.26,0);                          // the awning
+    sb(2.5,0.07,2.1, awning, 0,2.15,0.06);
+    for(let i=0;i<4;i++) sb(0.5,0.34,0.05, awning, -0.9+i*0.6, 2.02, 1.28);   // its scalloped edge
+    sb(1.9,0.62,1.0, timberMat, 0,0.40,-0.5);                    // the trestle the goods sit on
+    sb(2.0,0.09,1.1, timberPa,  0,0.75,-0.5);
+    // the goods, heaped on the trestle and stacked on the mat
+    goods.forEach((mt,i)=>{
+      sb(0.36,0.30,0.34, mt, -0.66+i*0.44, 0.95, -0.5);
+      sb(0.44,0.20,0.40, mt, -0.6+i*0.5, 0.20, 0.55);
+    });
+    if(tall) tall(S, sb);
+    addBox(sx,sz,2.9,2.5);
+  }
+  // row 1 (west): FEATHERS — the most valuable trade in the market
+  [-13.5,-9.5,-5.5].forEach((sz,i)=> stall(-13.5, sz, cottonBlu, [featherA,featherB,featherC], (S,sb)=>{
+    // feather bundles standing in jars, and a finished fan
+    [[-0.8,0.7],[0.0,0.85],[0.8,0.7]].forEach(([fx,fz],k)=>{
+      sb(0.26,0.36,0.26, clayMat, fx,0.31,fz);
+      for(let j=0;j<5;j++){
+        const f=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.62,0.05), [featherA,featherB,featherC][(j+k)%3]);
+        f.position.set(fx-0.1+j*0.05, 0.76, fz); f.rotation.z=(j-2)*0.13; S.add(f);
+      }
+    });
+  }));
+  // row 2: JADE, GOLD AND OBSIDIAN — the luxury row, with a lamp so it glitters
+  [-13.5,-9.5,-5.5].forEach((sz,i)=> stall(-6.5, sz, cottonRed, [jadeMat,goldMat,obsid], (S,sb)=>{
+    for(let j=0;j<6;j++) sb(0.16,0.10,0.16, j%2?jadeMat:goldMat, -0.7+j*0.28, 0.85, -0.16);
+    // obsidian blades stood on edge in a rack
+    for(let j=0;j<5;j++){ const b2=sb(0.05,0.40,0.14, obsid, -0.5+j*0.25, 1.00, -0.85); b2.rotation.z=0.06; }
+    sb(1.3,0.06,0.5, timberMat, 0,0.80,-0.85);
+  }));
+  // row 3 (east of centre): CLOTH — bolts of dyed cotton, hung to be seen
+  [-13.5,-9.5,-5.5].forEach((sz,i)=> stall(6.5, sz, cottonOch, [cottonRed,cottonBlu,cottonOch], (S,sb)=>{
+    sb(2.3,0.09,0.09, timberPa, 0, 2.00, -1.02);            // the display rail
+    for(let j=0;j<4;j++) sb(0.5,1.15,0.1, [cottonRed,cottonBlu,cottonOch,jadeMat][j], -0.85+j*0.56, 1.44, -1.02);
+    for(let j=0;j<3;j++) sb(0.9,0.16,0.7, [cottonBlu,cottonOch,cottonRed][j], 0.55, 0.88+j*0.17, 0.4);
+  }));
+  // row 4 (east): FOOD — maize, chili, cacao, salt; the busiest and the plainest
+  [-13.5,-9.5,-5.5].forEach((sz,i)=> stall(13.5, sz, thatchMat, [maizeMat,chiliMat,caoMat], (S,sb)=>{
+    [[-0.9,0.6],[-0.2,0.75],[0.6,0.6]].forEach(([bx,bz],k)=>{
+      sb(0.62,0.34,0.58, matMat, bx,0.26,bz);                    // the basket
+      sb(0.5,0.22,0.46, [maizeMat,chiliMat,saltMat][k], bx,0.52,bz);   // heaped over its rim
+    });
+    for(let j=0;j<4;j++) sb(0.12,0.46,0.12, maizeMat, -0.5+j*0.3, 1.02, -0.9);   // hanging maize
+  }));
+  // the south half of each row, mirrored across the cross aisle
+  [[-13.5,cottonBlu,[featherB,featherC,featherA]],[-6.5,cottonRed,[goldMat,obsid,jadeMat]],
+   [6.5,cottonOch,[cottonBlu,cottonOch,cottonRed]],[13.5,thatchMat,[chiliMat,caoMat,maizeMat]]]
+   .forEach(([sx,aw,gd])=>{ [2.5,6.5].forEach(sz=> stall(sx, sz, aw, gd)); });
+
+  // ================= THE CANAL — east =================
+  // Tlatelolco's market was fed by water: canoes came in loaded and tied up at the bank. This is the one
+  // edge of the square that is not a wall, and it is where the map gets its movement.
+  (function canal(){
+    const CX = HALF-4.0;
+    lb(6.0, 0.60, HALF*2-6, tezDark, CX+1.4, -0.33, 4);          // the cut, below the ground's own base
+    const w=new THREE.Mesh(new THREE.BoxGeometry(5.4,0.34,HALF*2-6.6), waterMat);
+    w.position.set(CX+1.4, -0.12, 4); w.receiveShadow=true; scene.add(w);
+    // the quay edge, stepped down to the water
+    lb(1.3,0.52,HALF*2-6, tezontle, CX-1.4, 0.16, 4);   // likewise
+    lb(0.9,0.30,HALF*2-6.8, plasterDk, CX-0.7, 0.11, 4);   // shorter and bedded, clear of the quay's ends
+    addBox(CX-1.4, 4, 1.3, HALF*2-6);
+    // mooring posts
+    for(let i=0;i<5;i++) lcy(0.13,0.15,1.1,6, timberPa, CX-1.2, 0.60, -5+i*5.2);   // clear of the quay's base
+    // canoes tied along the bank, each with its cargo
+    [[-4.5,0.0],[1.5,0.10],[7.5,-0.08],[13.0,0.05]].forEach(([cz,rot],i)=>{
+      const K=new THREE.Group(); K.position.set(CX+1.6, -0.02, cz); K.rotation.y=rot; scene.add(K);
+      const kb=(w2,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w2,h,d),mat);
+        m.position.set(x,y,z); m.castShadow=true; K.add(m); return m; };
+      kb(1.15,0.36,4.6, timberMat, 0,0.18,0);
+      kb(0.95,0.16,4.2, timberPa,  0,0.40,0);                     // the hollowed inside
+      [-1,1].forEach(sd=> kb(0.9,0.42,0.9, timberMat, 0,0.24,sd*2.35));   // the blunt ends
+      const cargo=[maizeMat,cottonRed,clayMat,caoMat][i%4];
+      for(let j=0;j<3;j++) kb(0.62,0.30,0.6, cargo, 0, 0.56, -1.0+j*1.0);
+      kb(0.10,0.10,2.1, timberPa, 0.42,0.62,0.6);                 // the paddle laid across
+    });
+    // bales landed on the bank, waiting to be carried in
+    [[-7.0],[ -1.0],[5.0],[11.0]].forEach(([cz],i)=>{
+      for(let j=0;j<2;j++) lb(1.0-j*0.15,0.26,0.86-j*0.1, j%2?matMat:[maizeMat,caoMat,cottonOch,clayMat][i%4],
+                              CX-2.9, 0.14+j*0.25, cz);
+      addBox(CX-2.9, cz, 1.1, 0.95);
+    });
+  })();
+
+  // ================= THE SOUTH GATE, AND THE TRAVEL BOOTH =================
+  // the gate you walk in through, off the causeway
+  [-4.4,4.4].forEach(gx=>{
+    lb(2.0,4.4,2.0, tezontle, gx,2.2,HALF-1.5);
+    lb(2.4,0.42,2.4, tezDark,  gx,4.55,HALF-1.5);
+    lco(1.5,1.5,4, plaster,    gx,5.45,HALF-1.5);
+    for(let i=0;i<3;i++) lb(2.1,0.22,2.1, i%2?cottonRed:jadeMat, gx, 1.0+i*1.1, HALF-1.5);
+    addBox(gx,HALF-1.5,2.2,2.2);
   });
-  lb(GATE_HALF*2-0.3,0.14,0.14, cottonRed, 0,3.55,HALF);   // the strung banner itself, just under the caps
-
-  // ---- twelve goods stalls around the inside of the wall, no two selling quite the same thing ----
-  // Collision on every one: marketStall() in the Cairo bazaar registers an addBox for exactly this reason
-  // (a "solid stall you can't walk into" is the expectation this codebase already sets), and these didn't
-  // — a real gap, not a style choice, since nothing else here treats a stall as walk-through scenery.
-  const STALLS = [
-    {x:-12,z:-12, roof:thatchMat,  goods:[maizeMat, chiliMat]},
-    {x: 12,z:-12, roof:cottonOch,  goods:[clayMat, clayMat]},
-    {x:-12,z:  0, roof:thatchMat,  goods:[caoMat, saltMat]},
-    {x: 12,z:  0, roof:cottonRed,  goods:[featherA, featherB]},
-    {x: -6,z:-13, roof:thatchMat,  goods:[cottonRed, cottonOch]},
-    {x:  6,z:-13, roof:thatchMat,  goods:[jadeMat, clayMat]},
-    {x:-12,z: 11, roof:cottonOch,  goods:[maizeMat, caoMat]},
-    {x: 12,z: 11, roof:thatchMat,  goods:[saltMat, chiliMat]},
-    {x: -6,z:  0, roof:cottonRed,  goods:[jadeMat, featherA]},
-    {x:  6,z:  0, roof:thatchMat,  goods:[clayMat, maizeMat]},
-    {x: -6,z: 11, roof:thatchMat,  goods:[chiliMat, cottonOch]},
-    {x:  6,z: 11, roof:cottonOch,  goods:[featherB, caoMat]},
-  ];
-  STALLS.forEach(({x:sx,z:sz,roof,goods})=>{
-    [[-0.9,-0.9],[0.9,-0.9],[-0.9,0.9],[0.9,0.9]].forEach(([px,pz])=>
-      lcy(0.09,0.10,2.3,6, timberMat, sx+px,1.15,sz+pz));
-    lb(2.3,0.16,2.3, roof, sx,2.35,sz);
-    lb(1.5,0.62,1.1, timberMat, sx,0.55,sz);           // table
-    for(let g=0; g<4; g++)
-      lb(0.34,0.30,0.34, goods[g%goods.length], sx-0.5+g*0.34, 0.95, sz);
-    // a plume or two standing up out of one basket per stall reads as market clutter rather than a
-    // second identical box, and gives the feather/pottery stalls something their neighbours don't have
-    lco(0.10,0.42,6, goods[0], sx-0.5, 1.25, sz);
-    // a loose second pile on the ground behind the table, not just goods on top of it. Centred in x (the
-    // posts sit at sx±0.9, so this stays clear of them) and past the table's own z±0.55 footprint, the
-    // same clearance discipline the table itself already keeps from the posts.
-    lb(0.5,0.22,0.5, goods[goods.length-1], sx, 0.11, sz-0.85);
-    addBox(sx, sz, 2.4, 2.4);
+  lb(7.2,0.5,1.0, tezDark, 0,4.5,HALF-1.5);
+  for(let i=0;i<4;i++) lb(0.9,1.2,0.14, i%2?cottonOch:cottonBlu, -2.4+i*1.6, 3.72, HALF-1.6);  // laps the lintel
+  // the low wall closing the rest of the south side
+  [[-13.5,11],[13.5,11]].forEach(([wx,ww])=>{
+    lb(ww,1.56,0.8, tezontle, wx,0.72,HALF-1.5);
+    lb(ww+0.3,0.26,1.0, tezDark, wx,1.62,HALF-1.5);
+    addBox(wx,HALF-1.5,ww,0.8);
   });
 
-  // bunting strung between two neighbouring stalls' nearest posts — colour and movement cues, the same
-  // idea as the gate's rope banner. (-12,0)'s right-side post sits at x=-11.1; (-6,0)'s left-side post at
-  // x=-6.9 — a real 4.2-unit gap between actual posts, not a guessed span between stall centres.
-  lb(4.2,0.10,0.10, cottonOch, -9,2.0,-0.9);
-
-  // two shade trees, off the direct paths, so the plaza reads as lived-in rather than freshly swept
-  [[-9,4],[10,-4]].forEach(([tx,tz])=>{
-    lcy(0.22,0.28,2.6,7, timberMat, tx,1.3,tz);
-    const leaves=new THREE.Mesh(new THREE.SphereGeometry(1.7,8,6), leafMat);
-    leaves.position.set(tx,3.3,tz); leaves.castShadow=true; scene.add(leaves);
-  });
-
-  // ---- the market's own travel booth: tezontle stone and jade/turquoise, not Cairo's brass and lapis ----
+  // ---- the travel booth: a merchant's stall under its own canopy, turquoise and gold ----
   function marketBooth(x,z,rot){
     const B=new THREE.Group(); B.position.set(x,0,z); B.rotation.y=rot||0; scene.add(B);
     const bb=(w,h,d,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(px,py,pz); m.castShadow=true; m.receiveShadow=true; B.add(m); return m; };
     const bcy=(rt,rb,h,seg,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat); m.position.set(px,py,pz); m.castShadow=true; B.add(m); return m; };
-    bb(4.2,0.28,3.2, tezontle, 0,0.06,0);                        // stone dais
-    bb(4.4,0.20,3.4, plaster, 0,0.00,0);                         // its kerb
-    [[-1.55,-1.15],[1.55,-1.15],[-1.55,1.15],[1.55,1.15]].forEach(([px,pz])=>
-      bcy(0.11,0.13,3.6,8, timberMat, px,1.74,pz));              // timber posts, not brass
-    bb(3.6,0.22,2.65, jadeMat, 0,3.35,0);                        // jade/turquoise awning — the one in the market
-    bb(3.7,0.09,2.75, goldMat, 0,3.21,0);                        // gilt rim under it
-    bb(2.9,0.70,0.18, timberMat, 0,3.78,-1.05);                  // destination board
-    for(let i=0;i<4;i++)
-      bb(0.44,0.36,0.05, i%2?jadeMat:goldMat, -1.0+i*0.53, 3.78, -1.14);   // route plaques
-    bb(2.6,0.85,1.85, timberMat, 0,0.415,0);                     // counter
-    bb(2.72,0.12,1.95, plaster, 0,0.86,0);                       // counter lip
-    // a carved jade orb stands in for Cairo's brass globe — same "this is the travel stall" cue
-    const orb=new THREE.Mesh(new THREE.SphereGeometry(0.38,14,10), jadeMat); orb.position.set(-0.85,1.30,0.02); B.add(orb);
-    bb(0.44,0.16,0.44, timberMat, -0.85,0.90,0.02);              // orb stand
-    // amatl-bark ticket rolls, heaped on the counter the way Cairo's paper rolls are
-    for(let i=0;i<5;i++){ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.10,0.40,8), voxMat(0xd8c8a0,{noise:8}));
-      r.position.set(0.4+(i%3)*0.30, 0.94+Math.floor(i/3)*0.22, -0.25+(i%3)*0.26); r.rotation.z=Math.PI/2; B.add(r); }
-    const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.85,12.4,12,1,true),
-      new THREE.MeshBasicMaterial({color:0x4fd8b8, transparent:true, opacity:0.17, side:THREE.DoubleSide, depthWrite:false, fog:false}));
-    beam.position.set(0,6.4,0); B.add(beam);
-    const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(0.70),
+    bb(4.6,0.30,3.6, tezontle, 0,0.07,0);                        // its own dais
+    bb(4.9,0.22,3.9, tezDark,  0,-0.05,0);   // kerb clear of the floor overlay's top plane
+    bb(4.2,0.20,3.2, matMat,   0,0.26,0);
+    [[-1.75,-1.3],[1.75,-1.3],[-1.75,1.3],[1.75,1.3]].forEach(([px,pz])=>
+      bcy(0.12,0.14,3.7,8, timberPa, px,1.92,pz));
+    bb(4.0,0.24,2.9, jadeMat,  0,3.55,0);                        // turquoise canopy
+    bb(4.15,0.10,3.05, goldMat, 0,3.40,0);
+    for(let i=0;i<5;i++) bb(0.5,0.42,0.06, i%2?cottonRed:goldMat, -1.5+i*0.75, 3.24, 1.50);
+    // the destination board on the back
+    bb(3.1,0.80,0.18, timberMat, 0,2.60,-1.25);
+    for(let i=0;i<4;i++) bb(0.48,0.42,0.05, i%2?jadeMat:goldMat, -1.1+i*0.58, 2.60, -1.36);
+    bb(3.25,0.16,0.24, goldMat, 0,3.06,-1.25);
+    bb(2.9,0.90,1.9, timberMat, 0,0.73,0.1);                     // the counter
+    bb(3.05,0.14,2.05, timberPa, 0,1.23,0.1);
+    // a jade orb on a stand — the cue that this stall sells passage, not goods
+    const orb=new THREE.Mesh(new THREE.SphereGeometry(0.40,14,10), jadeMat);
+    orb.position.set(-0.95,1.66,0.05); B.add(orb);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(0.46,0.05,6,16), goldMat);
+    ring.position.set(-0.95,1.66,0.05); ring.rotation.y=0.5; B.add(ring);
+    bb(0.48,0.20,0.48, tezDark, -0.95,1.36,0.05);
+    // amatl-bark scrolls heaped on the counter
+    for(let i=0;i<5;i++){ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.10,0.42,8), voxMat(0xd8c8a0,{noise:8}));
+      r.position.set(0.5+(i%3)*0.32, 1.38+Math.floor(i/3)*0.22, -0.2+(i%3)*0.28); r.rotation.z=Math.PI/2; B.add(r); }
+    bb(0.80,0.16,0.60, cottonBlu, 1.35,1.38,0.55);
+    // the beacon: a shaft of turquoise light standing on the dais
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.50,0.95,12.8,12,1,true),
+      new THREE.MeshBasicMaterial({color:0x4fd8b8, transparent:true, opacity:0.16, side:THREE.DoubleSide, depthWrite:false, fog:false}));
+    beam.position.set(0,6.6,0); B.add(beam);
+    const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(0.76),
       new THREE.MeshBasicMaterial({color:0x6ce8c8, fog:false}));
-    crystal.position.set(0,11.8,0); B.add(crystal);
-    const beaconLight=new THREE.PointLight(0x6ce8c8,0.9,13); beaconLight.position.set(0,11.0,0); B.add(beaconLight);
+    crystal.position.set(0,12.2,0); B.add(crystal);
+    const bl=new THREE.PointLight(0x6ce8c8,0.95,15); bl.position.set(0,11.3,0); B.add(bl);
     AZTEC_MARKET_BOOTH_BEACON = crystal;
-    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=4.2, d=3.2;
+    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=4.9, d=3.9;
     addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
     AZTEC_MARKET_BOOTH_POS.x=x; AZTEC_MARKET_BOOTH_POS.z=z;
   }
-  marketBooth(0, -5, 0);   // faces +z, toward the spawn point below
+  // (-8.5,17.5) put the west gate pillar squarely on the line you walk in on. Pulled a step deeper
+  // into the square so the approach from the gate is open.
+  marketBooth(-8.5, 16.0, 0);   // beside the gate, counter facing the way you walk in
 
-  // ground slab thick/wide enough to clear the "nothing solid under the map" sweep, same margin as
-  // every other hub/leg ground plane in this file
+  // ================= THINGS THAT MAKE IT FEEL OCCUPIED =================
+  // braziers down the centre aisle, the market's warm light
+  [[0,-16],[0,-8],[0,0],[0,8],[0,15]].forEach(([bx,bz])=>{
+    lcy(0.56,0.66,0.70,9, tezDark, bx,0.31,bz);   // bedded 0.04 into the floor
+    lcy(0.62,0.62,0.14,9, goldMat, bx,0.70,bz);
+    for(let i=0;i<6;i++){ const a=i/6*Math.PI*2;
+      lb(0.16,0.34,0.16, tezontle, bx+Math.cos(a)*0.52, 0.84, bz+Math.sin(a)*0.52); }
+    const f=new THREE.Mesh(new THREE.ConeGeometry(0.40,1.0,8),
+      new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false}));
+    f.position.set(bx,1.16,bz); scene.add(f);
+    const L=new THREE.PointLight(0xffa93a,0.95,13); L.position.set(bx,1.6,bz); scene.add(L);
+    addBox(bx,bz,1.3,1.3);
+  });
+  // banner poles along the aisles, in the market's colours
+  // (-10,15) now stands inside the travel booth's canopy; moved along the south front, clear of it
+  [[-17,-12],[-17,4],[17,-12],[-15,18],[10,15]].forEach(([px,pz],i)=>{
+    lcy(0.10,0.12,4.4,6, timberPa, px,2.31,pz);   // clear of the arcade step it stands beside
+    lb(0.12,2.0,0.9, [cottonRed,jadeMat,cottonOch,cottonBlu,cottonRed][i], px+0.1,3.2,pz);
+    lco(0.22,0.46,6, goldMat, px,4.6,pz);
+  });
+  // trees in the corners, for shade and to break the stone up
+  // (-18.5,-17.5) stood INSIDE the north arcade's own footprint — a tree growing up through the
+  // colonnade. The arcades occupy all three of the other edges, so the third tree goes by the gate.
+  [[-18.5,17],[18.5,17],[-14,18]].forEach(([tx,tz])=>{
+    lcy(0.30,0.40,2.9,8, timberMat, tx,1.45,tz);
+    const c1=new THREE.Mesh(new THREE.SphereGeometry(2.1,9,7), leafMat);
+    c1.scale.set(1,0.72,1); c1.position.set(tx,3.5,tz); c1.castShadow=true; scene.add(c1);
+    const c2=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,6), leafMat);
+    c2.scale.set(1,0.72,1); c2.position.set(tx+0.8,4.3,tz-0.5); c2.castShadow=true; scene.add(c2);
+    addBox(tx,tz,0.9,0.9);
+  });
+  // heaps of swept refuse and stacked empty mats at the edges — a market that has been TRADING in
+  [[-19.5,8],[19.5,-16],[-19.5,-4]].forEach(([mx,mz],i)=>{
+    for(let j=0;j<4;j++) lb(1.5-j*0.2,0.14,1.2-j*0.15, matMat, mx, 0.13+j*0.15, mz);
+    addBox(mx,mz,1.6,1.3);
+  });
 })();
 const aztecMarketOverworld = new THREE.Group();
 scene.children.slice().forEach(o=>{
@@ -8462,7 +8627,7 @@ function enterAztecMarketWorld(banner){
   sky.visible = true;
   activeColliders = aztecMarketColliders;
   activeHeightZones = heightZonesAztecMarket;
-  playClamp = 15;   // the plaza is 32 across with a wall at ±16; clamp just inside it
+  playClamp = 21;   // the tianquiztli is 44 across; clamp just inside its edge
   // Warm midday market light — tezontle red and jade both need to read clearly, so this stays closer to
   // Cairo's warm bazaar tone than Tenochtitlan's cool high-altitude lake palette.
   scene.background.set(0x8fd0e8); scene.fog.color.set(0xe0c9a0); scene.fog.near=20; scene.fog.far=95;
@@ -8470,11 +8635,10 @@ function enterAztecMarketWorld(banner){
   skyTint(0xffe6b8);
   hemi.intensity=0.74; hemi.color.set(0xffe4b0); hemi.groundColor.set(0x5a4a2c);
   sun.intensity=1.0; fill.intensity=0.22; fill.color.set(0xffdca0);
-  // Just inside the south gate, facing the booth across the whole plaza — the arrival reads as walking
-  // in from Tenochtitlan, not appearing already halfway across. yaw=0 is the -z heading everywhere else
-  // in this file (Cairo's and Tenochtitlan's own spawns both use it to face their own booth/boss the same
-  // way), and the booth sits far down at z=-5 from this z=13 spawn, so this needs the same yaw=0.
-  camera.position.set(0,1.7,13); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  // On the causeway just outside the south gate, looking north up the length of the market: the booth's
+  // stall first, then the four aisles, the braziers down the centre and the judges' platform closing the
+  // view. yaw=0 is the -z heading everywhere else in this file, and everything worth seeing is at -z.
+  camera.position.set(0,1.7,20.5); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
