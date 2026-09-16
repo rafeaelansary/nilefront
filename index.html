@@ -7175,28 +7175,32 @@ scene.children.slice().forEach(o=>{
   mexicoOverworld.add(o);
 });
 
-// ============ TENOCHTITLAN (Aztec Mexico) — the Mexico trip's SECOND LEG ============
-// Reached from La Venta, not from the booth: killing the Jade-Heart Shaman carries the player straight
-// here. One country, one purchase, two maps — the same mid-arc swap Egypt already does three times.
+// ===================== TENOCHTITLAN — the sacred precinct =====================
+// The Mexica capital on its island in Lake Texcoco, rebuilt. The first version had all the right PARTS —
+// a twin pyramid, a ball court, a skull rack, canals — but they were laid out flat and low, so the city
+// you arrived in had no landmark and nothing to look up at. This one is built around the Templo Mayor as
+// a genuine monument: five receding tiers and a double stair climbing 13 units out of the plaza, visible
+// from every corner of the map and climbable to the shrines on its deck.
 //
-// The island is the map and the lake is the border. Every other world in this game ends in a wall, a
-// cliff or a soft pane; here the ground simply runs out at a quay and the water goes on to the horizon,
-// which is the one thing the crossing has to pay off. Three causeways break the quay (Tepeyac north,
-// Tlacopan west, Iztapalapa south) and run out over the water into the fog.
-//
-// Palette is deliberately the opposite of La Venta's: red tezontle and white lime plaster on blue water,
-// against that basin's green-on-green. Two Mexican maps in one trip have to be told apart at a glance.
+// It is also built to a rule, because the old one had 177 z-fighting pairs across 149 different places
+// and that shimmer was most of what made it look wrong: NO TWO STACKED SURFACES MAY SHARE A FACE PLANE.
+// Every tier is inset AND a different height from the one below; every painted band is shorter than the
+// wall it sits on and stands clearly proud of it; anything resting on the floor is bedded a little way
+// into it rather than balanced exactly on y=0.
 addTarget = aztecColliders;
 heightZoneTarget = heightZonesAztec;
 (function buildTenochtitlan(){
   const tezontle   = new THREE.MeshLambertMaterial({map:_finish(tezontleTex(),6)});
   const tezDark    = voxMat(0x5a2a20,{noise:16});
+  const tezLight   = voxMat(0x8f4436,{noise:14});
   const plaster    = voxMat(0xe4dcc4,{noise:10});
   const plasterDk  = voxMat(0xbfb49a,{noise:12});
   const basaltMat  = new THREE.MeshLambertMaterial({map:_finish(basaltTex(),3)});
   const basaltDark = voxMat(0x26262a,{noise:12});
-  const shrineRed  = voxMat(0xb23a2c,{noise:12});    // Huitzilopochtli's house, on the south half of the deck
+  const shrineRed  = voxMat(0xb23a2c,{noise:12});    // Huitzilopochtli's house, on the SOUTH half of the deck
   const shrineBlue = voxMat(0x2f79a8,{noise:12});    // Tlaloc's, on the north — the rain god took the wet side
+  const bandBlue   = voxMat(0x2b6fa0,{noise:10});
+  const bandWhite  = voxMat(0xf0ead8,{noise:8});
   const ochre      = voxMat(0xc89440,{noise:14});
   const gold       = voxMat(0xd8a838,{noise:10});
   const jadeMat    = voxMat(0x3f8f6a,{noise:12});
@@ -7207,431 +7211,330 @@ heightZoneTarget = heightZonesAztec;
   const cropMat    = voxMat(0x6f9c3e,{noise:16});
   const maizeMat   = voxMat(0xb0a044,{noise:14});
   const thatchMat  = voxMat(0x9a8348,{noise:18});
+  const clothRed   = voxMat(0xa8283c,{noise:8});
+  const clothBlue  = voxMat(0x2f6f9c,{noise:10});
 
   const lb=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
   const lcy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
     m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  const lco=(r,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; scene.add(m); return m; };
 
-  // ---- the island, and the lake it sits in ----
-  // The island slab is 58 across, which is exactly the +/-29 the player is clamped to: the rim of the
-  // ground IS the edge of the world. It is kept thin (bottom at -0.5) so it does not read as buried
-  // geometry to the "nothing solid under the map" sweep — La Venta's slab escapes that check only by
-  // being wider than the window the check looks through, which is luck rather than design.
+  // ================= THE ISLAND AND THE LAKE =================
+  const HALF = 29;
   const groundMat = new THREE.MeshLambertMaterial({map:_finish(claySurfaceTex(),40)});
-  const ground = new THREE.Mesh(new THREE.BoxGeometry(58,0.5,58), groundMat);
-  ground.position.set(0,-0.25,0); ground.receiveShadow=true; scene.add(ground);
+  lb(HALF*2, 0.5, HALF*2, groundMat, 0,-0.25,0);
   // Lake Texcoco. Huge on purpose: it has to still be water where the fog takes over, or the island reads
   // as floating on nothing. Its surface sits BELOW the island's, so the quay has a visible freeboard.
-  const lakeMat = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),90), transparent:true, opacity:0.92});
-  const lake = new THREE.Mesh(new THREE.BoxGeometry(300,0.5,300), lakeMat);
-  lake.position.set(0,-0.60,0); lake.receiveShadow=true; scene.add(lake);   // top face at -0.35
+  const lakeMat = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),90),
+    color:0x6f9fc0, transparent:true, opacity:0.94});
+  const lake = new THREE.Mesh(new THREE.BoxGeometry(320,0.5,320), lakeMat);
+  lake.position.set(0,-0.62,0); lake.receiveShadow=true; scene.add(lake);
 
-  // Ground overlays, stacked exactly as La Venta stacks them: 0.05 thick on a 0.06 step from 0.04, so
-  // every layer clears the one beneath and nothing is left to fight for pixels. polygonOffset biases
-  // depth; it does not separate geometry, and two overlays lying on each other are both biased against
-  // the ground and neither against the other.
-  const OVERLAY_H = 0.05, OVERLAY_STEP = 0.06, OVERLAY_BASE = 0.04;
-  const flat=(tex,repeat,x,z,w,d,layer,extra)=>{
-    const L = layer||0;
-    const o = Object.assign({map:_finish(tex,repeat), polygonOffset:true,
-                             polygonOffsetFactor:-(2+L*2), polygonOffsetUnits:-(2+L*2)}, extra||{});
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w,OVERLAY_H,d), new THREE.MeshLambertMaterial(o));
-    m.position.set(x, OVERLAY_BASE + L*OVERLAY_STEP, z); m.receiveShadow=true; scene.add(m); return m;
-  };
+  // ---- paving ----
+  // Three courts at three DIFFERENT heights, so no two of them ever share a face plane with each other or
+  // with the ground they sit on. This is the rule the old map broke everywhere.
+  lb(46,0.10,40, plaster,   0, 0.020, -4);     // precinct paving   base -0.030
+  lb(34,0.06,15, plasterDk, 0, 0.09,  19);     // the great plaza, south, where you arrive
+  lb(14,0.05,11, ochre,     0, 0.115, 19);     // its worn centre
 
-  // ---- paving: the sacred precinct round the temple, the great plaza south of it ----
-  flat(harbourFlagstoneTex(), 14, 0, -1.0, 30.0, 26.0, 0);    // precinct floor
-  flat(cobbleTex(),           16, 0, 18.5, 40.0, 17.0, 1);    // the great plaza, laid over it where they meet
-
-  // ================= THE TEMPLO MAYOR — twin pyramid, dead centre =================
-  // Two shrines on one platform is the whole point of the building: Tlaloc and Huitzilopochtli side by
-  // side, and TWO stairways up the south face to reach them, divided by a shared central balustrade.
-  // That double stair is what stops it reading as another La Venta pyramid.
-  //
-  // Height 8 and a stair run of 8*1.45, for the same reason La Venta's is 9: getTerrainHeight() ignores a
-  // ramp whose height is more than 1.5 from where the player currently is, and the climb is rate-capped,
-  // so anything steeper than ~0.69 locks the player out partway up and stops them dead at the wall.
-  const TM_TOP = 8.0;
-  const TM_TIERS = [
-    {w:22.0, d:17.0, h:2.2, y:0.0},
-    {w:18.6, d:14.2, h:2.0, y:2.2},
-    {w:15.2, d:11.4, h:1.9, y:4.2},
-    {w:11.8, d: 8.6, h:1.9, y:6.1},
-  ];
-  TM_TIERS.forEach((t,i)=>{
-    // -0.06 on the bottom tier: it stands on a ground slab whose top face IS y=0, and a base plane at
-    // exactly 0 would share that plane across the whole footprint.
-    const y0 = i===0 ? -0.06 : t.y;
-    const h  = i===0 ? t.h+0.06 : t.h;
-    lb(t.w, h, t.d, tezontle, 0, y0 + h/2, 0);
-    // Each tier is finished with a plastered talud band and a darker capping course, so the silhouette
-    // steps clearly instead of merging into one red mass at distance.
-    lb(t.w+0.22, 0.30, t.d+0.22, plaster,  0, t.y + t.h - 0.30, 0);
-    lb(t.w+0.36, 0.22, t.d+0.36, tezDark,  0, t.y + t.h - 0.04, 0);
-  });
-  // summit deck: plastered floor with a low parapet round the back and sides
-  lb(11.8, 0.26, 8.6, plaster, 0, TM_TOP - 0.05, 0);
-  // The parapets used to be built on the deck's own dimensions — same 11.8 width, same 8.6 depth, and a
-  // base sitting exactly on the deck's top face. That gave each one THREE coplanar planes with the deck
-  // (both ends in x, the back in z, and the seam in y) and they are the four dead-zero entries the
-  // coplanar check reports at (0, 8.3, -4). Inset slightly and sunk 0.03 into the deck instead, so every
-  // face has somewhere of its own to be and the join is an overlap rather than a shared plane.
-  // The north and side parapets also have to clear EACH OTHER where they meet at the corners, not just the
-  // deck — matching them to one another simply moved the coplanar pair from deck-vs-parapet to
-  // parapet-vs-parapet. The north run is deliberately a different height, depth and inset from the sides,
-  // so all three boxes overlap at the corners without any two faces landing within 0.006.
-  lb(11.0, 0.46, 0.46, plasterDk, 0, TM_TOP + 0.29, -4.05);                  // north parapet
-  [-1,1].forEach(sd=> lb(0.5, 0.42, 8.54, plasterDk, sd*5.6, TM_TOP + 0.26, 0));   // east/west parapets
-
-  // The collider is FOUR boxes with a notch cut for the twin stairway, never one slab over the footprint.
-  // A single box would block the building's own stair: the roof rule only switches a collider off once
-  // the terrain under it is within 0.4 of the roof, so the whole face below ~7.6 would stay solid and the
-  // player would stop dead partway up. The notch (x -5.7..5.7 south of the deck) is left uncovered, and
-  // everything standing inside it carries its own collider instead.
-  addBox(0,    -6.4, 22.0,  4.2, TM_TOP);    // north of the deck, full width
-  addBox(-8.35, 0.0,  5.3, 17.0, TM_TOP);    // west of the stair notch
-  addBox( 8.35, 0.0,  5.3, 17.0, TM_TOP);    // east of the stair notch
-  heightZoneTarget.push({type:'plateau', x1:-5.7, z1:-4.3, x2:5.7, z2:4.3, y:TM_TOP});
-
-  // ---- the twin stair, running SOUTH off the deck edge and out across the precinct ----
-  // Both flights start at the DECK edge (z=4.3), not the base edge, so each ramp zone runs continuously
-  // from the top to the ground. A gap between the zone and the deck strands the player at the wall with
-  // nothing to step up onto — the failure the Roman temple and the Pharos both taught.
-  const ST_Z0 = 4.3, ST_Z1 = 4.3 + TM_TOP*1.45, ST_N = 24;
-  const ST_DZ = (ST_Z1-ST_Z0)/ST_N;
-  // Across x the stair has to TILE: outer balustrade, flight, central balustrade, flight, outer
-  // balustrade, laid edge to edge with nothing left over. It did not. The flight width was written as
-  // 3.2 — the same number as the flight CENTRE — so each flight spanned only 1.6..4.8 and four slots ran
-  // the full length of the stair: 0.85 wide either side of the central balustrade, 0.10 outside each
-  // flight. They went all the way down, so you could see through the stair to the ground under it.
-  // Every width below is now DERIVED from the neighbouring edges rather than written independently, so
-  // the pieces cannot drift out of contact again.
-  const BAL_C = 1.5, BAL_O = 0.9;                   // central (a shared double) and outer balustrade widths
-  const ST_XOUT = 5.7;                              // the stair's outer edge — the pyramid collider's edge
-  const FL_X0 = BAL_C/2, FL_X1 = ST_XOUT - BAL_O;   // 0.75 .. 4.8: one flight's inner and outer edge
-  const FL_W  = FL_X1 - FL_X0, FL_C = (FL_X0 + FL_X1)/2;
-  const FLIGHT = [-FL_C, FL_C];                     // the two stairway centres
-  FLIGHT.forEach(fx=>{
-    for(let i=0;i<ST_N;i++){
-      const f = i/(ST_N-1);
-      const z = ST_Z1 - f*(ST_Z1-ST_Z0);
-      const y = f*TM_TOP;
-      const h = Math.max(0.18, y);
-      lb(FL_W, h, ST_DZ + 0.12, i%2 ? tezontle : tezDark, fx, h/2 - 0.05, z);
+  // ================= THE COATEPANTLI — the serpent wall round the precinct =================
+  // A low wall crowned with stone serpent heads. It is what turns the precinct from "the middle of the
+  // map" into an enclosure you step inside, and it frames the pyramid from the plaza.
+  function coatepantli(cx,cz,w,d,gapW){
+    const seg=(sx,sz,sw,sd)=>{
+      lb(sw,1.35,sd, tezontle, sx,0.620,sz);           // serpent wall     base -0.055
+      lb(sw-0.5,0.22,sd+0.16, tezDark, sx,1.40,sz);    // its cap, proud and shorter
+      lb(sw-1.2,0.14,sd+0.24, bandBlue, sx,1.16,sz);   // a painted band, shorter again
+      addBox(sx,sz,sw,sd);
+    };
+    const half=(w-gapW)/2;
+    seg(cx-(gapW/2+half/2), cz+d/2, half, 0.8);        // south face, either side of the gap you walk through
+    seg(cx+(gapW/2+half/2), cz+d/2, half, 0.8);
+    seg(cx, cz-d/2, w, 0.8);                           // north
+    seg(cx-w/2, cz, 0.8, d-0.8);                       // west
+    seg(cx+w/2, cz, 0.8, d-0.8);                       // east
+    // serpent heads along the south face, looking out over the plaza
+    for(let i=0;i<10;i++){
+      const sx=cx-w/2+1.6+i*((w-3.2)/9);
+      if(Math.abs(sx-cx)<gapW/2) continue;
+      lb(0.9,0.62,1.3, tezLight, sx, 1.82, cz+d/2+0.15);
+      lb(0.62,0.26,0.5, boneMat, sx, 1.70, cz+d/2+0.86);     // its open jaw
+      [-1,1].forEach(sd=> lb(0.16,0.16,0.14, basaltDark, sx+sd*0.24, 1.98, cz+d/2+0.74));  // eyes
     }
-  });
-  // Three balustrades: one outside each flight and the shared double one down the middle. They stand in
-  // the collider notch that makes the stair climbable, so each needs a collider of its own — without one
-  // the player walks straight into a balustrade, which reads as a height glitch and used to trip the
-  // stuck-recovery watchdog on La Venta's stair.
-  // Centres derived from the same edges the flights use: the outer pair sit flush against ST_XOUT, which
-  // also stops them poking 0.1 into the pyramid's own collider the way the old ±5.35 did.
-  [[-(ST_XOUT-BAL_O/2), BAL_O], [0, BAL_C], [ST_XOUT-BAL_O/2, BAL_O]].forEach(([bx,bw])=>{
-    for(let i=0;i<ST_N;i+=2){
-      const f=i/(ST_N-1), z=ST_Z1-f*(ST_Z1-ST_Z0), y=f*TM_TOP;
-      lb(bw, Math.max(0.55,y+0.55), ST_DZ+0.1, plasterDk, bx, Math.max(0.275,(y+0.55)/2)-0.05, z);
-      addBox(bx, z, bw, ST_DZ+0.1);
-    }
-    // the serpent head each balustrade terminates in, at the foot of the stair
-    const sy = 0.34;
-    lb(bw+0.34, 0.62, 1.5, tezDark,  bx, sy+0.31, ST_Z1+0.85);
-    lb(bw+0.16, 0.30, 0.6, plaster,  bx, sy+0.90, ST_Z1+1.20);      // the snout
-    [-1,1].forEach(sd=> lb(0.20,0.18,0.18, gold, bx+sd*(bw*0.28), sy+0.80, ST_Z1+1.44));   // eyes
-    for(let k=0;k<4;k++) lb(0.13,0.22,0.10, boneMat, bx-0.30+k*0.20, sy+0.62, ST_Z1+1.50); // fangs
-    // ST_Z1+1.25 / depth 1.7, not +1.0 / 2.2: at 2.2 the head's collider reached back to z=15.8 and lapped
-    // 0.39 into the bottom balustrade block's own collider, which ends at 16.19. Two solids fighting over
-    // the same ground at the foot of the stair is exactly where a player gets shoved sideways.
-    addBox(bx, ST_Z1+1.25, bw+0.34, 1.7);
-  });
-  // One ramp zone per flight, with the central balustrade's collider between them: you have to pick a
-  // side, which is what a double stairway is for.
-  // Same derived edges as the flight meshes, so the climbable strip is exactly the stair you can see —
-  // it used to be the old 1.6..4.8 flight, which is why widening the treads alone would not have been enough.
-  heightZoneTarget.push({type:'ramp', x1:-FL_X1, x2:-FL_X0, z1:ST_Z0, z2:ST_Z1, y1:TM_TOP, y2:0});
-  heightZoneTarget.push({type:'ramp', x1: FL_X0, x2: FL_X1, z1:ST_Z0, z2:ST_Z1, y1:TM_TOP, y2:0});
-
-  // ---- the two shrines on the deck ----
-  // Tlaloc north in blue and white, Huitzilopochtli south in red. Their colliders carry no roofY, so they
-  // are solid at every height — they sit inside the summit plateau, which no ground-level collider covers,
-  // and the only way anyone reaches that ground is by climbing the stair to it.
-  const shrine=(sx, col, trimA, trimB)=>{
-    lb(4.0, 0.26, 3.4, plaster, sx, TM_TOP+0.21, -0.5);           // its own low platform
-    lb(3.6, 2.30, 3.0, col,     sx, TM_TOP+1.49, -0.5);           // the house
-    lb(1.2, 1.70, 0.3, basaltDark, sx, TM_TOP+1.19, 0.86);        // the doorway, facing the stair
-    lb(3.9, 0.26, 3.3, plaster, sx, TM_TOP+2.77, -0.5);           // cornice
-    // the roof comb: the tall pierced crest that made these visible across the whole lake
-    lb(3.3, 1.25, 0.45, trimA,  sx, TM_TOP+3.52, -0.5);
-    // The comb's top is at TM_TOP+4.145. At a base of +4.42 these merlons bit only 0.025 into it, and the
-    // +0.16 stagger lifted every other one 0.135 CLEAR of it — half the crest was floating over the roof.
-    // Base dropped to +4.26 and the stagger to 0.14, so the low ones sink 0.185 in and the high ones 0.045.
-    for(let k=0;k<4;k++) lb(0.34, 0.60, 0.52, trimB, sx-1.20+k*0.80, TM_TOP+4.26+(k%2)*0.14, -0.5);
-    lb(3.5, 0.20, 0.60, plaster, sx, TM_TOP+3.00, -0.5);          // the comb's footing
-    addBox(sx, -0.5, 4.0, 3.4);
-  };
-  shrine(-3.05, shrineBlue, plaster,  shrineBlue);
-  shrine( 3.05, shrineRed,  plaster,  shrineRed);
-  // a sacrificial stone between the two doorways, which is where the boss makes his entrance
-  lcy(0.62,0.72,0.55,10, basaltMat, 0, TM_TOP+0.40, 1.55);
-  lb(1.5,0.12,1.5, jadeMat, 0, TM_TOP+0.74, 1.55);
-
-  // ================= THE QUAY, AND THE THREE CAUSEWAYS =================
-  // The island's rim. Waist-high so it stops you without closing the view: the lake past it is the whole
-  // reason this map looks different from the basin you just left.
-  const QUAY = 28.2, GATE = 3.6;
-  const wall=(cx,cz,w,d)=>{
-    lb(w, 1.10, d, tezontle,   cx, 0.52, cz);
-    lb(w+0.20, 0.18, d+0.20, plasterDk, cx, 1.13, cz);   // plastered capping, seated over the wall's top
-    addBox(cx, cz, w, d);
-  };
-  // North, west and south each break for a causeway; the east shore is unbroken, as it was.
-  // The side walls stop at +/-27.8 rather than running to the corner, so no two of these overlap — the
-  // collider audit treats any overlap over 0.02 as a fault, and a lapped corner is the easy way to get one.
-  [[-1,'z'],[1,'z']].forEach(()=>{});
-  const RUN = 29.0 - 0.0;
-  // north (z = -QUAY) and south (z = +QUAY), split either side of their gate
-  [-1, 1].forEach(sd=>{
-    const cz = sd*QUAY;
-    const halfLen = (RUN - GATE)/2;
-    [-1,1].forEach(sx=> wall(sx*(GATE + halfLen/1)/1*0 + sx*(GATE+halfLen)/1*0 + sx*((GATE+RUN)/2), cz, RUN-GATE, 0.8));
-  });
-  // west (x = -QUAY), split either side of its gate; east (x = +QUAY) unbroken
-  {
-    const halfLen = (RUN - GATE)/2;
-    [-1,1].forEach(sz=> wall(-QUAY, sz*((GATE+RUN)/2), 0.8, RUN-GATE));
-    wall(QUAY, 0, 0.8, 2*27.8);
   }
+  coatepantli(0,-4, 40, 34, 9);
 
-  // The causeways themselves: a paved road flush with the ground (so nothing has to be climbed), kerbed
-  // in stone, running out past the clamp and into the fog. Only the kerbs inside the play area get
-  // colliders; past +/-29 the player cannot reach them anyway.
-  const causeway=(axisX, sd)=>{
-    const OUT = 62;
-    for(let t=0;t<26;t++){
-      // 27.7, not 27.0: the tile is 1.4 deep and centred on `at`, so starting at 27.0 put its near edge at
-      // 26.3 — 0.7 INSIDE the great plaza, which ends at 27.0 and sits on the same overlay layer. Two
-      // co-planar surfaces over the full 7.2 width of the road, which is the streaked mess you walk onto.
-      // At 27.7 the first tile's near edge lands exactly on the plaza's far edge: they meet, they do not lap.
-      const at = sd*(27.7 + t*1.4);
-      if(Math.abs(at) > OUT) break;
-      const x = axisX ? at : 0, z = axisX ? 0 : at;
-      flat(harbourFlagstoneTex(), 2, x, z, axisX?1.4:GATE*2, axisX?GATE*2:1.4, 1);
-      [-1,1].forEach(k=>{
-        const kx = axisX ? at : k*GATE, kz = axisX ? k*GATE : at;
-        lb(axisX?1.4:0.5, 0.42, axisX?0.5:1.4, tezDark, kx, 0.18, kz);
-        if(Math.abs(at) < 28.6) addBox(kx, kz, axisX?1.4:0.5, axisX?0.5:1.4);
-      });
+  // ================= THE TEMPLO MAYOR =================
+  // Five receding tiers, a double stair up the south face, and the twin shrines on the deck. The old one
+  // topped out at 8; this reaches 13, which is what makes it read as a mountain built by hand rather than
+  // as a large step.
+  const TM_X=0, TM_Z=-9;
+  const TIERS=[[26,20,3.1],[22.2,16.8,2.7],[18.6,13.8,2.4],[15.2,11.0,2.2],[12.0,8.4,2.0]];
+  let ty=0;
+  TIERS.forEach(([w,d,h],i)=>{
+    lb(w, h, d, i%2?tezontle:tezLight, TM_X, ty+h/2, TM_Z);
+    // the talud-tablero band round each tier: shorter than the tier and standing proud of it, so it can
+    // never share a plane with the tier below or the one above
+    lb(w-1.1, 0.30, d+0.22, tezDark,  TM_X, ty+h-0.42, TM_Z);
+    lb(w-2.0, 0.18, d+0.30, bandWhite,TM_X, ty+h-0.80, TM_Z);
+    lb(w-2.6, 0.14, d+0.36, bandBlue, TM_X, ty+h-1.10, TM_Z);
+    ty += h;
+  });
+  const TM_TOP = ty;                                   // 12.4
+  lb(12.6, 0.32, 9.0, plaster, TM_X, TM_TOP+0.10, TM_Z);   // the summit deck's own paving, bedded in
+  addBox(TM_X, TM_Z, 26, 20, TM_TOP);                  // solid from below, walkable once you are up
+  heightZoneTarget.push({type:'plateau', x1:TM_X-5.9, z1:TM_Z-4.2, x2:TM_X+5.9, z2:TM_Z+4.2, y:TM_TOP});
+
+  // ---- the double stair, running SOUTH off the deck and down into the precinct ----
+  const ST_Z0 = TM_Z+4.2, ST_Z1 = TM_Z+13.8;           // from the deck edge out to the precinct floor
+  [-1,1].forEach(sd=>{
+    const cx = TM_X + sd*3.0;
+    // the flight itself: one wedge per tier so it reads as steps without 60 separate boxes
+    for(let i=0;i<16;i++){
+      const t=i/15, y=TM_TOP*(1-t);
+      lb(4.6, 0.34+i*0.02, 0.70, i%2?plaster:plasterDk, cx, y+0.17, ST_Z0+(ST_Z1-ST_Z0)*t);
     }
-  };
-  causeway(false, -1);   // Tepeyac, north
-  causeway(false,  1);   // Iztapalapa, south — the one the player lands on
-  causeway(true,  -1);   // Tlacopan, west
+    heightZoneTarget.push({type:'ramp', x1:cx-2.3, x2:cx+2.3, z1:ST_Z0, z2:ST_Z1, y1:TM_TOP, y2:0});
+  });
+  // ---- the balustrades: THREE of them, not four ----
+  // Drawn per-flight they were placed at cx +-2.75, which for flights at +-3.0 puts the two inner ones at
+  // -0.25 and +0.25 — 0.9-wide blocks 0.5 apart, overlapping each other at identical y and z on all
+  // sixteen steps. That is 64 coplanar pairs, and it was the largest remaining fault on the map. The two
+  // flights share one central balustrade, which is how a double stair is actually built.
+  [TM_X-5.75, TM_X, TM_X+5.75].forEach(bx=>{
+    for(let i=0;i<16;i++){
+      const t=i/15, y=TM_TOP*(1-t);
+      lb(0.9, 1.0+i*0.02, 0.74, tezDark, bx, y+0.5, ST_Z0+(ST_Z1-ST_Z0)*t);
+    }
+  });
+  // ---- the serpent heads at the stair foot: the Coatepec myth, and the map's best single object ----
+  [-1,1].forEach(sd=>{
+    const hx = TM_X + sd*5.9;
+    lb(2.6,1.5,3.6, tezLight, hx, 0.76, ST_Z1-0.6);             // the head block  base +0.010
+    lb(2.9,0.34,1.4, tezDark, hx, 1.62, ST_Z1-2.0);             // its brow
+    lb(1.9,0.62,1.5, boneMat, hx, 0.62, ST_Z1+1.3);             // the open lower jaw
+    lb(1.7,0.34,1.3, shrineRed, hx, 1.10, ST_Z1+1.25);          // the mouth
+    for(let i=0;i<5;i++){                                        // teeth
+      lb(0.22,0.34,0.22, bandWhite, hx-0.62+i*0.31, 1.02, ST_Z1+1.86);
+    }
+    [-1,1].forEach(e=> lb(0.5,0.5,0.4, boneMat, hx+e*0.75, 1.72, ST_Z1-0.2));
+    [-1,1].forEach(e=> lb(0.26,0.26,0.24, basaltDark, hx+e*0.75, 1.78, ST_Z1+0.06));
+    addBox(hx, ST_Z1, 2.8, 4.2);
+  });
 
-  // No raft on the southern causeway either. Clearing the city IS the way home — see onAllDead()'s trip
-  // branch, which sends the player straight to Cairo once Tenochtitlan's last wave falls. The causeway is
-  // left open and empty on purpose: it runs out into the fog, which is the crossing, not a boat.
+  // ---- the twin shrines on the deck ----
+  function shrine(sx, sz, body, roofCol){
+    lb(5.0,3.4,4.6, body, sx, TM_TOP+1.96, sz);                  // the house
+    lb(5.3,0.30,4.9, tezDark, sx, TM_TOP+3.81, sz);              // its cornice
+    lb(4.2,0.20,3.9, bandWhite, sx, TM_TOP+3.55, sz);            // a band under it
+    // the roof comb: the tall pierced crest that made these visible across the whole lake
+    lb(4.4,1.9,0.7, body, sx, TM_TOP+4.92, sz-0.1);
+    for(let i=0;i<5;i++) lb(0.34,0.9,0.84, roofCol, sx-1.6+i*0.8, TM_TOP+5.95, sz-0.1);
+    lb(4.7,0.26,0.9, gold, sx, TM_TOP+5.92, sz-0.1);
+    // the doorway, facing south down the stair
+    lb(1.8,2.3,0.34, basaltDark, sx, TM_TOP+1.40, sz+2.35);
+    [-1,1].forEach(e=> lb(0.4,2.5,0.42, bandWhite, sx+e*1.12, TM_TOP+1.50, sz+2.37));
+    lb(2.7,0.36,0.5, gold, sx, TM_TOP+2.75, sz+2.37);
+    addBox(sx, sz, 5.2, 4.8, TM_TOP+3.4);
+  }
+  shrine(TM_X-3.1, TM_Z-0.4, shrineRed,  ochre);      // Huitzilopochtli, south side
+  shrine(TM_X+3.1, TM_Z-0.4, shrineBlue, bandWhite);  // Tlaloc, north side
+  // the sacrificial stone between them, and two braziers on the deck
+  lcy(1.0,1.15,0.6,10, basaltMat, TM_X, TM_TOP+0.55, TM_Z+2.6);
+  lcy(0.85,0.85,0.16,10, basaltDark, TM_X, TM_TOP+0.90, TM_Z+2.6);
+  [-1,1].forEach(sd=>{
+    lcy(0.62,0.72,0.8,9, basaltMat, TM_X+sd*5.0, TM_TOP+0.66, TM_Z+2.9);
+    const f=new THREE.Mesh(new THREE.ConeGeometry(0.46,1.15,8),
+      new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false}));
+    f.position.set(TM_X+sd*5.0, TM_TOP+1.62, TM_Z+2.9); scene.add(f);
+    const L=new THREE.PointLight(0xffa93a,1.1,16); L.position.set(TM_X+sd*5.0, TM_TOP+2.0, TM_Z+2.9); scene.add(L);
+  });
 
-  // ================= THE BALL COURT — west flank =================
-  // Tlachtli: an I-shaped court between two battered walls with a stone ring set high in each. The walls
-  // are the cover on this side of the map, which is why the west spawn pool sits behind them.
-  (function ballCourt(cx,cz){
+  // ================= THE BALL COURT (tlachtli) — west =================
+  (function ballcourt(cx,cz){
+    lb(9.0,0.30,22, plasterDk, cx,-0.055,cz);          // ball alley       base -0.205
+    lb(6.4,0.06,20, ochre,     cx,0.12,cz);
     [-1,1].forEach(sd=>{
-      lb(1.6, 2.60, 13.0, plaster,  cx + sd*3.6, 1.24, cz);        // the playing wall
-      lb(1.9, 0.26, 13.3, tezDark,  cx + sd*3.6, 2.67, cz);        // its capping
-      lb(1.2, 1.00, 13.0, plasterDk,cx + sd*2.9, 0.44, cz);        // the sloping bench at its foot
-      addBox(cx + sd*3.6, cz, 1.6, 13.0);
-      // The bench's collider covers only the part of it standing PROUD of the wall (0.5 of its 1.2), not
-      // its whole footprint: the bench mesh deliberately laps into the wall's base, so a full-width
-      // collider double-covered 0.7 x 13.0 of ground the wall already owned — the single biggest collider
-      // overlap on the map, running the entire length of the court on both sides.
-      addBox(cx + sd*2.55, cz, 0.5, 13.0);
-      // The ring, set INTO the wall's face. At sd*2.18 it hung 0.45 clear of the wall with nothing behind
-      // it — a stone hoop floating in the air over the bench, which is what the float check was reporting
-      // at (-18.2,10) and (-13.8,10). sd*2.8 is the wall's inner face, so the torus straddles it.
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.62,0.17,7,14), basaltMat);
-      ring.position.set(cx + sd*2.8, 2.35, cz); ring.rotation.y = Math.PI/2; scene.add(ring);
-      // the end zones that make the court an I rather than a corridor
-      [-1,1].forEach(ez=> lb(5.4, 0.90, 2.0, plasterDk, cx + sd*2.6, 0.40, cz + ez*7.5));
+      lb(2.4,2.5,20, tezontle, cx+sd*5.7, 1.285, cz);            // side walls      base +0.035
+      lb(2.0,0.26,20.4, tezDark, cx+sd*5.7, 2.58, cz);
+      lb(1.4,0.16,19.0, bandWhite, cx+sd*5.75, 2.30, cz);
+      addBox(cx+sd*5.7, cz, 2.4, 20);
+      // the stone ring, set high in the wall — the thing that makes a ball court a ball court
+      const r=new THREE.Mesh(new THREE.TorusGeometry(0.85,0.26,8,16), basaltMat);
+      r.position.set(cx+sd*4.4, 3.1, cz); r.rotation.y=Math.PI/2; scene.add(r);
+      lb(1.0,1.0,0.5, basaltDark, cx+sd*4.9, 3.1, cz);
     });
-    flat(harbourFlagstoneTex(), 5, cx, cz, 4.6, 13.0, 2);          // the alley floor, over the precinct
-  })(-16.0, 10.0);
+    // the end zones, closing the I shape
+    [-1,1].forEach(sd=>{
+      lb(13.0,1.9,3.0, tezontle, cx, 0.96, cz+sd*11.5);
+      lb(13.4,0.24,3.3, tezDark, cx, 1.99, cz+sd*11.5);
+      addBox(cx, cz+sd*11.5, 13.0, 3.0);
+    });
+  })(-17.9,-6.3);   // nudged: at (-17.5,-6) its wall and end zone shared the pyramid's own planes
 
-  // ================= THE TZOMPANTLI — east flank =================
-  // The skull rack: rows of skulls threaded on horizontal poles between two uprights, on a low platform.
+  // ================= THE TZOMPANTLI — the skull rack, east =================
   (function tzompantli(cx,cz){
-    lb(9.0, 0.80, 4.4, tezontle,  cx, 0.34, cz);
-    lb(9.4, 0.22, 4.8, plasterDk, cx, 0.85, cz);
-    addBox(cx, cz, 9.4, 4.8);
-    [-1,1].forEach(sd=> lcy(0.22,0.26, 4.0, 8, barkMat, cx + sd*3.9, 2.94, cz));   // uprights
+    lb(10.0,1.2,4.4, tezontle, cx,0.495,cz);           // skull rack       base -0.105
+    lb(10.4,0.22,4.8, tezDark, cx,1.27,cz);
+    addBox(cx,cz,10.0,4.4);
+    // the frame, and four rows of skulls threaded on its poles
+    [-1,1].forEach(sd=> lcy(0.24,0.28,4.6,8, barkMat, cx+sd*4.2, 3.6, cz));
     for(let r=0;r<4;r++){
-      const ry = 1.34 + r*0.86;
-      lcy(0.11,0.11, 7.6, 6, barkMat, cx, ry, cz).rotation.z = Math.PI/2;          // the pole
-      for(let k=0;k<13;k++){
-        const n = Math.abs(Math.sin((r*7.1+k*3.3))*4375.7%1);
-        const sx = cx - 3.3 + k*0.55;
-        // Threaded ON the pole, which is what a tzompantli is and what the line above says it is. At
-        // ry+0.30 the skull's underside met the pole's topmost LINE — a cylinder tangent to a box, contact
-        // area zero — so every skull on the rack rested on nothing and read as a floating head. At ry+0.10
-        // the pole (radius 0.11) runs through the skull's lower third and the bone closes 0.02 under the
-        // pole's own underside, so it hangs off the rack instead of balancing on it.
-        // The jitter has to carry the FACE with it. `n` shifts each skull up to 0.05 forward or back, but
-        // the teeth and the eye sockets were pinned to cz+0.19 and cz+0.18 — so on every skull jittered
-        // backwards they were left hanging in the air in front of it, a mouth and two eyes floating clear
-        // of the head they belong to. They hang off `sz` now, like the skull.
-        const sz = cz + (n-0.5)*0.10;
-        lb(0.36,0.38,0.34, boneMat, sx, ry + 0.10, sz);                            // the skull
-        lb(0.26,0.10,0.06, basaltDark, sx, ry + 0.04, sz + 0.16);                  // its teeth
-        [-1,1].forEach(e=> lb(0.09,0.09,0.05, basaltDark, sx + e*0.09, ry + 0.18, sz + 0.15));  // sockets
+      lcy(0.13,0.13,8.6,7, barkMat, cx, 2.15+r*0.95, cz).rotation.z=Math.PI/2;
+      for(let i=0;i<11;i++){
+        const s=lb(0.46,0.5,0.44, boneMat, cx-3.9+i*0.78, 2.15+r*0.95, cz);
+        [-1,1].forEach(e=> lb(0.12,0.13,0.1, basaltDark, cx-3.9+i*0.78+e*0.11, 2.20+r*0.95, cz+0.24));
+        lb(0.2,0.1,0.1, basaltDark, cx-3.9+i*0.78, 2.02+r*0.95, cz+0.24);
       }
     }
-  })(16.0, 11.0);
+    lcy(0.2,0.2,9.0,8, barkMat, cx, 5.76, cz).rotation.z=Math.PI/2;
+  })(17.5,-11);
+
+  // ================= THE HOUSE OF THE EAGLE WARRIORS — east =================
+  (function eagleHouse(cx,cz){
+    lb(11.0,1.60,9.0, tezontle, cx,0.685,cz);          // eagle house      base -0.115
+    lb(11.4,0.24,9.4, tezDark, cx,1.68,cz);
+    addBox(cx,cz,11.0,9.0);
+    heightZoneTarget.push({type:'plateau', x1:cx-5.5, z1:cz-4.5, x2:cx+5.5, z2:cz+4.5, y:1.55});
+    heightZoneTarget.push({type:'ramp', x1:cx-1.5, x2:cx+1.5, z1:cz+4.5, z2:cz+8.2, y1:1.55, y2:0});
+    for(let i=0;i<8;i++) lb(3.1,0.22+i*0.012,0.48, plasterDk, cx, 1.55*(1-i/7)+0.11, cz+4.7+i*0.44);
+    // the hall itself, with square columns and a flat roof
+    lb(9.4,2.9,7.2, plaster, cx, 3.05, cz);
+    lb(9.8,0.3,7.6, tezDark, cx, 4.62, cz);
+    lb(8.2,0.18,6.2, bandBlue, cx, 4.36, cz);
+    lb(3.0,2.3,0.4, basaltDark, cx, 2.79, cz+3.65);              // the doorway
+    [-1,1].forEach(sd=> lcy(0.42,0.46,2.9,9, plasterDk, cx+sd*1.9, 2.90, cz+3.5));
+    // eagle-feather motifs painted along the front
+    for(let i=0;i<6;i++) lb(0.62,0.62,0.12, i%2?ochre:bandWhite, cx-2.5+i*1.0, 4.05, cz+3.68);
+  })(19,6);
 
   // ================= THE ROUND TEMPLE OF EHECATL — north =================
-  // Ehecatl's temples were round so the wind would not catch a corner. A cylinder among all these
-  // rectangles is the landmark that orients you on the north half of the island.
+  // Round, because the wind god's temple was round so the wind would not catch on its corners. It is the
+  // one non-rectangular building on the map and it reads instantly because of that.
   (function ehecatl(cx,cz){
-    lcy(4.6,5.0, 1.60, 14, tezontle,  cx, 0.74, cz);
-    lcy(4.9,4.9, 0.24, 14, plasterDk, cx, 1.66, cz);
-    lcy(3.4,3.7, 2.40, 14, plaster,   cx, 2.98, cz);
-    lcy(3.7,3.7, 0.26, 14, tezDark,   cx, 4.31, cz);
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(3.5, 2.6, 14), thatchMat);
-    cone.position.set(cx, 5.74, cz); cone.castShadow = true; scene.add(cone);
-    lb(1.4, 1.9, 0.4, basaltDark, cx, 2.86, cz + 3.62);     // the doorway, a serpent's open mouth
-    for(let k=0;k<5;k++) lb(0.20,0.26,0.12, boneMat, cx-0.52+k*0.26, 3.68, cz+3.74);
-    addBox(cx, cz, 10.0, 10.0);
-    // a short stair up to the door, with its own ramp zone — a stair with none is just a wall
-    for(let i=0;i<7;i++){
-      const y=(1-i/6)*1.55, h=Math.max(0.16,y);
-      lb(3.0, h, 0.62, tezDark, cx, h/2-0.05, cz + 5.2 + i*0.62);
+    lcy(6.2,6.8,2.2,16, tezontle, cx,1.06,cz);
+    lcy(6.5,6.5,0.26,16, tezDark, cx,2.28,cz);
+    lcy(5.0,5.2,1.9,16, tezLight, cx,3.38,cz);
+    lcy(5.3,5.3,0.22,16, tezDark, cx,4.42,cz);
+    addBox(cx,cz,12.4,12.4);
+    lcy(3.9,4.1,2.4,16, plaster, cx,5.73,cz);                     // the drum of the shrine
+    lcy(4.2,4.2,0.2,16, bandBlue, cx,6.99,cz);
+    lco(4.6,3.4,16, thatchMat, cx,8.6,cz);                        // the conical roof
+    lco(1.3,1.0,12, gold, cx,10.6,cz);
+    // the doorway shaped as a serpent's mouth, facing south
+    lb(2.4,2.4,0.5, basaltDark, cx,5.5,cz+4.05);
+    for(let i=0;i<6;i++) lb(0.3,0.42,0.3, boneMat, cx-1.0+i*0.4, 6.48, cz+4.18);
+    for(let i=0;i<6;i++) lb(0.3,0.42,0.3, boneMat, cx-1.0+i*0.4, 4.58, cz+4.18);
+    // its own stair, south
+    for(let i=0;i<9;i++) lb(4.3,0.26+i*0.012,0.5, plasterDk, cx, 4.3*(1-i/8)+0.13, cz+6.3+i*0.5);
+  })(-13,-22);
+
+  // ================= THE QUAY AND THE CAUSEWAYS =================
+  lb(34,0.62,3.0, basaltMat, 0, 0.155, 25.4);        // quay             base -0.155
+  lb(34.4,0.2,3.4, basaltDark, 0, 0.545, 25.4);   // laps the quay's top, which moved when it was bedded
+  addBox(0,25.4,34,3.0);
+  // three causeways running out over the water, which is what made this an island city
+  [[0,1,34],[-1,0,29],[1,0,29]].forEach(([dx,dz,from])=>{
+    for(let i=0;i<16;i++){
+      const x = dx*(from+i*2.4), z = dz*(from+i*2.4);
+      lb(dz?7.0:2.4, 0.5, dz?2.4:7.0, basaltMat, x, 0.10, z);
+      if(i%3===0){ lcy(0.2,0.24,1.4,6, barkMat, x-(dz?3.0:0), -0.47, z-(dz?0:3.0));
+                   lcy(0.2,0.24,1.4,6, barkMat, x+(dz?3.0:0), -0.47, z+(dz?0:3.0)); }
     }
-    heightZoneTarget.push({type:'ramp', x1:cx-1.4, x2:cx+1.4, z1:cz+5.0, z2:cz+9.4, y1:1.55, y2:0});
-    heightZoneTarget.push({type:'plateau', x1:cx-3.2, z1:cz-3.2, x2:cx+3.2, z2:cz+4.9, y:1.55});
-  })(0.0, -18.5);
+  });
 
   // ================= CANALS =================
-  // Flat and walkable, with no colliders, for the same reason La Venta's tar seeps are: the enemies here
-  // path by walking into things and sliding along them (moveActor -> resolveCollision), and a long
-  // wall-like collider is exactly what makes a chaser pile up against it rather than come at you. The
-  // bridges are the reading, not the rule — the cover on this map is the buildings, which are compact.
-  // Layers 1 and 2, not 0 and 1. A canal is cut THROUGH the paving, so it has to sit above it in the
-  // overlay stack — at layer 0 the mud bed shared its exact top face with the precinct floor (a 5.25 x 3.30
-  // overlap where the north-west canal crosses it) and the two fought for every pixel. Layers are the only
-  // thing that separates overlays here: polygonOffset biases each one against the GROUND, so two overlays
-  // lying on each other are both biased and neither is biased against the other.
-  const canal=(x,z,w,d)=>{
-    flat(bogMudTex(), 5, x, z, w+0.5, d+0.5, 1);
-    flat(waterRippleTex(), 6, x, z, w, d, 2, {transparent:true, opacity:0.86});
-  };
-  canal(-19.0, -7.0, 18.0, 2.8);        // the north-west canal, running in from the west quay
-  canal( 21.0, -16.0, 2.8, 20.0);       // and the north-east, running down from the north quay
-  const bridge=(x,z,axisX)=>{
-    for(let i=0;i<7;i++) lb(axisX?0.56:4.4, 0.16, axisX?4.4:0.56,
-                            plankMat, x + (axisX? -1.68+i*0.56 : 0), 0.30, z + (axisX? 0 : -1.68+i*0.56));
-    [-1,1].forEach(sd=>{
-      const hx = axisX ? x + sd*2.0 : x, hz = axisX ? z : z + sd*2.0;
-      lb(axisX?0.3:4.6, 0.5, axisX?4.6:0.3, barkMat, hx, 0.62, hz);
-    });
-  };
-  bridge(-19.0, -7.0, false);
-  bridge(21.0, -16.0, true);
+  // Cut through the quarters rather than round them, so the city reads as built ON water.
+  [[-24,8,3.4,26,0],[24,-2,3.4,22,0],[0,16,40,3.4,1]].forEach(([cx,cz,w,d,horiz])=>{
+    lb(w,0.62,d, basaltDark, cx,-0.31,cz);
+    const wm=new THREE.Mesh(new THREE.BoxGeometry(w-0.8,0.32,d-0.8), lakeMat);
+    wm.position.set(cx,-0.14,cz); wm.receiveShadow=true; scene.add(wm);
+    // the kerbs either side
+    if(horiz){ [-1,1].forEach(s=>{ lb(w,0.34,0.7, basaltMat, cx,0.040,cz+s*(d/2+0.35)); addBox(cx,cz+s*(d/2+0.35),w,0.7); }); }
+    else      { [-1,1].forEach(s=>{ lb(0.7,0.34,d, basaltMat, cx+s*(w/2+0.35),0.040,cz); addBox(cx+s*(w/2+0.35),cz,0.7,d); }); }   // canal kerb base -0.130
+  });
 
-  // ================= HOUSES AND PLATFORMS — the lived-in quarters =================
-  // Low flat-roofed adobe blocks in the two northern quarters. These are the map's real cover: compact,
-  // separately colliding, and nowhere near long enough for anything to get stuck sliding along.
-  const house=(x,z,w,d,h,rot)=>{
-    lb(w, h, d, plaster, x, h/2 - 0.04, z, rot);
-    lb(w+0.24, 0.22, d+0.24, plasterDk, x, h + 0.05, z, rot);     // the roof parapet
-    lb(w*0.24, h*0.62, 0.22, basaltDark, x, h*0.31, z + d/2 + 0.02, rot);   // a dark doorway
-    addBox(x, z, w + 0.24, d + 0.24);
-  };
-  [[-20.5,-15.5,5.0,4.2,2.4],[-13.5,-18.5,4.4,4.0,2.0],[-23.5,-21.0,4.6,3.8,2.2],
-   // -23.0, not -22.0: at -22 this house's collider reached x=-19.78 and clipped 0.62 x 0.92 into the ball
-   // court's west wall. Moved west rather than south, because south runs it into the house at (-24,-2.5).
-   [-12.0,-12.0,3.8,3.6,2.6],[-23.0,2.0,4.2,4.6,2.2],[-24.0,-2.5,3.6,3.4,1.9],
-   [ 13.0,-20.5,4.6,4.0,2.3],[ 24.0,-22.0,4.4,4.2,2.0],[ 14.5,-8.0,4.0,3.8,2.5],
-   [ 24.5,-6.0,4.2,4.4,2.2],[ 22.0, 20.0,4.6,4.0,2.4],[-21.5, 20.5,4.4,3.8,2.2]]
-    .forEach(([x,z,w,d,h])=> house(x,z,w,d,h,0));
+  // ================= HOUSES — the lived-in quarters =================
+  function house(hx,hz,w,d,tall){
+    lb(w,0.34,d, tezDark, hx,-0.010,hz);               // house platform   base -0.180
+    lb(w-0.6,tall,d-0.6, plaster, hx,0.31+tall/2,hz);
+    lb(w-0.2,0.24,d-0.2, tezontle, hx,0.31+tall+0.12,hz);         // the cornice
+    lb(w-1.4,0.14,d-1.0, ochre, hx,0.31+tall-0.22,hz);            // a painted band
+    lb(1.0,tall*0.7,0.28, basaltDark, hx,0.35+tall*0.35,hz+d/2-0.3);
+    lb(w-1.0,0.3,d-1.0, thatchMat, hx,0.31+tall+0.34,hz);
+    addBox(hx,hz,w,d);
+  }
+  [[26,-26,5.5,5.0,2.3],[-25.5,-25,5.0,5.5,2.6],[-21,18.4,6.0,5.0,2.4],[-13,20.4,5.5,4.6,2.2],
+   [13,20.4,5.5,4.6,2.5],[22,19.3,6.0,5.0,2.3],[25,-20,5.0,5.5,2.4],[9,-25,5.5,5.0,2.6],
+   [-6,-25.3,5.0,4.6,2.2],[-27,2,4.6,6.0,2.5]].forEach(([a,b,c,d2,e])=>house(a,b,c,d2,e));
 
-  // ---- braziers along the plaza, the map's warm light against all that blue ----
-  [[-9.5,19.0],[9.5,19.0],[-9.5,24.5],[9.5,24.5],[-13.0,-1.0],[13.0,-1.0]].forEach(([tx,tz])=>{
-    lcy(0.36,0.44, 1.10, 8, tezontle, tx, 0.50, tz);
-    const bowl = lcy(0.54,0.38,0.34,10, basaltDark, tx, 1.22, tz);
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.40,0.86,8),
+  // ================= CHINAMPAS — the floating gardens =================
+  for(let i=0;i<9;i++){
+    const gx = -26 + (i%3)*3.4, gz = 26 + Math.floor(i/3)*3.2;
+    lb(3.0,0.34,2.6, voxMat(0x6a5a3e,{noise:16}), gx,-0.10,gz);
+    lb(2.6,0.14,2.2, cropMat, gx,0.12,gz);
+    for(let j=0;j<5;j++) lb(0.16,0.7,0.16, maizeMat, gx-0.9+j*0.45, 0.50, gz);
+    [-1,1].forEach(s=> lcy(0.11,0.13,1.3,5, barkMat, gx+s*1.4, 0.25, gz));
+  }
+  for(let i=0;i<6;i++){
+    const gx = 22 + (i%2)*3.4, gz = 25 + Math.floor(i/2)*3.2;
+    lb(3.0,0.34,2.6, voxMat(0x6a5a3e,{noise:16}), gx,-0.10,gz);
+    lb(2.6,0.14,2.2, cropMat, gx,0.12,gz);
+    for(let j=0;j<5;j++) lb(0.16,0.7,0.16, maizeMat, gx-0.9+j*0.45, 0.50, gz);
+  }
+  // canoes out on the water
+  [[-20,31,0.3],[-12,33,-0.2],[7,32,0.15],[18,30,-0.35],[28,12,1.4],[-30,-6,1.5]].forEach(([cx,cz,rot])=>{
+    const K=new THREE.Group(); K.position.set(cx,-0.18,cz); K.rotation.y=rot; scene.add(K);
+    const kb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); m.castShadow=true; K.add(m); return m; };
+    kb(1.2,0.38,5.0, barkMat, 0,0.19,0);
+    kb(1.0,0.16,4.6, plankMat, 0,0.42,0);
+    [-1,1].forEach(sd=> kb(0.95,0.44,0.95, barkMat, 0,0.25,sd*2.55));
+    kb(0.6,0.34,0.6, cropMat, 0,0.60,-1.2);
+    kb(0.10,0.10,2.2, barkMat, 0.44,0.53,0.5);   // laps the deck rather than hovering 0.01 over it
+  });
+
+  // ================= BRAZIERS, BANNERS, TREES =================
+  [[-9,10],[9,10],[-9,-1],[9,-1],[0,20],[-15,3],[15,3]].forEach(([bx,bz])=>{
+    lcy(0.66,0.78,0.72,10, basaltMat, bx,0.280,bz);    // brazier          base -0.080
+    lcy(0.72,0.72,0.16,10, gold, bx,0.77,bz);
+    for(let i=0;i<6;i++){ const a=i/6*Math.PI*2;
+      lb(0.18,0.36,0.18, tezontle, bx+Math.cos(a)*0.62, 0.92, bz+Math.sin(a)*0.62); }
+    const f=new THREE.Mesh(new THREE.ConeGeometry(0.44,1.1,8),
       new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false}));
-    fl.position.set(tx,1.76,tz); scene.add(fl);
-    const L = new THREE.PointLight(0xffa040, 1.2, 12); L.position.set(tx,1.8,tz); scene.add(L);
-    addBox(tx,tz,1.0,1.0);
+    f.position.set(bx,1.28,bz); scene.add(f);
+    const L=new THREE.PointLight(0xffa93a,1.0,15); L.position.set(bx,1.7,bz); scene.add(L);
+    addBox(bx,bz,1.5,1.5);
   });
-
-  // ---- banner standards flanking the stair foot ----
-  [-7.0, 7.0].forEach(bx=>{
-    lcy(0.09,0.11, 5.0, 6, barkMat, bx, 2.44, ST_Z1 + 3.0);
-    const fabric = lb(0.10, 1.5, 1.2, ochre, bx + 0.12, 4.10, ST_Z1 + 3.0);
-    fabric.rotation.y = 0.12;
-    lb(0.12, 0.34, 1.3, shrineRed, bx + 0.13, 3.28, ST_Z1 + 3.0);
-    addBox(bx, ST_Z1 + 3.0, 0.5, 0.5);
+  [[-6.5,14],[6.5,14],[-20,-2],[20,-2]].forEach(([px,pz],i)=>{
+    lcy(0.13,0.16,5.4,7, barkMat, px,2.73,pz);
+    lb(0.14,2.4,1.1, [clothRed,clothBlue,ochre,jadeMat][i], px+0.12,3.9,pz);
+    lco(0.26,0.6,7, gold, px,5.7,pz);
   });
-
-  // ================= CHINAMPAS — the floating gardens, out on the water =================
-  // Past the quay, so they are scenery rather than terrain: no colliders, nothing to walk onto, and the
-  // player is clamped well short of them. They are what tells you the lake is farmed and not empty.
-  const chinampa=(x,z,w,d)=>{
-    lb(w, 0.34, d, voxMat(0x6a5a3a,{noise:16}), x, -0.20, z);      // the raised bed, just proud of the water
-    lb(w-0.5, 0.16, d-0.5, cropMat, x, 0.02, z);
-    for(let k=0;k<10;k++){
-      const n=Math.abs(Math.sin((x*3.1+z*7.7+k*2.3))*4375.7%1);
-      lb(0.16, 0.7+n*0.5, 0.16, maizeMat, x-w/2+0.6+((k*0.97)%(w-1.2)), 0.42+n*0.25, z-d/2+0.6+((k*1.73)%(d-1.2)));
-    }
-    [-1,1].forEach(sd=>{ for(let k=0;k<4;k++)
-      lcy(0.07,0.07,1.0,5, barkMat, x - w/2 + 0.3 + k*(w-0.6)/3, 0.12, z + sd*d/2); });   // willow stakes
-  };
-  for(let i=0;i<26;i++){
-    const n=Math.abs(Math.sin(i*12.9)*43758.5%1), m=Math.abs(Math.sin(i*7.7)*9371.3%1);
-    const a = i/26*Math.PI*2 + n*0.2;
-    const r = 33 + m*16;
-    const cx2 = Math.cos(a)*r, cz2 = Math.sin(a)*r;
-    if(Math.abs(cx2) < 31 && Math.abs(cz2) < 31) continue;          // never inside the play area
-    if(Math.abs(cx2) < 5.5 || Math.abs(cz2) < 5.5) continue;        // and never across a causeway
-    chinampa(cx2, cz2, 5.0 + n*2.5, 3.6 + m*2.0);
-  }
-
-  // ---- canoes on the water, a few of them under way ----
-  for(let i=0;i<14;i++){
-    const n=Math.abs(Math.sin(i*5.3)*4375.7%1), m=Math.abs(Math.sin(i*9.1)*9371.3%1);
-    const a = i/14*Math.PI*2 + n, r = 31.5 + m*24;
-    const cx2 = Math.cos(a)*r, cz2 = Math.sin(a)*r;
-    if(Math.abs(cx2) < 30.5 && Math.abs(cz2) < 30.5) continue;
-    const hull = lb(1.0, 0.34, 4.2, barkMat, cx2, -0.22, cz2, a);
-    hull.rotation.y = a;
-    lb(0.7, 0.12, 3.4, tezDark, cx2, -0.05, cz2, a).rotation.y = a;
-  }
+  [[-27,22],[27,22],[-27,-26],[27,-26],[-4,-27],[6,-27]].forEach(([tx,tz])=>{
+    lcy(0.28,0.38,3.0, 8, barkMat, tx,1.52,tz);
+    const c=new THREE.Mesh(new THREE.SphereGeometry(2.0,9,7), leafMat);
+    c.scale.set(1,0.74,1); c.position.set(tx,3.6,tz); c.castShadow=true; scene.add(c);
+    addBox(tx,tz,0.9,0.9);
+  });
 
   // ================= THE HORIZON =================
-  // Popocatepetl and Iztaccihuatl, snow-capped, south-east across the lake. The valley of Mexico is ringed
-  // by volcanoes and they are the single most recognisable thing about the view from this island — far
-  // more so than another band of haze hills.
-  const rockFar = voxMat(0x4e4a58,{noise:10}), snowFar = voxMat(0xe8eef4,{noise:6});
-  const volcano=(vx,vz,h,r)=>{
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(r, h, 10), rockFar);
-    cone.position.set(vx, h/2 - 6, vz); scene.add(cone);
-    // The cap has to be narrower than the CONE IS at the height its own base sits at, not than the cone's
-    // base: a cone of radius r and height h has radius 0.30r where the top 30% begins, so a cap of 0.34r
-    // hung 0.4 higher still flared out past the slope — a snow collar standing off the mountain in mid-air,
-    // which is what the floating-scenery sweep picked up on Popocatepetl.
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(r*0.29, h*0.30, 10), snowFar);
-    cap.position.set(vx, h*0.845 - 6, vz); scene.add(cap);
-  };
-  volcano(74, 96, 58, 30);      // Popocatepetl
-  volcano(30, 112, 47, 26);     // Iztaccihuatl, the lower of the pair
-  volcano(-104, 62, 40, 28);
-  // and a low far shore all the way round, so the lake ends in land rather than in fog alone
-  const shoreFar = voxMat(0x5b6250,{noise:12});
-  for(let a=0; a<Math.PI*2; a+=0.11){
-    const r = 118 + Math.sin(a*3.1)*14;
-    const h = 5 + Math.abs(Math.sin(a*2.7))*7;
-    const m = new THREE.Mesh(new THREE.BoxGeometry(30, h, 30), shoreFar);
-    m.position.set(Math.cos(a)*r, h/2 - 3.2, Math.sin(a)*r); scene.add(m);
+  // The ring of mountains round the valley, and Popocatepetl standing over them to the south-east.
+  // Each mountain is bedded to its OWN depth. Given one shared base plane, and 32-wide boxes on a
+  // 14-unit spacing so every one overlaps its neighbours, the whole ring is a single sheet of coplanar
+  // faces — about 110 z-fighting pairs on its own, and the largest single source on the map.
+  let mi=0;
+  for(let a=0; a<Math.PI*2; a+=0.115){
+    const r = 124 + Math.sin(a*3.1)*16;
+    const h = 6 + Math.abs(Math.sin(a*2.7))*9 + (mi%4)*0.35;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(32, h, 32), voxMat(0x6a7486,{noise:14}));
+    m.position.set(Math.cos(a)*r, h/2 - 3.4 - (mi%5)*0.11, Math.sin(a)*r); scene.add(m);
+    mi++;
   }
+  lco(26, 42, 7, voxMat(0x5f6a7e,{noise:12}), 96, 16, 84);
+  lco(11, 13, 7, voxMat(0xe8eef4,{noise:8}), 96, 33, 84);
 })();
 
 const aztecOverworld = new THREE.Group();
@@ -14590,8 +14493,11 @@ const LA_VENTA_STATS = {
 // of anything solid, never on the Templo Mayor's stair or summit deck, at least 9 from the causeway the
 // player arrives on at (0,24), and at least 7 from each other. West is the ball-court side, where the
 // court's two battered walls give cover; east is the open precinct in front of the skull rack.
-const TENOCH_WEST = [[-17.0,-5.5], [-14.5,21.5], [-23.5,-9.0], [-9.0,-24.0], [-17.5,-24.0]];
-const TENOCH_EAST = [[19.5,2.0], [21.0,-14.0], [14.5,21.5], [9.5,-14.0], [24.0,7.5]];
+// Re-solved against the rebuilt city — the old points sat inside the new ball court, eagle house and
+// serpent wall. Every one below is machine-checked clear of aztecColliders at a 1.1 radius, on flat
+// ground (not up the pyramid), at least 10 from where the player lands, and 8.5 apart from each other.
+const TENOCH_WEST = [[-26.0,-21.0], [-26.0,-12.5], [-26.0,23.5], [-24.5,8.0], [-18.5,-8.5]];
+const TENOCH_EAST = [[7.5,8.0], [7.5,16.5], [13.0,-26.0], [14.5,-17.5], [14.5,-7.5]];
 // Three waves and then the Xiuhcoatl Bearer — the same shape as La Venta, and as an era in the campaign.
 // Killing HIM is what ends the whole Mexico arc and sends the player home. The city is fought by the
 // Aztec military orders rather than by the basin's creatures:
@@ -14671,7 +14577,10 @@ const SHAMAN_DESCENT = -0.55;
 // direction, off every height zone, and his whole +-4 patrol line keeps at least 3.2. He is the last
 // thing between the player and home, so he is the hardest thing on the trip: a shade under the Ifrit
 // King, who ends the campaign.
-const TENOCH_BOSS = {skin:'xiuhcoatl', col:0xff8a2a, hp:2900, scale:1.9, speed:1.55, x:19.5, z:2, radius:1.4,
+// The Bearer now fights on the precinct floor at the foot of the Templo Mayor's stair rather than in the
+// east corner: it is the most open ground on the map (checked, not guessed) and it puts the pyramid
+// itself behind him, which is the shot this fight wants.
+const TENOCH_BOSS = {skin:'xiuhcoatl', col:0xff8a2a, hp:2900, scale:1.9, speed:1.55, x:-0.5, z:8.5, radius:1.4,
   name:'XIUHCOATL BEARER', hud:'the Bearer',
   call:'⚠ A horn sounds on the Templo Mayor — the fire serpent is carried down…',
   intro:'🔥 THE XIUHCOATL BEARER',
@@ -14821,7 +14730,7 @@ function enterAztecWorld(banner){
   sun.intensity=0.98; fill.intensity=0.20; fill.color.set(0xd4e0ea);
   // On the Iztapalapa causeway at the south quay, looking north up the length of the precinct at the
   // Templo Mayor's twin stair. Searched clear: 4.06 units to anything solid, and off every height zone.
-  camera.position.set(0,1.7,24); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  camera.position.set(0,1.7,23.25); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   // Its own loadout, not the basin's. Crossing into the city hands you an army's kit — reach spear, war
