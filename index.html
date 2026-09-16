@@ -3031,6 +3031,11 @@ function clearFieldEffects(){
   fireMeteors.length = 0;
   for(const q of quakeEffects) scene.remove(q.grp);
   quakeEffects.length = 0;
+  // Grenades in flight belong to the map they were thrown on. Left alone they land on the NEXT one, at the
+  // old map's coordinates, and deal splash damage there — exactly the fault this function already exists
+  // to fix for the bosses' meteors and quake cracks.
+  for(const gr of grenades) scene.remove(gr.mesh);
+  grenades.length = 0;
 }
 function enterDungeon(){
   dungeonWasPyramid = pyramidPhase; // false during era 1 (Greek) — the only other era currently reachable
@@ -14812,6 +14817,12 @@ function enterIfritArena(){
 }
 // ==========================================================================
 let gunBaseZ = -0.5;
+// The fire kick lives here rather than on gunGroup.rotation.x directly. It is a TRANSIENT that decays to
+// zero; the reload dip and the switch raise are ABSOLUTE poses held for as long as they last. Writing both
+// into the same property, one with -= and one with +=, meant the pose terms were re-added every frame on
+// top of whatever the decay had left — they compounded to an equilibrium instead of settling at their own
+// value, and tilted the weapon 102 degrees through a reload and 70 on a weapon switch.
+let gunKickX = 0;
 camera.add(gunGroup);
 scene.add(camera);
 selectWeapon(0);
@@ -16357,7 +16368,7 @@ function fire(){
     lastShot = now;
     SFX.knife(1.2);
     gunGroup.position.z = gunBaseZ + w.recoil*0.6;
-    gunGroup.rotation.x -= 0.13;
+    gunKickX -= 0.13;
     camera.getWorldDirection(_fwd);
     const hit = firstHit(camera.position, _fwd, w.hybridRange);
     if(hit && hit.bot){ damageBot(hit.bot, gk7q.b?1e9:w.hybridMelee, hit.point); showHitmarker(); SFX.hitmark(); }
@@ -16382,7 +16393,7 @@ function fire(){
     // a melee weapon may name its own swing sound too; the light knife-whip is only right for light blades
     if(w.sfx && SFX[w.sfx]) SFX[w.sfx](); else SFX.knife(1.5);
     gunGroup.position.z = gunBaseZ + w.recoil;
-    gunGroup.rotation.x -= 0.16; // swing kick — every weapon gets a visible kick now, not just the position punch
+    gunKickX -= 0.16; // swing kick — every weapon gets a visible kick now, not just the position punch
     camera.getWorldDirection(_fwd);
     const reach = w.range || 2.4;
     // ---- the swing ----
@@ -16445,7 +16456,7 @@ function fire(){
   else SFX.playerGrenade();
   // recoil + flash
   gunGroup.position.z = gunBaseZ + w.recoil;
-  gunGroup.rotation.x -= 0.05 + w.recoil*0.3; // muzzle-rise kick — scales with each weapon's own recoil strength
+  gunKickX -= 0.05 + w.recoil*0.3; // muzzle-rise kick — scales with each weapon's own recoil strength
   muzzle.visible = true; muzzle.material.opacity = 0.95;
   muzzle.material.color.set(w.glow ? 0x5ad6ff : (w.grenade?0xffb347:0xffe08a));
   muzzle.scale.setScalar(w.glow ? 1.3 : 1.0);
@@ -16459,7 +16470,7 @@ function fire(){
   const mw = new THREE.Vector3(); muzzle.getWorldPosition(mw);
   const end = hit ? hit.point : origin.clone().addScaledVector(_fwd, 120);
   if(w.grenade){
-    launchGrenade(mw, end);
+    launchGrenade(mw, end, w);
     return;
   }
   const shotDmg = gk7q.b ? 1e9 : (w._chargeDmg || w.damage);
@@ -16507,8 +16518,14 @@ function fire(){
 // Drop a held draw without loosing anything — for losing focus, opening the booth/admin panel, or dying
 // mid-pull. Safe to call on any weapon.
 function cancelCharge(){
-  const wp = weapons[currentWeapon]; if(!wp) return;
-  wp.userData.drawing = false; wp.userData.chargeT = 0; wp.userData._chargeDmg = 0;
+  // Clears EVERY weapon, not just the current one. jumpToWave()/travelTo() swap the `weapons` array and
+  // then call selectWeapon(), so by the time this ran the drawn weapon was no longer reachable through
+  // weapons[currentWeapon] at all — a bow left at full draw stayed flagged as drawing across the whole
+  // rest of the run. Only one weapon can be drawn at a time, so sweeping all of them costs nothing.
+  const clear = wp => { if(!wp) return; wp.userData.drawing = false; wp.userData.chargeT = 0; wp.userData._chargeDmg = 0; };
+  originalWeapons.forEach(clear); pyramidWeapons.forEach(clear); nileWeapons.forEach(clear);
+  greekWeapons.forEach(clear);   romanWeapons.forEach(clear);   islamicWeapons.forEach(clear);
+  mexicoWeapons.forEach(clear);  aztecWeapons.forEach(clear);   swedenWeapons.forEach(clear);
 }
 // The draw indicator around the crosshair. Driven every frame from animate(); the body.drawing class is
 // what makes the ring visible at all, so a weapon that is not a charged one never shows it.
@@ -16603,16 +16620,25 @@ function updateGrenadePreview(){
 }
 
 const grenades = [];
-function launchGrenade(from, to){
+// A grenade carries the stats of the weapon that THREW it. explodeAt() used to look them up from
+// whatever the player happened to be holding when it landed, which is a different weapon entirely if the
+// loadout changed during the 0.35s flight.
+function launchGrenade(from, to, w){
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.14,0.14,0.14),
     new THREE.MeshLambertMaterial({color:0x3a4a2a, emissive:0x1a2a10}));
   mesh.position.copy(from); scene.add(mesh);
-  grenades.push({mesh, from:from.clone(), to:to.clone(), t:0, dur:0.35});
+  grenades.push({mesh, from:from.clone(), to:to.clone(), t:0, dur:0.35,
+                 splashDamage:(w&&w.splashDamage)||150, splashRadius:(w&&w.splashRadius)||4.2});
 }
 const explosions = [];
-function explodeAt(point){
+// `stats` comes from the grenade itself. This used to be
+//     weapons.find(wp => wp.userData.grenade).userData
+// which returns UNDEFINED for every loadout that has no grenade weapon in it — the pyramid, Greek, Nile,
+// Mexico, Aztec and Viking sets, six of the nine. Throw a Naft Pot in Cairo, buy passage before it lands,
+// and that find() came back empty and took the whole animate loop down with it.
+function explodeAt(point, stats){
   SFX.explosion();
-  const w = weapons.find(wp=>wp.userData.grenade).userData;
+  const w = stats || {splashDamage:150, splashRadius:4.2};
   bots.forEach(b=>{
     if(!b.alive) return;
     const d = b.mesh.position.distanceTo(point);
@@ -17128,7 +17154,7 @@ function animate(){
     gr.mesh.position.lerpVectors(gr.from, gr.to, s);
     gr.mesh.position.y += Math.sin(s*Math.PI) * gr.from.distanceTo(gr.to) * 0.14; // gentle lob arc
     gr.mesh.rotation.x += dt*14; gr.mesh.rotation.z += dt*10;
-    if(s>=1){ scene.remove(gr.mesh); explodeAt(gr.to); grenades.splice(i,1); }
+    if(s>=1){ scene.remove(gr.mesh); explodeAt(gr.to, gr); grenades.splice(i,1); }
   }
   // ----- explosions: fireball expands and fades, light flash decays -----
   for(let i=explosions.length-1;i>=0;i--){
@@ -17187,7 +17213,7 @@ function animate(){
 
   // recoil recovery toward the active weapon's base position + idle sway
   gunGroup.position.z += (gunBaseZ - gunGroup.position.z) * Math.min(1, dt*10);
-  gunGroup.rotation.x += (0 - gunGroup.rotation.x) * Math.min(1, dt*9); // eases the muzzle-rise/swing kick back level
+  gunKickX += (0 - gunKickX) * Math.min(1, dt*9); // eases the muzzle-rise/swing kick back level
   // ================= VIEWMODEL MOTION =================
   // Everything below applies to EVERY weapon in the game, not just the Viking ones. Until now the only
   // motion a weapon had was the fire kick and a 0.008 idle bob, which is why they all felt like decals
@@ -17226,7 +17252,8 @@ function animate(){
     gunGroup.position.y = base.y + bobY + swayY - lagY + rlY - rz*0.32;
     gunGroup.rotation.z = rlRot*0.5 + lagX*1.6;
     gunGroup.rotation.y = -lagX*0.9;
-    gunGroup.rotation.x += rlRot*0.35 + rz*0.55;      // += : the fire kick already wrote this
+    // ASSIGNED, not accumulated: kick (which decays on its own) plus the poses (which do not).
+    gunGroup.rotation.x = gunKickX + rlRot*0.35 + rz*0.55;
   }
   if (muzzleTimer > 0){ muzzleTimer -= dt; muzzle.material.opacity = Math.max(0, muzzleTimer/0.05); if (muzzleTimer<=0) muzzle.visible=false; }
   // tick any weapon currently reloading (not just the active one, so switching away mid-reload doesn't pause it)
