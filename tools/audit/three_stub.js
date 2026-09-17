@@ -453,6 +453,9 @@ const THREE = {
   FrontSide:0, BackSide:1, DoubleSide:2,
   PCFSoftShadowMap:2, BasicShadowMap:0, PCFShadowMap:1,
   sRGBEncoding:3001, AdditiveBlending:2, NormalBlending:1,
+  // real values from three.js r128 — the game sets renderer.toneMapping from these, and a stub that left
+  // them undefined would still "work" while quietly hiding a typo in the constant's name
+  NoToneMapping:0, LinearToneMapping:1, ReinhardToneMapping:2, CineonToneMapping:3, ACESFilmicToneMapping:4,
   MathUtils:{ degToRad:d=>d*Math.PI/180, radToDeg:r=>r*180/Math.PI, clamp:(v,a,b)=>Math.max(a,Math.min(b,v)), lerp:(a,b,t)=>a+(b-a)*t },
 };
 

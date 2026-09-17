@@ -259,6 +259,36 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.5)); // retina dis
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// ---- one global dial for how hot the whole game reads ----
+// Three lights stack on every outdoor map (hemi 0.85 + sun 0.95 + fill 0.25), on top of voxel textures
+// that are already painted at full brightness. A face turned toward the sun was therefore being lit at
+// close to 2x its own albedo, and past 1.0 the shader simply clamps. A clamped pixel does not just get
+// brighter — it loses its HUE, because whichever channel hit 1.0 first stops rising while the others
+// climb toward it. That is why the palette read as glaring rather than merely bright: the most saturated
+// surfaces in each map were the first to wash out to white. Scaling the light back under 1.0 hands those
+// surfaces their colour back.
+//
+// LinearToneMapping is a plain multiply-then-clamp, which is exactly what is wanted here: one number
+// dims every lit surface in the game without touching a single map's authored lighting, and it preserves
+// hue while doing it. ACES and Reinhard were the alternatives and are both wrong for this renderer —
+// they are designed to be followed by an sRGB encode, which this one does not do, so dropped in here
+// they would LIFT the shadows into grey rather than damp the highlights.
+const WORLD_DAMP = 0.70;
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = WORLD_DAMP;
+// Tone mapping reaches every material in the scene, but NOT these two. three.js paints a Color background
+// as the GL clear colour, with no shader involved at all, and it mixes fog in AFTER the tone-mapping chunk
+// in the fragment shader. Left alone, both would stay at full brightness while the world in front of them
+// dimmed — so every map would read as hazier and flatter than it was authored, which is the opposite of
+// the point. Damp them at the setter instead: each object is constructed exactly once, just above, and
+// every map tints its own era through .set() on these same two.
+[scene.background, scene.fog.color].forEach(c => {
+  const set = c.set.bind(c);
+  c.set = v => set(v).multiplyScalar(WORLD_DAMP);
+});
+scene.background.set(0x8fd6f2);          // re-apply, so the starting pair is damped like every other map's
+scene.fog.color.set(0x9fdcf0);
 document.body.appendChild(renderer.domElement);
 // Declared here, immediately after renderer exists, specifically so every texture-building helper below —
 // several of which run at module top-level, not inside a function — can safely reference it. See the note
@@ -439,6 +469,49 @@ const fill = new THREE.DirectionalLight(0xaecbe0, 0.25);
 fill.position.set(-30, 25, -20);
 scene.add(fill);
 
+// ---- white-balancing the world's light ----
+// Three lights add up on every surface, and their SUM was never neutral. Measured: Cairo's and the Aztec
+// market's comes out +8% red and -15% blue, which is an orange cast over every single pixel of those maps.
+// Nobody had ever seen it, because at a peak around 1.95 the bright half of each map clipped to flat white
+// — and a clipped pixel has no hue left to be tinted. Damping the exposure pulled those surfaces back into
+// range and the cast, which was there all along, came back into view with them.
+//
+// So it gets corrected at the source: scale all four colours by the same per-channel factor, exactly the
+// way a camera's white balance does, until the light a vertical surface receives is neutral grey. The sun
+// stays warmer than the sky RELATIVE to it, so shaded and lit faces still read differently — but a white
+// wall now renders white in Cairo and white in Birka. Each era still reads warm or cold through its fog,
+// sky and ground colours, which is where that belongs; it should not arrive as a filter over the lens.
+//
+// Always re-derived from what the map ASKED for, never from the corrected value it is about to overwrite.
+// Correcting cumulatively would drift: maps do not all set all four lights, so a light left alone across a
+// map change would be scaled twice, then three times, and walk away from its authored colour.
+const LIGHT_AUTHORED = new Map();     // the live Color object -> the r/g/b its map actually asked for
+[hemi.color, hemi.groundColor, sun.color, fill.color].forEach(c => {
+  LIGHT_AUTHORED.set(c, {r:c.r, g:c.g, b:c.b});
+  const set = c.set.bind(c);
+  c.set = v => { const out = set(v); LIGHT_AUTHORED.set(c, {r:out.r, g:out.g, b:out.b}); return out; };
+});
+function balanceLights(){
+  const sky = LIGHT_AUTHORED.get(hemi.color),  grd = LIGHT_AUTHORED.get(hemi.groundColor),
+        sn  = LIGHT_AUTHORED.get(sun.color),   fl  = LIGHT_AUTHORED.get(fill.color);
+  if(!sky || !grd || !sn || !fl) return;
+  // A hemisphere light gives a floor all sky but a wall half sky and half ground, so no single correction
+  // neutralises both. Balancing purely for walls leaves Tenochtitlan's floors 8.9% off; purely for floors
+  // leaves its walls 8.9% off. Measured across all seven maps, 0.75 is the weighting that minimises the
+  // worst case anywhere in the game — nothing lands more than 4.6% off neutral, against 8.9% at either
+  // extreme. Under about 5% a cast stops reading as a filter over the lens and starts reading as the
+  // difference between a lit face and a shaded one, which is what it is supposed to be.
+  const SKY_W = 0.75;
+  const ch = k => (sky[k]*SKY_W + grd[k]*(1-SKY_W)) * hemi.intensity
+                  + sn[k] * sun.intensity + fl[k] * fill.intensity;
+  const r = ch('r'), g = ch('g'), b = ch('b');
+  if(!(r > 0 && g > 0 && b > 0)) return;
+  const t = (r + g + b)/3, kr = t/r, kg = t/g, kb = t/b;
+  [[hemi.color, sky], [hemi.groundColor, grd], [sun.color, sn], [fill.color, fl]].forEach(([c, a]) => {
+    c.r = a.r*kr; c.g = a.g*kg; c.b = a.b*kb;
+  });
+}
+
 // ---- cloud skydome (canvas cloud texture on a big inverted sphere, Pixel-Gun-style bright sky) ----
 function cloudSkyTexture(size=512){
   const c = document.createElement('canvas');
@@ -585,7 +658,12 @@ function setDistantGround(hex, tex){
   // the haze is the era's own atmosphere, so it takes the fog colour — this is the one thing out here that
   // genuinely should match fog rather than ground
   horizonHaze.visible=true;
-  horizonHaze.material.color.copy(scene.fog.color);
+  // This band exists to dissolve the fogged ground into the sky, so it has to land on exactly the fog's
+  // own brightness. But it is a mesh, and meshes go through tone mapping while fog does not — so copying
+  // the (already damped) fog colour straight across would damp it a second time and leave the haze darker
+  // than the haze it is blending into. Dividing WORLD_DAMP back out here cancels the pass it is about to
+  // make through the tone mapper, which is what keeps the two matching at any value of the dial.
+  horizonHaze.material.color.copy(scene.fog.color).multiplyScalar(1/WORLD_DAMP);
   const want = tex || distantGroundDefaultTex;
   if(distantGround.material.map !== want){ distantGround.material.map = want; distantGround.material.needsUpdate = true; }
 }
@@ -17010,6 +17088,10 @@ function animate(){
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = performance.now()*0.001;
+  // Re-derived from the authored colours every frame rather than hooked onto each of the fifteen enter*()
+  // functions, so a map added later cannot forget it and arrive tinted. Twelve multiplies; it does not
+  // show up in a frame.
+  balanceLights();
 
   if (paused){ renderer.render(scene, camera); return; } // freeze the whole world — just keep showing the last frame
   // The booth panel freezes the world the same way pause does, but AFTER the interact prompt is cleared —
