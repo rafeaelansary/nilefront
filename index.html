@@ -158,6 +158,35 @@
   #admintitle{font-size:20px;font-weight:900;letter-spacing:3px;color:#7fffc4;text-align:center;
     text-shadow:0 2px 0 #06301f,0 0 18px rgba(70,255,180,0.3);margin-bottom:4px}
   #adminsub{font-size:12px;text-align:center;opacity:0.62;margin-bottom:16px}
+  /* ---- the console (press C twice) ---- */
+  /* Its own overlay, deliberately not part of the admin panel. Anchored to the bottom and only lightly
+     dimmed so the world stays visible behind it — that is the difference between a chat and a menu: you
+     are meant to be able to watch what your command just did. Monospace, because the whole point of a
+     command line is that /tp sweden 1 2 lines up under the /help that taught it to you. */
+  #chatoverlay{position:absolute;inset:0;z-index:13;display:none;align-items:flex-end;justify-content:center;
+    padding:0 0 26px;
+    background:linear-gradient(to top, rgba(2,6,5,0.82) 0%, rgba(2,6,5,0.34) 34%, rgba(2,6,5,0) 62%)}
+  body.chat #chatoverlay{display:flex}
+  body.chat #crosshair,body.chat #prompt{display:none !important}
+  #chatbox{width:min(620px,94vw);padding:10px 12px;border:1px solid rgba(63,208,138,0.55);border-radius:10px;
+    background:rgba(4,12,9,0.9);box-shadow:0 10px 40px rgba(0,0,0,0.7);color:#dff5e8}
+  #chattitle{font-size:10px;letter-spacing:3px;font-weight:900;color:#7fffc4;opacity:0.72;margin-bottom:6px}
+  #chatlog{height:150px;overflow-y:auto;text-align:left;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.55;
+    white-space:pre-wrap;overflow-wrap:anywhere}
+  #chatlog .echo{color:#7fffc4}
+  #chatlog .ok{color:#a8ecc8}
+  #chatlog .err{color:#ff9b88}
+  #chatlog .dim{color:#dff5e8;opacity:0.5}
+  #chatentry{display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 10px;border-radius:7px;
+    background:rgba(0,0,0,0.55);border:1px solid rgba(63,208,138,0.4)}
+  #chatentry:focus-within{border-color:rgba(63,208,138,0.9)}
+  #chatentry .caret{color:#7fffc4;font-weight:900;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  #chatinput{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#dfffe9;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  #chatinput::placeholder{color:rgba(223,255,233,0.34)}
+  #chathint{margin-top:6px;font-size:10px;letter-spacing:1px;opacity:0.45;text-align:right}
   .adminrow{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;
     padding:10px 12px;margin-bottom:8px;border:1px solid rgba(63,208,138,0.35);border-radius:8px;
     background:rgba(0,0,0,0.3);font-size:15px;font-weight:700;cursor:pointer;
@@ -234,6 +263,14 @@
   </div>
   <div id="adminhint">click a row to toggle · click a wave to jump · [Esc] or [C] to close</div>
 </div></div>
+<div id="chatoverlay"><div id="chatbox">
+  <div id="chattitle">CONSOLE</div>
+  <div id="chatlog"></div>
+  <div id="chatentry"><span class="caret">&rsaquo;</span><input id="chatinput" type="text"
+    autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+    placeholder="/help"></div>
+  <div id="chathint">↑ ↓ history · [Esc] to close</div>
+</div></div>
 <div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button></div>
 <div id="mobile">
   <div id="stick"><div id="knob"></div></div>
@@ -259,6 +296,36 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.5)); // retina dis
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// ---- one global dial for how hot the whole game reads ----
+// Three lights stack on every outdoor map (hemi 0.85 + sun 0.95 + fill 0.25), on top of voxel textures
+// that are already painted at full brightness. A face turned toward the sun was therefore being lit at
+// close to 2x its own albedo, and past 1.0 the shader simply clamps. A clamped pixel does not just get
+// brighter — it loses its HUE, because whichever channel hit 1.0 first stops rising while the others
+// climb toward it. That is why the palette read as glaring rather than merely bright: the most saturated
+// surfaces in each map were the first to wash out to white. Scaling the light back under 1.0 hands those
+// surfaces their colour back.
+//
+// LinearToneMapping is a plain multiply-then-clamp, which is exactly what is wanted here: one number
+// dims every lit surface in the game without touching a single map's authored lighting, and it preserves
+// hue while doing it. ACES and Reinhard were the alternatives and are both wrong for this renderer —
+// they are designed to be followed by an sRGB encode, which this one does not do, so dropped in here
+// they would LIFT the shadows into grey rather than damp the highlights.
+const WORLD_DAMP = 0.70;
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = WORLD_DAMP;
+// Tone mapping reaches every material in the scene, but NOT these two. three.js paints a Color background
+// as the GL clear colour, with no shader involved at all, and it mixes fog in AFTER the tone-mapping chunk
+// in the fragment shader. Left alone, both would stay at full brightness while the world in front of them
+// dimmed — so every map would read as hazier and flatter than it was authored, which is the opposite of
+// the point. Damp them at the setter instead: each object is constructed exactly once, just above, and
+// every map tints its own era through .set() on these same two.
+[scene.background, scene.fog.color].forEach(c => {
+  const set = c.set.bind(c);
+  c.set = v => set(v).multiplyScalar(WORLD_DAMP);
+});
+scene.background.set(0x8fd6f2);          // re-apply, so the starting pair is damped like every other map's
+scene.fog.color.set(0x9fdcf0);
 document.body.appendChild(renderer.domElement);
 // Declared here, immediately after renderer exists, specifically so every texture-building helper below —
 // several of which run at module top-level, not inside a function — can safely reference it. See the note
@@ -439,6 +506,49 @@ const fill = new THREE.DirectionalLight(0xaecbe0, 0.25);
 fill.position.set(-30, 25, -20);
 scene.add(fill);
 
+// ---- white-balancing the world's light ----
+// Three lights add up on every surface, and their SUM was never neutral. Measured: Cairo's and the Aztec
+// market's comes out +8% red and -15% blue, which is an orange cast over every single pixel of those maps.
+// Nobody had ever seen it, because at a peak around 1.95 the bright half of each map clipped to flat white
+// — and a clipped pixel has no hue left to be tinted. Damping the exposure pulled those surfaces back into
+// range and the cast, which was there all along, came back into view with them.
+//
+// So it gets corrected at the source: scale all four colours by the same per-channel factor, exactly the
+// way a camera's white balance does, until the light a vertical surface receives is neutral grey. The sun
+// stays warmer than the sky RELATIVE to it, so shaded and lit faces still read differently — but a white
+// wall now renders white in Cairo and white in Birka. Each era still reads warm or cold through its fog,
+// sky and ground colours, which is where that belongs; it should not arrive as a filter over the lens.
+//
+// Always re-derived from what the map ASKED for, never from the corrected value it is about to overwrite.
+// Correcting cumulatively would drift: maps do not all set all four lights, so a light left alone across a
+// map change would be scaled twice, then three times, and walk away from its authored colour.
+const LIGHT_AUTHORED = new Map();     // the live Color object -> the r/g/b its map actually asked for
+[hemi.color, hemi.groundColor, sun.color, fill.color].forEach(c => {
+  LIGHT_AUTHORED.set(c, {r:c.r, g:c.g, b:c.b});
+  const set = c.set.bind(c);
+  c.set = v => { const out = set(v); LIGHT_AUTHORED.set(c, {r:out.r, g:out.g, b:out.b}); return out; };
+});
+function balanceLights(){
+  const sky = LIGHT_AUTHORED.get(hemi.color),  grd = LIGHT_AUTHORED.get(hemi.groundColor),
+        sn  = LIGHT_AUTHORED.get(sun.color),   fl  = LIGHT_AUTHORED.get(fill.color);
+  if(!sky || !grd || !sn || !fl) return;
+  // A hemisphere light gives a floor all sky but a wall half sky and half ground, so no single correction
+  // neutralises both. Balancing purely for walls leaves Tenochtitlan's floors 8.9% off; purely for floors
+  // leaves its walls 8.9% off. Measured across all seven maps, 0.75 is the weighting that minimises the
+  // worst case anywhere in the game — nothing lands more than 4.6% off neutral, against 8.9% at either
+  // extreme. Under about 5% a cast stops reading as a filter over the lens and starts reading as the
+  // difference between a lit face and a shaded one, which is what it is supposed to be.
+  const SKY_W = 0.75;
+  const ch = k => (sky[k]*SKY_W + grd[k]*(1-SKY_W)) * hemi.intensity
+                  + sn[k] * sun.intensity + fl[k] * fill.intensity;
+  const r = ch('r'), g = ch('g'), b = ch('b');
+  if(!(r > 0 && g > 0 && b > 0)) return;
+  const t = (r + g + b)/3, kr = t/r, kg = t/g, kb = t/b;
+  [[hemi.color, sky], [hemi.groundColor, grd], [sun.color, sn], [fill.color, fl]].forEach(([c, a]) => {
+    c.r = a.r*kr; c.g = a.g*kg; c.b = a.b*kb;
+  });
+}
+
 // ---- cloud skydome (canvas cloud texture on a big inverted sphere, Pixel-Gun-style bright sky) ----
 function cloudSkyTexture(size=512){
   const c = document.createElement('canvas');
@@ -585,7 +695,12 @@ function setDistantGround(hex, tex){
   // the haze is the era's own atmosphere, so it takes the fog colour — this is the one thing out here that
   // genuinely should match fog rather than ground
   horizonHaze.visible=true;
-  horizonHaze.material.color.copy(scene.fog.color);
+  // This band exists to dissolve the fogged ground into the sky, so it has to land on exactly the fog's
+  // own brightness. But it is a mesh, and meshes go through tone mapping while fog does not — so copying
+  // the (already damped) fog colour straight across would damp it a second time and leave the haze darker
+  // than the haze it is blending into. Dividing WORLD_DAMP back out here cancels the pass it is about to
+  // make through the tone mapper, which is what keeps the two matching at any value of the dial.
+  horizonHaze.material.color.copy(scene.fog.color).multiplyScalar(1/WORLD_DAMP);
   const want = tex || distantGroundDefaultTex;
   if(distantGround.material.map !== want){ distantGround.material.map = want; distantGround.material.needsUpdate = true; }
 }
@@ -3145,6 +3260,82 @@ function waterRippleTex(){
   }
   return c;
 }
+// ---- baking a map's static boxes down to one mesh per material ----
+// A map assembled out of individual boxes costs one draw call per box, every frame, whether or not the
+// player can tell them apart. nileWorld is the extreme case in this game: 4399 meshes, against 1962 for
+// the next heaviest map. It is ALSO the only map where the player cannot walk anywhere — the Nile Wave
+// pins you to a boat deck about five units across — so the only thing that changes between frames is
+// where the camera is pointed, and a long river corridor puts very different numbers of those meshes in
+// frustum depending on the heading. The per-frame draw count therefore swings as you turn, and frame time
+// swings with it. That is what "looking around is glitchy in the Nile wave" actually was: not the look
+// code, which every map in the game shares, but the cost of the frame changing while you turned.
+//
+// Boxes that never move and already share a material can be baked into one geometry that draws in a
+// single call. Nothing is dropped and nothing shifts — these are the same vertices, transformed into the
+// group's own space once here instead of by a per-object matrix every frame.
+//
+// Under tools/audit's stubbed THREE this does nothing at all, by construction: those geometries describe
+// themselves as half-extents and carry no vertex buffers, so the `attributes` guard below rejects every
+// mesh and the world stays exactly as authored. That is deliberate — the headless geometry sweeps read
+// this map one authored box at a time, and merging would leave them nothing to read.
+function mergeStatic(root, keep){
+  root.updateMatrixWorld(true);
+  // Keyed on the material OBJECT, not its uuid. Same grouping in the browser, but it does not quietly
+  // depend on a field the object might not carry — key on a missing uuid and every material in the map
+  // hashes to "undefined", collapsing the whole world into one bucket and one wrong-looking mesh.
+  const byMat = new Map();   // material -> Map(shadow flags -> bucket)
+  // Built on first use, never before: the guards below are what decide whether there is any real geometry
+  // here at all, and under the audit stub there is none — its matrixWorld is a flat array of sixteen
+  // numbers rather than a Matrix4, so touching it up here would throw before the guards could say so.
+  let rootInv = null;
+  root.traverse(o => {
+    if(!o.isMesh || !o.geometry || !o.material || Array.isArray(o.material)) return;
+    const a = o.geometry.attributes;
+    if(!a || !a.position || !a.position.array) return;   // stubbed geometry — see the note above
+    if(o.material.transparent) return;                   // merging would collapse these into one sort order
+    if(keep && keep(o)) return;
+    if(!rootInv) rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    // castShadow/receiveShadow are per-object, not per-material, so they have to agree across a bucket —
+    // otherwise the bake would quietly change which surfaces cast into the shadow map.
+    let flags = byMat.get(o.material);
+    if(!flags) byMat.set(o.material, flags = new Map());
+    const fk = (o.castShadow?'c':'') + (o.receiveShadow?'r':'');
+    let b = flags.get(fk);
+    if(!b) flags.set(fk, b = {mat:o.material, cast:o.castShadow, recv:o.receiveShadow, src:[], geos:[]});
+    // applyMatrix4 carries the normals through its own normal matrix, so non-uniform scales survive intact.
+    // Going via rootInv rather than matrixWorld directly keeps this correct even if the group itself is
+    // ever moved: the vertices land in ROOT's space, which is the space the merged mesh will hang in.
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(rootInv, o.matrixWorld));
+    b.geos.push(g); b.src.push(o);
+  });
+  let before = 0, after = 0;
+  byMat.forEach(flags => flags.forEach(b => {
+    before += b.src.length;
+    if(b.src.length < 2){ after += b.src.length; return; }   // a bucket of one has nothing to gain
+    let n = 0; for(const g of b.geos) n += g.attributes.position.count;
+    const pos = new Float32Array(n*3), nor = new Float32Array(n*3), uv = new Float32Array(n*2);
+    let v = 0;
+    for(const g of b.geos){
+      pos.set(g.attributes.position.array, v*3);
+      if(g.attributes.normal) nor.set(g.attributes.normal.array, v*3);
+      if(g.attributes.uv)     uv.set(g.attributes.uv.array,     v*2);
+      v += g.attributes.position.count;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    geo.setAttribute('normal',   new THREE.BufferAttribute(nor,3));
+    geo.setAttribute('uv',       new THREE.BufferAttribute(uv,2));
+    const m = new THREE.Mesh(geo, b.mat);
+    m.castShadow = b.cast; m.receiveShadow = b.recv;
+    m.matrixAutoUpdate = false;   // the vertices are already in root's space; this local matrix stays identity
+    b.src.forEach(o => { if(o.parent) o.parent.remove(o); });
+    root.add(m);
+    after++;
+  }));
+  return {before, after};
+}
+
 (function buildNileWorld(){
   function nblock(w,h,d,color,x,y,z,opts){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), voxMat(color,opts||{noise:16})); m.position.set(x,y,z); nileWorld.add(m); return m; }
   // open water in every direction — a big flat sea, no walls, no ceiling, with a rippled surface texture instead of a flat color
@@ -3514,6 +3705,10 @@ function waterRippleTex(){
   for(let i=0;i<12;i++) bankReeds(-20+4+Math.random()*3, -50+i*9+(Math.random()-0.5)*4, 5);
   for(let i=0;i<5;i++) bankPalm(17, -40+i*20);
   for(let i=0;i<5;i++) bankPalm(-17, -40+i*20);
+  // Bake the banks, dunes, palms, reeds, horizon and boat down to one mesh per material. Everything built
+  // above is fixed scenery: the only thing in this world that is not is the river surface, which bobs, and
+  // the chewed hull chunks, which spawnBoatHole() builds at runtime long after this has run.
+  mergeStatic(nileWorld, o => o.userData.isWater);
 })();
 addTarget = colliders;
 
@@ -14933,7 +15128,7 @@ document.addEventListener('pointerlockchange', () => {
   // the START overlay OVER the panel — so the panel looks like it never opened, the click that dismisses
   // the overlay lands as a fresh startGame(), and you are left unlocked and unable to move. Any future
   // overlay that drops pointer lock has to be listed here too.
-  const overlayUp = boothOpen || adminOpen;
+  const overlayUp = boothOpen || adminOpen || chatOpen;
   lockEl.style.display = (locked || overlayUp) ? 'none' : 'flex';
   if(locked && !overlayUp && (!gameStarted || gameWon)) startGame();
 });
@@ -15378,6 +15573,7 @@ let flyY = 0;                       // height above the terrain while flying, in
 // is no timeout: a timer would make it fail under a lag spike, and there is nothing to protect here.
 const ADMIN_SEQ = ['KeyZ','KeyX','KeyX','KeyC','KeyC','KeyC'];
 let adminSeqAt = 0;
+let chatSeqAt = 0;   // consecutive C presses toward opening the console — see the keydown handler
 function adminSeqStep(code){
   if(code === ADMIN_SEQ[adminSeqAt]){
     adminSeqAt++;
@@ -15389,12 +15585,16 @@ function adminSeqStep(code){
   return false;
 }
 
+// Every entry carries a `cmd`, and the console builds its command list from THIS array rather than
+// keeping a parallel one of its own. That is the whole reason the two can never drift: a cheat added
+// here shows up as a clickable row AND as /<cmd> with no second edit, and a row that reads ON can never
+// disagree with what the console just said, because both call the same get/set.
 const ADMIN_ITEMS = [
-  {key:'infAmmo',   label:'♾  Infinite ammo',  get:()=>gk7q.a,   set:v=>{ gk7q.a=v; setAmmoHUD(); }},
-  {key:'infMoney',  label:'💰  Infinite money', get:()=>gk7q.d,   set:v=>{ gk7q.d=v; setHUD(); }},
-  {key:'god',       label:'🛡  God mode',       get:()=>godMode,         set:v=>{ godMode=v; }},
-  {key:'instaKill', label:'💀  Insta kill',     get:()=>gk7q.b, set:v=>{ gk7q.b=v; }},
-  {key:'fly',       label:'🕊  Flight',         get:()=>gk7q.c,       set:v=>{
+  {key:'infAmmo',   cmd:'ammo',      label:'♾  Infinite ammo',  get:()=>gk7q.a,   set:v=>{ gk7q.a=v; setAmmoHUD(); }},
+  {key:'infMoney',  cmd:'money',     label:'💰  Infinite money', get:()=>gk7q.d,   set:v=>{ gk7q.d=v; setHUD(); }},
+  {key:'god',       cmd:'god',       label:'🛡  God mode',       get:()=>godMode,         set:v=>{ godMode=v; }},
+  {key:'instaKill', cmd:'instakill', label:'💀  Insta kill',     get:()=>gk7q.b, set:v=>{ gk7q.b=v; }},
+  {key:'fly',       cmd:'fly',       label:'🕊  Flight',         get:()=>gk7q.c,       set:v=>{
       gk7q.c=v;
       if(v){ flyY = 0; jumpY = 0; jumpV = 0; }
       else {
@@ -15411,13 +15611,13 @@ const ADMIN_ITEMS = [
       }
     }},
   // Actions rather than toggles, so they read as buttons in the panel.
-  {key:'killAll', action:true, label:'☠  Kill everything', state:'RUN',
+  {key:'killAll', cmd:'killall', action:true, label:'☠  Kill everything', state:'RUN',
    run:()=>{
      // whatever is live: a wave, a boss, the Nile wave, a destination's garrison
      bots.forEach(b=>{ if(b.alive) damageBot(b, 1e9, b.mesh.position); });
      closeAdmin();
    }},
-  {key:'skip', action:true, label:'⏭  Skip to the end', state:'RUN',
+  {key:'skip', cmd:'skip', action:true, label:'⏭  Skip to the end', state:'RUN',
    run:()=>{
      clearBots();
      currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
@@ -15532,6 +15732,249 @@ function renderWaveJump(){
     });
   });
 }
+// ============================ the console ============================
+// A chat, opened with C twice, entirely separate from the admin panel — that panel is untouched and still
+// lives behind Z,X,X,C,C,C with its own rows and wave-jump tree. This is the typing half: /tp 7 beats
+// opening a section to hunt for a button, and it is the only way to reach some places at all (the Nile
+// wave has no row anywhere).
+//
+// Both drive the same ADMIN_ITEMS, so whichever you use, the other agrees with it.
+function chatSay(text, kind){
+  const log = document.getElementById('chatlog'); if(!log) return;
+  const line = document.createElement('div');
+  line.className = kind || 'dim';
+  line.textContent = text;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;   // newest line stays in view
+}
+
+// ---- /tp ----
+// The game has two different kinds of place, so this takes two shapes. The campaign is a flat run of
+// numbered waves; every destination is a named trip of legs, each holding its own waves and maybe a boss.
+//   /tp 7              campaign wave 7 — the number on the HUD, 1-based like the HUD is
+//   /tp rome           an era, at its first wave
+//   /tp sweden         a destination: first leg, first wave
+//   /tp sweden 1 2     that destination, leg 1, wave 2
+//   /tp sweden 1 boss  the boss that leg ends on
+//   /tp nile           the Nile wave, which sits on neither map
+function adminTp(args){
+  if(!args.length){ chatSay('/tp needs somewhere to go — try /tp 7 or /tp sweden', 'err'); return false; }
+  const first = String(args[0]).toLowerCase();
+
+  if(/^\d+$/.test(first)){
+    const n = parseInt(first, 10);
+    if(n < 1 || n > WAVES.length){
+      chatSay('there is no wave ' + n + ' — the campaign runs 1-' + WAVES.length, 'err'); return false;
+    }
+    jumpToWave(n-1);
+    chatSay('✓ wave ' + n + ' · ' + ERA_NAMES[eraOfWave(n-1)], 'ok');
+    return true;
+  }
+  if(first === 'nile'){ enterNileWave(); chatSay('✓ the Nile wave', 'ok'); return true; }
+
+  const era = ERA_NAMES.findIndex(nm => nm.toLowerCase() === first);
+  if(era >= 0){
+    jumpToWave(ERA_START_WAVE[era]);
+    chatSay('✓ ' + ERA_NAMES[era] + ' · wave ' + (ERA_START_WAVE[era]+1), 'ok');
+    return true;
+  }
+
+  // a destination by name, or by any prefix that names only one of them
+  const ready = DESTINATIONS.filter(d => d.legs && d.legs.length);
+  let hits = ready.filter(d => d.name.toLowerCase() === first);
+  if(!hits.length) hits = ready.filter(d => d.name.toLowerCase().startsWith(first));
+  if(!hits.length){
+    chatSay('no wave, era or destination called "' + args[0] + '"', 'err');
+    chatSay('  try: 1-' + WAVES.length + ' · ' + ERA_NAMES.join(' ').toLowerCase() +
+             ' · nile · ' + ready.map(d => d.name.toLowerCase()).join(' '), 'dim');
+    return false;
+  }
+  if(hits.length > 1){
+    chatSay('"' + args[0] + '" could mean ' + hits.map(d => d.name).join(' or '), 'err'); return false;
+  }
+  const dest = hits[0];
+
+  const legN = args.length > 1 ? parseInt(args[1], 10) : 1;
+  if(!(legN >= 1 && legN <= dest.legs.length)){
+    chatSay(dest.name + ' has ' + dest.legs.length + ' leg' + (dest.legs.length>1?'s':'') +
+             ', so leg "' + args[1] + '" does not exist', 'err');
+    chatSay('  ' + dest.legs.map((l,i) => (i+1) + '=' + l.place).join('  '), 'dim');
+    return false;
+  }
+  const leg = dest.legs[legN-1];
+
+  const waveArg = args.length > 2 ? String(args[2]).toLowerCase() : '1';
+  let wave;
+  if(waveArg === 'boss'){
+    if(!leg.boss){ chatSay(leg.place + ' does not end on a boss', 'err'); return false; }
+    wave = leg.waves.length;          // jumpToDestStage reads one past the last wave as "the boss"
+  } else {
+    const w = parseInt(waveArg, 10);
+    if(!(w >= 1 && w <= leg.waves.length)){
+      chatSay(leg.place + ' has ' + leg.waves.length + ' wave' + (leg.waves.length>1?'s':'') +
+               (leg.boss ? ' and a boss' : '') + ', so "' + args[2] + '" does not exist', 'err');
+      return false;
+    }
+    wave = w-1;
+  }
+  jumpToDestStage(dest, legN-1, wave);
+  chatSay('✓ ' + dest.name + ' · ' + leg.place + ' · ' +
+           (waveArg === 'boss' ? 'boss' : 'wave ' + (wave+1)), 'ok');
+  return true;
+}
+
+// `closes` marks the commands that move you or change the world — those dismiss the panel so you can see
+// where you landed, exactly as clicking the equivalent row does. A plain toggle leaves it up, because the
+// next thing you do is usually another command.
+const ADMIN_CMDS = [];
+ADMIN_ITEMS.forEach(it => {
+  if(!it.cmd) return;
+  const plain = it.label.replace(/^[^\w]+\s*/, '').toLowerCase();   // strip the leading emoji
+  if(it.action){
+    ADMIN_CMDS.push({name:it.cmd, help:plain, closes:true, run:()=>{
+      chatSay('✓ ' + plain, 'ok');   // said BEFORE running, since these close the panel
+      it.run();
+      return true;
+    }});
+  } else {
+    ADMIN_CMDS.push({name:it.cmd, args:'[on|off]', help:plain, run:(a)=>{
+      const want = !a.length ? !it.get()
+                 : /^(on|1|true|yes)$/i.test(a[0])  ? true
+                 : /^(off|0|false|no)$/i.test(a[0]) ? false : null;
+      if(want === null){ chatSay('/' + it.cmd + ' takes on or off, not "' + a[0] + '"', 'err'); return false; }
+      it.set(want);
+      if(adminOpen) renderAdmin();   // if the panel happens to be up too, its row must agree with this
+      chatSay('✓ ' + plain + ' ' + (want ? 'ON' : 'OFF'), 'ok');
+      return true;
+    }});
+  }
+});
+ADMIN_CMDS.push(
+  {name:'tp', args:'<wave|place> [leg] [wave|boss]', help:'go somewhere', closes:true, run:adminTp},
+  {name:'give', args:'<amount>', help:'add to your score', run:(a)=>{
+    const n = parseInt(a[0], 10);
+    if(!isFinite(n)){ chatSay('/give needs a number, e.g. /give 500', 'err'); return false; }
+    player.score = Math.max(0, (player.score|0) + n); setHUD();
+    chatSay('✓ score ' + (n>=0?'+':'') + n + ' → ' + balance(), 'ok');
+    return true;
+  }},
+  {name:'heal', help:'back to full health', run:()=>{
+    // deliberately does NOT resurrect: respawning is its own machinery (map, loadout, spawn point), and
+    // half-doing it here would leave the player alive inside a world that thinks they are not
+    if(!player.alive){ chatSay('you are dead — wait for the respawn, or /tp somewhere', 'err'); return false; }
+    player.hp = player.maxHp; setHUD();
+    chatSay('✓ health restored', 'ok');
+    return true;
+  }},
+  {name:'where', help:'say where you are', run:()=>{
+    if(inNileArea) chatSay('the Nile wave', 'ok');
+    else if(tripDest){
+      const L = curLeg();
+      chatSay(tripDest.name + ' · ' + L.place + ' · ' +
+               (bossActive ? 'boss' : 'wave ' + (tripWave+1) + '/' + L.waves.length), 'ok');
+    }
+    else if(inHub) chatSay('the ' + currentHub + ' hub', 'ok');
+    else chatSay('wave ' + (waveIdx+1) + ' · ' + ERA_NAMES[eraOfWave(Math.max(0,waveIdx))] +
+                  (bossActive ? ' · boss' : ''), 'ok');
+    return true;
+  }},
+  {name:'clear', help:'wipe this transcript', run:()=>{
+    const log = document.getElementById('chatlog'); if(log) log.innerHTML = '';
+    return true;
+  }},
+  {name:'close', help:'close the console', closes:true, run:()=>true},
+  {name:'help', help:'this list', run:()=>{
+    chatSay('commands (a unique prefix is enough — /inst works):', 'dim');
+    ADMIN_CMDS.forEach(c => {
+      const sig = '/' + c.name + (c.args ? ' ' + c.args : '');
+      chatSay('  ' + sig.padEnd(34) + c.help, 'dim');
+    });
+    chatSay('  ↑ ↓ walk back through what you have typed', 'dim');
+    return true;
+  }}
+);
+
+function chatRun(raw){
+  const line = String(raw).trim();
+  if(!line) return;
+  chatSay('› ' + line, 'echo');
+  // the leading slash is how the user thinks of it, but typing it is optional — "tp 7" works too
+  const parts = line.replace(/^\/+/, '').split(/\s+/).filter(Boolean);
+  if(!parts.length){ chatSay('type a command name after the slash — /help lists them', 'err'); return; }
+  const name = parts[0].toLowerCase(), args = parts.slice(1);
+  let hits = ADMIN_CMDS.filter(c => c.name === name);
+  if(!hits.length) hits = ADMIN_CMDS.filter(c => c.name.startsWith(name));
+  if(!hits.length){ chatSay('no command "' + name + '" — /help lists them all', 'err'); return; }
+  if(hits.length > 1){
+    chatSay('"' + name + '" could mean ' + hits.map(c => '/' + c.name).join(' or '), 'err'); return;
+  }
+  const cmd = hits[0];
+  // A cheat that throws must not take the console down with it — it would be left showing a dead input
+  // with no hint of why, in the one place you cannot open devtools to find out.
+  let ok = false;
+  try { ok = cmd.run(args) !== false; }
+  catch(err){ chatSay('/' + cmd.name + ' failed: ' + ((err && err.message) || err), 'err'); return; }
+  if(ok && cmd.closes) closeChat();
+}
+
+// history, so re-running a jump is ↑ ↵ rather than retyping it
+const chatHistory = [];
+let chatHistAt = -1;        // -1 means "on the live line, below the end of the history"
+{
+  const inp = document.getElementById('chatinput');
+  if(inp) inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      const v = inp.value; inp.value = '';
+      if(v.trim() && chatHistory[chatHistory.length-1] !== v.trim()) chatHistory.push(v.trim());
+      chatHistAt = -1;
+      chatRun(v);
+    } else if(e.key === 'ArrowUp' || e.key === 'ArrowDown'){
+      if(!chatHistory.length) return;
+      e.preventDefault();
+      if(chatHistAt === -1) chatHistAt = chatHistory.length;
+      chatHistAt = Math.max(0, Math.min(chatHistory.length, chatHistAt + (e.key === 'ArrowUp' ? -1 : 1)));
+      inp.value = chatHistAt >= chatHistory.length ? '' : chatHistory[chatHistAt];
+      // the caret belongs at the end of the recalled line, not wherever it happened to be
+      const end = inp.value.length;
+      setTimeout(()=>{ try { inp.setSelectionRange(end, end); } catch(_){} }, 0);
+    }
+  });
+}
+// ===================================================================
+
+// ---- opening and closing the chat ----
+// Deliberately NOT paused, matching every other overlay here: you opened a console over a live world so
+// you could watch what your command did to it. The keydown handler swallows movement keys while it is up,
+// so nothing can be left held down behind it.
+let chatOpen = false;
+let chatGreeted = false;
+function openChat(){
+  if(chatOpen || paused || adminOpen || boothOpen) return;
+  chatOpen = true; firing = false;
+  document.body.classList.add('chat');
+  if(document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+  releaseAllInput();
+  if(!chatGreeted){ chatGreeted = true; chatSay('console — type /help', 'dim'); }
+  const inp = document.getElementById('chatinput');
+  // not on touch: focusing here throws the on-screen keyboard up over the panel before it was asked for.
+  // Tapping the field still works.
+  if(inp && !isTouch){ inp.value = ''; inp.focus(); }
+}
+function closeChat(){
+  if(!chatOpen) return;
+  chatOpen = false;
+  document.body.classList.remove('chat');
+  const inp = document.getElementById('chatinput');
+  if(inp) inp.blur();         // or it keeps swallowing keys behind the closed overlay
+  if(!isTouch && !paused) renderer.domElement.requestPointerLock();   // same as closeBooth()
+}
+// clicking the dimmed area above the box closes it, matching the other overlays
+{
+  const co = document.getElementById('chatoverlay');
+  if(co) co.addEventListener('click', e => { if(e.target === co) closeChat(); });
+}
+
 function openAdmin(){
   if(adminOpen || paused) return;
   adminOpen = true; firing = false;
@@ -15583,6 +16026,13 @@ document.addEventListener('keydown', e => {
     if (e.code==='Escape' || e.code==='KeyC'){ e.preventDefault(); closeAdmin(); }
     return;                       // the panel swallows everything else while it is up
   }
+  // The console is a text field, so Esc alone closes it — [C] has to stay a letter, or /clear could never
+  // be typed. Enter and the history arrows belong to the input's own handler; everything else is swallowed
+  // right here, so no movement key can be left held down behind the overlay.
+  if (chatOpen){
+    if (e.code==='Escape'){ e.preventDefault(); closeChat(); }
+    return;
+  }
   if (e.code==='KeyP' || e.code==='Escape'){
     if (gameStarted && !gameWon){ paused?resumeGame():pauseGame(); }
   }
@@ -15600,7 +16050,18 @@ document.addEventListener('keydown', e => {
   // except by reading the source. Everything they did now lives behind Z, X, X, C, C, C in that order and
   // is visible and toggleable in one place. This is still a single unminified HTML file, so treat the
   // sequence as public knowledge: do not build anything that assumes a run was played honestly.
-  if (!boothOpen && adminSeqStep(e.code)) { openAdmin(); return; }
+  // ---- C,C opens the console ----
+  // These two shortcuts overlap on purpose-built ground: the unlock ENDS in C,C,C, so a naive "two C's in
+  // a row" would fire the console on keys four and five and the panel could never open at all. The admin
+  // run therefore wins — while one is part-way through, its C's are spoken for and count for nothing here.
+  // Read BEFORE adminSeqStep, because that call is what advances the run.
+  const midAdminRun = adminSeqAt > 0;
+  if (e.code === 'KeyC' && !midAdminRun){
+    if (++chatSeqAt >= 2){ chatSeqAt = 0; openChat(); return; }
+  } else if (e.code !== 'KeyC'){
+    chatSeqAt = 0;                // the two presses have to be consecutive, or a stray C opens it later
+  }
+  if (!boothOpen && adminSeqStep(e.code)) { openAdmin(); chatSeqAt = 0; return; }
   // ============================================================
   keys[e.code]=true;
   if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && document.pointerLockElement===renderer.domElement) setAim(true);
@@ -16930,6 +17391,10 @@ function animate(){
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = performance.now()*0.001;
+  // Re-derived from the authored colours every frame rather than hooked onto each of the fifteen enter*()
+  // functions, so a map added later cannot forget it and arrive tinted. Twelve multiplies; it does not
+  // show up in a frame.
+  balanceLights();
 
   if (paused){ renderer.render(scene, camera); return; } // freeze the whole world — just keep showing the last frame
   // The booth panel freezes the world the same way pause does, but AFTER the interact prompt is cleared —
@@ -16993,7 +17458,14 @@ function animate(){
   });
 
   // ----- smooth look: ease actual angles toward the input targets -----
-  const lookEase = Math.min(1, dt*25);   // smooths jitter while staying responsive
+  // 1 - e^(-k*dt), not the k*dt this used to be. Both smooth, but only this one closes the same FRACTION
+  // of the remaining angle per unit of real time no matter how long the frame was, and that distinction is
+  // the whole point. With k*dt the factor was 0.42 at 60fps, 0.83 at 30fps and clamped flat to 1.0 (an
+  // instant snap, no smoothing at all) at 20fps — so whenever frame time moved, the FEEL of the mouse moved
+  // with it, and the camera alternated between lagging and snapping within a single mouse movement. That is
+  // a stutter the look code was manufacturing out of ordinary frame-time variance, on top of whatever
+  // variance the map itself had. k=30 leaves the 60fps response where it was (0.39 against the old 0.42).
+  const lookEase = 1 - Math.exp(-dt*30);
   yaw   += (targetYaw   - yaw)   * lookEase;
   pitch += (targetPitch - pitch) * lookEase;
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
