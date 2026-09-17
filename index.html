@@ -3145,6 +3145,82 @@ function waterRippleTex(){
   }
   return c;
 }
+// ---- baking a map's static boxes down to one mesh per material ----
+// A map assembled out of individual boxes costs one draw call per box, every frame, whether or not the
+// player can tell them apart. nileWorld is the extreme case in this game: 4399 meshes, against 1962 for
+// the next heaviest map. It is ALSO the only map where the player cannot walk anywhere — the Nile Wave
+// pins you to a boat deck about five units across — so the only thing that changes between frames is
+// where the camera is pointed, and a long river corridor puts very different numbers of those meshes in
+// frustum depending on the heading. The per-frame draw count therefore swings as you turn, and frame time
+// swings with it. That is what "looking around is glitchy in the Nile wave" actually was: not the look
+// code, which every map in the game shares, but the cost of the frame changing while you turned.
+//
+// Boxes that never move and already share a material can be baked into one geometry that draws in a
+// single call. Nothing is dropped and nothing shifts — these are the same vertices, transformed into the
+// group's own space once here instead of by a per-object matrix every frame.
+//
+// Under tools/audit's stubbed THREE this does nothing at all, by construction: those geometries describe
+// themselves as half-extents and carry no vertex buffers, so the `attributes` guard below rejects every
+// mesh and the world stays exactly as authored. That is deliberate — the headless geometry sweeps read
+// this map one authored box at a time, and merging would leave them nothing to read.
+function mergeStatic(root, keep){
+  root.updateMatrixWorld(true);
+  // Keyed on the material OBJECT, not its uuid. Same grouping in the browser, but it does not quietly
+  // depend on a field the object might not carry — key on a missing uuid and every material in the map
+  // hashes to "undefined", collapsing the whole world into one bucket and one wrong-looking mesh.
+  const byMat = new Map();   // material -> Map(shadow flags -> bucket)
+  // Built on first use, never before: the guards below are what decide whether there is any real geometry
+  // here at all, and under the audit stub there is none — its matrixWorld is a flat array of sixteen
+  // numbers rather than a Matrix4, so touching it up here would throw before the guards could say so.
+  let rootInv = null;
+  root.traverse(o => {
+    if(!o.isMesh || !o.geometry || !o.material || Array.isArray(o.material)) return;
+    const a = o.geometry.attributes;
+    if(!a || !a.position || !a.position.array) return;   // stubbed geometry — see the note above
+    if(o.material.transparent) return;                   // merging would collapse these into one sort order
+    if(keep && keep(o)) return;
+    if(!rootInv) rootInv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+    // castShadow/receiveShadow are per-object, not per-material, so they have to agree across a bucket —
+    // otherwise the bake would quietly change which surfaces cast into the shadow map.
+    let flags = byMat.get(o.material);
+    if(!flags) byMat.set(o.material, flags = new Map());
+    const fk = (o.castShadow?'c':'') + (o.receiveShadow?'r':'');
+    let b = flags.get(fk);
+    if(!b) flags.set(fk, b = {mat:o.material, cast:o.castShadow, recv:o.receiveShadow, src:[], geos:[]});
+    // applyMatrix4 carries the normals through its own normal matrix, so non-uniform scales survive intact.
+    // Going via rootInv rather than matrixWorld directly keeps this correct even if the group itself is
+    // ever moved: the vertices land in ROOT's space, which is the space the merged mesh will hang in.
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(rootInv, o.matrixWorld));
+    b.geos.push(g); b.src.push(o);
+  });
+  let before = 0, after = 0;
+  byMat.forEach(flags => flags.forEach(b => {
+    before += b.src.length;
+    if(b.src.length < 2){ after += b.src.length; return; }   // a bucket of one has nothing to gain
+    let n = 0; for(const g of b.geos) n += g.attributes.position.count;
+    const pos = new Float32Array(n*3), nor = new Float32Array(n*3), uv = new Float32Array(n*2);
+    let v = 0;
+    for(const g of b.geos){
+      pos.set(g.attributes.position.array, v*3);
+      if(g.attributes.normal) nor.set(g.attributes.normal.array, v*3);
+      if(g.attributes.uv)     uv.set(g.attributes.uv.array,     v*2);
+      v += g.attributes.position.count;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+    geo.setAttribute('normal',   new THREE.BufferAttribute(nor,3));
+    geo.setAttribute('uv',       new THREE.BufferAttribute(uv,2));
+    const m = new THREE.Mesh(geo, b.mat);
+    m.castShadow = b.cast; m.receiveShadow = b.recv;
+    m.matrixAutoUpdate = false;   // the vertices are already in root's space; this local matrix stays identity
+    b.src.forEach(o => { if(o.parent) o.parent.remove(o); });
+    root.add(m);
+    after++;
+  }));
+  return {before, after};
+}
+
 (function buildNileWorld(){
   function nblock(w,h,d,color,x,y,z,opts){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), voxMat(color,opts||{noise:16})); m.position.set(x,y,z); nileWorld.add(m); return m; }
   // open water in every direction — a big flat sea, no walls, no ceiling, with a rippled surface texture instead of a flat color
@@ -3514,6 +3590,10 @@ function waterRippleTex(){
   for(let i=0;i<12;i++) bankReeds(-20+4+Math.random()*3, -50+i*9+(Math.random()-0.5)*4, 5);
   for(let i=0;i<5;i++) bankPalm(17, -40+i*20);
   for(let i=0;i<5;i++) bankPalm(-17, -40+i*20);
+  // Bake the banks, dunes, palms, reeds, horizon and boat down to one mesh per material. Everything built
+  // above is fixed scenery: the only thing in this world that is not is the river surface, which bobs, and
+  // the chewed hull chunks, which spawnBoatHole() builds at runtime long after this has run.
+  mergeStatic(nileWorld, o => o.userData.isWater);
 })();
 addTarget = colliders;
 
@@ -16993,7 +17073,14 @@ function animate(){
   });
 
   // ----- smooth look: ease actual angles toward the input targets -----
-  const lookEase = Math.min(1, dt*25);   // smooths jitter while staying responsive
+  // 1 - e^(-k*dt), not the k*dt this used to be. Both smooth, but only this one closes the same FRACTION
+  // of the remaining angle per unit of real time no matter how long the frame was, and that distinction is
+  // the whole point. With k*dt the factor was 0.42 at 60fps, 0.83 at 30fps and clamped flat to 1.0 (an
+  // instant snap, no smoothing at all) at 20fps — so whenever frame time moved, the FEEL of the mouse moved
+  // with it, and the camera alternated between lagging and snapping within a single mouse movement. That is
+  // a stutter the look code was manufacturing out of ordinary frame-time variance, on top of whatever
+  // variance the map itself had. k=30 leaves the 60fps response where it was (0.39 against the old 0.42).
+  const lookEase = 1 - Math.exp(-dt*30);
   yaw   += (targetYaw   - yaw)   * lookEase;
   pitch += (targetPitch - pitch) * lookEase;
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
