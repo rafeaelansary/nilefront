@@ -158,6 +158,35 @@
   #admintitle{font-size:20px;font-weight:900;letter-spacing:3px;color:#7fffc4;text-align:center;
     text-shadow:0 2px 0 #06301f,0 0 18px rgba(70,255,180,0.3);margin-bottom:4px}
   #adminsub{font-size:12px;text-align:center;opacity:0.62;margin-bottom:16px}
+  /* ---- the console (press C twice) ---- */
+  /* Its own overlay, deliberately not part of the admin panel. Anchored to the bottom and only lightly
+     dimmed so the world stays visible behind it — that is the difference between a chat and a menu: you
+     are meant to be able to watch what your command just did. Monospace, because the whole point of a
+     command line is that /tp sweden 1 2 lines up under the /help that taught it to you. */
+  #chatoverlay{position:absolute;inset:0;z-index:13;display:none;align-items:flex-end;justify-content:center;
+    padding:0 0 26px;
+    background:linear-gradient(to top, rgba(2,6,5,0.82) 0%, rgba(2,6,5,0.34) 34%, rgba(2,6,5,0) 62%)}
+  body.chat #chatoverlay{display:flex}
+  body.chat #crosshair,body.chat #prompt{display:none !important}
+  #chatbox{width:min(620px,94vw);padding:10px 12px;border:1px solid rgba(63,208,138,0.55);border-radius:10px;
+    background:rgba(4,12,9,0.9);box-shadow:0 10px 40px rgba(0,0,0,0.7);color:#dff5e8}
+  #chattitle{font-size:10px;letter-spacing:3px;font-weight:900;color:#7fffc4;opacity:0.72;margin-bottom:6px}
+  #chatlog{height:150px;overflow-y:auto;text-align:left;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.55;
+    white-space:pre-wrap;overflow-wrap:anywhere}
+  #chatlog .echo{color:#7fffc4}
+  #chatlog .ok{color:#a8ecc8}
+  #chatlog .err{color:#ff9b88}
+  #chatlog .dim{color:#dff5e8;opacity:0.5}
+  #chatentry{display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 10px;border-radius:7px;
+    background:rgba(0,0,0,0.55);border:1px solid rgba(63,208,138,0.4)}
+  #chatentry:focus-within{border-color:rgba(63,208,138,0.9)}
+  #chatentry .caret{color:#7fffc4;font-weight:900;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  #chatinput{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#dfffe9;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  #chatinput::placeholder{color:rgba(223,255,233,0.34)}
+  #chathint{margin-top:6px;font-size:10px;letter-spacing:1px;opacity:0.45;text-align:right}
   .adminrow{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;
     padding:10px 12px;margin-bottom:8px;border:1px solid rgba(63,208,138,0.35);border-radius:8px;
     background:rgba(0,0,0,0.3);font-size:15px;font-weight:700;cursor:pointer;
@@ -233,6 +262,14 @@
     <div id="adminjumprows"></div>
   </div>
   <div id="adminhint">click a row to toggle · click a wave to jump · [Esc] or [C] to close</div>
+</div></div>
+<div id="chatoverlay"><div id="chatbox">
+  <div id="chattitle">CONSOLE</div>
+  <div id="chatlog"></div>
+  <div id="chatentry"><span class="caret">&rsaquo;</span><input id="chatinput" type="text"
+    autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"
+    placeholder="/help"></div>
+  <div id="chathint">↑ ↓ history · [Esc] to close</div>
 </div></div>
 <div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button></div>
 <div id="mobile">
@@ -15091,7 +15128,7 @@ document.addEventListener('pointerlockchange', () => {
   // the START overlay OVER the panel — so the panel looks like it never opened, the click that dismisses
   // the overlay lands as a fresh startGame(), and you are left unlocked and unable to move. Any future
   // overlay that drops pointer lock has to be listed here too.
-  const overlayUp = boothOpen || adminOpen;
+  const overlayUp = boothOpen || adminOpen || chatOpen;
   lockEl.style.display = (locked || overlayUp) ? 'none' : 'flex';
   if(locked && !overlayUp && (!gameStarted || gameWon)) startGame();
 });
@@ -15536,6 +15573,7 @@ let flyY = 0;                       // height above the terrain while flying, in
 // is no timeout: a timer would make it fail under a lag spike, and there is nothing to protect here.
 const ADMIN_SEQ = ['KeyZ','KeyX','KeyX','KeyC','KeyC','KeyC'];
 let adminSeqAt = 0;
+let chatSeqAt = 0;   // consecutive C presses toward opening the console — see the keydown handler
 function adminSeqStep(code){
   if(code === ADMIN_SEQ[adminSeqAt]){
     adminSeqAt++;
@@ -15547,12 +15585,16 @@ function adminSeqStep(code){
   return false;
 }
 
+// Every entry carries a `cmd`, and the console builds its command list from THIS array rather than
+// keeping a parallel one of its own. That is the whole reason the two can never drift: a cheat added
+// here shows up as a clickable row AND as /<cmd> with no second edit, and a row that reads ON can never
+// disagree with what the console just said, because both call the same get/set.
 const ADMIN_ITEMS = [
-  {key:'infAmmo',   label:'♾  Infinite ammo',  get:()=>gk7q.a,   set:v=>{ gk7q.a=v; setAmmoHUD(); }},
-  {key:'infMoney',  label:'💰  Infinite money', get:()=>gk7q.d,   set:v=>{ gk7q.d=v; setHUD(); }},
-  {key:'god',       label:'🛡  God mode',       get:()=>godMode,         set:v=>{ godMode=v; }},
-  {key:'instaKill', label:'💀  Insta kill',     get:()=>gk7q.b, set:v=>{ gk7q.b=v; }},
-  {key:'fly',       label:'🕊  Flight',         get:()=>gk7q.c,       set:v=>{
+  {key:'infAmmo',   cmd:'ammo',      label:'♾  Infinite ammo',  get:()=>gk7q.a,   set:v=>{ gk7q.a=v; setAmmoHUD(); }},
+  {key:'infMoney',  cmd:'money',     label:'💰  Infinite money', get:()=>gk7q.d,   set:v=>{ gk7q.d=v; setHUD(); }},
+  {key:'god',       cmd:'god',       label:'🛡  God mode',       get:()=>godMode,         set:v=>{ godMode=v; }},
+  {key:'instaKill', cmd:'instakill', label:'💀  Insta kill',     get:()=>gk7q.b, set:v=>{ gk7q.b=v; }},
+  {key:'fly',       cmd:'fly',       label:'🕊  Flight',         get:()=>gk7q.c,       set:v=>{
       gk7q.c=v;
       if(v){ flyY = 0; jumpY = 0; jumpV = 0; }
       else {
@@ -15569,13 +15611,13 @@ const ADMIN_ITEMS = [
       }
     }},
   // Actions rather than toggles, so they read as buttons in the panel.
-  {key:'killAll', action:true, label:'☠  Kill everything', state:'RUN',
+  {key:'killAll', cmd:'killall', action:true, label:'☠  Kill everything', state:'RUN',
    run:()=>{
      // whatever is live: a wave, a boss, the Nile wave, a destination's garrison
      bots.forEach(b=>{ if(b.alive) damageBot(b, 1e9, b.mesh.position); });
      closeAdmin();
    }},
-  {key:'skip', action:true, label:'⏭  Skip to the end', state:'RUN',
+  {key:'skip', cmd:'skip', action:true, label:'⏭  Skip to the end', state:'RUN',
    run:()=>{
      clearBots();
      currentEra=3; bossNum=3; waveIdx=ERA_START_WAVE[3];
@@ -15690,6 +15732,249 @@ function renderWaveJump(){
     });
   });
 }
+// ============================ the console ============================
+// A chat, opened with C twice, entirely separate from the admin panel — that panel is untouched and still
+// lives behind Z,X,X,C,C,C with its own rows and wave-jump tree. This is the typing half: /tp 7 beats
+// opening a section to hunt for a button, and it is the only way to reach some places at all (the Nile
+// wave has no row anywhere).
+//
+// Both drive the same ADMIN_ITEMS, so whichever you use, the other agrees with it.
+function chatSay(text, kind){
+  const log = document.getElementById('chatlog'); if(!log) return;
+  const line = document.createElement('div');
+  line.className = kind || 'dim';
+  line.textContent = text;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;   // newest line stays in view
+}
+
+// ---- /tp ----
+// The game has two different kinds of place, so this takes two shapes. The campaign is a flat run of
+// numbered waves; every destination is a named trip of legs, each holding its own waves and maybe a boss.
+//   /tp 7              campaign wave 7 — the number on the HUD, 1-based like the HUD is
+//   /tp rome           an era, at its first wave
+//   /tp sweden         a destination: first leg, first wave
+//   /tp sweden 1 2     that destination, leg 1, wave 2
+//   /tp sweden 1 boss  the boss that leg ends on
+//   /tp nile           the Nile wave, which sits on neither map
+function adminTp(args){
+  if(!args.length){ chatSay('/tp needs somewhere to go — try /tp 7 or /tp sweden', 'err'); return false; }
+  const first = String(args[0]).toLowerCase();
+
+  if(/^\d+$/.test(first)){
+    const n = parseInt(first, 10);
+    if(n < 1 || n > WAVES.length){
+      chatSay('there is no wave ' + n + ' — the campaign runs 1-' + WAVES.length, 'err'); return false;
+    }
+    jumpToWave(n-1);
+    chatSay('✓ wave ' + n + ' · ' + ERA_NAMES[eraOfWave(n-1)], 'ok');
+    return true;
+  }
+  if(first === 'nile'){ enterNileWave(); chatSay('✓ the Nile wave', 'ok'); return true; }
+
+  const era = ERA_NAMES.findIndex(nm => nm.toLowerCase() === first);
+  if(era >= 0){
+    jumpToWave(ERA_START_WAVE[era]);
+    chatSay('✓ ' + ERA_NAMES[era] + ' · wave ' + (ERA_START_WAVE[era]+1), 'ok');
+    return true;
+  }
+
+  // a destination by name, or by any prefix that names only one of them
+  const ready = DESTINATIONS.filter(d => d.legs && d.legs.length);
+  let hits = ready.filter(d => d.name.toLowerCase() === first);
+  if(!hits.length) hits = ready.filter(d => d.name.toLowerCase().startsWith(first));
+  if(!hits.length){
+    chatSay('no wave, era or destination called "' + args[0] + '"', 'err');
+    chatSay('  try: 1-' + WAVES.length + ' · ' + ERA_NAMES.join(' ').toLowerCase() +
+             ' · nile · ' + ready.map(d => d.name.toLowerCase()).join(' '), 'dim');
+    return false;
+  }
+  if(hits.length > 1){
+    chatSay('"' + args[0] + '" could mean ' + hits.map(d => d.name).join(' or '), 'err'); return false;
+  }
+  const dest = hits[0];
+
+  const legN = args.length > 1 ? parseInt(args[1], 10) : 1;
+  if(!(legN >= 1 && legN <= dest.legs.length)){
+    chatSay(dest.name + ' has ' + dest.legs.length + ' leg' + (dest.legs.length>1?'s':'') +
+             ', so leg "' + args[1] + '" does not exist', 'err');
+    chatSay('  ' + dest.legs.map((l,i) => (i+1) + '=' + l.place).join('  '), 'dim');
+    return false;
+  }
+  const leg = dest.legs[legN-1];
+
+  const waveArg = args.length > 2 ? String(args[2]).toLowerCase() : '1';
+  let wave;
+  if(waveArg === 'boss'){
+    if(!leg.boss){ chatSay(leg.place + ' does not end on a boss', 'err'); return false; }
+    wave = leg.waves.length;          // jumpToDestStage reads one past the last wave as "the boss"
+  } else {
+    const w = parseInt(waveArg, 10);
+    if(!(w >= 1 && w <= leg.waves.length)){
+      chatSay(leg.place + ' has ' + leg.waves.length + ' wave' + (leg.waves.length>1?'s':'') +
+               (leg.boss ? ' and a boss' : '') + ', so "' + args[2] + '" does not exist', 'err');
+      return false;
+    }
+    wave = w-1;
+  }
+  jumpToDestStage(dest, legN-1, wave);
+  chatSay('✓ ' + dest.name + ' · ' + leg.place + ' · ' +
+           (waveArg === 'boss' ? 'boss' : 'wave ' + (wave+1)), 'ok');
+  return true;
+}
+
+// `closes` marks the commands that move you or change the world — those dismiss the panel so you can see
+// where you landed, exactly as clicking the equivalent row does. A plain toggle leaves it up, because the
+// next thing you do is usually another command.
+const ADMIN_CMDS = [];
+ADMIN_ITEMS.forEach(it => {
+  if(!it.cmd) return;
+  const plain = it.label.replace(/^[^\w]+\s*/, '').toLowerCase();   // strip the leading emoji
+  if(it.action){
+    ADMIN_CMDS.push({name:it.cmd, help:plain, closes:true, run:()=>{
+      chatSay('✓ ' + plain, 'ok');   // said BEFORE running, since these close the panel
+      it.run();
+      return true;
+    }});
+  } else {
+    ADMIN_CMDS.push({name:it.cmd, args:'[on|off]', help:plain, run:(a)=>{
+      const want = !a.length ? !it.get()
+                 : /^(on|1|true|yes)$/i.test(a[0])  ? true
+                 : /^(off|0|false|no)$/i.test(a[0]) ? false : null;
+      if(want === null){ chatSay('/' + it.cmd + ' takes on or off, not "' + a[0] + '"', 'err'); return false; }
+      it.set(want);
+      if(adminOpen) renderAdmin();   // if the panel happens to be up too, its row must agree with this
+      chatSay('✓ ' + plain + ' ' + (want ? 'ON' : 'OFF'), 'ok');
+      return true;
+    }});
+  }
+});
+ADMIN_CMDS.push(
+  {name:'tp', args:'<wave|place> [leg] [wave|boss]', help:'go somewhere', closes:true, run:adminTp},
+  {name:'give', args:'<amount>', help:'add to your score', run:(a)=>{
+    const n = parseInt(a[0], 10);
+    if(!isFinite(n)){ chatSay('/give needs a number, e.g. /give 500', 'err'); return false; }
+    player.score = Math.max(0, (player.score|0) + n); setHUD();
+    chatSay('✓ score ' + (n>=0?'+':'') + n + ' → ' + balance(), 'ok');
+    return true;
+  }},
+  {name:'heal', help:'back to full health', run:()=>{
+    // deliberately does NOT resurrect: respawning is its own machinery (map, loadout, spawn point), and
+    // half-doing it here would leave the player alive inside a world that thinks they are not
+    if(!player.alive){ chatSay('you are dead — wait for the respawn, or /tp somewhere', 'err'); return false; }
+    player.hp = player.maxHp; setHUD();
+    chatSay('✓ health restored', 'ok');
+    return true;
+  }},
+  {name:'where', help:'say where you are', run:()=>{
+    if(inNileArea) chatSay('the Nile wave', 'ok');
+    else if(tripDest){
+      const L = curLeg();
+      chatSay(tripDest.name + ' · ' + L.place + ' · ' +
+               (bossActive ? 'boss' : 'wave ' + (tripWave+1) + '/' + L.waves.length), 'ok');
+    }
+    else if(inHub) chatSay('the ' + currentHub + ' hub', 'ok');
+    else chatSay('wave ' + (waveIdx+1) + ' · ' + ERA_NAMES[eraOfWave(Math.max(0,waveIdx))] +
+                  (bossActive ? ' · boss' : ''), 'ok');
+    return true;
+  }},
+  {name:'clear', help:'wipe this transcript', run:()=>{
+    const log = document.getElementById('chatlog'); if(log) log.innerHTML = '';
+    return true;
+  }},
+  {name:'close', help:'close the console', closes:true, run:()=>true},
+  {name:'help', help:'this list', run:()=>{
+    chatSay('commands (a unique prefix is enough — /inst works):', 'dim');
+    ADMIN_CMDS.forEach(c => {
+      const sig = '/' + c.name + (c.args ? ' ' + c.args : '');
+      chatSay('  ' + sig.padEnd(34) + c.help, 'dim');
+    });
+    chatSay('  ↑ ↓ walk back through what you have typed', 'dim');
+    return true;
+  }}
+);
+
+function chatRun(raw){
+  const line = String(raw).trim();
+  if(!line) return;
+  chatSay('› ' + line, 'echo');
+  // the leading slash is how the user thinks of it, but typing it is optional — "tp 7" works too
+  const parts = line.replace(/^\/+/, '').split(/\s+/).filter(Boolean);
+  if(!parts.length){ chatSay('type a command name after the slash — /help lists them', 'err'); return; }
+  const name = parts[0].toLowerCase(), args = parts.slice(1);
+  let hits = ADMIN_CMDS.filter(c => c.name === name);
+  if(!hits.length) hits = ADMIN_CMDS.filter(c => c.name.startsWith(name));
+  if(!hits.length){ chatSay('no command "' + name + '" — /help lists them all', 'err'); return; }
+  if(hits.length > 1){
+    chatSay('"' + name + '" could mean ' + hits.map(c => '/' + c.name).join(' or '), 'err'); return;
+  }
+  const cmd = hits[0];
+  // A cheat that throws must not take the console down with it — it would be left showing a dead input
+  // with no hint of why, in the one place you cannot open devtools to find out.
+  let ok = false;
+  try { ok = cmd.run(args) !== false; }
+  catch(err){ chatSay('/' + cmd.name + ' failed: ' + ((err && err.message) || err), 'err'); return; }
+  if(ok && cmd.closes) closeChat();
+}
+
+// history, so re-running a jump is ↑ ↵ rather than retyping it
+const chatHistory = [];
+let chatHistAt = -1;        // -1 means "on the live line, below the end of the history"
+{
+  const inp = document.getElementById('chatinput');
+  if(inp) inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      const v = inp.value; inp.value = '';
+      if(v.trim() && chatHistory[chatHistory.length-1] !== v.trim()) chatHistory.push(v.trim());
+      chatHistAt = -1;
+      chatRun(v);
+    } else if(e.key === 'ArrowUp' || e.key === 'ArrowDown'){
+      if(!chatHistory.length) return;
+      e.preventDefault();
+      if(chatHistAt === -1) chatHistAt = chatHistory.length;
+      chatHistAt = Math.max(0, Math.min(chatHistory.length, chatHistAt + (e.key === 'ArrowUp' ? -1 : 1)));
+      inp.value = chatHistAt >= chatHistory.length ? '' : chatHistory[chatHistAt];
+      // the caret belongs at the end of the recalled line, not wherever it happened to be
+      const end = inp.value.length;
+      setTimeout(()=>{ try { inp.setSelectionRange(end, end); } catch(_){} }, 0);
+    }
+  });
+}
+// ===================================================================
+
+// ---- opening and closing the chat ----
+// Deliberately NOT paused, matching every other overlay here: you opened a console over a live world so
+// you could watch what your command did to it. The keydown handler swallows movement keys while it is up,
+// so nothing can be left held down behind it.
+let chatOpen = false;
+let chatGreeted = false;
+function openChat(){
+  if(chatOpen || paused || adminOpen || boothOpen) return;
+  chatOpen = true; firing = false;
+  document.body.classList.add('chat');
+  if(document.pointerLockElement === renderer.domElement) document.exitPointerLock();
+  releaseAllInput();
+  if(!chatGreeted){ chatGreeted = true; chatSay('console — type /help', 'dim'); }
+  const inp = document.getElementById('chatinput');
+  // not on touch: focusing here throws the on-screen keyboard up over the panel before it was asked for.
+  // Tapping the field still works.
+  if(inp && !isTouch){ inp.value = ''; inp.focus(); }
+}
+function closeChat(){
+  if(!chatOpen) return;
+  chatOpen = false;
+  document.body.classList.remove('chat');
+  const inp = document.getElementById('chatinput');
+  if(inp) inp.blur();         // or it keeps swallowing keys behind the closed overlay
+  if(!isTouch && !paused) renderer.domElement.requestPointerLock();   // same as closeBooth()
+}
+// clicking the dimmed area above the box closes it, matching the other overlays
+{
+  const co = document.getElementById('chatoverlay');
+  if(co) co.addEventListener('click', e => { if(e.target === co) closeChat(); });
+}
+
 function openAdmin(){
   if(adminOpen || paused) return;
   adminOpen = true; firing = false;
@@ -15741,6 +16026,13 @@ document.addEventListener('keydown', e => {
     if (e.code==='Escape' || e.code==='KeyC'){ e.preventDefault(); closeAdmin(); }
     return;                       // the panel swallows everything else while it is up
   }
+  // The console is a text field, so Esc alone closes it — [C] has to stay a letter, or /clear could never
+  // be typed. Enter and the history arrows belong to the input's own handler; everything else is swallowed
+  // right here, so no movement key can be left held down behind the overlay.
+  if (chatOpen){
+    if (e.code==='Escape'){ e.preventDefault(); closeChat(); }
+    return;
+  }
   if (e.code==='KeyP' || e.code==='Escape'){
     if (gameStarted && !gameWon){ paused?resumeGame():pauseGame(); }
   }
@@ -15758,7 +16050,18 @@ document.addEventListener('keydown', e => {
   // except by reading the source. Everything they did now lives behind Z, X, X, C, C, C in that order and
   // is visible and toggleable in one place. This is still a single unminified HTML file, so treat the
   // sequence as public knowledge: do not build anything that assumes a run was played honestly.
-  if (!boothOpen && adminSeqStep(e.code)) { openAdmin(); return; }
+  // ---- C,C opens the console ----
+  // These two shortcuts overlap on purpose-built ground: the unlock ENDS in C,C,C, so a naive "two C's in
+  // a row" would fire the console on keys four and five and the panel could never open at all. The admin
+  // run therefore wins — while one is part-way through, its C's are spoken for and count for nothing here.
+  // Read BEFORE adminSeqStep, because that call is what advances the run.
+  const midAdminRun = adminSeqAt > 0;
+  if (e.code === 'KeyC' && !midAdminRun){
+    if (++chatSeqAt >= 2){ chatSeqAt = 0; openChat(); return; }
+  } else if (e.code !== 'KeyC'){
+    chatSeqAt = 0;                // the two presses have to be consecutive, or a stray C opens it later
+  }
+  if (!boothOpen && adminSeqStep(e.code)) { openAdmin(); chatSeqAt = 0; return; }
   // ============================================================
   keys[e.code]=true;
   if ((e.code==='ShiftLeft' || e.code==='ShiftRight') && document.pointerLockElement===renderer.domElement) setAim(true);

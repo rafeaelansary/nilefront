@@ -494,9 +494,23 @@ function makeElement(tag){
                   if(on) this._s.add(c); else this._s.delete(c);
                   return on;
                 }, contains(c){ return this._s.has(c); } },
+    // scroll/selection state a console or list actually touches; without these, writing to them just
+    // invents properties and reading one back tells a test nothing
+    className:'', scrollTop:0, scrollHeight:0, selectionStart:0, selectionEnd:0,
+    setSelectionRange(a,b){ this.selectionStart=a; this.selectionEnd=b; },
     appendChild(c){ this.children.push(c); return c; },
     removeChild(c){ const i=this.children.indexOf(c); if(i>=0) this.children.splice(i,1); return c; },
-    addEventListener(){}, removeEventListener(){}, dispatchEvent(){ return true; },
+    // Recorded, not dropped — for the same reason document's are (see its note below). An element that
+    // throws its listeners away makes anything driven by typing into a field untestable, and the admin
+    // console's whole input path (Enter, the history arrows) lives on exactly one such listener.
+    // __fireOn(el, type, props) is how a harness drives them.
+    _listeners:{},
+    addEventListener(type, fn){ (this._listeners[type] = this._listeners[type] || []).push(fn); },
+    removeEventListener(type, fn){
+      const a = this._listeners[type]; if(!a) return;
+      const i = a.indexOf(fn); if(i >= 0) a.splice(i, 1);
+    },
+    dispatchEvent(ev){ (this._listeners[ev && ev.type] || []).forEach(fn=>fn(ev)); return true; },
     setAttribute(){}, getAttribute(){ return null; }, removeAttribute(){},
     focus(){}, blur(){}, click(){}, remove(){},
     requestPointerLock(){}, getBoundingClientRect(){ return {left:0,top:0,right:800,bottom:600,width:800,height:600}; },
@@ -540,6 +554,15 @@ global.__fire = function(type, props){
                             repeat:false, shiftKey:false, ctrlKey:false, altKey:false, metaKey:false},
                            props||{});
   document.dispatchEvent(ev);
+  return ev;
+};
+// Same, but aimed at one element's own listeners rather than the document's.
+//   __fireOn(document.getElementById('admininput'), 'keydown', {key:'Enter'})
+global.__fireOn = function(el, type, props){
+  const ev = Object.assign({type:type, target:el, preventDefault(){}, stopPropagation(){},
+                            repeat:false, shiftKey:false, ctrlKey:false, altKey:false, metaKey:false},
+                           props||{});
+  if(el && el.dispatchEvent) el.dispatchEvent(ev);
   return ev;
 };
 document.body.requestPointerLock = ()=>{};
