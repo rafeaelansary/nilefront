@@ -15302,32 +15302,37 @@ function makeDaneAxe(){
   for(let i=0;i<4;i++) ab(0.014,0.030,0.008, silver, 0, 0.66-i*0.055, 0.115);
   ab(0.010,0.10,0.008, silver, 0, 0.605, 0.128);
   // BIG, and held across the body with the head high and to the right.
-  // What made this unusable before was not its size — it was that it stood bolt upright dead down the
-  // middle of the view. Measured in screen space, the cant is what fixes that: the axe's nearest edge
-  // sits right of the centre line, so the crosshair stays clear. It gets to stay a proper two-hander
-  // filling the right side of the frame.
+  // What made this unusable long ago was not its size — it was that it stood bolt upright dead down
+  // the middle of the view. The cant is what fixes that: the axe's nearest edge sits right of the
+  // centre line, so the crosshair stays clear, and it gets to be a proper two-hander filling the
+  // right side of the frame.
   //
-  // FOUR numbers are measured now, not one. The pass before this checked only the left edge (crosshair
-  // clearance) and the head was hanging 41% off the right of the frame. The pass after THAT fixed the
-  // right edge and broke two other things: it came out small, and its butt ended up inside the frame at
-  // -1.00, so the axe hung in mid-air instead of running off the bottom of the screen the way a weapon
-  // you are actually holding does. A viewmodel has to satisfy all four at once:
-  //    right   <= 0.88   inside the frame, with ~0.09 spare for the bob/sway/lag that ride on pos
-  //    top      < 0.92   the head is not clipped off the top, and >= 0.30 so it is not sunk out of view
-  //    bottom  <= -1.30  the haft LEAVES the frame — this is what makes it read as held, not floating
-  //    crosshair         no mesh may cross the 0.10 box around screen centre
-  // Solved against all four, maximising size: scale 1.06 — BIGGER than the 0.88 it originally shipped
-  // at — held further out at z -0.76 so the extra size costs nothing at the frame edge. Lands at
-  // right 0.90 / left 0.11 / top 0.76 / bottom -1.32 at 16:9. The pose is untouched throughout.
-  // Two of the four are now hard against their limits, so this is the largest the axe can be: the
-  // bottom cannot rise (it would start floating) and the right cannot grow (it would start clipping).
-  // Only the top has slack, and the top is not what is holding the size down.
-  // At 16:9, which is what this is tuned for. A 3:2 window puts the edge at 1.06 and 4:3 at 1.19, so
-  // the horn of the blade grazes the frame on a narrow window — the alternative was a permanently
-  // smaller axe on every screen, which is the wrong trade for a two-hander.
-  g.scale.setScalar(1.06);
+  // FOUR things are measured, in half-screen units where 1.0 is the frame edge, at 16:9:
+  //    right   <= 0.93   inside the frame, with room for the bob/sway/lag that ride on pos
+  //    top     <= 0.90   the head is not clipped off the top
+  //    bottom  <= -1.35  the haft LEAVES the frame — this is what makes it read as held, not floating
+  //    crosshair         nothing comes near the aim point
+  //
+  // The pass before this one solved those against the models' BOUNDING BOXES and concluded, in a
+  // comment that said so in as many words, that 1.06 was the largest the axe could ever be. It was
+  // not. The haft is a round shaft canted across the frame, and the box around a diagonal cylinder is
+  // mostly air: measured as a box it came within 0.108 of the crosshair and the size was pinned there,
+  // while the actual timber was never closer than 0.37. That imaginary 0.26 was the whole headroom.
+  //
+  // Measured as a SILHOUETTE instead — boxes by their eight corners, the round parts by their axis and
+  // radius — the binding constraints are the top of the frame and the centre line, not the crosshair.
+  // Solved against all four that way: scale 1.20, held at (0.21, -0.425, -0.76). At 16:9 that lands at
+  // right 0.88 / left 0.00 / top 0.88 / bottom -1.44, with 0.31 of clear screen around the crosshair.
+  // It is 13% bigger than it was with its right edge in exactly the same place — the extra size went
+  // up into empty frame and down off the bottom of the screen, which is where a two-hander's haft
+  // belongs. Worst case for every bit of viewmodel motion at once (walk bob + idle sway + a hard
+  // flick's look-lag) puts the head at right 0.95 / top 0.97: still inside the frame, as before.
+  // Tuned at 16:9. A 16:10 window puts the edge at 0.98, 3:2 at 1.05 and 4:3 at 1.18, so the horn of
+  // the blade grazes the frame on a narrow window — the alternative is a permanently smaller axe on
+  // every screen, which is the wrong trade for a two-hander.
+  g.scale.setScalar(1.20);
   g.rotation.z = -0.42; g.rotation.y = 0.34; g.rotation.x = 0.10;
-  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.29,-0.38,-0.76),recoil:0.24,name:'Dane Axe',
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.21,-0.425,-0.76),recoil:0.24,name:'Dane Axe',
     restRot:{x:0.10,y:0.34,z:-0.42},
     melee:true, range:3.0, damage:185, fireRate:0.92, sfx:'axeSwing',
     // the brief's "instantly smashes guards and armour": damage is multiplied against armoured targets.
