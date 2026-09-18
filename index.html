@@ -938,9 +938,11 @@ function snowGroundTex(){
   // A PALETTE, not a gradient. Every other ground texture in this game picks from a handful of tones
   // (grassTopTex from four, dirtTex from four) and that is what makes them read as pixel art rather
   // than as a photograph of a surface. Smooth interpolated noise came out as a pale blue blur.
-  // White at the crown down to blue in the trough: the only light reaching a hollow in snow is sky
-  // light, and that blue is most of what separates snow from concrete.
-  const SNOW=[[255,255,255],[246,250,254],[236,242,251],[224,233,246],[210,222,240],[196,211,233]];
+  // NEUTRAL, and not paper white. The first pass ramped white to blue on the theory that the light
+  // in a hollow is sky light — true of real snow, wrong here: it put a colour cast over the whole
+  // ground and sat too bright under a map that has already had its brightness damped once. Six
+  // tones, no hue in any of them, and the brightest is off-white rather than 255.
+  const SNOW=[[238,238,238],[225,225,225],[212,212,212],[199,199,199],[186,186,186],[172,172,172]];
   for(let y=0;y<P;y++) for(let x=0;x<P;x++){
     const u=x/P, v=y/P;
     // DRIFTS: the big swells wind piles snow into
@@ -958,10 +960,12 @@ function snowGroundTex(){
     ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
     ctx.fillRect(x,y,1,1);
   }
-  // ice crystals: single pixels blown to white, the sun catching a facet
-  for(let k=0;k<90;k++){
+  // ice crystals: single pixels catching the sun. Not blown to 255 — they were the brightest thing
+  // on the map and the only pure white in it, which is exactly the kind of highlight that flares
+  // under three lights stacked on an already-bright texture.
+  for(let k=0;k<70;k++){
     const cx=(Math.abs(Math.sin(k*57.3)*9973)|0)%P, cy=(Math.abs(Math.cos(k*41.7)*8623)|0)%P;
-    ctx.fillStyle='rgb(255,255,255)'; ctx.fillRect(cx,cy,1,1);
+    ctx.fillStyle='rgb(244,244,244)'; ctx.fillRect(cx,cy,1,1);
   }
   return c;
 }
@@ -8862,7 +8866,7 @@ heightZoneTarget = heightZonesFjord;
   const timberPa = voxMat(0x7a6242,{noise:14});
   const plankF   = new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(),2)});
   const ironF    = metalMatP(0x6f757c,55,0xc0c8d0);
-  const clothPa  = voxMat(0xd8cfba,{noise:12});
+  const clothPa  = voxMat(0xb4b2ad,{noise:12});   // undyed wool, not bleached linen
   const shieldR  = voxMat(0xa8322c,{noise:12});
   const shieldB  = voxMat(0x2f5c86,{noise:12});
   const shieldY  = voxMat(0xc9a53e,{noise:12});
@@ -8884,7 +8888,7 @@ heightZoneTarget = heightZonesFjord;
   seaMesh.receiveShadow = true;
   fjordWorld.add(seaMesh);
   fjordSea = {mesh:seaMesh, geo:seaGeo, cols:seaCols, seg:SEG, size:SEA};
-  const far = new THREE.Mesh(new THREE.BoxGeometry(520,1,520), voxMat(0x24455c,{noise:10}));
+  const far = new THREE.Mesh(new THREE.BoxGeometry(520,1,520), voxMat(0x2e2e2e,{noise:10}));
   far.position.set(0, FJORD_SEA_Y-0.9, 0);
   fjordWorld.add(far);
 
@@ -8895,9 +8899,9 @@ heightZoneTarget = heightZonesFjord;
   // Mälaren's skerries: bare granite, snow-capped, a few wind-bent pines. None of it is a collider
   // and none of it is reachable — it is here for parallax, for depth, and to say where the player
   // is. Everything sits well past the decks, so it reads as distance and not as an obstacle.
-  const graniteF = voxMat(0x6a6f72,{noise:18});
-  const graniteD = voxMat(0x474c50,{noise:16});
-  const snowF    = voxMat(0xdfe8ee,{noise:8});
+  const graniteF = voxMat(0x656565,{noise:18});
+  const graniteD = voxMat(0x454545,{noise:16});
+  const snowF    = voxMat(0xc8c8c8,{noise:8});   // neutral, and not brighter than the foam
   const pineF    = voxMat(0x25402e,{noise:16});
   const trunkF   = voxMat(0x3e2f22,{noise:14});
   function pine(x,y,z,s){
@@ -9010,9 +9014,12 @@ let fjordBowLashed = false;
 // STEEPNESS — the gradient fjordWaveAt() already hands back — whitens it toward foam. Foam then
 // appears where the water is genuinely steep and travels with the waves, instead of sitting wherever
 // a texture happens to be light.
-const FJORD_TROUGH = new THREE.Color(0x24455c);
-const FJORD_CREST  = new THREE.Color(0x5b8ba6);
-const FJORD_FOAM   = new THREE.Color(0xdfeaf0);
+// Neutral and dark. These were a blue trough, a blue crest and a near-white foam; over a whole sea
+// that is a colour cast across the entire screen, and the foam was bright enough to flare. Slate
+// through to a grey-white that is still clearly the lightest thing on the water without being paint.
+const FJORD_TROUGH = new THREE.Color(0x2a2a2a);
+const FJORD_CREST  = new THREE.Color(0x606060);
+const FJORD_FOAM   = new THREE.Color(0xbcbcbc);
 const _fjc = new THREE.Color();
 function fjordTick(dt, t){
   if(!fjordSea) return;
@@ -9091,12 +9098,15 @@ function enterFjordWorld(banner){
   playClamp = 20;
   // Colder and flatter than Birka: the same northern key, but over open water with no snow to bounce
   // light back up, and fog closing much nearer so the raiders arrive out of it.
-  scene.background.set(0xa8bcc8); scene.fog.color.set(0xb4c6d2);
+  // Overcast and untinted. Every value here was a pale blue, which over open water means the whole
+  // frame is tinted — there is nothing else on screen to balance it against the way a town's timber
+  // and turf balance Birka's. Neutral greys, and darker across the board.
+  scene.background.set(0x909090); scene.fog.color.set(0x969696);
   scene.fog.near = 14; scene.fog.far = 86;
-  setDistantGround(0x4c6678);
-  skyTint(0xdce8f0);
-  hemi.intensity=0.78; hemi.color.set(0xc4d8e6); hemi.groundColor.set(0x334c5a);
-  sun.intensity=0.58; fill.intensity=0.34; fill.color.set(0xb4c8dc);
+  setDistantGround(0x4a4a4a);
+  skyTint(0xbebebe);
+  hemi.intensity=0.72; hemi.color.set(0xb2b2b2); hemi.groundColor.set(0x363636);
+  sun.intensity=0.54; fill.intensity=0.30; fill.color.set(0xa0a0a0);
   camera.position.set(0,1.7,3.4); yaw=targetYaw=Math.PI; pitch=targetPitch=0;
   vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   fjordLashSides();
