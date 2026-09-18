@@ -935,7 +935,12 @@ global.__worldBoxes = function(group){
 
 // Near-coplanar face pairs across a whole map. Same rule as the per-model check: two boxes overlapping
 // substantially in two axes whose faces sit within eps on the third will fight in the depth buffer.
-global.__worldCoplanar = function(group, eps, omin, cell){
+// groundY: the y of the world's floor. Two boxes that both START at the floor share a bottom face —
+// and a bottom face at ground level points DOWN, into the ground slab, and is never rendered toward
+// any camera. It cannot fight for pixels with anything, so reporting it is noise of exactly the kind
+// the polygonOffset skip below already exists to suppress. On greekOverworld that one class was 46 of
+// 77 reported pairs; on pyramidOverworld, 16 of 43. Pass null to see them anyway.
+global.__worldCoplanar = function(group, eps, omin, cell, groundY){
   const boxes = global.__worldBoxes(group);
   cell = cell || 4;
   const grid = new Map();
@@ -972,8 +977,11 @@ global.__worldCoplanar = function(group, eps, omin, cell){
         if(ou<omin||ov<omin) continue;
         const oa=Math.min(A.max[ax],B.max[ax])-Math.max(A.min[ax],B.min[ax]);
         if(oa<=0) continue;
-        for(const [pp,qq] of [[A.min[ax],B.min[ax]],[A.max[ax],B.max[ax]]]){
+        for(const [pp,qq,side] of [[A.min[ax],B.min[ax],'min'],[A.max[ax],B.max[ax],'max']]){
           const d=Math.abs(pp-qq);
+          // both undersides, both on the floor: buried, and invisible from every angle
+          if(groundY !== null && groundY !== undefined && ax==='y' && side==='min'
+             && Math.abs(pp-groundY)<0.02 && Math.abs(qq-groundY)<0.02) continue;
           if(d<eps){                     // d === 0 counts — see the note in __coplanar
             hits.push({axis:ax, gap:Math.round(d*10000)/10000,
                        x:Math.round((A.min.x+A.max.x)/2*10)/10,

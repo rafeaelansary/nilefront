@@ -190,7 +190,7 @@ def main():
     mfn = ctx.eval("""
     (function(name, eps, omin, groundY, minGap, touchEps){
       var W = globalThis.__worlds[name];
-      var cop = globalThis.__worldCoplanar(W.group, eps, omin, 4);
+      var cop = globalThis.__worldCoplanar(W.group, eps, omin, 4, groundY);
       var flo = globalThis.__worldFloaters(W.group, groundY, minGap, touchEps);
       var n = 0; W.group.traverse(function(o){ if(o.isMesh) n++; });
       return JSON.stringify({meshes:n, coplanar:cop.slice(0,6), coplanarN:cop.length,

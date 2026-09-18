@@ -2231,7 +2231,11 @@ addTarget = pyramidDungeonColliders;
   const dadoMat  = voxMat(0xa4854f,{noise:18,pattern:'plate'});
   const corniceMat= voxMat(0xb99a63,{noise:14});
   [[0,-R,1],[0,R,1],[-R,0,0],[R,0,0]].forEach(([wx,wz,alongX])=>{
-    const len = R*2;
+    // 0.6 short of the full span, so each course dies 0.2 INSIDE the wall at right angles to it rather
+    // than ending flush with it. At the full R*2 every course on every wall ended on exactly the same
+    // plane as the wall it met, which is four corners times three courses of coincident faces. Short
+    // enough to bury the end, long enough that no gap opens in the corner.
+    const len = R*2 - 0.6;
     // battered plinth running the base of every wall
     pblock(alongX?len:1.5, 1.2, alongX?1.5:len, dadoMat, wx + (alongX?0:(wx>0?-0.3:0.3)), alongX?0.6:0.57, wz + (alongX?(wz>0?-0.3:0.3):0));
     // cavetto cornice under the ceiling — the flared Egyptian moulding
@@ -2257,7 +2261,12 @@ addTarget = pyramidDungeonColliders;
   [[0,-1],[0,1],[-1,0],[1,0]].forEach(([nx,nz])=>{
     const span = R - HOLE;
     const cx = nx * (HOLE + span/2), cz = nz * (HOLE + span/2);
-    pblock(nx ? span : R*2, 0.6, nz ? span : R*2, sandBrickMat, cx, roofY, cz);
+    // HOLE*2 on the axis the slab does NOT run along, not R*2. At R*2 the four roof slabs each ran the
+    // full width of the chamber, so every pair overlapped in a 10x10 corner with both their top AND
+    // bottom faces at exactly roofY — four corners, eight coincident faces, a hundred square metres of
+    // z-fighting on the one surface the player spends the boss fight looking up at. Butted like this
+    // they still cover the whole roof minus the opening, with no doubled geometry anywhere.
+    pblock(nx ? span : R*2, 0.6, nz ? span : HOLE*2, sandBrickMat, cx, roofY, cz);
   });
   // ragged edge round the opening: blocks of varying size and drop, so the break reads as collapse rather
   // than as a cut rectangle
@@ -5475,7 +5484,10 @@ heightZoneTarget = heightZonesGreek;
     for(let i=0;i<9;i++){
       const fx=x-18.5+i*4.6;
       far(3.0,3.6,0.9, farStone, fx, 1.8, z+5.6);                       // facade panel
-      [-1,1].forEach(sd=>{ far(0.5,3.2,1.1, farStoneLit, fx+sd*1.25, 1.6, z+5.9); });  // framing pilasters
+      // 1.15, not 1.25: at 1.25 a pilaster's outer face landed exactly on the facade panel's own, and
+      // nine facades times two pilasters is eighteen z-fighting seams down the necropolis cliff. A
+      // framing pilaster belongs INSIDE the panel it frames anyway.
+      [-1,1].forEach(sd=>{ far(0.5,3.2,1.1, farStoneLit, fx+sd*1.15, 1.6, z+5.9); });  // framing pilasters
       far(3.4,0.5,1.2, farStoneLit, fx, 3.7, z+5.9);                    // architrave
       far(2.2,0.5,1.1, farStoneLit, fx, 4.15, z+5.9);                   // pediment, stepped
       far(1.1,0.45,1.0, farStoneLit, fx, 4.55, z+5.9);
