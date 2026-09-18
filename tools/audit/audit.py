@@ -259,21 +259,26 @@ def check_connectivity(ctx, runs=4):
 # flags every small part nested inside a larger one, where the coincident faces are interior and
 # never visible.
 COPLANAR_EPS = 0.005
-# 0.12: the shared face area has to be big enough to actually be seen fighting.
-OVERLAP_MIN  = 0.12
+# 0.0006 m^2 -- about a 25mm square -- and NOT the 0.12 this was for a long time. 0.12 is a 35cm
+# square: bigger than almost every face on a voxel actor, so this check reported "0 of 34 actors have
+# near-coplanar faces" for the entire game while fullcheck.py, which measures the same models at
+# 0.0006, was reporting hundreds. The number had been copied from the world sweep, where a shared face
+# has to be big before anyone notices it on a 40-unit wall; on a man 1.8 tall the fighting faces are
+# belt buckles, shield planks and beards, and every one of them is in front of your eyes.
+OVERLAP_MIN  = 0.0006
 
 
 def check_coplanar(ctx, runs=3):
     fn = ctx.eval("""
-    (function(builder, invoke, scale, eps, omin){
+    (function(builder, invoke, scale, eps, omin, floorY){
       var m = eval(invoke)(globalThis.__builders[builder]);
-      return JSON.stringify(globalThis.__coplanar(m, scale, eps, omin));
+      return JSON.stringify(globalThis.__coplanar(m, scale, eps, omin, floorY));
     })
     """)
     worst = {}
-    for builder, invoke, scale, _floor, label in ACTORS:
+    for builder, invoke, scale, floor, label in ACTORS:
         for _ in range(runs):
-            hits = json.loads(fn(builder, invoke, scale, COPLANAR_EPS, OVERLAP_MIN))
+            hits = json.loads(fn(builder, invoke, scale, COPLANAR_EPS, OVERLAP_MIN, floor))
             if len(hits) >= worst.get(label, (-1, []))[0]:
                 worst[label] = (len(hits), hits[:4])
     return worst

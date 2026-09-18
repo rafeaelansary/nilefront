@@ -107,7 +107,7 @@ def main():
       var m = eval(invoke)(globalThis.__builders[builder]);
       var b = globalThis.__modelBounds(m, scale);
       var conn = globalThis.__connectivity(m, scale, ceps);
-      var cop  = globalThis.__coplanar(m, scale, xeps, xomin);
+      var cop  = globalThis.__coplanar(m, scale, xeps, xomin, floor);
       return JSON.stringify({
         minY: b.min.y, gap: b.min.y - floor, meshes: b.count,
         orphans: conn.orphans.length, coplanar: cop.length,

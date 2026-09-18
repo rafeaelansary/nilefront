@@ -889,8 +889,23 @@ global.__connectivity = function(root, scale, eps){
 // Near-coplanar face pairs: two boxes that overlap substantially in two axes and whose faces sit within
 // eps on the third will fight for the same pixels in the depth buffer. This is the single most recurring
 // visual bug in this project, so it is checked automatically.
-global.__coplanar = function(root, scale, eps, omin){
-  const boxes = global.__modelBoxes(root, scale);
+// floorY: the y an actor stands on. Two meshes that both START there share a bottom face, and a bottom
+// face at ground level points DOWN into the floor and is never rendered toward any camera — a boot sole
+// and the toe cap in front of it, say. It cannot fight for pixels, so counting it is noise of the same
+// kind __worldCoplanar's groundY rule already exists to suppress. Pass null to see them anyway.
+global.__coplanar = function(root, scale, eps, omin, floorY){
+  // A mesh that is never drawn cannot fight for pixels: the bot muzzle marker is an invisible
+  // zero-opacity box sitting inside a spear blade, and it was being reported as z-fighting with it.
+  const drawn = (m)=>{
+    if(m.visible === false) return false;
+    const mt = m.material;
+    if(mt && !Array.isArray(mt)){
+      if(mt.depthWrite === false) return false;
+      if(mt.transparent && (mt.opacity === 0)) return false;
+    }
+    return true;
+  };
+  const boxes = global.__modelBoxes(root, scale).filter(b=>drawn(b.mesh));
   const AX = ['x','y','z'];
   const hits = [];
   for(let i=0;i<boxes.length;i++) for(let j=i+1;j<boxes.length;j++){
@@ -905,9 +920,11 @@ global.__coplanar = function(root, scale, eps, omin){
       // the two boxes must actually interpenetrate on this axis, else they are merely stacked
       const oa = Math.min(a.max[ax],c.max[ax]) - Math.max(a.min[ax],c.min[ax]);
       if(oa <= 0) continue;
-      const pairs = [[a.min[ax],c.min[ax]],[a.max[ax],c.max[ax]]];
-      for(const [p,q] of pairs){
+      const pairs = [[a.min[ax],c.min[ax],'min'],[a.max[ax],c.max[ax],'max']];
+      for(const [p,q,side] of pairs){
         const d = Math.abs(p-q);
+        if(floorY !== null && floorY !== undefined && ax === 'y' && side === 'min'
+           && Math.abs(p-floorY) < 0.02 && Math.abs(q-floorY) < 0.02) continue;   // both underfoot
         // d === 0 counts. Two faces at EXACTLY the same coordinate are the worst case there is — the depth
         // buffer has nothing at all to separate them and the flicker is total — and this check used to skip
         // them, requiring d > 1e-9. That hole is why a 14-cube mane ring sharing one front plane with the
