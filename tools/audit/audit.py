@@ -118,6 +118,7 @@ globalThis.__builders = {
   makeNisse: typeof makeNisse==='function' ? makeNisse : null,
   makeBerserkr: typeof makeBerserkr==='function' ? makeBerserkr : null,
   makeTroll: typeof makeTroll==='function' ? makeTroll : null,
+  makeHirdman: typeof makeHirdman==='function' ? makeHirdman : null,
   makeDaneAxe: typeof makeDaneAxe==='function' ? makeDaneAxe : null,
   makeHunnishBow: typeof makeHunnishBow==='function' ? makeHunnishBow : null,
   makeThrowingSeax: typeof makeThrowingSeax==='function' ? makeThrowingSeax : null,
@@ -204,6 +205,7 @@ ACTORS = [
     ("makeNisse",    "b=>b()",                              1.00, 0.00, "Nisse"),
     ("makeBerserkr", "b=>b()",                              1.05, 0.00, "Berserkr"),
     ("makeTroll",    "b=>b()",                              1.60, 0.00, "Troll"),
+    ("makeHirdman",  "b=>b()",                              1.00, 0.00, "Hirdman"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor
