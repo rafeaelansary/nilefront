@@ -428,20 +428,27 @@ ok &= show("the sea mesh is the wave function, and its foam follows real steepne
   fjordTick(0.016, T + 1.7);
   if(Math.abs(pos.getY(0) - before) < 1e-6) throw new Error('the mesh does not move with time');
 
-  // foam: the whitest vertices must be the steep ones, not random ones
-  var cols = fjordSea.cols, steepOfBright = 0, steepOfDull = 0, nb = 0, nd = 0;
+  // Foam: the whitest water must be the steepest water. Compared as the top fifth against the
+  // bottom fifth by brightness rather than against a fixed threshold -- the palette is a tuning
+  // knob and an absolute cutoff would break every time somebody adjusted a colour.
+  var cols = fjordSea.cols, samples = [];
   for(var i=0;i<pos.count;i+=7){
     var c = (i % (seg+1)), r = (i/(seg+1))|0;
     var x = -size/2 + c*(size/seg), z = -size/2 + r*(size/seg);
-    var g = fjordWaveAt(x,z,T+1.7), steep = Math.hypot(g.dx,g.dz);
-    if(cols.getX(i) > 0.88){ steepOfBright += steep; nb++; } else { steepOfDull += steep; nd++; }
+    var g = fjordWaveAt(x,z,T+1.7);
+    samples.push({bright:cols.getX(i), steep:Math.hypot(g.dx,g.dz)});
   }
-  if(nb === 0) throw new Error('no foam anywhere on the sea');
-  if(steepOfBright/nb <= steepOfDull/nd)
-    throw new Error('foam is not on the steep water (bright '+(steepOfBright/nb).toFixed(3)+
-                    ' vs dull '+(steepOfDull/nd).toFixed(3)+')');
-  return checked+' vertices match, foam steepness '+(steepOfBright/nb).toFixed(2)+
-         ' vs '+(steepOfDull/nd).toFixed(2);
+  samples.sort(function(a,b){ return a.bright - b.bright; });
+  var fifth = Math.max(1, (samples.length/5)|0), lo = 0, hi = 0;
+  for(var i=0;i<fifth;i++){ lo += samples[i].steep; hi += samples[samples.length-1-i].steep; }
+  lo /= fifth; hi /= fifth;
+  if(samples[samples.length-1].bright - samples[0].bright < 0.05)
+    throw new Error('the sea is all one tone -- no crest/trough shading at all');
+  if(hi <= lo*1.2)
+    throw new Error('foam is not on the steep water (whitest fifth '+hi.toFixed(3)+
+                    ' vs darkest fifth '+lo.toFixed(3)+')');
+  return checked+' vertices match, steepness of the whitest fifth '+hi.toFixed(2)+
+         ' against the darkest '+lo.toFixed(2);
 """))
 ```
 
@@ -588,9 +595,13 @@ ok &= show("the archipelago is scenery only, and stands clear of the water", run
   gameStarted = true;
   enterFjordWorld('test');
   // It is scenery: the fight is on decks, so nothing out there may be solid. A collider on a
-  // skerry would let the player be blocked by an island they can never reach.
-  if(fjordColliders.length !== 0)
-    throw new Error('the archipelago added '+fjordColliders.length+' colliders; it must add none');
+  // skerry would block the player against an island they can never reach.
+  // Stated as "every collider belongs to a ship" rather than "there are none", because the next
+  // task adds the longship's rails and a flat count would fail the moment it lands.
+  var strays = fjordColliders.filter(function(b){ return Math.abs(b.x) > 8 || Math.abs(b.z) > 8; });
+  if(strays.length)
+    throw new Error('the archipelago is solid: '+strays.length+' colliders away from the ships, '+
+                    'first at '+JSON.stringify([strays[0].x, strays[0].z]));
   if(heightZonesFjord.length !== 0) throw new Error('nothing in the Fjord is climbable');
 
   // count what is out there, and check it is out THERE -- islands inside the play area would be
@@ -752,7 +763,27 @@ Expected: `[BUG] ... Error: fjordShips is empty`
 
 - [ ] **Step 3: Build the ship**
 
-Birka already contains a longship builder inside `buildBirka()`'s local `ship()` function — read it first (`grep -n "function ship(px,pz,rot,scale,sailMat)" index.html`) and follow its clinker-strake construction, carved stem and stern, mast, furled sail, shipped oars and shield rail. Re-implement it inside `buildFjord()` as a local function that adds to a `THREE.Group` rather than straight to the world, so the group can be moved each frame:
+**Port Birka's longship rather than inventing a second one.** It already exists as the local
+`ship(px, pz, rot, scale, sailMat)` inside `buildBirka()` — find it with
+`grep -n "function ship(px,pz,rot,scale,sailMat)" index.html` and read the whole function before
+you start. It builds, in this order: four clinker strakes each stepped out and up from the one
+below; a sheer strake along the rail; stem and stern rising to a carved head; the mast; a furled
+sail with red stripes; the yard; oars shipped along both rails; and shields on the rail. Copy that
+body verbatim into `buildFjord()` with exactly four changes:
+
+1. It already builds into a local `THREE.Group` called `K` — keep that, and **return `K`** instead
+   of letting it fall out of scope. Birka's version adds `K` to the `scene`; add it to `fjordWorld`.
+2. **Drop the `addBox(...)` call at the end of it.** Birka's ship is an obstacle you walk around;
+   this one is a deck you stand on, and its collision is the four rails added in the snippet below.
+3. **Add a deck.** Birka's ship has no walkable surface because nobody ever stands on it. Add one
+   plank slab spanning the hull, with its TOP face at `y = 0` inside the group:
+   `const deck = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 9.2), plankF); deck.position.set(0, -0.09, 0); deck.receiveShadow = true; K.add(deck);`
+   where `plankF` is `new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(),2)})`.
+   Top face at `y = 0` is load-bearing: the group rides at `FJORD_DECK_Y`, so the planking then
+   sits exactly where `playerHeight` puts the player's feet, at every point of the swell.
+4. Keep the scale at 1 — Birka beaches its knarr at a reduced scale, and this one is full size.
+
+Then, as the local group factory:
 
 ```js
   // ---- the ships ----
@@ -764,10 +795,6 @@ Birka already contains a longship builder inside `buildBirka()`'s local `ship()`
     K.position.set(x, FJORD_DECK_Y, z);
     K.rotation.y = rot;
     fjordWorld.add(K);
-    // ... hull, stem, stern, mast, sail, oars, shields: follow buildBirka()'s ship() ...
-    // The DECK is what the player stands on. Its top sits at y=0 within the group, which is why
-    // the group rides at FJORD_DECK_Y: the deck is then exactly at the height the player's
-    // playerHeight expects, at every point of the swell.
     return K;
   };
   const own = fjordShipGroup(0, 0, 0);
