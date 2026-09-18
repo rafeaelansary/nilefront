@@ -108,11 +108,43 @@ class Quaternion {
 // ---------- geometry ----------
 // Each geometry records a local-space axis-aligned half-extent box. That is all the audit needs.
 class BufferGeometry {
-  constructor(){ this._half = {x:0,y:0,z:0}; this._offset={x:0,y:0,z:0}; this.parameters={}; }
+  constructor(){ this._half = {x:0,y:0,z:0}; this._offset={x:0,y:0,z:0}; this.parameters={}; this.attributes={}; }
   translate(x,y,z){ this._offset.x+=x; this._offset.y+=y; this._offset.z+=z; return this; }
-  rotateX(){ return this; } rotateY(){ return this; } rotateZ(){ return this; }
+  // Rotations used to be no-ops, which was fine while every geometry was an opaque half-extent box.
+  // PlaneGeometry now carries real vertices (the Fjord's sea is a plane whose every vertex moves each
+  // frame), and the game rotates that plane flat with rotateX(-PI/2) before touching it -- so the
+  // rotation has to actually happen or the stub's idea of the mesh is a different shape from the
+  // game's. Applied to the position data when there is any; still a no-op when there is not.
+  _rot(axis, a){
+    const p = this.attributes.position;
+    if(p){
+      const c = Math.cos(a), s2 = Math.sin(a);
+      for(let i=0;i<p.count;i++){
+        const x=p.getX(i), y=p.getY(i), z=p.getZ(i);
+        if(axis==='x') p.setXYZ(i, x, y*c - z*s2, y*s2 + z*c);
+        else if(axis==='y') p.setXYZ(i, x*c + z*s2, y, -x*s2 + z*c);
+        else p.setXYZ(i, x*c - y*s2, x*s2 + y*c, z);
+      }
+      this._halfFromPosition();
+    }
+    return this;
+  }
+  rotateX(a){ return this._rot('x', a||0); }
+  rotateY(a){ return this._rot('y', a||0); }
+  rotateZ(a){ return this._rot('z', a||0); }
+  _halfFromPosition(){
+    const p = this.attributes.position; if(!p || !p.count) return;
+    let mnx=Infinity,mny=Infinity,mnz=Infinity,mxx=-Infinity,mxy=-Infinity,mxz=-Infinity;
+    for(let i=0;i<p.count;i++){
+      const x=p.getX(i), y=p.getY(i), z=p.getZ(i);
+      if(x<mnx)mnx=x; if(y<mny)mny=y; if(z<mnz)mnz=z;
+      if(x>mxx)mxx=x; if(y>mxy)mxy=y; if(z>mxz)mxz=z;
+    }
+    this._half = {x:(mxx-mnx)/2, y:(mxy-mny)/2, z:(mxz-mnz)/2};
+    this._offset = {x:(mxx+mnx)/2, y:(mxy+mny)/2, z:(mxz+mnz)/2};
+  }
   dispose(){}
-  setAttribute(){ return this; }
+  setAttribute(name, attr){ this.attributes[name] = attr; return this; }
   computeVertexNormals(){}
 }
 class BoxGeometry extends BufferGeometry {
@@ -128,7 +160,25 @@ class SphereGeometry extends BufferGeometry {
   constructor(r=1){ super(); this._half={x:r,y:r,z:r}; this.parameters={radius:r}; this.type='SphereGeometry'; }
 }
 class PlaneGeometry extends BufferGeometry {
-  constructor(w=1,h=1){ super(); this._half={x:w/2,y:h/2,z:0}; this.parameters={width:w,height:h}; this.type='PlaneGeometry'; }
+  // Real vertices, in three.js's own order: row by row, iy outer and ix inner, x running left to
+  // right and y running TOP to bottom, so vertex i sits at column i%(segW+1), row (i/(segW+1))|0.
+  // Anything reading the sea back out of this has to agree with that layout, so it is built here
+  // rather than approximated.
+  constructor(w=1,h=1,sw=1,sh=1){
+    super();
+    this.parameters={width:w,height:h,widthSegments:sw,heightSegments:sh};
+    this.type='PlaneGeometry';
+    const gx=sw+1, gy=sh+1, sx=w/sw, sy=h/sh;
+    const arr = new Float32Array(gx*gy*3);
+    for(let iy=0;iy<gy;iy++) for(let ix=0;ix<gx;ix++){
+      const i=(iy*gx+ix)*3;
+      arr[i]   = ix*sx - w/2;
+      arr[i+1] = h/2 - iy*sy;
+      arr[i+2] = 0;
+    }
+    this.setAttribute('position', new BufferAttribute(arr, 3));
+    this._halfFromPosition();
+  }
 }
 class CircleGeometry extends BufferGeometry {
   constructor(r=1){ super(); this._half={x:r,y:r,z:0}; this.parameters={radius:r}; this.type='CircleGeometry'; }
@@ -174,7 +224,17 @@ class BufferAttribute {
     this.count = this.array.length / this.itemSize;
     this.needsUpdate = false;
   }
-  setXYZ(){ return this; } setXY(){ return this; } getX(){ return 0; } getY(){ return 0; } getZ(){ return 0; }
+  // These used to be stubs returning 0. The Fjord's sea is written and read back through them every
+  // frame, and a test that asks "is this vertex where the wave function says it is" cannot be
+  // answered by an attribute that always says 0.
+  setXYZ(i,x,y,z){ const k=i*this.itemSize; this.array[k]=x; this.array[k+1]=y; this.array[k+2]=z; return this; }
+  setXY(i,x,y){ const k=i*this.itemSize; this.array[k]=x; this.array[k+1]=y; return this; }
+  setX(i,v){ this.array[i*this.itemSize]=v; return this; }
+  setY(i,v){ this.array[i*this.itemSize+1]=v; return this; }
+  setZ(i,v){ this.array[i*this.itemSize+2]=v; return this; }
+  getX(i){ return this.array[i*this.itemSize]; }
+  getY(i){ return this.array[i*this.itemSize+1]; }
+  getZ(i){ return this.array[i*this.itemSize+2]; }
   setUsage(){ return this; }
 }
 class Matrix4 {
@@ -301,7 +361,11 @@ class Color {
   offsetHSL(){ return this; }
   clone(){ const c=new Color(); c.r=this.r;c.g=this.g;c.b=this.b; return c; }
   copy(c){ this.r=c.r;this.g=c.g;this.b=c.b; return this; }
-  lerp(){ return this; }
+  // Was a no-op, which meant any code that shaded by blending between colours looked to the harness
+  // like a single flat tone -- the Fjord's sea is vertex-coloured by lerping trough -> crest -> foam,
+  // and "is the foam on the steep water" is unanswerable against a stub that cannot blend.
+  lerp(c, a){ this.r += (c.r-this.r)*a; this.g += (c.g-this.g)*a; this.b += (c.b-this.b)*a; return this; }
+  lerpColors(a, b, t){ this.r=a.r+(b.r-a.r)*t; this.g=a.g+(b.g-a.g)*t; this.b=a.b+(b.b-a.b)*t; return this; }
 }
 class Texture { constructor(){ this.wrapS=0; this.wrapT=0; this.repeat={set(){}}; this.offset={set(){}}; this.anisotropy=1; this.needsUpdate=false; } dispose(){} clone(){ return new Texture(); } }
 class CanvasTexture extends Texture { constructor(c){ super(); this.image=c; } }

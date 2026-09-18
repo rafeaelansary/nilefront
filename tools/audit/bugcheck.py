@@ -76,7 +76,57 @@ show("each leg of each destination enters, spawns, and has clear spawn points", 
   return out.join(' ');
 """))
 
-print("\n=== 4. every weapon, every operation ===")
+print("\n=== 4. every weapon is actually ON the screen ===")
+# The Dane Axe shipped with its right edge at 1.41 half-screen-widths -- 41% past the frame, with its
+# whole crescent head cut off by it -- because the tuning pass that placed it only ever measured the
+# LEFT edge (crosshair clearance) and never the right. This measures both.
+#
+# MELEE weapons only, deliberately: a polearm or a thrown weapon is held with its shaft running back
+# past the camera, so some of it is off-frame by design (the Naft Pot sits at 33% inside and looks
+# correct). A melee weapon is short and held close -- none of it should leave the frame. 95% rather
+# than 100% because the Chimalli's shield rim has one mesh clipping the edge, which has always been
+# true and reads fine.
+show("no melee weapon hangs off the edge of the screen", run("""
+  var all = originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons)
+    .concat(romanWeapons).concat(islamicWeapons).concat(mexicoWeapons).concat(aztecWeapons).concat(swedenWeapons);
+  var tanV = Math.tan(75*Math.PI/180/2), tanH = tanV*(16/9), out=[], bad=[];
+  all.forEach(function(w){
+    if(!w.userData.melee) return;
+    w.updateMatrixWorld(true);
+    var p=w.userData.pos, inside=0, total=0, right=-9, bottom=9;
+    globalThis.__worldBoxes(w).forEach(function(bx){
+      var b=bx.box, pts=[];
+      [b.min.x+p.x, b.max.x+p.x].forEach(function(X){
+        [b.min.y+p.y, b.max.y+p.y].forEach(function(Y){
+          [b.min.z+p.z, b.max.z+p.z].forEach(function(Z){
+            if(Z > -0.1) return;
+            pts.push([X/(-Z*tanH), Y/(-Z*tanV)]);
+          });
+        });
+      });
+      if(!pts.length) return;
+      total++;
+      var mx = -9, mny = 9;
+      pts.forEach(function(q){ mx=Math.max(mx,q[0]); mny=Math.min(mny,q[1]); });
+      right = Math.max(right, mx);
+      bottom = Math.min(bottom, mny);
+      if(mx <= 1.0) inside++;
+    });
+    var frac = inside/total;
+    // bottom is reported, not asserted. A long-hafted weapon MUST leave the bottom of the frame or it
+    // hangs in mid-air -- the Dane Axe did exactly that for one revision, ending at -1.00 -- but a
+    // xiphos, a pugio and a saif all stop around -0.85 and read correctly, because a short blade held
+    // in the fist genuinely ends near the bottom edge. There is no threshold that separates those two
+    // without exempting half the list, so this prints the number and leaves the judgement to a human.
+    out.push(w.userData.name+' '+Math.round(frac*100)+'% (foot '+bottom.toFixed(2)+')');
+    if(frac < 0.95) bad.push(w.userData.name+' only '+Math.round(frac*100)+
+                             '% on screen (right edge '+right.toFixed(2)+')');
+  });
+  if(bad.length) throw new Error(bad.join('; '));
+  return out.join(' \u00b7 ');
+"""))
+
+print("\n=== 5. every weapon, every operation ===")
 show("fire / reload / scope / switch on all 23 weapons without throwing", run("""
   gameStarted=true; jumpToWave(1);
   var sets=[originalWeapons,pyramidWeapons,nileWeapons,greekWeapons,romanWeapons,
@@ -103,7 +153,7 @@ show("fire / reload / scope / switch on all 23 weapons without throwing", run(""
   return n+' weapons exercised';
 """))
 
-print("\n=== 5. state leaks across map transitions ===")
+print("\n=== 6. state leaks across map transitions ===")
 show("flight / scope / guard / charge do not survive a map change", run("""
   gameStarted=true;
   jumpToWave(1);
@@ -134,7 +184,7 @@ show("dying and respawning on every destination leaves no boss bar or stale bots
   return 'clean';
 """))
 
-print("\n=== 6. world geometry, every map ===")
+print("\n=== 7. world geometry, every map ===")
 r=run("""
   var names=['overworld','pyramidOverworld','greekOverworld','romanOverworld','islamicOverworld',
              'mexicoOverworld','aztecOverworld','aztecMarketOverworld','swedenOverworld',

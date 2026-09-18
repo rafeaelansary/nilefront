@@ -903,6 +903,68 @@ function gizaSandTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   for(let k=0;k<30;k++){ const n=Math.abs(Math.sin(k*19.7)*467%1), m=Math.abs(Math.cos(k*8.3)*251%1);
     x.fillStyle='#75603a'; x.fillRect((n*P)|0,(m*P)|0,2,1); }
   return c; }
+// Snow, for the ground of a whole map rather than a cap on a roof.
+//
+// The ordinary voxMat() texture cannot do this job, and Birka proved it: voxMat draws in 6px cells with
+// a white top-left and a black bottom-right bevel on every cell, which is what gives everything else in
+// the game its crisp voxel edge. Stretched over a 58-unit island with no repeat, each of those cells came
+// out 5.4 METRES across — so the snowfield read as a grid of grey and white squares, because that is
+// exactly what it was.
+//
+// Snow has no grid at any scale, so this has none either. Three bands of feature instead:
+//   DRIFTS    low-frequency swells, the shape wind piles snow into
+//   SASTRUGI  the same field sampled stretched 4:1, so the surface is combed one way — wind has a
+//             direction, and parallel scour is the single strongest "this is snow, not paint" cue
+//   CRYSTALS  a scatter of single blown-out pixels catching the sun
+//
+// The colour ramp matters more than any of them: snow is white on the crown of a drift and BLUE in the
+// trough, because the only light reaching a hollow is sky light. White-to-grey reads as concrete;
+// white-to-blue reads as snow.
+//
+// The lattice wraps on the tile boundary (every frequency divides the tile, and the stretched sample uses
+// integer coefficients), so the texture repeats across the map with no seam line.
+function snowGroundTex(){
+  const P=128, c=_mkCanvas(P), ctx=c.getContext('2d');
+  const hash=(i,j)=>{ const n=Math.sin(i*127.1+j*311.7)*43758.5453; return n-Math.floor(n); };
+  const fade=t=>t*t*(3-2*t);
+  const noise=(u,v,f)=>{
+    const fx=u*f, fy=v*f, i0=Math.floor(fx), j0=Math.floor(fy);
+    const tx=fade(fx-i0), ty=fade(fy-j0);
+    const w=(i,j)=>hash(((i%f)+f)%f, ((j%f)+f)%f);   // modulo on the lattice = a seamless tile
+    const a=w(i0,j0), b=w(i0+1,j0), d=w(i0,j0+1), e=w(i0+1,j0+1);
+    const top=a+(b-a)*tx, bot=d+(e-d)*tx;
+    return top+(bot-top)*ty;
+  };
+  // A PALETTE, not a gradient. Every other ground texture in this game picks from a handful of tones
+  // (grassTopTex from four, dirtTex from four) and that is what makes them read as pixel art rather
+  // than as a photograph of a surface. Smooth interpolated noise came out as a pale blue blur.
+  // White at the crown down to blue in the trough: the only light reaching a hollow in snow is sky
+  // light, and that blue is most of what separates snow from concrete.
+  const SNOW=[[255,255,255],[246,250,254],[236,242,251],[224,233,246],[210,222,240],[196,211,233]];
+  for(let y=0;y<P;y++) for(let x=0;x<P;x++){
+    const u=x/P, v=y/P;
+    // DRIFTS: the big swells wind piles snow into
+    const drift = noise(u,v,4)*0.60 + noise(u,v,9)*0.28 + noise(u,v,20)*0.12;
+    // SASTRUGI: the same field sampled stretched 5:1, so the surface is combed one way. Wind has a
+    // direction, and parallel scour is the strongest single cue that a white surface is snow.
+    // Integer coefficients keep the stretched sample wrapping with the tile.
+    const comb  = noise(u*5+v, v, 14);
+    let t = drift*0.72 + comb*0.28;
+    // dither before quantising, or smooth noise through a 6-tone palette gives contour terraces like a
+    // survey map. A per-pixel jitter turns those bands into a stipple, which is the right idiom here.
+    t += (hash(x*1.7, y*2.3)-0.5)*0.09;
+    const k = Math.max(0, Math.min(SNOW.length-1, Math.floor((1-t)*SNOW.length)));
+    const col = SNOW[k];
+    ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
+    ctx.fillRect(x,y,1,1);
+  }
+  // ice crystals: single pixels blown to white, the sun catching a facet
+  for(let k=0;k<90;k++){
+    const cx=(Math.abs(Math.sin(k*57.3)*9973)|0)%P, cy=(Math.abs(Math.cos(k*41.7)*8623)|0)%P;
+    ctx.fillStyle='rgb(255,255,255)'; ctx.fillRect(cx,cy,1,1);
+  }
+  return c;
+}
 function graniteTex(){ const P=16,c=_mkCanvas(P),x=c.getContext('2d');
   // speckled red Aswan granite — the stone the valley temple and the royal stelae were actually faced in
   x.fillStyle='#8a4234'; x.fillRect(0,0,P,P);
@@ -3130,7 +3192,8 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 // the invariant "at most one world group in the scene" holds no matter what state the flags are in.
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
-  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  camera.rotation.z = 0;   // the Fjord rolls the camera with its deck; nothing else may inherit that
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, fjordWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
   clearFieldEffects();
 }
 // Ground effects — the bosses' AoE telegraphs and the Colossus's quake cracks — are added to the SCENE,
@@ -8121,7 +8184,13 @@ let birkaSnow = null, birkaForge = null, birkaBeacon = null;
   const leafDark  = voxMat(0x2f4a30,{noise:16});     // spruce, not the broadleaf green used further south
   const birchBark = voxMat(0xd8d8cc,{noise:10});
   const birchLeaf = voxMat(0x7a8f4a,{noise:16});
-  const snowMat   = voxMat(0xe8ecf0,{noise:8});
+  const snowMat   = voxMat(0xe8ecf0,{noise:8});     // snow as a PROP: roof caps, mound crowns, tree crowns
+  // Snow as GROUND is a different material, because it is a different problem. voxMat's 6px cells are
+  // 5.4 metres across once they are stretched over a 58-unit island, and every one of them carries a
+  // bevel — which is why the snowfield read as a grid of grey squares. snowGroundTex() has no grid and
+  // is tiled at a real-world size: repeat 6 puts one tile every 9.7 units, so a drift is about 2.4
+  // across, which is what a wind drift actually is.
+  const snowGround = new THREE.MeshLambertMaterial({map:_finish(snowGroundTex(),6)});
   const clothPale = voxMat(0xc8c0b0,{noise:12});
   const furMat    = voxMat(0x6b5a44,{noise:18});
 
@@ -8136,7 +8205,7 @@ let birkaSnow = null, birkaForge = null, birkaBeacon = null;
   const HALF = 29;
   // Snow-covered, not green. Birka is the winter map; a bright turf field under a pale sky was the single
   // biggest reason it did not read as Nordic at all.
-  lb(HALF*2,0.5,HALF*2, snowMat, 0,-0.25,0);
+  lb(HALF*2,0.5,HALF*2, snowGround, 0,-0.25,0);
   // Lake Mälaren. Wide enough to still be water where the fog closes, the same reason Tenochtitlan's lake
   // is 300 across — a shoreline that ends in nothing reads as a floating slab.
   const lakeMat = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),90),
@@ -8723,6 +8792,314 @@ function enterSwedenWorld(banner){
   sun.intensity=0.70; fill.intensity=0.30; fill.color.set(0xc8d8e8);
   // Just up the shore from the jetty heads, facing into the town — you arrive by water, as everyone did.
   camera.position.set(0,1.7,24); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  weapons.forEach(w=>w.visible=false);
+  weapons = swedenWeapons;
+  selectWeapon(0);
+  spawnTripStage();
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
+
+// ===================== THE FJORD (Sweden, leg 2) =====================
+// The raid: a boarding action on lashed longship decks out in the Mälaren archipelago, entered by
+// clearing Birka. Deliberately built as the Nile Wave's INVERSE. That one is a shrinking siege —
+// pinned in place, one weapon, the boat coming apart under you. This is an advance: you keep the
+// whole Birka loadout, the enemy comes to you across grappled hulls, and when the last ship lashes
+// on the arena GROWS instead of closing in. Two water set pieces in one game have to differ in
+// their verbs, not just their props.
+//
+// ---- the one structural decision everything else follows from ----
+// spawnBot() pins every actor to y=0. So the DECKS sit at y=0 and the SEA sits below them, rather
+// than the other way round. That is why FJORD_SEA_Y is negative: it is the mean water level under a
+// deck that is, and must stay, the world's floor.
+//
+// It also decides which hulls are allowed to move. A ship still rowing toward you carries nobody,
+// so it heaves and rolls on the full swell — that motion at a distance is most of what tells the
+// eye this is a real sea. A ship that has GRAPPLED stops dead and locks to deck level, because men
+// are now fighting across it; that is also exactly what lashing two hulls together means, so the
+// engine's constraint and the fiction agree for once instead of fighting.
+const fjordColliders = [];
+const heightZonesFjord = [];     // a deck is one level — nothing out here is climbable
+const fjordWorld = new THREE.Group();
+
+const FJORD_SEA_Y = -0.95;       // mean water, below the decks
+// Four directional waves. The wavelengths are deliberately not small multiples of one another, so
+// the sum never settles into a pattern you can see repeating. Long swell first, chop riding on it.
+const FJORD_SWELL = [
+  {amp:0.26, len:14.0, spd:0.55, dx: 0.94, dz: 0.34},
+  {amp:0.17, len: 8.5, spd:0.80, dx: 0.62, dz:-0.78},
+  {amp:0.09, len: 4.7, spd:1.15, dx:-0.31, dz: 0.95},
+  {amp:0.05, len: 2.6, spd:1.60, dx: 0.80, dz: 0.60},
+];
+const FJORD_AMP = FJORD_SWELL.reduce((s,w)=>s+w.amp, 0);   // 0.57: the most the sea can ever rise
+// The single description of the water in this game. The visible mesh, every hull that floats on it
+// and the horizon's tilt all read from here, so none of them can drift out of step with what is
+// actually drawn — which is the failure that makes a boat scene look broken even when every piece
+// of it is individually fine. Returns the two partial derivatives alongside the height because foam
+// and hull roll both need the slope, and four cosines here beats finite-differencing at each call.
+function fjordWaveAt(x, z, t){
+  let y=0, gx=0, gz=0;
+  for(let i=0;i<FJORD_SWELL.length;i++){
+    const w = FJORD_SWELL[i], k = Math.PI*2/w.len;
+    const phase = (x*w.dx + z*w.dz)*k + t*w.spd*k;
+    y += Math.sin(phase)*w.amp;
+    const c = Math.cos(phase)*w.amp*k;
+    gx += c*w.dx; gz += c*w.dz;
+  }
+  return {y:y, dx:gx, dz:gz};
+}
+
+let fjordSea = null;             // {mesh, geo, cols, seg, size}
+const fjordShips = [];           // every hull: {grp, x, z, lashed}
+let fjordGangplank = null;       // drops when the last ship grapples
+let fjordBowRail = null;         // solid until it does
+
+addTarget = fjordColliders;
+heightZoneTarget = heightZonesFjord;
+(function buildFjord(){
+  const timber   = new THREE.MeshLambertMaterial({map:_finish(logTex(),1)});
+  const timberDk = voxMat(0x3f2d1c,{noise:16});
+  const timberPa = voxMat(0x7a6242,{noise:14});
+  const plankF   = new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(),2)});
+  const ironF    = metalMatP(0x6f757c,55,0xc0c8d0);
+  const clothPa  = voxMat(0xd8cfba,{noise:12});
+  const shieldR  = voxMat(0xa8322c,{noise:12});
+  const shieldB  = voxMat(0x2f5c86,{noise:12});
+  const shieldY  = voxMat(0xc9a53e,{noise:12});
+  const ropeF    = voxMat(0x6f6047,{noise:14});
+
+  // ---- the sea ----
+  // A 110-unit plane at 72 segments: a vertex every 1.5 units, fine enough that the 2.6-unit chop is
+  // not stair-stepped and coarse enough that moving all of them is ~5k writes a frame, which is
+  // nothing beside this map's draw calls. A much larger flat plane sits beneath and beyond it so the
+  // moving water runs out into calm distance instead of ending at a visible edge — everything past
+  // the fog is flat anyway, and 500 units of moving vertices would not be.
+  const SEA=110, SEG=72;
+  const seaGeo = new THREE.PlaneGeometry(SEA, SEA, SEG, SEG);
+  seaGeo.rotateX(-Math.PI/2);
+  const seaCols = new THREE.BufferAttribute(new Float32Array(seaGeo.attributes.position.count*3), 3);
+  seaGeo.setAttribute('color', seaCols);
+  const seaMesh = new THREE.Mesh(seaGeo, new THREE.MeshLambertMaterial({vertexColors:true}));
+  seaMesh.position.y = FJORD_SEA_Y;
+  seaMesh.receiveShadow = true;
+  fjordWorld.add(seaMesh);
+  fjordSea = {mesh:seaMesh, geo:seaGeo, cols:seaCols, seg:SEG, size:SEA};
+  const far = new THREE.Mesh(new THREE.BoxGeometry(520,1,520), voxMat(0x24455c,{noise:10}));
+  far.position.set(0, FJORD_SEA_Y-0.9, 0);
+  fjordWorld.add(far);
+
+  function fb(w,h,d,mat,x,y,z,grp){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; (grp||fjordWorld).add(m); return m; }
+
+  // ---- the archipelago ----
+  // Mälaren's skerries: bare granite, snow-capped, a few wind-bent pines. None of it is a collider
+  // and none of it is reachable — it is here for parallax, for depth, and to say where the player
+  // is. Everything sits well past the decks, so it reads as distance and not as an obstacle.
+  const graniteF = voxMat(0x6a6f72,{noise:18});
+  const graniteD = voxMat(0x474c50,{noise:16});
+  const snowF    = voxMat(0xdfe8ee,{noise:8});
+  const pineF    = voxMat(0x25402e,{noise:16});
+  const trunkF   = voxMat(0x3e2f22,{noise:14});
+  function pine(x,y,z,s){
+    fb(0.30*s,1.6*s,0.30*s, trunkF, x, y+0.8*s, z);
+    for(let i=0;i<3;i++) fb((2.2-i*0.6)*s, 0.9*s, (2.2-i*0.6)*s, pineF, x, y+1.75*s+i*0.72*s, z);
+  }
+  [[-38,-22, 7, 2.6, 3], [ 34,-30, 5, 1.8, 2], [ 44,  6, 9, 3.4, 5],
+   [ 22, 41, 6, 2.2, 2], [-16, 46, 4, 1.4, 0], [-45, 18, 8, 3.0, 4],
+   [-31, 36, 3, 1.0, 0], [ 48,-14, 4, 1.6, 1], [  6,-44, 6, 2.4, 2],
+   [-52, -4, 5, 2.0, 1], [ 30, 24, 3, 1.1, 0], [ -8,-38, 4, 1.5, 1]
+  ].forEach(([ix,iz,r,h,np], k)=>{
+    const base = FJORD_SEA_Y - 0.4;
+    // granite breaks in slabs, not cones — a squat mass with two shelves reads as rock, a cone does not
+    fb(r*2.00, h,      r*1.70, graniteF, ix, base + h/2,      iz);
+    fb(r*1.50, h*0.45, r*2.10, graniteD, ix, base + h*0.26,   iz);
+    fb(r*1.10, h*0.30, r*1.20, graniteF, ix, base + h*0.84,   iz);
+    fb(r*1.15, 0.30,   r*1.00, snowF,    ix, base + h - 0.05, iz);
+    fb(r*2.20, 0.55,   r*1.90, graniteD, ix, FJORD_SEA_Y-0.2, iz);   // wet rock at the waterline
+    for(let p=0;p<np;p++){
+      const a = k*1.7 + p*2.4;
+      pine(ix + Math.cos(a)*r*0.5, base + h, iz + Math.sin(a)*r*0.4, 0.8 + (p%2)*0.35);
+    }
+  });
+
+  // ---- a longship ----
+  // Clinker-built: each strake stepped out and up from the one below, which is the whole silhouette.
+  // The DECK's top face sits at y=0 inside the group, so when the group rides at 0 the planking is
+  // exactly where the bots' and the player's feet already are.
+  function longship(px, pz, rot, sailMat){
+    const K = new THREE.Group(); K.position.set(px,0,pz); K.rotation.y = rot; fjordWorld.add(K);
+    const kb=(w,h,d,mat,x,y,z,rx)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); if(rx) m.rotation.x=rx; m.castShadow=true; K.add(m); return m; };
+    for(let i=0;i<4;i++) kb(2.05+i*0.20, 0.30, 9.0-i*0.26, i%2?plankF:timberPa, 0, -0.92+i*0.26, 0);
+    kb(2.74,0.22,8.6, timberDk, 0,0.20,0);                       // sheer strake along the rail
+    kb(2.60,0.18,9.2, plankF,  0,-0.09,0);                       // THE DECK — top face at y=0
+    [-1,1].forEach(sd=>{
+      kb(1.5,1.6,1.7, plankF,   0,-0.05,sd*4.4, sd*0.55);        // stem and stern rising
+      kb(0.34,1.3,0.34, timberDk, 0,1.00,sd*5.05);
+      kb(0.26,0.30,0.50, timberDk, 0,1.62,sd*5.20);              // the carved head
+      kb(0.18,0.44,0.18, timberDk, 0,1.88,sd*5.05);
+    });
+    kb(0.34,5.2,0.34, timber, 0,2.4,0);                          // mast
+    kb(3.8,2.6,0.22, sailMat||clothPa, 0,3.3,0);                 // furled sail
+    for(let i=0;i<4;i++) kb(3.9,0.10,0.30, shieldR, 0,2.35+i*0.56,0.02);
+    kb(4.5,0.14,0.14, timberDk, 0,4.7,0);                        // the yard
+    [-1,1].forEach(sd=> [0,1,2,3].forEach(i=> kb(0.10,0.10,3.0, timberPa, sd*1.18, 0.42, -2.3+i*1.55)));
+    [-1,1].forEach(sd=> [0,1,2,3].forEach(i=>{                   // shields on the rail
+      kb(0.09,0.78,0.78, [shieldB,shieldR,shieldY,timberPa][i], sd*1.42, 0.52, -2.5+i*1.7);
+    }));
+    return K;
+  }
+
+  // The player's ship, and three raiders. The raiders close in during the leg-crossing banner, then
+  // grapple: port and starboard for the hold, and the third on the bow for the counter-board.
+  const own = longship(0,0,0, clothPa);
+  fjordShips.push({grp:own, x:0, z:0, lashed:true});             // yours never moves: it is the floor
+  [[-3.65,-0.4, shieldR], [3.65, 0.6, shieldB], [0,-11.6, shieldY]].forEach(([sx,sz,sm])=>{
+    const g = longship(sx, sz, 0, sm);
+    fjordShips.push({grp:g, x:sx, z:sz, lashed:false});
+  });
+
+  // grappling lines from your rail to the two ships alongside, so the lashing is visible...
+  [[-1.5,-2.15],[1.5,2.15]].forEach(([x0,x1])=>{
+    [-2.6,0.4,3.2].forEach(rz=>{
+      const rope = fb(Math.abs(x1-x0),0.07,0.07, ropeF, (x0+x1)/2, 0.28, rz);
+      rope.rotation.z = 0.10;
+    });
+    // ...and boarding planks across the gap, because the deck rectangles let you walk it and you
+    // should be walking on something rather than on nothing a metre above the water
+    [-3.4,-0.6,2.2].forEach(pz=> fb(Math.abs(x1-x0)+0.5,0.14,1.1, plankF, (x0+x1)/2, -0.05, pz));
+  });
+  // the gangplank to the bow ship — hidden until that one grapples, which is the counter-board beat
+  fjordGangplank = fb(1.5,0.16,2.8, plankF, 0, -0.04, -5.7);
+  fjordGangplank.visible = false;
+  fb(1.7,0.09,0.5, ironF, 0, 0.04, -4.75);   // the iron lip it lands on
+
+  // ---- collision ----
+  // Only the OUTER rails of the full lashed platform are solid, so the player can move freely across
+  // every deck and cannot casually walk off the sides. Falling in is still possible over the ends,
+  // and is handled in fjordTick() — the sea is lethal, the way the Nile Wave's is.
+  addBox(-5.15,  0.1, 0.40, 10.0);   // port side of the port ship
+  addBox( 5.15,  0.6, 0.40, 10.0);   // starboard side of the starboard ship
+  addBox( 0.0,   5.0, 11.0, 0.40);   // the stern rail, right across
+  // The bow rail is a collider only until the third ship grapples: it is what stops the player
+  // walking straight off the front into the water while there is still nothing out there to reach.
+  // fjordLashBow() takes it out, and that removal IS the crossing opening.
+  fjordBowRail = {x1:-1.6, z1:-5.2, x2:1.6, z2:-4.8};
+  fjordColliders.push(fjordBowRail);
+})();
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
+// The decks you may stand on, as plain rectangles. The last entry is the bow ship, and it is pushed
+// on only when that ship grapples — which is the whole "the arena grows as you win" beat, and it is
+// one line rather than a mechanism because a rectangle is all a deck ever needed to be.
+const FJORD_DECKS = [
+  {x1:-1.45, z1:-4.7, x2: 1.45, z2: 4.7},   // yours
+  {x1:-5.10, z1:-4.7, x2:-1.40, z2: 4.3},   // port raider
+  {x1: 1.40, z1:-4.1, x2: 5.10, z2: 4.7},   // starboard raider
+];
+// The three OVERLAP in x on purpose. Butted edge to edge they left a 0.75-wide strip of nothing
+// between each hull and the next, so crossing between two ships that are lashed together dropped you
+// in the fjord — which is the one thing a boarding action must let you do.
+const FJORD_BOW_DECK = {x1:-1.45, z1:-16.3, x2:1.45, z2:-6.9};
+const FJORD_GANGWAY  = {x1:-0.75, z1:-7.1,  x2:0.75, z2:-4.3};   // exactly the plank you can see
+let fjordBowLashed = false;
+
+// Advances the sea, the hulls that still float on it, and the horizon's tilt.
+// Colour comes from the surface's own SHAPE rather than a texture: height picks the base tone, and
+// STEEPNESS — the gradient fjordWaveAt() already hands back — whitens it toward foam. Foam then
+// appears where the water is genuinely steep and travels with the waves, instead of sitting wherever
+// a texture happens to be light.
+const FJORD_TROUGH = new THREE.Color(0x24455c);
+const FJORD_CREST  = new THREE.Color(0x5b8ba6);
+const FJORD_FOAM   = new THREE.Color(0xdfeaf0);
+const _fjc = new THREE.Color();
+function fjordTick(dt, t){
+  if(!fjordSea) return;
+  const pos = fjordSea.geo.attributes.position, cols = fjordSea.cols;
+  const seg = fjordSea.seg, size = fjordSea.size, step = size/seg;
+  for(let i=0;i<pos.count;i++){
+    const c = i % (seg+1), r = (i/(seg+1))|0;
+    const x = -size/2 + c*step, z = -size/2 + r*step;
+    const w = fjordWaveAt(x, z, t);
+    pos.setY(i, w.y);
+    const lift  = (w.y/FJORD_AMP)*0.5 + 0.5;             // 0 in the deepest trough, 1 on the peak
+    const steep = Math.min(1, Math.hypot(w.dx, w.dz)*1.9);
+    _fjc.copy(FJORD_TROUGH).lerp(FJORD_CREST, lift).lerp(FJORD_FOAM, steep*steep*lift);
+    cols.setXYZ(i, _fjc.r, _fjc.g, _fjc.b);
+  }
+  pos.needsUpdate = true; cols.needsUpdate = true;
+  fjordSea.geo.computeVertexNormals();                    // or the swell is lit as though it were flat
+
+  // Only the hulls that have NOT grappled ride the swell. See the note at the top of this section:
+  // a lashed ship carries men fighting across it and has to be a floor, an approaching one carries
+  // nobody and is free to heave. Heave from the height, heel and pitch from the slope, so a hull
+  // leans into the face it is sitting on rather than wobbling to its own clock.
+  for(let i=1;i<fjordShips.length;i++){
+    const s = fjordShips[i];
+    if(s.lashed){ s.grp.position.y = 0; s.grp.rotation.z = 0; s.grp.rotation.x = 0; continue; }
+    const w = fjordWaveAt(s.x, s.z, t);
+    s.grp.position.y = w.y - 0.10;
+    s.grp.rotation.z = -w.dx*0.55;
+    s.grp.rotation.x =  w.dz*0.55;
+  }
+  // A quarter of the swell under your own keel, on the camera. Full roll on a deck is nauseating and
+  // fights the movement code; none at all makes the whole thing a diorama.
+  const own = fjordWaveAt(0, camera.position.z*0.5, t);
+  camera.rotation.z = -own.dx*0.14;
+
+  // The sea is lethal. Off every deck is in the water, handled the way the Nile Wave handles going
+  // under — no drowning system, no fall damage, you are simply in the fjord and that is that.
+  if(player.alive && gameStarted){
+    const px = camera.position.x, pz = camera.position.z;
+    const inRect = r => px>=r.x1 && px<=r.x2 && pz>=r.z1 && pz<=r.z2;
+    let aboard = FJORD_DECKS.some(inRect);
+    if(!aboard && fjordBowLashed) aboard = inRect(FJORD_BOW_DECK) || inRect(FJORD_GANGWAY);
+    if(!aboard){ setBanner('🌊 INTO THE FJORD'); damagePlayer(9999); }
+  }
+}
+
+// Grapples the two ships alongside — the hold. Called when the leg opens.
+function fjordLashSides(){
+  if(fjordShips[1]) fjordShips[1].lashed = true;
+  if(fjordShips[2]) fjordShips[2].lashed = true;
+  if(fjordShips[3]) fjordShips[3].lashed = false;
+  fjordBowLashed = false;
+  if(fjordGangplank) fjordGangplank.visible = false;
+  // put the bow rail back — this runs on every entry, including after a death mid-boss
+  if(fjordBowRail && fjordColliders.indexOf(fjordBowRail) < 0) fjordColliders.push(fjordBowRail);
+}
+// The third ship comes on at the bow and the plank goes down: the counter-board. The walkable area
+// grows by a deck, which is the one thing this set piece does that the Nile Wave cannot.
+function fjordLashBow(){
+  if(!fjordShips[3] || fjordBowLashed) return;
+  fjordShips[3].lashed = true;
+  fjordBowLashed = true;
+  if(fjordGangplank) fjordGangplank.visible = true;
+  const ri = fjordColliders.indexOf(fjordBowRail);
+  if(ri >= 0) fjordColliders.splice(ri, 1);      // the rail comes off; that is the crossing
+  setBanner('⚓ Grapples bite at the bow — get across');
+  setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('Grapples')>=0) setBanner(''); }, 2600);
+}
+
+function enterFjordWorld(banner){
+  clearWorldGroups();
+  scene.add(fjordWorld);
+  sky.visible = true;
+  activeColliders = fjordColliders;
+  activeHeightZones = heightZonesFjord;
+  playClamp = 20;
+  // Colder and flatter than Birka: the same northern key, but over open water with no snow to bounce
+  // light back up, and fog closing much nearer so the raiders arrive out of it.
+  scene.background.set(0xa8bcc8); scene.fog.color.set(0xb4c6d2);
+  scene.fog.near = 14; scene.fog.far = 86;
+  setDistantGround(0x4c6678);
+  skyTint(0xdce8f0);
+  hemi.intensity=0.78; hemi.color.set(0xc4d8e6); hemi.groundColor.set(0x334c5a);
+  sun.intensity=0.58; fill.intensity=0.34; fill.color.set(0xb4c8dc);
+  camera.position.set(0,1.7,3.4); yaw=targetYaw=Math.PI; pitch=targetPitch=0;
+  vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  fjordLashSides();
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   weapons = swedenWeapons;
@@ -14659,14 +15036,31 @@ function makeDaneAxe(){
   ab(0.010,0.10,0.008, silver, 0, 0.605, 0.128);
   // BIG, and held across the body with the head high and to the right.
   // What made this unusable before was not its size — it was that it stood bolt upright dead down the
-  // middle of the view. Measured in screen space, the cant is what fixes that: even at full size the
-  // axe's nearest edge sits at +0.19 of half-screen-width, so it never crosses the centre line and the
-  // crosshair stays clear. So it gets to stay a proper two-hander that fills the right side of the frame.
-  // 0.88 rather than 0.92, and dropped slightly, only so the head itself stays inside the top of frame
-  // instead of being clipped off by it.
-  g.scale.setScalar(0.88);
+  // middle of the view. Measured in screen space, the cant is what fixes that: the axe's nearest edge
+  // sits right of the centre line, so the crosshair stays clear. It gets to stay a proper two-hander
+  // filling the right side of the frame.
+  //
+  // FOUR numbers are measured now, not one. The pass before this checked only the left edge (crosshair
+  // clearance) and the head was hanging 41% off the right of the frame. The pass after THAT fixed the
+  // right edge and broke two other things: it came out small, and its butt ended up inside the frame at
+  // -1.00, so the axe hung in mid-air instead of running off the bottom of the screen the way a weapon
+  // you are actually holding does. A viewmodel has to satisfy all four at once:
+  //    right   <= 0.88   inside the frame, with ~0.09 spare for the bob/sway/lag that ride on pos
+  //    top      < 0.92   the head is not clipped off the top, and >= 0.30 so it is not sunk out of view
+  //    bottom  <= -1.30  the haft LEAVES the frame — this is what makes it read as held, not floating
+  //    crosshair         no mesh may cross the 0.10 box around screen centre
+  // Solved against all four, maximising size: scale 1.06 — BIGGER than the 0.88 it originally shipped
+  // at — held further out at z -0.76 so the extra size costs nothing at the frame edge. Lands at
+  // right 0.90 / left 0.11 / top 0.76 / bottom -1.32 at 16:9. The pose is untouched throughout.
+  // Two of the four are now hard against their limits, so this is the largest the axe can be: the
+  // bottom cannot rise (it would start floating) and the right cannot grow (it would start clipping).
+  // Only the top has slack, and the top is not what is holding the size down.
+  // At 16:9, which is what this is tuned for. A 3:2 window puts the edge at 1.06 and 4:3 at 1.19, so
+  // the horn of the blade grazes the frame on a narrow window — the alternative was a permanently
+  // smaller axe on every screen, which is the wrong trade for a two-hander.
+  g.scale.setScalar(1.06);
   g.rotation.z = -0.42; g.rotation.y = 0.34; g.rotation.x = 0.10;
-  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.30,-0.50,-0.50),recoil:0.24,name:'Dane Axe',
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.29,-0.38,-0.76),recoil:0.24,name:'Dane Axe',
     restRot:{x:0.10,y:0.34,z:-0.42},
     melee:true, range:3.0, damage:185, fireRate:0.92, sfx:'axeSwing',
     // the brief's "instantly smashes guards and armour": damage is multiplied against armoured targets.
@@ -15090,15 +15484,53 @@ const MEXICO_LEGS = [
    waves:TENOCH_WAVES, stats:TENOCH_STATS, west:TENOCH_WEST, east:TENOCH_EAST, boss:TENOCH_BOSS,
    enter(b){ enterAztecWorld(b || '🏔 Tenochtitlan — the Templo Mayor stands over the lake'); }},
 ];
-// Birka is a ONE-LEG destination for now, and carries no boss: spawnTripStage() already handles a
-// bossless leg (its last wave falling is what ends it, in onAllDead), so this needs no special casing.
-// A boss and further legs are the next pieces of this arc.
+// ---- the Fjord's garrison: the raid, fought on lashed decks ----
+// Spawn points sit on the two raider decks alongside, which is the only ground there is out here.
+// WEST is the port raider, EAST the starboard one; nothing spawns on YOUR deck, because everything
+// that reaches it walked across a grappled rail to get there, and that is the whole set piece.
+// Every point is inside its deck rectangle (see FJORD_DECKS) and clear of the outer rail colliders.
+const FJORD_WEST = [[-4.2,-3.4], [-3.4,-1.2], [-4.2,1.4], [-3.4,3.2], [-4.0,0.1]];
+const FJORD_EAST = [[ 3.4,-3.0], [ 4.2,-0.8], [ 3.4,1.8], [ 4.2,3.6], [ 3.9,0.6]];
+// Three waves and then the thing chained on the third ship. The roster is TWO models, both already
+// built, and that is a deliberate choice rather than a shortcut: berserkir are the living crew and
+// draugar are the drowned one, which is a real piece of Norse folklore (the crew that never came
+// home still crewing) and ties the fjord back to Birka's own grave field without inventing a third
+// kind of Viking nobody needed.
+const FJORD_WAVES = [
+  {berserkr:3, draugr:2},
+  {berserkr:4, draugr:3},
+  {berserkr:4, draugr:4},
+];
+// A deck is three units wide with no cover on it, so the fight is much more dangerous than Birka's
+// at the same numbers — the stats are Birka's, and the leg's flat step is what carries the rest.
+const FJORD_STATS = {
+  berserkr: {hp:190, speed:1.70, wt:'knife', scale:1.05, west:true,  noFlinch:true},
+  draugr:   {hp:260, speed:0.95, wt:'knife', scale:1.15, west:false, armoured:true, noFlinch:true},
+};
+const FJORD_DIFF = 1.5;    // the far end of the journey, and nowhere to back away to
+// The boss stands on the THIRD ship, which is not attached to anything until he is called. His
+// arrival is what grapples it and drops the plank, so reaching him means crossing — the counter-board
+// the whole leg is built around. radius is set explicitly: the boss branch in spawnBot() measures
+// from the model origin and would give him 1.2, which is most of the width of the deck he stands on.
+const FJORD_BOSS = {skin:'troll', col:0x6b6d63, hp:2600, scale:1.6, speed:0.90, x:0, z:-11.6, radius:0.95,
+  name:'THE SKERRY TROLL', hud:'the troll',
+  call:'⚠ Something on the third ship stands up — and the ship lists under it…',
+  intro:'🪨 THE SKERRY TROLL',
+  fell:'🪨 The troll goes over the side — the fjord is quiet'};
+// Birka is the first leg; the Fjord is the second and ends the Sweden trip.
 // `south` is a third spawn pool alongside west/east — see SWEDEN_SOUTH, and `pool` in SWEDEN_STATS.
 const SWEDEN_LEGS = [
   {place:'Birka', icon:'🛡️', diff:SWEDEN_DIFF, era:'Vikings',
    waves:SWEDEN_WAVES, stats:SWEDEN_STATS, west:SWEDEN_WEST, east:SWEDEN_EAST, south:SWEDEN_SOUTH,
    waveLine:' — a keel grinds up the shingle…',
    enter(b){ enterSwedenWorld(b || '🛡️ Birka — the hall doors are open and nothing living came out'); }},
+  {place:'The Fjord', icon:'🌊', diff:FJORD_DIFF, era:'Vikings',
+   waves:FJORD_WAVES, stats:FJORD_STATS, west:FJORD_WEST, east:FJORD_EAST, boss:FJORD_BOSS,
+   waveLine:' — another keel comes out of the fog…',
+   // Called by spawnTripBoss() the moment the boss is placed: it is what lashes the third ship on
+   // and drops the gangplank, so the arena grows at exactly the moment there is a reason to cross.
+   onBoss(){ fjordLashBow(); },
+   enter(b){ enterFjordWorld(b || '🌊 Out past the skerries — and they are already alongside'); }},
 ];
 // The leg currently underway. Clamped rather than indexed raw so a stale tripLeg can never return
 // undefined and take the spawn/HUD code down with it.
@@ -15109,6 +15541,9 @@ function curLeg(){
 function spawnTripBoss(){
   const leg = curLeg(); if(!leg || !leg.boss) return;
   clearBots();
+  // A leg may need the map itself to change when its boss arrives. The Fjord uses it to grapple the
+  // third ship and drop the gangplank, so the walkable area grows at the moment the fight demands it.
+  if(leg.onBoss) leg.onBoss();
   bossActive = true;
   // deliberately does NOT touch bossNum: that counts campaign bosses and gates the Cairo/win transitions.
   // Patrol is +-4 around the boss's OWN x, not around the origin. Those were the same thing while La
@@ -15549,7 +15984,9 @@ const DESTINATIONS = [
    // new hub that sells passage onward from here (Sweden included, once it's built).
    go(){ travelTo({name:'Mexico', legs:MEXICO_LEGS,
      homeHub:enterAztecMarketHub, homeBanner:'🎪 The Aztec Market — a new booth stands ready'}); }},
-  {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka, 800–1050', price:60, ready:true,
+  // Two maps on one ticket, the same shape as Mexico: the trading town, then the raid out on the
+  // water that answers it. See SWEDEN_LEGS.
+  {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka to the fjord, 800–1050', price:60, ready:true,
    lon: 17, lat: 60,
    legs:SWEDEN_LEGS,
    go(){ travelTo({name:'Sweden', legs:SWEDEN_LEGS}); }},
@@ -16046,6 +16483,7 @@ function chatSay(text, kind){
 //   /tp sweden 1 2     that destination, leg 1, wave 2
 //   /tp sweden 1 boss  the boss that leg ends on
 //   /tp nile           the Nile wave, which sits on neither map
+//   /tp fjord          the Fjord, Sweden's second leg — the raid, fought on lashed decks
 function adminTp(args){
   if(!args.length){ chatSay('/tp needs somewhere to go — try /tp 7 or /tp sweden', 'err'); return false; }
   const first = String(args[0]).toLowerCase();
@@ -16060,6 +16498,7 @@ function adminTp(args){
     return true;
   }
   if(first === 'nile'){ enterNileWave(); chatSay('✓ the Nile wave', 'ok'); return true; }
+  if(first === 'fjord'){ enterFjordWorld('🌊 The fjord — they are already alongside'); chatSay('✓ the Fjord', 'ok'); return true; }
 
   const era = ERA_NAMES.findIndex(nm => nm.toLowerCase() === first);
   if(era >= 0){
@@ -17760,6 +18199,10 @@ function animate(){
   yaw   += (targetYaw   - yaw)   * lookEase;
   pitch += (targetPitch - pitch) * lookEase;
   camera.rotation.set(pitch, yaw, 0, 'YXZ');
+  // AFTER the line above, never before it: that set() assigns all three angles, so a roll applied
+  // earlier in the frame is wiped before it is ever drawn. This is also the only place the Fjord's
+  // sea is advanced, so the water and the horizon's tilt always agree.
+  if(fjordWorld.parent) fjordTick(dt, t);
 
   // ----- player movement (disabled while dead), velocity-smoothed -----
   if(player.alive){
