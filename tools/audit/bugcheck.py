@@ -56,7 +56,9 @@ show("each leg of each destination enters, spawns, and has clear spawn points", 
     d.legs.forEach(function(leg,li){
       jumpToDestStage(d, li, 0);
       var blockedSpawns=[];
-      leg.west.concat(leg.east).forEach(function(p){
+      // south too, where a leg has one -- Birka's harbour is a pool like any other, and checking only
+      // west/east would silently pass two thirds of its garrison
+      leg.west.concat(leg.east).concat(leg.south||[]).forEach(function(p){
         if(insideCollider(p[0],p[1],0.6,0)) blockedSpawns.push(p);
       });
       if(blockedSpawns.length) throw new Error(d.name+'/'+leg.place+': blocked spawn points '+JSON.stringify(blockedSpawns));

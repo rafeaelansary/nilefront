@@ -63,6 +63,10 @@ globalThis.__laVentaSpawns = (typeof LA_VENTA_WEST!=='undefined' && typeof LA_VE
   ? LA_VENTA_WEST.concat(LA_VENTA_EAST) : null;
 globalThis.__tenochtitlanSpawns = (typeof TENOCH_WEST!=='undefined' && typeof TENOCH_EAST!=='undefined')
   ? TENOCH_WEST.concat(TENOCH_EAST) : null;
+// Birka is the first leg with THREE pools -- the harbour is a pool of its own, so it has to be in here
+// too or the blocked-spawn check silently tests two thirds of the garrison.
+globalThis.__birkaSpawns = (typeof SWEDEN_WEST!=='undefined' && typeof SWEDEN_EAST!=='undefined')
+  ? SWEDEN_WEST.concat(SWEDEN_EAST).concat(typeof SWEDEN_SOUTH!=='undefined' ? SWEDEN_SOUTH : []) : null;
 globalThis.__builders = {
   makeVoxelBot: typeof makeVoxelBot==='function' ? makeVoxelBot : null,
   makeMinotaur: typeof makeMinotaur==='function' ? makeMinotaur : null,
@@ -112,6 +116,8 @@ globalThis.__builders = {
   makeDraugr: typeof makeDraugr==='function' ? makeDraugr : null,
   makeWarg: typeof makeWarg==='function' ? makeWarg : null,
   makeNisse: typeof makeNisse==='function' ? makeNisse : null,
+  makeBerserkr: typeof makeBerserkr==='function' ? makeBerserkr : null,
+  makeTroll: typeof makeTroll==='function' ? makeTroll : null,
   makeDaneAxe: typeof makeDaneAxe==='function' ? makeDaneAxe : null,
   makeHunnishBow: typeof makeHunnishBow==='function' ? makeHunnishBow : null,
   makeThrowingSeax: typeof makeThrowingSeax==='function' ? makeThrowingSeax : null,
@@ -195,6 +201,8 @@ ACTORS = [
     ("makeDraugr",   "b=>b()",                              1.15, 0.00, "Draugr"),
     ("makeWarg",     "b=>b()",                              1.00, 0.00, "Warg"),
     ("makeNisse",    "b=>b()",                              1.00, 0.00, "Nisse"),
+    ("makeBerserkr", "b=>b()",                              1.05, 0.00, "Berserkr"),
+    ("makeTroll",    "b=>b()",                              1.60, 0.00, "Troll"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor

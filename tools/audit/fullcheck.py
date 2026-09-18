@@ -46,9 +46,10 @@ FLOAT_TOUCH_EPS = 0.03
 # "blocked spawns: ok" line was printed without anything being tested -- and it hid three enemy spawns
 # standing inside the pyramid. A destination is a wave-bearing map like any other.
 WAVE_MAPS = {"pyramidOverworld", "greekOverworld", "romanOverworld", "islamicOverworld",
-             "mexicoOverworld", "aztecOverworld"}
+             "mexicoOverworld", "aztecOverworld", "swedenOverworld"}
 # Maps that use their own spawn coordinates instead of the shared SPAWN_POINTS list.
-MAP_SPAWNS = {"mexicoOverworld": "__laVentaSpawns", "aztecOverworld": "__tenochtitlanSpawns"}
+MAP_SPAWNS = {"mexicoOverworld": "__laVentaSpawns", "aztecOverworld": "__tenochtitlanSpawns",
+              "swedenOverworld": "__birkaSpawns"}
 PLAYER_ENTRY = {
     "pyramidOverworld": (0, 18),
     "greekOverworld": (0, 10),
@@ -56,6 +57,7 @@ PLAYER_ENTRY = {
     "islamicOverworld": (0, 10),
     "mexicoOverworld": (0, 27),
     "aztecOverworld": (0, 24),
+    "swedenOverworld": (0, 24),
 }
 # Built but never reached: startGame() drops the player straight into the pyramid
 # overworld, and enterDungeon() only ever runs with dungeonWasPyramid true.
