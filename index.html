@@ -8920,7 +8920,7 @@ heightZoneTarget = heightZonesFjord;
   seaMesh.receiveShadow = true;
   fjordWorld.add(seaMesh);
   fjordSea = {mesh:seaMesh, geo:seaGeo, cols:seaCols, seg:SEG, size:SEA};
-  const far = new THREE.Mesh(new THREE.BoxGeometry(520,1,520), voxMat(0x2e2e2e,{noise:10}));
+  const far = new THREE.Mesh(new THREE.BoxGeometry(520,1,520), voxMat(0x3f6f90,{noise:10}));
   far.position.set(0, FJORD_SEA_Y-0.9, 0);
   fjordWorld.add(far);
 
@@ -9145,12 +9145,10 @@ function fjordClampPlayer(){
 // STEEPNESS — the gradient fjordWaveAt() already hands back — whitens it toward foam. Foam then
 // appears where the water is genuinely steep and travels with the waves, instead of sitting wherever
 // a texture happens to be light.
-// Neutral and dark. These were a blue trough, a blue crest and a near-white foam; over a whole sea
-// that is a colour cast across the entire screen, and the foam was bright enough to flare. Slate
-// through to a grey-white that is still clearly the lightest thing on the water without being paint.
-const FJORD_TROUGH = new THREE.Color(0x2a2a2a);
-const FJORD_CREST  = new THREE.Color(0x606060);
-const FJORD_FOAM   = new THREE.Color(0xbcbcbc);
+// Blue and lit — deep-water blue in the trough, lighter blue on the crest, near-white foam.
+const FJORD_TROUGH = new THREE.Color(0x1f5a7c);
+const FJORD_CREST  = new THREE.Color(0x5b9cc4);
+const FJORD_FOAM   = new THREE.Color(0xdcf0fa);
 const _fjc = new THREE.Color();
 function fjordTick(dt, t){
   if(!fjordSea) return;
@@ -9240,15 +9238,13 @@ function enterFjordWorld(banner){
   playClamp = 20;
   // Colder and flatter than Birka: the same northern key, but over open water with no snow to bounce
   // light back up, and fog closing much nearer so the raiders arrive out of it.
-  // Overcast and untinted. Every value here was a pale blue, which over open water means the whole
-  // frame is tinted — there is nothing else on screen to balance it against the way a town's timber
-  // and turf balance Birka's. Neutral greys, and darker across the board.
-  scene.background.set(0x909090); scene.fog.color.set(0x969696);
+  // Bright and blue — a lit sky and sea, not the overcast grey this used to be.
+  scene.background.set(0x9fc8e6); scene.fog.color.set(0xa8d0ec);
   scene.fog.near = 14; scene.fog.far = 86;
-  setDistantGround(0x4a4a4a);
-  skyTint(0xbebebe);
-  hemi.intensity=0.72; hemi.color.set(0xb2b2b2); hemi.groundColor.set(0x363636);
-  sun.intensity=0.54; fill.intensity=0.30; fill.color.set(0xa0a0a0);
+  setDistantGround(0x5f7a94);
+  skyTint(0xb8dcf2);
+  hemi.intensity=0.95; hemi.color.set(0xcfe8fa); hemi.groundColor.set(0x3f5568);
+  sun.intensity=0.80; fill.intensity=0.42; fill.color.set(0x9fc0d8);
   camera.position.set(0,1.7,3.4); yaw=targetYaw=Math.PI; pitch=targetPitch=0;
   vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   fjordPlanked = true; fjordSetPlank(false);   // force it back down on every entry, including a respawn
@@ -10073,7 +10069,7 @@ function makeMummy(){
   botMuzzle.position.set(0,-1.0,0.02); botMuzzle.visible=false; armR.add(botMuzzle);
 
   // ---- held khopesh, gripped in the right hand ----
-  // Same six verified blade transforms the player's khopesh uses, at 0.55 scale. Two nested groups: the
+  // Same six verified blade transforms the player's khopesh uses, at 0.85 scale. Two nested groups: the
   // outer one sits AT the fist and carries the wrist angle; the inner one shifts the weapon down its own
   // length so the middle of the GRIP lands in the hand, rather than the pommel sitting in the palm with
   // the whole weapon hanging off one end.
@@ -10089,7 +10085,7 @@ function makeMummy(){
     armR.add(wrist);
     const kh = new THREE.Group();
     kh.position.set(0,-0.10,0);      // centre the grip in the palm
-    kh.scale.setScalar(0.55);
+    kh.scale.setScalar(0.85);
     wrist.add(kh);
 
     const kGold = metalMatP(0xd4af37,90,0xfff4c0), kDeep = metalMatP(0x9a7020,80,0xd9b872);
@@ -12713,7 +12709,7 @@ function makeDraugr(){
   };
   const armR=mkArm(1), armL=mkArm(-1);
   // a broken grave-sword, held two-handed: the blade snapped off short, which is why it closes to melee
-  const sword=new THREE.Group(); sword.position.set(0,-0.60,-0.02); armR.add(sword);
+  const sword=new THREE.Group(); sword.position.set(0,-0.60,-0.02); sword.rotation.y=Math.PI; sword.scale.setScalar(1.15); armR.add(sword);
   const sw=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); sword.add(m); return m; };
   sw(0.05,0.05,0.20, leather, 0,0,0.078);           // grip
@@ -12895,7 +12891,7 @@ function makeNisse(){
   };
   const armR=mkArm(1), armL=mkArm(-1);
   // the ice shard, held ready in the right hand — jagged, not a neat dart
-  const shard=new THREE.Group(); shard.position.set(0,-0.31,-0.02); armR.add(shard);
+  const shard=new THREE.Group(); shard.position.set(0,-0.31,-0.02); shard.rotation.y=Math.PI; shard.scale.setScalar(1.12); armR.add(shard);
   [[0.05,0.16,0.05,0,0,-0.07],[0.035,0.11,0.035,0.02,0.02,-0.15],[0.03,0.08,0.03,-0.02,-0.01,-0.20]]
     .forEach(([w,h,d,x,y,z])=>{
       const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), iceMat);
@@ -13011,9 +13007,10 @@ function makeBerserkr(){
   };
   const armR=mkArm(1), armL=mkArm(-1);
 
-  // ---- right hand: a one-handed bearded axe. Small on purpose — the Dane Axe the PLAYER carries is the
-  // two-handed one, and these two should never read as the same weapon from opposite ends of the fight.
-  const axe=new THREE.Group(); axe.position.set(0,-0.65,-0.02); armR.add(axe);
+  // ---- right hand: a one-handed bearded axe. Smaller than the Dane Axe the PLAYER carries — the
+  // two-handed one — so these two never read as the same weapon from opposite ends of the fight, but
+  // scaled up from the hand-grip proportions so it still reads as filling his hand.
+  const axe=new THREE.Group(); axe.position.set(0,-0.65,-0.02); axe.rotation.y=Math.PI; axe.scale.setScalar(1.12); armR.add(axe);
   const ax=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); axe.add(m); return m; };
   ax(0.048,0.048,0.46, leather, 0,0,-0.14);         // haft
@@ -13159,6 +13156,7 @@ function makeTroll(){
   // crossed the gut, and its back face landed 3mm off the gut's own -- a z-fighting stripe down the
   // troll's side, which the coplanarity check caught before it was ever rendered.
   const club=new THREE.Group(); club.position.set(0.05,-0.95,0.06); club.rotation.z=-0.14; club.rotation.x=-0.08;
+  club.scale.setScalar(1.08);
   armR.add(club);
   const cl=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); m.castShadow=true; club.add(m); return m; };
@@ -13262,7 +13260,7 @@ function makeHirdman(){
 
   // right hand: a spear held back ready to throw, angled rather than couched, so the pose reads as a
   // throw about to happen and not as a pike drill
-  const spear=new THREE.Group(); spear.position.set(0,-0.65,-0.02); spear.rotation.x=0.22; armR.add(spear);
+  const spear=new THREE.Group(); spear.position.set(0,-0.65,-0.02); spear.rotation.x=0.22; spear.scale.setScalar(1.18); armR.add(spear);
   const sp=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); spear.add(m); return m; };
   sp(0.042,0.042,1.05, woodM,   0,0,-0.24);
