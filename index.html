@@ -9202,6 +9202,13 @@ function fjordDecks(forBots){
 // and left you walking on it. These are your own deck, in the lane between the cargo and the far rail.
 const FJORD_PLAYER_SPAWNS = [[0.30,5.80],[0.30,-5.80],[0.30,1.40],[1.20,-2.40],[0.60,-6.80]]
   .map(([x,z])=>new THREE.Vector3(x,1.7,z));
+// ...and once the third ship is lashed on, you come back up on the MIDDLE one instead. You took that
+// deck; dying on the Jarl's should not make you take it again. It is still a crossing back to him —
+// the plank you have to walk is the fight — but it is the one crossing you had left rather than both
+// of them, and it is his own hird you land among, which is the right amount of punishment.
+// These are the middle deck's open waist, clear of its two cargo stacks and both its gangways.
+const FJORD_FOE_SPAWNS = [[-10.0,4.4],[-10.4,-4.4],[-9.6,3.0],[-10.6,-3.0],[-10.1,5.4]]
+  .map(([x,z])=>new THREE.Vector3(x,1.7,z));
 // Clamps a point into whichever of these rectangles is nearest, and returns whether it had to move.
 // Used two ways: on the crew, as a leash that keeps them aboard a ship instead of strolling across
 // open water toward you; and on the player, as the edge of the world — see fjordClampPlayer().
@@ -16121,7 +16128,7 @@ const FJORD_EAST = [[-10.2,1.0], [-10.6,2.4], [-9.9,3.2], [-11.0,0.2], [-10.3,4.
 // on. Solved against his hull rather than picked by eye — every point is clear of his one cargo
 // stack, his barrel and both his rails at a 1.1 radius, and none is within 1.2 of his mast.
 // Only wave three ever draws from it, because until wave three that ship is out in the fog.
-const FJORD_JARL_POOL = [[-20.2,3.2], [-19.6,5.0], [-20.6,-3.6], [-19.4,-2.0], [-20.9,5.9]];
+const FJORD_JARL_POOL = [[-20.2,3.2], [-19.6,5.0], [-20.6,-3.6], [-19.4,-2.0], [-20.9,6.4]];
 // THREE waves, and they are three different fights rather than one fight three times. Each one is a
 // different distance from the enemy, which is the only thing this map can vary and the only thing it
 // needs to.
@@ -17620,7 +17627,7 @@ function usableSpawns(){
   // The Fjord's floor is two ships. The shared list above is a town's, every point of it is open sea
   // out there, and spawnUsable() cannot tell — it only knows colliders, and water is not one. A map
   // whose walkable ground is not the ground plane has to name its own spots. (See FJORD_PLAYER_SPAWNS.)
-  if(fjordWorld.parent) return FJORD_PLAYER_SPAWNS;
+  if(fjordWorld.parent) return fjordLashed ? FJORD_FOE_SPAWNS : FJORD_PLAYER_SPAWNS;
   const ok = PLAYER_SPAWNS.filter(spawnUsable);
   return ok.length ? ok : PLAYER_SPAWNS;    // never return empty: somewhere is better than nowhere
 }
@@ -18668,12 +18675,16 @@ function spawnFireMeteor(x,z){
 }
 function damageBot(bd, dmg, point){
   if(!bd.alive) return;
-  if(bd.skin==='minotaur' || bd.skin==='vanguard'){
-    // the lowered horned head, and the Monolith Vanguard's carved stone shield: damage from within the
-    // facing arc is reduced (not nearly blocked) — flanking, or hitting it from behind while its slow turn
-    // rate hasn't caught up, still lands full damage, but frontal hits aren't supposed to feel like
-    // shooting a brick wall. One rule, two enemies: the brief's "immune to frontal damage" expressed
-    // through the mechanic this game already has rather than a second system beside it.
+  if(bd.skin==='minotaur' || bd.skin==='vanguard' || (bd.skin==='jarl' && bd.wallUp)){
+    // the lowered horned head, the Monolith Vanguard's carved stone shield, and the Jarl's own shield
+    // once he sets it at half health: damage from within the facing arc is reduced (not nearly blocked)
+    // — flanking, or hitting it from behind while its slow turn rate hasn't caught up, still lands full
+    // damage, but frontal hits aren't supposed to feel like shooting a brick wall. One rule, three
+    // enemies: "immune to frontal damage" expressed through the mechanic this game already has rather
+    // than a second system beside it.
+    // For the Jarl it is also the fight's whole question, because the Dane Axe's armourPierce is x2
+    // against a boss and this is x0.5: the axe comes through the wall at exactly full damage, and
+    // nothing else does.
     const dx=camera.position.x-bd.mesh.position.x, dz=camera.position.z-bd.mesh.position.z;
     let da = Math.atan2(-dx,-dz) - bd.facing;
     da = ((da+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2) - Math.PI;
@@ -19679,6 +19690,71 @@ function animate(){
                    {skin:sk, hp:st.hp, diff:1.0, speed:st.speed, scale:st.scale});
         });
         setBanner('⚠ The orders answer the horn!'); setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
+      }
+    }
+
+    // JARL HÁKON (the Fjord's boss, and the end of the whole Sweden trip). The same two-tool shape
+    // every boss here has — one telegraphed hazard, one summon — plus a single change at half health.
+    // What makes him his own fight is WHERE he is: two crossings away, on a deck you have to come to,
+    // which means both of his tools have to work at range or the answer to him is to stand on your own
+    // ship and shoot. So the cast reaches across all three hulls and the horn fills the deck between
+    // you and him.
+    //
+    //   The spear cast: a telegraphed strike where the player IS, dodged by moving, out to 34 — far
+    //     enough to reach your own deck from his stern. Half a fjord away is not out of his reach.
+    //   The horn: his hird come up out of the middle ship, which is exactly the deck you have just
+    //     finished clearing. Capped at 3 live adds, as every other summon in this game is.
+    //   THE SHIELD WALL, at half health: he sets his shield and keeps it there for the rest of the
+    //     fight. Frontal damage is halved by the same facing-arc rule the minotaur's lowered head and
+    //     the Vanguard's stone shield already use — and the Dane Axe's armourPierce is x2 against a
+    //     boss, so the axe comes through the wall at full damage while the bow and the seax come
+    //     through it at half. The answer to the last enemy in the arc is the arc's own first weapon,
+    //     or going round him on a deck 4.9 wide. It is not a phase to learn; it is a reason to move.
+    if(b.boss && b.skin==='jarl' && player.alive){
+      const walled = b.hp <= b.maxHp*0.5;
+      if(walled && !b.wallUp){
+        b.wallUp = true;
+        b.speed *= 1.2;
+        SFX.boss();
+        shakeAmt = Math.max(shakeAmt, 0.25);
+        setBanner('⚠ The Jarl sets his shield — come round it, or break it');
+        setTimeout(()=>{ if(bossActive) setBanner(''); },2000);
+      }
+      // the tell, and it is the same object the damage rule reads: the shield comes up across his
+      // body and stays up. Eased rather than snapped, so it reads as a man setting himself.
+      if(ud.jarlShield){
+        const wantY = b.wallUp ? -0.34 : -0.52, wantR = b.wallUp ? 1.18 : 0.30;
+        ud.jarlShield.position.y += (wantY - ud.jarlShield.position.y) * Math.min(1, dt*3);
+        ud.jarlShield.rotation.y += (wantR - ud.jarlShield.rotation.y) * Math.min(1, dt*3);
+      }
+      b.castCd = b.castCd===undefined ? 3 : b.castCd - dt;
+      if(b.castCd <= 0 && distToPlayer < 34){
+        b.castCd = (4.6 + Math.random()*1.6) * (b.wallUp?0.65:1);
+        const cast=(ox,oz)=> spawnAoeTelegraph(camera.position.x+ox, camera.position.z+oz,
+          {ringColor:0x8f9aa6, fillColor:0xc4ced8, impactColor:0xf2f7fb,
+           ringR:1.9, impactAt:0.7, dur:1.25, hitRadius:1.9, damage:20});
+        cast(0,0);
+        // once the shield is up he throws a second one down the deck beside the first, so standing
+        // still is punished harder — but on a hull 4.9 across there is still somewhere to move TO
+        if(b.wallUp){ const a=Math.random()*Math.PI*2; cast(Math.cos(a)*3.0, Math.sin(a)*3.0); }
+        if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
+        b.swing = 1;
+        SFX.boss();
+        setBanner('⚠ The Jarl casts!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ The Jarl casts!') setBanner(''); },650);
+      }
+      b.hirdCd = b.hirdCd===undefined ? 7 : b.hirdCd - dt;
+      if(b.hirdCd <= 0 && bots.filter(o=>!o.boss && o.alive).length < 3){
+        b.hirdCd = (13 + Math.random()*4) * (b.wallUp?0.65:1);
+        const st = FJORD_STATS.hirdman;
+        for(let i=0;i<(b.wallUp?2:1);i++){
+          const sp = FJORD_WEST[(i + ((Math.random()*FJORD_WEST.length)|0)) % FJORD_WEST.length];
+          spawnBot(sp[0], sp[1], ENEMY_COLORS[(Math.random()*ENEMY_COLORS.length)|0],
+                   [sp[0]-2,0,sp[1]], [sp[0]+2,0,sp[1]], st.wt,
+                   {skin:'hirdman', hp:st.hp, diff:1.0, speed:st.speed, scale:st.scale});
+        }
+        SFX.boss();
+        setBanner('⚠ The horn — his hird come up the middle ship!');
+        setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
       }
     }
 
