@@ -3,7 +3,12 @@
 **Date:** 2026-09-19
 **Status:** built
 **Arc:** Sweden (Viking Age). Completes the leg specified in
-`2026-09-18-fjord-sea-battle-design.md`, and with it the whole destination.
+`2026-09-18-fjord-sea-battle-design.md`.
+
+> **Superseded in one respect, the same day:** the Jarl was built as the end of the Sweden
+> trip and is not one any more. A third leg follows him — see
+> `2026-09-19-uppsala-design.md` — so his death hands the trip inland instead of sending the
+> player home, and the `fell` line below is now a `fellOn`. Everything else here still stands.
 
 ## What was missing
 

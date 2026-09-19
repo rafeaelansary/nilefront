@@ -17248,11 +17248,11 @@ const DESTINATIONS = [
   // Sweden still comes home to Cairo — there is no hub out here to sell passage onward, and the
   // Aztec Market is where you bought this trip. Only the banner is its own: a destination that ends
   // on a jarl's deck should not land you back in the bazaar with the same line the Nile wave uses.
-  {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka to the fjord, 800–1050', price:60, ready:true,
+  {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka, the fjord and Uppsala, 800–1050', price:60, ready:true,
    lon: 17, lat: 60,
-   legs:SWEDEN_LEGS, homeBanner:'🏠 Home in Cairo — and the Jarl’s gold came back with you',
+   legs:SWEDEN_LEGS, homeBanner:'🏠 Home in Cairo — and a dead king’s gold came back with you',
    go(){ travelTo({name:'Sweden', legs:SWEDEN_LEGS,
-     homeBanner:'🏠 Home in Cairo — and the Jarl’s gold came back with you'}); }},
+     homeBanner:'🏠 Home in Cairo — and a dead king’s gold came back with you'}); }},
   {flag:'🐉', name:'China & Japan', era:'Yuan China to Kyushu · 1271–1281',       price:70, ready:false,
    lon:116, lat: 39, leg:{lon:133, lat:33}},   // the leg is the sea crossing to Kyushu, drawn dashed
 ];
@@ -19459,6 +19459,16 @@ function animate(){
   // the forge coals breathe, and the hillfort beacon gutters — both are MeshBasicMaterial, so this is the
   // only thing that makes them read as fire rather than as orange plastic
   if(birkaForge) birkaForge.material.color.setHex(Math.sin(t*3.1)>0.1 ? 0xff7a1a : 0xff9a3a);
+  // Uppsala's braziers and torches breathe. Each reads off its OWN phase and its own rate, so twelve
+  // fires are twelve fires rather than one animation played twelve times — and a guttered one is
+  // skipped entirely, because after the Mound King goes to work there is nothing left to breathe.
+  if(uppsalaWorld.parent && !uppsalaOut){
+    for(let i=0;i<uppsalaFires.length;i++){
+      const f = uppsalaFires[i];
+      f.flame.scale.set(1, 0.86 + Math.sin(t*(5.2+(i%3)*0.9) + f.phase)*0.14, 1);
+      f.light.intensity = f.base * (0.88 + Math.sin(t*(3.7+(i%5)*0.3) + f.phase)*0.12);
+    }
+  }
   if(birkaBeacon){
     birkaBeacon.scale.y = 1 + Math.sin(t*5.7)*0.16;
     birkaBeacon.rotation.y = t*0.9;
