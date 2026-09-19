@@ -9552,6 +9552,7 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='berserkr') return makeBerserkr();
   if(skinName==='troll') return makeTroll();
   if(skinName==='hirdman') return makeHirdman();
+  if(skinName==='jarl') return makeJarl();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -13314,6 +13315,136 @@ function makeHirdman(){
   muzzle.visible=false;
   const rig=_mexRig(g, legL, legR, armR, armL);
   g.userData.botMuzzle=muzzle;
+  return rig;
+}
+
+// THE JARL — the man whose ships these are, and the end of the whole Sweden trip.
+// Built as the hirdman's superior rather than as a monster, because that is what he is: the same
+// silhouette language — helm, round shield, mail — carried one rank up, so that when he stands up on
+// the third deck you know exactly what he is without a banner having to tell you. What separates him
+// at distance is colour, not shape: GOLD on the helm and the shield boss, and a madder-red cloak that
+// nothing else on this water can afford. Every other Viking here is grey, brown or iron.
+//
+// The mask is the point of the face. A hirdman has eyes and a beard you can read; the Jarl's face is
+// a gilded ocular and a nasal with a beard coming out from under it, so the one enemy in the arc that
+// never shows you a face is the one you have to get round the shield of.
+function makeJarl(){
+  const g=new THREE.Group();
+  const skin    = voxMat(0xc08a63,{noise:16});
+  const mail    = metalMatP(0x7b8189,45,0xc4ccd4);   // riveted iron, brighter than the crew's homespun
+  const mailDk  = voxMat(0x4d5259,{noise:14});
+  const ironMat = metalMatP(0x6f757c,55,0xc0c8d0);
+  const gold    = metalMatP(0xc8a23c,80,0xffeeb0);
+  const cloakM  = voxMat(0x8d2a22,{noise:16});       // madder red — the most expensive thing afloat
+  const furM    = voxMat(0x6a5a44,{noise:20});
+  const leather = voxMat(0x4a3521,{noise:14});
+  const leathDk = voxMat(0x2f2115,{noise:12});
+  const woolDk  = voxMat(0x353b45,{noise:14});
+  const woodM   = voxMat(0x8a7048,{noise:16});
+  const boneM   = voxMat(0xd8d2bc,{noise:8});
+  const shieldC = voxMat(0x1f4166,{noise:12});       // his shield is blue and gold, the crew's is ochre
+  const pupMat  = new THREE.MeshBasicMaterial({color:0x14100c,fog:false});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  // legs are the hirdman's exactly — a jarl is a man, and the rank is carried above the belt
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.14,0.76,0); g.add(l);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.19,0.32,0.20, mailDk,  -0.17,0);
+    p(0.155,0.10,0.165,leather,-0.36,0);
+    p(0.135,0.30,0.145,woolDk, -0.55,0);
+    p(0.155,0.045,0.165,leather,-0.455,0);          // leg wraps, proud of the shin
+    p(0.152,0.045,0.162,leather,-0.585,0);
+    p(0.165,0.08,0.25, leathDk,-0.72,0.045);
+    p(0.13,0.05,0.07, leathDk, -0.735,0.16);
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  // ---- the byrnie: a mail coat to the knee, which no man on the crew's decks is wearing ----
+  b(0.52,0.24,0.32, mail,    0,0.86,0);             // its skirt
+  b(0.55,0.06,0.35, mailDk,  0,0.755,0);            // and the hem, hanging proud of it
+  b(0.54,0.15,0.34, leather, 0,0.94,0);             // the belt over it
+  b(0.15,0.12,0.07, gold,    0,0.94,0.155);         // gold buckle, sunk into the belt's face
+  b(0.09,0.09,0.26, boneM,   0.28,0.86,0.02);       // THE HORN, on his hip — he sounds it for his hird
+  b(0.11,0.11,0.05, gold,    0.28,0.86,0.10);
+  b(0.44,0.28,0.30, mail,    0,1.05,0);             // belly
+  b(0.50,0.32,0.32, mail,    0,1.33,0);             // chest
+  b(0.34,0.10,0.28, mailDk,  0,1.52,0);             // the mail collar standing up round his neck
+  [-1,1].forEach(sd=> b(0.16,0.13,0.22, leathDk, sd*0.26,1.47,0));   // shoulder straps
+  b(0.60,0.80,0.11, cloakM,  0,1.16,-0.135);        // the cloak, hung down his back
+  b(0.52,0.12,0.16, furM,    0,1.49,-0.10);         // its fur collar
+  b(0.09,0.09,0.05, gold,    0.20,1.47,0.10);       // and the brooch that pins it, at his right shoulder
+
+  // ---- head: a mask, not a face ----
+  b(0.16,0.10,0.16, mailDk, 0,1.61,0);
+  b(0.26,0.25,0.24, skin,   0,1.76,0);
+  b(0.22,0.26,0.13, furM,   0,1.63,0.115);          // the beard, out from under the mask
+  b(0.11,0.10,0.10, leathDk,0,1.47,0.12);           // bound into a braid at its point
+  b(0.32,0.16,0.29, ironMat,0,1.92,0);              // the helm
+  b(0.36,0.06,0.31, gold,   0,1.845,0);             // its gold brow band
+  b(0.06,0.09,0.31, gold,   0,2.005,0);             // and the ridge over the crown
+  b(0.27,0.07,0.06, gold,   0,1.79,0.135);          // the ocular — a gilded brow over both eyes
+  b(0.055,0.22,0.055, gold, 0,1.70,0.11);           // and the nasal down between them
+  [-1,1].forEach(sd=> b(0.05,0.045,0.07, pupMat, sd*0.065,1.745,0.12));    // what little of him shows
+  [-1,1].forEach(sd=> b(0.05,0.14,0.20, ironMat, sd*0.12,1.78,0.03));      // cheek guards
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.275,1.45,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.16,0.28,0.16, mail,   -0.15,0);             // mail sleeve to the elbow
+    p(0.145,0.05,0.145,gold,  -0.31,0);             // an arm-ring — the thing a jarl pays his men with
+    p(0.13,0.26,0.13, skin,   -0.46,0);
+    p(0.135,0.12,0.145,leathDk,-0.655,0.01);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  // right hand: a broad sword, carried level across his front the way a man carries one he has already
+  // decided to use. Flipped on Y like the hirdman's spear — the blade runs down the group's -Z and the
+  // model faces +Z, so unflipped it would come out of his back.
+  const sword=new THREE.Group(); sword.position.set(0,-0.66,0.02); sword.rotation.x=-0.30; sword.rotation.y=Math.PI; armR.add(sword);
+  const sw=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); m.castShadow=true; sword.add(m); return m; };
+  sw(0.055,0.055,0.16, leather, 0,0,0.12);          // grip
+  sw(0.075,0.075,0.05, gold,    0,0,0.215);         // pommel, proud of the grip
+  sw(0.24,0.045,0.05, gold,     0,0,0.015);         // the guard, across it
+  sw(0.105,0.032,0.62, ironMat, 0,0,-0.33);         // blade
+  sw(0.119,0.020,0.52, mailDk,  0,0,-0.33);         // its fuller, proud of the blade's flats
+  sw(0.070,0.020,0.13, ironMat, 0,0,-0.70);         // and the point
+
+  // left arm: a shield half again the size of a hirdman's, blue with a gold boss and a gold rim. This
+  // is the thing the fight is about — see the shield-wall phase in the bot AI.
+  const shield=new THREE.Group(); shield.position.set(0,-0.52,-0.18); shield.rotation.y=0.30; armL.add(shield);
+  const sh=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); m.castShadow=true; shield.add(m); return m; };
+  // alternate boards stepped deeper, the same reason the hirdman's are: no two neighbours coplanar
+  const BOARDS=[[-0.276,0.360],[-0.166,0.564],[-0.055,0.645],[0.055,0.645],[0.166,0.564],[0.276,0.360]];
+  BOARDS.forEach(([bx,bh],i)=> sh(0.116,bh-(i%2)*0.016,0.05+(i%2)*0.014, shieldC, bx,0,-0.05));
+  // gold rim studs. Radius, phase and size are SOLVED rather than picked: a stud whose edge lands on a
+  // plank's edge shares a face plane with it, and sixteen of those round the rim of the one thing he
+  // holds between you and him is the worst place in the game to put a flicker. 0.319/0.195/0.072 keeps
+  // every stud face at least 10mm off every board edge it overlaps.
+  for(let i=0;i<16;i++){
+    const a=(i/16)*Math.PI*2 + 0.195;
+    sh(0.072,0.072,0.062, gold, Math.cos(a)*0.319, Math.sin(a)*0.319, -0.028);
+  }
+  sh(0.15,0.15,0.062, gold,   0,0,-0.096);          // the boss
+  sh(0.085,0.085,0.042, gold, 0,0,-0.136);
+  sh(0.40,0.058,0.042, woodM, 0,0,-0.012);          // grip bar behind it
+
+  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.09),
+    new THREE.MeshBasicMaterial({color:0xffe9a8, transparent:true, opacity:0, fog:false}));
+  muzzle.position.set(0,0,-0.70); sword.add(muzzle);
+  muzzle.visible=false;
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  g.userData.botMuzzle=muzzle;
+  // The shield-wall phase raises this and turns the body to carry it — the AI reads it back off here,
+  // so the tell the player sees and the damage rule that follows from it are the same object.
+  g.userData.jarlShield=shield;
+  g.userData.jarlArmL=armL;
   return rig;
 }
 
