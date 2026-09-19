@@ -416,4 +416,29 @@ ok &= show("the shield wall halves what hits it, and the axe reads straight thro
   return 'front 50 of 100, axe '+pierced.toFixed(0)+' of its own '+axe.damage+', behind him 100 of 100';
 """))
 
+# The whole leg, start to finish, in one run: three waves, the boss, and the way home. Every piece of
+# this is asserted somewhere above in isolation -- what this one catches is the ladder coming apart at
+# a JOIN, which is the failure no single-stage test can see.
+ok &= show("the whole leg plays through: three fights, the Jarl, and the road home", run("""
+  gameStarted=true; var wasGod=godMode; godMode=true;
+  var d=DESTINATIONS.filter(function(x){return x.name==='Sweden';})[0];
+  jumpToDestStage(d,1,0);
+  var seen=[], want=['3', '5+plank', '5+plank+lash', '1+plank+lash'];
+  for(var w=0; w<FJORD_WAVES.length+1; w++){
+    seen.push(bots.filter(function(b){return b.alive;}).length
+              + (fjordPlanked?'+plank':'') + (fjordLashed?'+lash':''));
+    bots.forEach(function(b){ if(b.alive) damageBot(b, 1e6); });
+    for(var i=0;i<600 && !bots.some(function(b){return b.alive;}); i++) animate();
+  }
+  for(var k=0;k<want.length;k++) if(seen[k] !== want[k])
+    throw new Error('stage '+(k+1)+' was '+seen[k]+', expected '+want[k]+' (whole ladder: '+seen.join(' ')+')');
+  if(bossActive) throw new Error('the boss bar is still up after he fell');
+  for(var i=0;i<900;i++) animate();
+  if(!inHub) throw new Error('clearing the Jarl did not send you home');
+  if(tripDest) throw new Error('the trip is still running after it ended');
+  if(fjordWorld.parent) throw new Error('the Fjord is still in the scene back in Cairo');
+  if(bots.length) throw new Error(bots.length+' men followed you home');
+  return seen.join(' -> ')+' -> Cairo';
+"""))
+
 sys.exit(0 if ok else 1)

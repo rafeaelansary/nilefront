@@ -16180,6 +16180,7 @@ const FJORD_DIFF = 1.25;   // down from 1.5: this is a duel and a boarding, not 
 const FJORD_BOSS = {skin:'jarl', col:0xc8a23c, hp:3000, scale:1.50, speed:1.30, x:-20.3, z:5.2, radius:0.95,
   name:'JARL HÁKON', hud:'the Jarl',
   call:'⚠ A horn sounds twice on the black-sailed ship — the Jarl comes aft of his mast…',
+  callSfx(){ SFX.warHorn(); },
   intro:'👑 JARL HÁKON',
   fell:'👑 The Jarl goes down on his own deck — the fjord is quiet, and Sweden is yours'};
 // Birka is the first leg; the Fjord is the second and ends the Sweden trip.
@@ -16659,10 +16660,14 @@ const DESTINATIONS = [
      homeHub:enterAztecMarketHub, homeBanner:'🎪 The Aztec Market — a new booth stands ready'}); }},
   // Two maps on one ticket, the same shape as Mexico: the trading town, then the raid out on the
   // water that answers it. See SWEDEN_LEGS.
+  // Sweden still comes home to Cairo — there is no hub out here to sell passage onward, and the
+  // Aztec Market is where you bought this trip. Only the banner is its own: a destination that ends
+  // on a jarl's deck should not land you back in the bazaar with the same line the Nile wave uses.
   {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka to the fjord, 800–1050', price:60, ready:true,
    lon: 17, lat: 60,
-   legs:SWEDEN_LEGS,
-   go(){ travelTo({name:'Sweden', legs:SWEDEN_LEGS}); }},
+   legs:SWEDEN_LEGS, homeBanner:'🏠 Home in Cairo — and the Jarl’s gold came back with you',
+   go(){ travelTo({name:'Sweden', legs:SWEDEN_LEGS,
+     homeBanner:'🏠 Home in Cairo — and the Jarl’s gold came back with you'}); }},
   {flag:'🐉', name:'China & Japan', era:'Yuan China to Kyushu · 1271–1281',       price:70, ready:false,
    lon:116, lat: 39, leg:{lon:133, lat:33}},   // the leg is the sea crossing to Kyushu, drawn dashed
 ];
@@ -17950,6 +17955,9 @@ function onAllDead(){
       if(leg.boss){
         pending='tripboss'; betweenTimer=4.2;
         setBanner(leg.boss.call || '⚠ Something is coming…');
+        // a boss may announce itself with a sound of its own during the four seconds before it walks
+        // out. The Jarl's call says a horn sounds twice; this is what makes it actually sound.
+        if(leg.boss.callSfx) leg.boss.callSfx();
         return;
       }
       player.score += TRIP_CLEAR_BONUS;
@@ -18291,6 +18299,19 @@ const SFX = (function(){
       tone(t,0.42,'sawtooth',270,48,0.22,{detune:14,send:true});
       tone(t+0.05,0.40,'sine',150,40,0.10,{send:true});
       noise(t+0.10,0.30,'lowpass',700,0.12,0.5,120,true); },
+    // A lur, blown twice: a low brass blast with a fifth riding on it, the second a fourth higher.
+    // Every other cue in this game is a transient — a crack, a slap, a thud — and this one is held,
+    // because it is the only sound in the arc that CALLS something. When the Jarl sounds it, men come
+    // up the middle ship, and you should know that from the sound before you see them.
+    warHorn(){ if(!actx)return; const t=actx.currentTime;
+      [147, 196].forEach((f,i)=>{
+        const o = i*0.62;
+        tone(t+o,0.52,'sawtooth',f*0.94,f,0.20,{drive:4,detune:9,send:true,attack:0.05});
+        tone(t+o,0.50,'square',  f*1.5, f*1.5, 0.07,{send:true,attack:0.06});
+        tone(t+o,0.46,'sine',    f*0.5, f*0.5, 0.13,{attack:0.04});
+        noise(t+o,0.10,'bandpass',700,0.06,1.2,380);     // the breath at the start of it
+      });
+    },
     boss(){    if(!actx)return; const t=actx.currentTime;
       tone(t,0.9,'sawtooth',110,36,0.3,{drive:10,detune:14,send:true});
       tone(t,0.9,'square',58,26,0.18,{send:true});
@@ -19752,7 +19773,7 @@ function animate(){
                    [sp[0]-2,0,sp[1]], [sp[0]+2,0,sp[1]], st.wt,
                    {skin:'hirdman', hp:st.hp, diff:1.0, speed:st.speed, scale:st.scale});
         }
-        SFX.boss();
+        SFX.warHorn();
         setBanner('⚠ The horn — his hird come up the middle ship!');
         setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
       }
