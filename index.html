@@ -11780,7 +11780,13 @@ function makeSwampStalker(){
   };
   const armR=mkArm(1), armL=mkArm(-1);
   // the blowgun itself, carried in the right hand: a bound cane with its node rings and mouthpiece
-  const bgun=new THREE.Group(); bgun.position.set(0,-0.56,-0.02); armR.add(bgun);
+  // Flipped on Y: the barrel runs down the group's -Z and this model faces +Z, so unflipped he held
+  // the mouthpiece out in front of him and blew darts out through his own back.
+  // z=0.0325, not -0.02: mirroring the group offset keeps the hand on the same point of the barrel it
+  // gripped before the flip. The exact value is boxed in on both sides -- below 0.031 the vine lashing
+  // slides into the hand (same 0.112 across, so every face of it lands on a face of the hand), above
+  // 0.034 the top node ring backs into the forearm (0.084 against the forearm's 0.082).
+  const bgun=new THREE.Group(); bgun.position.set(0,-0.56,0.0325); bgun.rotation.y=Math.PI; armR.add(bgun);
   const bg=(rt,rb,h,mat,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,7),mat);
     m.position.set(0,0,z); m.rotation.x=Math.PI/2; bgun.add(m); return m; };
   bg(0.024,0.028,0.70, cane, -0.20);
@@ -12270,17 +12276,23 @@ function makeEagleKnight(){
   };
   const armR=mkArm(1), armL=mkArm(-1);
   // the atlatl in the right hand: a short throwing board with a dart laid along it
-  const spear=new THREE.Group(); spear.position.set(0,-0.56,-0.02); armR.add(spear);
+  // Flipped on Y: the dart rides the board down the group's -Z and this model faces +Z, so unflipped
+  // the dart's head pointed back over his shoulder and the finger loops led the way.
+  // z=0.04, not -0.02: mirrored with the flip, so the hand keeps the same grip along the board.
+  const spear=new THREE.Group(); spear.position.set(0,-0.56,0.04); spear.rotation.y=Math.PI; armR.add(spear);
   const sp=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); spear.add(m); return m; };
   sp(0.05,0.035,0.42, cane, 0,0,-0.14);             // the board
   sp(0.028,0.028,0.66, cane, 0,0.035,-0.22);        // the dart riding on it
   sp(0.036,0.036,0.07, jade, 0,0.035,-0.55);        // its obsidian-green head
-  sp(0.06,0.05,0.05, quill, 0,0,0.04);              // the finger loops
+  sp(0.066,0.05,0.05, quill, 0,0,0.04);             // the finger loops, 0.066 so their sides clear the
+                                                    // board's by 0.008 instead of sitting exactly on
+                                                    // the 0.005 the coplanarity check calls a hit
 
   const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.09),
     new THREE.MeshBasicMaterial({color:0xffe7a0, transparent:true, opacity:0, fog:false}));
-  muzzle.position.set(0,-0.525,-0.60); armR.add(muzzle);   // at the dart's head, in arm-local space
+  // On the dart, not where the dart used to be: parented to the weapon so it rides the flip with it.
+  muzzle.position.set(0,0.035,-0.60); spear.add(muzzle);   // at the dart's head, in spear-local space
   muzzle.visible=false;
   const rig=_mexRig(g, legL, legR, armR, armL);
   g.userData.botMuzzle=muzzle;
@@ -12709,7 +12721,10 @@ function makeDraugr(){
   };
   const armR=mkArm(1), armL=mkArm(-1);
   // a broken grave-sword, held two-handed: the blade snapped off short, which is why it closes to melee
-  const sword=new THREE.Group(); sword.position.set(0,-0.60,-0.02); sword.rotation.y=Math.PI; sword.scale.setScalar(1.15); armR.add(sword);
+  // Flipped: the blade runs down the group's -Z, and this model faces +Z, so unflipped it pointed out
+  // of his back. The offset then re-centres the GRIP in the palm rather than leaving the pommel there,
+  // which also carries the crossguard clear of the forearm's front face.
+  const sword=new THREE.Group(); sword.position.set(0,-0.60,0.10); sword.rotation.y=Math.PI; sword.scale.setScalar(1.15); armR.add(sword);
   const sw=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); sword.add(m); return m; };
   sw(0.05,0.05,0.20, leather, 0,0,0.078);           // grip
@@ -12720,7 +12735,9 @@ function makeDraugr(){
 
   const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.09),
     new THREE.MeshBasicMaterial({color:0x5ad6ff, transparent:true, opacity:0, fog:false}));
-  muzzle.position.set(0,-0.60,-0.58); armR.add(muzzle);
+  // On the blade, not floating where the blade used to be: the muzzle is a real mesh to the geometry
+  // audit, so it rides the weapon group and moves with it.
+  muzzle.position.set(0,0,-0.60); sword.add(muzzle);
   muzzle.visible=false;
   const rig=_mexRig(g, legL, legR, armR, armL);
   g.userData.botMuzzle=muzzle;
@@ -12900,7 +12917,7 @@ function makeNisse(){
 
   const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.07),
     new THREE.MeshBasicMaterial({color:0x9fe0f0, transparent:true, opacity:0, fog:false}));
-  muzzle.position.set(0,-0.31,-0.24); armR.add(muzzle);
+  muzzle.position.set(0,0,-0.22); shard.add(muzzle);
   muzzle.visible=false;
   const rig=_mexRig(g, legL, legR, armR, armL);
   g.userData.botMuzzle=muzzle;
@@ -13051,7 +13068,7 @@ function makeBerserkr(){
 
   const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.09),
     new THREE.MeshBasicMaterial({color:0xffd9a0, transparent:true, opacity:0, fog:false}));
-  muzzle.position.set(0,-0.65,-0.50); armR.add(muzzle);
+  muzzle.position.set(0,0,-0.48); axe.add(muzzle);
   muzzle.visible=false;
   const rig=_mexRig(g, legL, legR, armR, armL);
   g.userData.botMuzzle=muzzle;
@@ -13259,8 +13276,10 @@ function makeHirdman(){
   const armR=mkArm(1), armL=mkArm(-1);
 
   // right hand: a spear held back ready to throw, angled rather than couched, so the pose reads as a
-  // throw about to happen and not as a pike drill
-  const spear=new THREE.Group(); spear.position.set(0,-0.65,-0.02); spear.rotation.x=0.22; spear.scale.setScalar(1.18); armR.add(spear);
+  // throw about to happen and not as a pike drill.
+  // Flipped on Y: the shaft runs down the group's -Z and this model faces +Z, so unflipped the spear
+  // ran out through his back. The tilt mirrors with it (-0.22, not 0.22) to keep the point raised.
+  const spear=new THREE.Group(); spear.position.set(0,-0.65,-0.02); spear.rotation.x=-0.22; spear.rotation.y=Math.PI; spear.scale.setScalar(1.18); armR.add(spear);
   const sp=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
     m.position.set(x,y,z); spear.add(m); return m; };
   sp(0.042,0.042,1.05, woodM,   0,0,-0.24);
