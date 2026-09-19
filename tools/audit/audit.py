@@ -120,6 +120,7 @@ globalThis.__builders = {
   makeTroll: typeof makeTroll==='function' ? makeTroll : null,
   makeHirdman: typeof makeHirdman==='function' ? makeHirdman : null,
   makeJarl: typeof makeJarl==='function' ? makeJarl : null,
+  makeMoundKing: typeof makeMoundKing==='function' ? makeMoundKing : null,
   makeDaneAxe: typeof makeDaneAxe==='function' ? makeDaneAxe : null,
   makeHunnishBow: typeof makeHunnishBow==='function' ? makeHunnishBow : null,
   makeThrowingSeax: typeof makeThrowingSeax==='function' ? makeThrowingSeax : null,
@@ -209,6 +210,7 @@ ACTORS = [
     ("makeTroll",    "b=>b()",                              1.60, 0.00, "Troll"),
     ("makeHirdman",  "b=>b()",                              1.00, 0.00, "Hirdman"),
     ("makeJarl",     "b=>b()",                              1.50, 0.00, "Jarl (Fjord boss)"),
+    ("makeMoundKing","b=>b()",                              1.80, 0.00, "Mound King (Uppsala)"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor

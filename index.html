@@ -10122,6 +10122,7 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='troll') return makeTroll();
   if(skinName==='hirdman') return makeHirdman();
   if(skinName==='jarl') return makeJarl();
+  if(skinName==='moundking') return makeMoundKing();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -14014,6 +14015,134 @@ function makeJarl(){
   // so the tell the player sees and the damage rule that follows from it are the same object.
   g.userData.jarlShield=shield;
   g.userData.jarlArmL=armL;
+  return rig;
+}
+
+// THE MOUND KING — what is in the middle mound, and the last thing in the Sweden arc.
+// Built on the Jarl's frame on purpose: same height, same mail, same stance, so that when he comes up
+// out of the turf you recognise the SHAPE of a Viking lord and then notice, one beat later, that
+// everything on it is wrong. The gold is still gold, and the man wearing it has been dead four hundred
+// years — corpse-green skin drawn tight, a jaw with nothing behind it, a crown instead of a helm, and
+// the same blue corpse-light in the sockets that the draugr in Birka's grave field carry, because they
+// are his and this is where it comes from.
+// His sword is broken off a hand above the guard. He does not need the rest of it.
+function makeMoundKing(){
+  const g=new THREE.Group();
+  const flesh   = voxMat(0x8a9a84,{noise:16});       // corpse-green, the draugr's colour one shade paler
+  const fleshDk = voxMat(0x5c6a58,{noise:14});
+  const mail    = metalMatP(0x6e7168,45,0xa8b0a4);   // mail that has been in the ground
+  const mailDk  = voxMat(0x44483f,{noise:14});
+  const rust    = voxMat(0x6a4a2c,{noise:16});
+  const gold    = metalMatP(0xc8a23c,80,0xffeeb0);
+  const goldDk  = voxMat(0x8a6f28,{noise:12});
+  const pelt    = voxMat(0x4a3f33,{noise:20});       // a bear pelt, mostly gone
+  const peltDk  = voxMat(0x322a22,{noise:16});
+  const leathDk = voxMat(0x2f2115,{noise:12});
+  const woolDk  = voxMat(0x353b45,{noise:14});
+  const boneM   = voxMat(0xd2d6bc,{noise:8});
+  const eyeMat  = new THREE.MeshBasicMaterial({color:0x6ad8ff,fog:false});   // corpse-light, not an eye
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.14,0.76,0); g.add(l);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.19,0.32,0.20, mailDk,  -0.17,0);
+    p(0.155,0.10,0.165,rust,   -0.36,0);
+    p(0.135,0.30,0.145,woolDk, -0.55,0);
+    p(0.155,0.045,0.165,leathDk,-0.455,0);
+    p(0.152,0.045,0.162,leathDk,-0.585,0);
+    p(0.165,0.08,0.25, leathDk,-0.72,0.045);
+    p(0.13,0.05,0.07, boneM,   -0.735,0.16);          // the toes have come through the leather
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  // ---- the byrnie he was buried in ----
+  b(0.52,0.24,0.32, mail,    0,0.86,0);
+  b(0.55,0.06,0.35, rust,    0,0.755,0);              // the hem, rusted through
+  b(0.54,0.15,0.34, leathDk, 0,0.94,0);
+  b(0.15,0.12,0.07, gold,    0,0.94,0.155);
+  b(0.44,0.28,0.30, mail,    0,1.05,0);
+  b(0.50,0.32,0.32, mail,    0,1.33,0);
+  [0,1].forEach(i=> b(0.20,0.09,0.10, rust, -0.10+i*0.20, 1.30-i*0.13, 0.13));    // holes in it, sunk through it
+  b(0.34,0.10,0.28, mailDk,  0,1.52,0);
+  [-1,1].forEach(sd=> b(0.16,0.13,0.22, peltDk, sd*0.26,1.47,0));
+  b(0.60,0.80,0.11, pelt,    0,1.16,-0.135);          // the bear pelt over his back
+  b(0.52,0.12,0.16, peltDk,  0,1.49,-0.10);
+  // THE TORC — a king's neck-ring, and the brightest thing on him
+  b(0.38,0.10,0.30, gold,    0,1.575,0.03);
+  b(0.12,0.12,0.09, goldDk,  0,1.575,0.21);
+
+  // ---- the head: a face, where the Jarl had a mask ----
+  b(0.16,0.10,0.16, fleshDk, 0,1.61,0);
+  b(0.26,0.25,0.24, flesh,   0,1.76,0);
+  b(0.21,0.07,0.10, fleshDk, 0,1.845,0.105);          // the brow, drawn forward over the sockets
+  [-1,1].forEach(sd=> b(0.07,0.07,0.07, eyeMat, sd*0.062,1.80,0.115));
+  b(0.19,0.10,0.11, fleshDk, 0,1.700,0.10);           // the cheekbones, with nothing under them
+  b(0.135,0.10,0.12, boneM,  0,1.595,0.09);           // the jaw, open
+  [-1,1].forEach(sd=> b(0.035,0.05,0.04, boneM, sd*0.045,1.665,0.118));  // and what is left in it
+  b(0.22,0.26,0.13, voxMat(0xb4b0a4,{noise:14}), 0,1.55,0.135);   // the beard, gone white
+  b(0.11,0.10,0.10, leathDk, 0,1.40,0.14);
+  // ---- THE CROWN ----
+  // Not a helm. A king's circlet, and the five points of it are why you can tell what he is from the
+  // far side of the blót ground.
+  b(0.32,0.13,0.30, gold,   0,1.935,0);
+  b(0.35,0.05,0.33, goldDk, 0,1.865,0);               // its lower rim, proud of the band
+  [-0.11,-0.055,0,0.055,0.11].forEach((cx,i)=>{
+    const ph=[0.17,0.24,0.32,0.24,0.17][i];
+    b(0.045,ph,0.045, gold, cx*2.0, 1.99+ph/2, 0.0);           // sunk into the band, not stood on it
+    b(0.062,0.062,0.062, i===2?eyeMat:goldDk, cx*2.0, 1.99+ph+0.02, 0.0);
+  });
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.275,1.45,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.16,0.28,0.16, mail,   -0.15,0);
+    p(0.145,0.05,0.145,gold,  -0.31,0);               // the arm-rings a king is measured in
+    p(0.152,0.045,0.152,goldDk,-0.385,0);
+    p(0.13,0.26,0.13, flesh,  -0.48,0);
+    p(0.155,0.12,0.165,fleshDk,-0.655,0.01);   // proud of the forearm on every face, not a hair under it
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  // right hand: the sword, broken off a hand above the guard — the grave-goods sword, bent and snapped
+  // as they were when they went into the ground with their owner.
+  const sword=new THREE.Group(); sword.position.set(0,-0.67,0.02); sword.rotation.x=-0.26; sword.rotation.y=Math.PI; armR.add(sword);
+  const sw=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); m.castShadow=true; sword.add(m); return m; };
+  sw(0.055,0.055,0.16, leathDk, 0,0,0.12);
+  sw(0.085,0.085,0.05, gold,    0,0,0.215);           // the pommel is still gold
+  sw(0.26,0.045,0.05, goldDk,   0,0,0.015);           // and the guard
+  sw(0.105,0.032,0.30, mail,    0,0,-0.17);           // what is left of the blade
+  sw(0.119,0.020,0.20, rust,    0,0,-0.17);           // rust down its flats, proud of them
+  sw(0.086,0.018,0.09, mail,    0,0,-0.355);          // the break, torn rather than cut
+  sw(0.034,0.008,0.06, mail,    0.018,0,-0.415);
+
+  // left hand: no shield. An open hand, which is the other half of the read — he is not defending
+  // anything, he is coming to take something back.
+  const claw=new THREE.Group(); claw.position.set(0,-0.715,0.06); armL.add(claw);
+  const cl=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); m.castShadow=true; claw.add(m); return m; };
+  [-1,0,1].forEach((fx,i)=>{
+    cl(0.042,0.055,0.17, flesh,  fx*0.048, -0.02, 0.10);
+    cl(0.034,0.034,0.06, boneM,  fx*0.048, -0.022, 0.196);        // the nails, come through
+  });
+  cl(0.05,0.05,0.13, flesh, -0.078, -0.03, 0.06);                 // the thumb, out to the side
+
+  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.09),
+    new THREE.MeshBasicMaterial({color:0x9ae8ff, transparent:true, opacity:0, fog:false}));
+  muzzle.position.set(0,0,-0.42); sword.add(muzzle);
+  muzzle.visible=false;
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  g.userData.botMuzzle=muzzle;
+  // Everything on him that is lit rather than shaded. When he puts the fires out these are the only
+  // things left burning in the field, so the AI brightens them — it is the one cue that survives the
+  // dark, and it is what you aim at once the braziers are gone.
+  g.userData.kingGlow = [];
+  g.traverse(o=>{ if(o.isMesh && o.material === eyeMat) g.userData.kingGlow.push(o); });
   return rig;
 }
 
