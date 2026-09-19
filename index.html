@@ -8870,6 +8870,17 @@ const fjordShips = [];           // every hull: {grp, x, z, lashed}
 let fjordGangplank = null;       // drops for the second wave: the boarding
 let fjordPlanked = false;        // is the crossing open?
 let fjordPlankGate = [];         // the two rail sections that close the gap until it is
+// ---- and the third keel, which is the end of the trip ----
+// The Jarl's own ship. It is a hull like the others, but it is the only one that MOVES: it lies out
+// in the fog for the duel, rows in while you are busy boarding the second, and lashes on for the last
+// wave — at which point its deck becomes floor and the fight has somewhere further to go. That is the
+// "the arena grows as you win" beat the set piece was designed round, and it is the same two switches
+// the gangplank already uses (a mesh's visibility, and a rail collider spliced in or out) rather than
+// any new mechanism.
+let fjordJarlShip = null;        // its entry in fjordShips, so the approach can steer it
+let fjordJarlPlank = null;       // the second plank: their deck onto his
+let fjordLashed = false;         // has it come alongside?
+let fjordJarlGate = [];          // the rail sections that close THAT gap until it has
 // ---- how big a deck is, as the numbers every other part of this map is derived from ----
 // This fight was first built on a 2.9-wide deck, and a 2.9-wide deck is a corridor: there is no room
 // on it to put anything you could get behind, so its "cover" was three knee-high crates that the
@@ -8880,15 +8891,27 @@ const FJORD_DECK_HW = 2.45;      // half-width of the walkable planking
 const FJORD_DECK_HL = 7.60;      // half-length — 15.2 by 4.9 is about 3:1, which still reads as a hull
 const FJORD_RAIL_X  = 2.60;      // rail centre: 0.30 thick, so its inner face lands on the deck edge
 const FJORD_RAIL_Z  = 7.75;      // bow and stern rails, the same
-// The gangway gap is a hole in the COLLIDER only — the sheer strake runs unbroken over it, the way a
-// gunwale does — so it costs nothing to make it wider than the plank it serves, and it has to be: a
-// body centred anywhere on a 1.9-wide plank has to fit through it, and the widest thing that crosses
-// is 1.9 across. At 1.15 the troll caught a shoulder on the rail beside it and stopped boarding.
-const FJORD_GATE_HZ = 1.90;      // half-length of the one gap in each rail, amidships, for the plank
+// 2.10, not 1.90, and the extra 0.20 is the whole difference between a boss who boards and one who
+// does not. The walkable plank is 1.9 wide, so a body may be centred anywhere within 0.95 of its
+// middle; at a 1.90 gate a 0.95-radius body standing on the plank's own edge grazes the rail segment
+// beside it and is stopped dead there, one and a half metres short of the deck. The gap is a hole in
+// the COLLIDER only — the sheer strake runs unbroken over it, the way a gunwale does — so widening it
+// past the plank it serves costs nothing visible and buys the clearance the plank implies.
+const FJORD_GATE_HZ = 2.10;      // half-length of the one gap in each rail, amidships, for the plank
 // How far off your port side the enemy lies. 10.1 puts 5.2 of open water between the two decks —
 // comfortably past the 3.4 at which a javelin-carrier stops throwing and starts swinging, and
 // nowhere near the 30 at which it stops throwing at all.
 const FJORD_FOE_X = -10.1;
+// The Jarl lies the same 10.1 beyond them, so the three hulls make one line abeam and every crossing
+// is the same crossing: 5.2 of water, one plank, one gap in two rails. Spacing them differently would
+// mean a second plank length, a second gate width and a second set of numbers to keep in step with the
+// first for no gain — the fight changes because there is another deck, not because it is a new shape.
+const FJORD_JARL_X = FJORD_FOE_X*2;
+// Where he waits while the duel and the boarding are fought: out past the skerries on the bow, far
+// enough into the fog (near 14, far 86) that he is a shape rather than a ship, and heaving on the full
+// swell the whole time — which is what makes him read as still being out THERE.
+const FJORD_JARL_FAR = {x:-33.0, z:-30.0, rot:0.62};
+const FJORD_JARL_ROW = 7.5;      // seconds the approach takes: a rowed ship's pace, not a cut
 
 addTarget = fjordColliders;
 heightZoneTarget = heightZonesFjord;
@@ -8903,6 +8926,9 @@ heightZoneTarget = heightZonesFjord;
   const shieldB  = voxMat(0x2f5c86,{noise:12});
   const shieldY  = voxMat(0xc9a53e,{noise:12});
   const ropeF    = voxMat(0x6f6047,{noise:14});
+  const goldF    = metalMatP(0xc8a23c,80,0xffeeb0);   // the Jarl's ship, and nothing else out here
+  const ravenF   = voxMat(0x1c1c22,{noise:12});
+  const blackSail= voxMat(0x24242c,{noise:14});
 
   // ---- the sea ----
   // A 110-unit plane at 72 segments: a vertex every 1.5 units, fine enough that the 2.6-unit chop is
@@ -8964,10 +8990,15 @@ heightZoneTarget = heightZonesFjord;
   // exactly where the bots' and the player's feet already are. Every width and length here comes off
   // FJORD_DECK_HW/HL, so the hull you can see and the rectangle that decides what is floor are the
   // same ship and cannot be resized apart.
-  // `gap` says which rail carries the gangway gap amidships — -1 port, +1 starboard, 0 neither — so
-  // the stowed oars and the shield row leave that stretch of rail clear instead of lying across the
-  // one way on and off the ship.
-  function longship(px, pz, rot, sailMat, gap){
+  // `gaps` lists which rails carry a gangway gap amidships — -1 port, +1 starboard — so the stowed
+  // oars and the shield row leave those stretches of rail clear instead of lying across the way on
+  // and off the ship. It is a LIST because the middle ship of three is boarded from one side and
+  // boarded FROM on the other: it needs a gap in both rails, and the crew's own gear must keep out of
+  // both. `dress` gilds a hull: the stem heads, a black-and-gold sail and a standard at the stern —
+  // the one ship out here that is somebody's, rather than somebody's transport.
+  function longship(px, pz, rot, sailMat, gaps, dress){
+    const gapList = gaps == null ? [] : (Array.isArray(gaps) ? gaps : [gaps]);
+    const gapped = (sd)=> gapList.indexOf(sd) >= 0;
     const W = FJORD_DECK_HW*2, L = FJORD_DECK_HL*2;
     const K = new THREE.Group(); K.position.set(px,0,pz); K.rotation.y = rot; fjordWorld.add(K);
     const kb=(w,h,d,mat,x,y,z,rx)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
@@ -8986,13 +9017,26 @@ heightZoneTarget = heightZonesFjord;
     for(let i=0;i<4;i++) kb(5.30,0.10,0.30, shieldR, 0,2.70+i*0.65,0.02);
     kb(6.20,0.14,0.14, timberDk, 0,5.70,0);                      // the yard
     [-1,1].forEach(sd=> [-1,1].forEach(fa=> [0,1,2].forEach(i=>{ // oars stowed along the rails
-      if(sd === gap && i === 0) return;                          // ...but never across the gangway gap
+      if(gapped(sd) && i === 0) return;                          // ...but never across a gangway gap
       kb(0.10,0.10,3.00, timberPa, sd*(FJORD_DECK_HW-0.12), 0.42, fa*(2.70+i*1.80));
     })));
     [-6.8,-5.1,-3.4,-1.7,0,1.7,3.4,5.1,6.8].forEach((sz,i)=> [-1,1].forEach(sd=>{  // shields on the rail
-      if(sd === gap && Math.abs(sz) < FJORD_GATE_HZ + 0.1) return;   // nothing hangs in the gangway
+      if(gapped(sd) && Math.abs(sz) < FJORD_GATE_HZ + 0.1) return;   // nothing hangs in a gangway
       kb(0.09,0.86,0.86, [shieldB,shieldR,shieldY,timberPa][i%4], sd*(FJORD_DECK_HW+0.25), 0.56, sz);
     }));
+    if(dress){
+      // The gilding, and all of it sits ABOVE the deck line so none of it can fight with the hull it
+      // is fixed to: a collar round each stem below its carved head, a standard at the stern, and the
+      // raven on it. You are meant to be able to pick this hull out of the fog before anything on it
+      // moves.
+      [-1,1].forEach(sd=>{
+        kb(0.44,0.13,0.44, goldF,   0, 1.86, sd*(FJORD_DECK_HL+0.60));   // collar under the head
+        kb(0.26,0.30,0.26, goldF,   0, 2.44, sd*(FJORD_DECK_HL+0.60));   // and a gilded finial over it
+      });
+      kb(0.14,2.60,0.14, timberDk, 0, 1.55, FJORD_DECK_HL-1.10);         // the standard's staff
+      kb(1.16,0.92,0.10, ravenF,   0, 2.55, FJORD_DECK_HL-1.16);         // the raven banner
+      kb(1.22,0.12,0.14, goldF,    0, 3.06, FJORD_DECK_HL-1.10);         // its gilded head-rope
+    }
     return K;
   }
 
@@ -9003,13 +9047,22 @@ heightZoneTarget = heightZonesFjord;
   // to become a melee, because the one enemy type already does both.
   // The first version of this had four hulls grappled together at the start and eight men on them,
   // which is not a fight on a deck, it is a blender.
-  const own = longship(0,0,0, clothPa, -1);                      // your gap is to port; so are they
+  const own = longship(0,0,0, clothPa, [-1]);                    // your gap is to port; so are they
   fjordShips.push({grp:own, x:0, z:0, lashed:true});             // yours never moves: it is the floor
-  const foe = longship(FJORD_FOE_X, 0, 0, shieldR, 1);           // theirs is to starboard, facing you
+  const foe = longship(FJORD_FOE_X, 0, 0, shieldR, [1,-1]);      // the middle hull: boarded, and boarded from
   fjordShips.push({grp:foe, x:FJORD_FOE_X, z:0, lashed:true});   // theirs is a floor too — they stand on it
+  // THE JARL'S SHIP. Built where he waits rather than where he ends up, because the approach is the
+  // one thing in this map that is allowed to move, and a hull that starts in its final place and
+  // teleports out to the fog on entry would be visible doing it. Unlashed, so it heaves out there for
+  // the whole duel.
+  const jarlHull = longship(FJORD_JARL_FAR.x, FJORD_JARL_FAR.z, FJORD_JARL_FAR.rot, blackSail, [1], true);
+  (function(){ const lip = new THREE.Mesh(new THREE.BoxGeometry(0.60,0.09,2.10), ironF);
+    lip.position.set(FJORD_DECK_HW-0.10, 0.04, 0); lip.castShadow = true; jarlHull.add(lip); })();
+  fjordJarlShip = {grp:jarlHull, x:FJORD_JARL_FAR.x, z:FJORD_JARL_FAR.z, lashed:false, glide:1};
+  fjordShips.push(fjordJarlShip);
   // ...and one more out on the horizon that never joins, purely so there is a hull visibly heaving on
   // the swell somewhere in frame. It is the cheapest possible proof that the water is really moving.
-  const drift = longship(19, -24, 0.7, shieldY, 0);
+  const drift = longship(19, -24, 0.7, shieldY, []);
   fjordShips.push({grp:drift, x:19, z:-24, lashed:false});
 
   // The plank. Hidden and inert until the second wave, when it drops and the fight changes from a
@@ -9019,6 +9072,13 @@ heightZoneTarget = heightZonesFjord;
   fjordGangplank = fb(-FJORD_FOE_X - FJORD_DECK_HW*2 + 0.40, 0.16, 1.90, plankF, FJORD_FOE_X/2, -0.04, 0);
   fjordGangplank.visible = false;
   fb(0.60,0.09,2.10, ironF, -FJORD_DECK_HW+0.10, 0.04, 0);   // the iron lip on your rail it lands against
+  // The SECOND plank, and the same plank: same length, same 1.9 width, same 0.2 of bearing on each
+  // deck — because the three hulls are spaced identically, one set of numbers serves both crossings.
+  // Its lip belongs to the Jarl's HULL rather than to the world, so it travels out to the fog with
+  // him instead of sitting in open water waiting for a ship to arrive under it.
+  fjordJarlPlank = fb(FJORD_FOE_X - FJORD_JARL_X - FJORD_DECK_HW*2 + 0.40, 0.16, 1.90, plankF,
+                      (FJORD_FOE_X + FJORD_JARL_X)/2, -0.04, 0);
+  fjordJarlPlank.visible = false;
 
   // ---- cargo, and what makes cover cover ----
   // A sightline in this game runs from a man's chest at y 1.2 to your eyes at 1.7, and it is a real
@@ -9060,29 +9120,45 @@ heightZoneTarget = heightZonesFjord;
   // raider stripped for boarding, and the asymmetry is what makes the water between them dangerous.
   cargo(FJORD_FOE_X, 1, [[-6.20,1.50,2.00], [6.00,1.50,2.00]]);
   deckJunk(FJORD_FOE_X, 1, [-2.60, 2.60]);
+  // The Jarl's deck is the emptiest of the three, and deliberately: one stack up in the bow, one
+  // barrel amidships, and nothing at all aft of the mast. He is 1.9 across and he fights on the
+  // stern quarter — a deck dressed like yours would leave him shuffling round his own cargo, and the
+  // last fight of the trip should be decided by the shield, not by the furniture.
+  cargo(FJORD_JARL_X, 1, [[-6.10,1.50,2.00]]);
+  deckJunk(FJORD_JARL_X, 1, [-1.30]);
 
   // ---- collision ----
-  // Both ships are railed all the way round, so neither you nor the crew can walk off a side by
+  // Every hull is railed all the way round, so neither you nor the crew can walk off a side by
   // accident — this is what you feel when you back into the gunwale mid-fight, and fjordClampPlayer()
-  // is only the backstop behind it. The ONE gap in each rail is where the plank lands. Each rail is
+  // is only the backstop behind it. The gaps in those rails are where the planks land. Each rail is
   // placed so its INNER face falls exactly on the deck rectangle's edge: the collider and the
   // rectangle that decides what is floor are then the same line, and no resizing can drift them apart.
+  // The MIDDLE hull carries two gaps, because it is boarded from your side and boarded from on the
+  // Jarl's, so "the gapped side" is no longer a single answer and each side is asked separately.
   const railEdge = FJORD_RAIL_Z + 0.15;
-  [[0, -1], [FJORD_FOE_X, 1]].forEach(([ox, gapSide])=>{
-    addBox(ox - gapSide*FJORD_RAIL_X, 0, 0.30, railEdge*2);                   // the unbroken side
-    addBox(ox, -FJORD_RAIL_Z, FJORD_DECK_HW*2, 0.30);                         // bow
-    addBox(ox,  FJORD_RAIL_Z, FJORD_DECK_HW*2, 0.30);                         // stern
-    addBox(ox + gapSide*FJORD_RAIL_X, -(FJORD_GATE_HZ+railEdge)/2, 0.30, railEdge-FJORD_GATE_HZ);
-    addBox(ox + gapSide*FJORD_RAIL_X,  (FJORD_GATE_HZ+railEdge)/2, 0.30, railEdge-FJORD_GATE_HZ);
+  // The Jarl's rails are laid at the station he lashes to, not where the hull currently floats. They
+  // are unreachable until he is in it — the walkable rectangles, not the colliders, are what decides
+  // where anyone may stand out here — so there is nothing to be gained by splicing them in and out
+  // with him, and a rail that is always in the same list can never be left behind by a respawn.
+  [{x:0, gaps:[-1]}, {x:FJORD_FOE_X, gaps:[1,-1]}, {x:FJORD_JARL_X, gaps:[1]}].forEach(hull=>{
+    addBox(hull.x, -FJORD_RAIL_Z, FJORD_DECK_HW*2, 0.30);                     // bow
+    addBox(hull.x,  FJORD_RAIL_Z, FJORD_DECK_HW*2, 0.30);                     // stern
+    [-1,1].forEach(sd=>{
+      const gx = hull.x + sd*FJORD_RAIL_X;
+      if(hull.gaps.indexOf(sd) < 0){ addBox(gx, 0, 0.30, railEdge*2); return; }   // the unbroken side
+      addBox(gx, -(FJORD_GATE_HZ+railEdge)/2, 0.30, railEdge-FJORD_GATE_HZ);
+      addBox(gx,  (FJORD_GATE_HZ+railEdge)/2, 0.30, railEdge-FJORD_GATE_HZ);
+    });
   });
-  // ...and the gap itself is closed until the plank drops into it, so during the duel there is no
-  // way to wander out of a hole in your own rail into the water. Taking this collider out IS the
-  // boarding opening, on both ships at once.
-  fjordPlankGate = [[0,-1],[FJORD_FOE_X,1]].map(([ox, gapSide])=>{
-    const gx = ox + gapSide*FJORD_RAIL_X;
-    return {x1:gx-0.15, z1:-FJORD_GATE_HZ, x2:gx+0.15, z2:FJORD_GATE_HZ};
-  });
-  fjordPlankGate.forEach(gt=> fjordColliders.push(gt));
+  // ...and each gap is closed until its own plank drops into it, so during the duel there is no way
+  // to wander out of a hole in your own rail into the water, and during the boarding no way off the
+  // far side of THEIR deck either. Taking a pair of these out IS a crossing opening, on both of the
+  // hulls it joins at once.
+  const gateAt = (ox, sd)=>{ const gx = ox + sd*FJORD_RAIL_X;
+    return {x1:gx-0.15, z1:-FJORD_GATE_HZ, x2:gx+0.15, z2:FJORD_GATE_HZ}; };
+  fjordPlankGate = [gateAt(0,-1),            gateAt(FJORD_FOE_X,1)];
+  fjordJarlGate  = [gateAt(FJORD_FOE_X,-1),  gateAt(FJORD_JARL_X,1)];
+  fjordPlankGate.concat(fjordJarlGate).forEach(gt=> fjordColliders.push(gt));
 })();
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
@@ -9099,9 +9175,26 @@ heightZoneTarget = heightZonesOriginal;
 // The plank rect overlaps both decks rather than butting against them, because a rectangle that
 // merely touches leaves a strip of nothing at the join and a strip of nothing is a hole in the floor.
 // All three come off the same half-extents the hulls and the rails do, so the floor IS the ship.
-const FJORD_OWN_DECK = {x1:-FJORD_DECK_HW, z1:-FJORD_DECK_HL, x2:FJORD_DECK_HW, z2:FJORD_DECK_HL};
-const FJORD_FOE_DECK = {x1:FJORD_FOE_X-FJORD_DECK_HW, z1:-FJORD_DECK_HL, x2:FJORD_FOE_X+FJORD_DECK_HW, z2:FJORD_DECK_HL};
-const FJORD_PLANK    = {x1:FJORD_FOE_X+FJORD_DECK_HW-0.30, z1:-0.95, x2:-FJORD_DECK_HW+0.30, z2:0.95};
+// The third deck and its plank join the list the same way, and they are the whole of what "the arena
+// grows" costs: two more rectangles, pushed into the sets the player and the crew are clamped to at
+// the moment the hull that owns them is alongside.
+const FJORD_OWN_DECK  = {x1:-FJORD_DECK_HW, z1:-FJORD_DECK_HL, x2:FJORD_DECK_HW, z2:FJORD_DECK_HL};
+const FJORD_FOE_DECK  = {x1:FJORD_FOE_X-FJORD_DECK_HW, z1:-FJORD_DECK_HL, x2:FJORD_FOE_X+FJORD_DECK_HW, z2:FJORD_DECK_HL};
+const FJORD_PLANK     = {x1:FJORD_FOE_X+FJORD_DECK_HW-0.30, z1:-0.95, x2:-FJORD_DECK_HW+0.30, z2:0.95};
+const FJORD_JARL_DECK = {x1:FJORD_JARL_X-FJORD_DECK_HW, z1:-FJORD_DECK_HL, x2:FJORD_JARL_X+FJORD_DECK_HW, z2:FJORD_DECK_HL};
+const FJORD_JARL_PL   = {x1:FJORD_JARL_X+FJORD_DECK_HW-0.30, z1:-0.95, x2:FJORD_FOE_X-FJORD_DECK_HW+0.30, z2:0.95};
+// Everywhere anyone may stand, at the current state of the fight. One function, asked by the player's
+// clamp and by the crew's leash alike, so the two can never disagree about where the floor is.
+// It is ASYMMETRIC while the planks are up, and that asymmetry is the fight: before a crossing opens,
+// your deck is yours and theirs is theirs, and neither crew can reach the other at all. Once a plank
+// is down the two sets are the same set, in both directions — they can come back over it.
+// The Jarl's deck is nobody's until his hull is alongside, and then it is everybody's.
+function fjordDecks(forBots){
+  const r = [forBots ? FJORD_FOE_DECK : FJORD_OWN_DECK];
+  if(fjordPlanked) r.push(FJORD_PLANK, forBots ? FJORD_OWN_DECK : FJORD_FOE_DECK);
+  if(fjordPlanked && fjordLashed) r.push(FJORD_JARL_PL, FJORD_JARL_DECK);
+  return r;
+}
 // Where a death in this leg stands you back up. The game's one shared PLAYER_SPAWNS list is (0,10),
 // (15,0), (0,20)… — a town square's points, and out here every single one of them is open sea, forty
 // feet from the ship. Nothing rejected them, either: spawnUsable() only asks whether a spot is inside
@@ -9131,8 +9224,7 @@ function fjordNearestDeck(px, pz, rects){
 // you the way a wall does. There is no drowning left to write, because there is no way in.
 function fjordClampPlayer(){
   if(!player.alive) return;
-  const rects = fjordPlanked ? [FJORD_OWN_DECK, FJORD_PLANK, FJORD_FOE_DECK] : [FJORD_OWN_DECK];
-  const c = fjordNearestDeck(camera.position.x, camera.position.z, rects);
+  const c = fjordNearestDeck(camera.position.x, camera.position.z, fjordDecks(false));
   if(c[2] > 1e-8){
     if(c[0] !== camera.position.x) vel.x = 0;   // per axis, exactly as resolveCollision() does it, so
     if(c[1] !== camera.position.z) vel.z = 0;   // walking into an edge slides along it, not stops dead
@@ -9172,6 +9264,20 @@ function fjordTick(dt, t){
   // the air above it or buried in the planking. The ship out on the horizon has nobody on it, so it
   // heaves and heels freely — and that one moving hull in frame is what tells the eye the sea is
   // real, at no cost to the fight at all.
+  // The approach. The only hull in this map that travels, and it travels on a clock rather than on a
+  // path: eased from where he waited to the station he lashes at, with the heave and the roll below
+  // still coming off the sea he is crossing, so he is a ship being rowed in and not a prop sliding.
+  // Steering is by lerp because there is nothing to steer AROUND — the water between the fog and the
+  // fight is empty, and a ship that arrives late has already been overtaken by fjordSetLash().
+  if(fjordJarlShip && fjordJarlShip.glide < 1){
+    fjordJarlShip.glide = Math.min(1, fjordJarlShip.glide + dt/FJORD_JARL_ROW);
+    const u = fjordJarlShip.glide, e = u*u*(3-2*u);            // smoothstep: he leans into it and settles
+    fjordJarlShip.x = FJORD_JARL_FAR.x + (FJORD_JARL_X - FJORD_JARL_FAR.x)*e;
+    fjordJarlShip.z = FJORD_JARL_FAR.z + (0 - FJORD_JARL_FAR.z)*e;
+    fjordJarlShip.grp.position.x = fjordJarlShip.x;
+    fjordJarlShip.grp.position.z = fjordJarlShip.z;
+    fjordJarlShip.grp.rotation.y = FJORD_JARL_FAR.rot*(1-e);
+  }
   for(let i=0;i<fjordShips.length;i++){
     const s = fjordShips[i];
     if(s.lashed){ s.grp.position.y = 0; s.grp.rotation.z = 0; s.grp.rotation.x = 0; continue; }
@@ -9196,9 +9302,39 @@ function fjordTick(dt, t){
   // a man steps off the deck's edge onto it — and the deck edge would become a wall he is pulled back
   // to, every frame, one step short of boarding. Whether his shoulder hangs over the water crossing
   // it is a matter of looks; whether he can cross at all is the fight.
-  const botRects = fjordPlanked ? [FJORD_FOE_DECK, FJORD_PLANK, FJORD_OWN_DECK] : [FJORD_FOE_DECK];
+  const botRects = fjordDecks(true);
+  // ---- and the gangway ----
+  // A chase AI walks a straight line at the player, and a straight line at a man on another deck
+  // walks into the rail BESIDE the gap rather than into the gap. With two hulls that was survivable:
+  // the one enemy who had to cross started amidships, so his line was near enough the gangway to fall
+  // into it. With three in a row, a man on the far deck meets the rail four metres from the only way
+  // off it and then slides along it at the rate of the z component of a heading that is almost all x
+  // — which looks exactly like a boss who has decided not to fight you.
+  // So: anyone who must leave the deck he is standing on to reach you goes to the gangway first. One
+  // axis of steering, applied only while he is up against a rail he cannot pass and only when the
+  // plank beyond it is actually down. It is also just what a man does — the gap is the door.
+  const isOpen = (r)=> botRects.indexOf(r) >= 0;
+  const inRect = (r,x,z)=> x>=r.x1 && x<=r.x2 && z>=r.z1 && z<=r.z2;
   for(let i=0;i<bots.length;i++){
     const b = bots[i]; if(!b.alive) continue;
+    const bx = b.mesh.position.x, bz = b.mesh.position.z;
+    let deck = null;
+    if(inRect(FJORD_OWN_DECK,bx,bz))       deck = FJORD_OWN_DECK;
+    else if(inRect(FJORD_FOE_DECK,bx,bz))  deck = FJORD_FOE_DECK;
+    else if(inRect(FJORD_JARL_DECK,bx,bz)) deck = FJORD_JARL_DECK;
+    if(deck){
+      const toPlayer = camera.position.x - bx;
+      const beyond = toPlayer > 0 ? camera.position.x > deck.x2 : camera.position.x < deck.x1;
+      if(beyond){
+        const gate = toPlayer > 0 ? (deck === FJORD_JARL_DECK ? FJORD_JARL_PL : FJORD_PLANK)
+                                  : (deck === FJORD_OWN_DECK  ? FJORD_PLANK   : FJORD_JARL_PL);
+        const edge = toPlayer > 0 ? deck.x2 : deck.x1;
+        if(isOpen(gate) && Math.abs(bx-edge) < 1.45 && Math.abs(bz) > 0.5){
+          const stepZ = Math.min(Math.abs(bz), (b.speed||1)*dt*1.5);
+          b.mesh.position.z = bz - (bz>0?1:-1)*stepZ;
+        }
+      }
+    }
     const c = fjordNearestDeck(b.mesh.position.x, b.mesh.position.z, botRects);
     if(c[2] > 1e-8){ b.mesh.position.x = c[0]; b.mesh.position.z = c[1]; }
   }
@@ -9229,6 +9365,50 @@ function fjordSetPlank(down){
   }
 }
 
+// He starts rowing in. Cosmetic only — nothing about the fight changes until fjordSetLash() — so it
+// is safe to call at any point and safe to call again: a glide already underway is left alone, and a
+// hull already alongside is not sent back out to sea to do it a second time.
+function fjordJarlApproach(){
+  if(!fjordJarlShip || fjordLashed) return;
+  if(fjordJarlShip.glide < 1) return;
+  if(Math.abs(fjordJarlShip.x - FJORD_JARL_X) < 0.01) return;   // already in station
+  fjordJarlShip.glide = 0;
+  setBanner('⚓ A third keel comes out of the fog — black sail, gilded stems');
+  setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('third keel')>=0) setBanner(''); }, 2800);
+}
+
+// THE LASH — the last switch in the arc. Grapples the Jarl's hull to the far side of theirs, drops
+// the second plank into the pair of rail gaps waiting for it, and hands fjordDecks() two more
+// rectangles. Written as a re-derivable STATE rather than an event, exactly as the plank is, so
+// arriving, dying, respawning and jumping straight to the boss all agree about where his ship is.
+function fjordSetLash(on){
+  on = !!on;
+  if(fjordLashed === on && fjordJarlShip && fjordJarlShip.glide >= 1
+     && (Math.abs(fjordJarlShip.x - (on ? FJORD_JARL_X : FJORD_JARL_FAR.x)) < 0.01)) return;
+  fjordLashed = on;
+  if(fjordJarlShip){
+    // Snapped, not glided: this runs on entry and on respawn as well as on the wave that calls him
+    // in, and a ship that eased into place over seven seconds while the wave was already spawning
+    // would leave the men standing on it hanging over open water for those seconds.
+    const s = fjordJarlShip;
+    s.x = on ? FJORD_JARL_X : FJORD_JARL_FAR.x;
+    s.z = on ? 0            : FJORD_JARL_FAR.z;
+    s.glide = 1; s.lashed = on;
+    s.grp.position.set(s.x, 0, s.z);
+    s.grp.rotation.set(0, on ? 0 : FJORD_JARL_FAR.rot, 0);
+  }
+  if(fjordJarlPlank) fjordJarlPlank.visible = on;
+  fjordJarlGate.forEach(gt=>{
+    const i = fjordColliders.indexOf(gt);
+    if(on){ if(i >= 0) fjordColliders.splice(i, 1); }
+    else if(i < 0)   { fjordColliders.push(gt); }
+  });
+  if(on){
+    setBanner('⚓ Grapnels — the Jarl’s ship is lashed on');
+    setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('lashed')>=0) setBanner(''); }, 2600);
+  }
+}
+
 function enterFjordWorld(banner){
   clearWorldGroups();
   scene.add(fjordWorld);
@@ -9247,7 +9427,10 @@ function enterFjordWorld(banner){
   sun.intensity=0.80; fill.intensity=0.42; fill.color.set(0x9fc0d8);
   camera.position.set(0,1.7,3.4); yaw=targetYaw=Math.PI; pitch=targetPitch=0;
   vel.set(0,0,0); playerHeight=0; stuckTimer=0;
-  fjordPlanked = true; fjordSetPlank(false);   // force it back down on every entry, including a respawn
+  // force both crossings back to shut on every entry, including a respawn; spawnTripStage() below
+  // then re-derives the right state for whatever wave this actually is
+  fjordPlanked = true;  fjordSetPlank(false);
+  fjordLashed  = true;  fjordSetLash(false);
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   weapons = swedenWeapons;
@@ -15933,18 +16116,33 @@ const MEXICO_LEGS = [
 // and a man spawned inside it spends the duel shuffling out of it.
 const FJORD_WEST = [[-10.3,-3.2], [-9.9,-1.6], [-10.6,-2.4], [-10.1,-0.5], [-10.4,-4.2]];
 const FJORD_EAST = [[-10.2,1.0], [-10.6,2.4], [-9.9,3.2], [-11.0,0.2], [-10.3,4.0]];
-// TWO waves, and they are two different fights rather than one fight twice.
+// A third pool, on the JARL'S deck, and it exists for the same reason Birka's harbour pool does: the
+// men who hold that deck have to be standing on it, and it is not the deck the other two pools are
+// on. Solved against his hull rather than picked by eye — every point is clear of his one cargo
+// stack, his barrel and both his rails at a 1.1 radius, and none is within 1.2 of his mast.
+// Only wave three ever draws from it, because until wave three that ship is out in the fog.
+const FJORD_JARL_POOL = [[-20.2,3.2], [-19.6,5.0], [-20.6,-3.6], [-19.4,-2.0], [-20.9,5.9]];
+// THREE waves, and they are three different fights rather than one fight three times. Each one is a
+// different distance from the enemy, which is the only thing this map can vary and the only thing it
+// needs to.
 //   1  THE DUEL. Three hirdmen on their deck, five metres of water in between. Nobody can reach
 //      anybody. They throw, you shoot back, and the shoulder-high cargo down your port rail is the
 //      only reason this is a duel and not a firing squad. Won with the bow.
 //   2  THE BOARDING. The plank goes down. Three more hirdmen and two berserkir, and now YOU have to
 //      cross, because standing on your own deck just means being thrown at by five men instead of
 //      three. Won with the axe.
-// The counts are small and that is the point. The first version of this put eight melee enemies on
-// decks touching yours and it killed you on arrival.
+//   3  THE SHIELD WALL. The black-sailed ship that has been heaving out in the fog since you arrived
+//      comes alongside THEIRS, and the arena grows by a whole deck at the moment you have just
+//      finished clearing one. His hird hold the middle hull and the Skerry Troll holds the gangway
+//      onto his — which is what that model was built for, and a better home for it than a third
+//      ground wave at Birka. Won by killing the troll in the gap he is standing in, because there is
+//      nowhere to go round him.
+// The counts stay small and that is still the point. The first version of this put eight melee
+// enemies on decks touching yours and it killed you on arrival.
 const FJORD_WAVES = [
   {hirdman:3},
   {hirdman:3, berserkr:2},
+  {hirdman:2, berserkr:2, troll:1},
 ];
 // The hirdman carries 'javelin', which the bot AI already treats as a hybrid: it throws from up to 30
 // away and only closes to hand strokes inside 3.4. That one property is what lets a single enemy type
@@ -15952,20 +16150,31 @@ const FJORD_WAVES = [
 // no second behaviour, and the fight changes character because the GEOMETRY changed, not the cast.
 // The berserkir hold the far deck: they cannot throw, so they exist purely to make the crossing cost
 // something, and their frenzy means the last one is the dangerous one.
+// The troll's numbers here are the LEG's, not Birka's: 620 rather than 850, because a champion in a
+// wave of five on a deck you have to get past him on is a different animal from a boss fought alone
+// with the whole ship to circle in. At wave three's difficulty he lands just under a thousand, which
+// is three Dane Axe strokes through his armour and about nine without — the difference between the
+// right weapon and the wrong one, which is what an armoured enemy is for.
 const FJORD_STATS = {
   hirdman:  {hp:150, speed:1.25, wt:'javelin', scale:1.00, west:true},
   berserkr: {hp:190, speed:1.70, wt:'knife',   scale:1.05, west:false, noFlinch:true},
+  troll:    {hp:620, speed:0.78, wt:'knife',   scale:1.60, pool:'jarl', armoured:true, noFlinch:true},
 };
 const FJORD_DIFF = 1.25;   // down from 1.5: this is a duel and a boarding, not a brawl
-// He stands on THEIR deck, and the plank stays down for him — so he can come back across it at you,
-// which is the best thing in this fight and the reason the plank is 1.9 wide rather than 1.2.
-// radius is set explicitly: the boss branch in spawnBot() measures from the model origin and would
-// hand him 1.2 — and 2.4 across does not fit through the narrowest gap the deck cargo leaves.
-const FJORD_BOSS = {skin:'troll', col:0x6b6d63, hp:2600, scale:1.6, speed:0.90, x:-10.4, z:0, radius:0.95,
-  name:'THE SKERRY TROLL', hud:'the troll',
-  call:'⚠ Something on the third ship stands up — and the ship lists under it…',
-  intro:'🪨 THE SKERRY TROLL',
-  fell:'🪨 The troll goes over the side — the fjord is quiet'};
+// THE JARL — the last thing between the player and home, and the end of the whole Sweden trip.
+// He stands aft on his OWN deck, two crossings from where you started, and the plank behind him stays
+// down: he can come back over it, and so can you go round it, which is the entire point of a boss
+// whose defence is a shield you have to get past rather than a health bar you have to outlast.
+// 3000 puts him a shade over the Xiuhcoatl Bearer (2900), who ends the only other destination in the
+// game and is bought for ten less.
+// radius is set explicitly for the same reason the troll's was: the boss branch in spawnBot() measures
+// the bounding box from the model ORIGIN, which counts the sword he is holding out in front of him,
+// and a body 2.4 across does not fit between his own cargo and his rail.
+const FJORD_BOSS = {skin:'jarl', col:0xc8a23c, hp:3000, scale:1.50, speed:1.30, x:-20.3, z:5.2, radius:0.95,
+  name:'JARL HÁKON', hud:'the Jarl',
+  call:'⚠ A horn sounds twice on the black-sailed ship — the Jarl comes aft of his mast…',
+  intro:'👑 JARL HÁKON',
+  fell:'👑 The Jarl goes down on his own deck — the fjord is quiet, and Sweden is yours'};
 // Birka is the first leg; the Fjord is the second and ends the Sweden trip.
 // `south` is a third spawn pool alongside west/east — see SWEDEN_SOUTH, and `pool` in SWEDEN_STATS.
 const SWEDEN_LEGS = [
@@ -15974,13 +16183,16 @@ const SWEDEN_LEGS = [
    waveLine:' — a keel grinds up the shingle…',
    enter(b){ enterSwedenWorld(b || '🛡️ Birka — the hall doors are open and nothing living came out'); }},
   {place:'The Fjord', icon:'🌊', diff:FJORD_DIFF, era:'Vikings',
-   waves:FJORD_WAVES, stats:FJORD_STATS, west:FJORD_WEST, east:FJORD_EAST, boss:FJORD_BOSS,
+   waves:FJORD_WAVES, stats:FJORD_STATS, west:FJORD_WEST, east:FJORD_EAST, jarl:FJORD_JARL_POOL,
+   boss:FJORD_BOSS,
    waveLine:' — another keel comes out of the fog…',
-   // The map's own state, re-derived from the wave index every time a stage is spawned rather than
-   // toggled by events — so arriving, advancing, dying and respawning all put the plank where that
-   // wave says it should be, with no way for the two to drift apart.
-   onWave(n){ fjordSetPlank(n >= 1); },
-   onBoss(){ fjordSetPlank(true); },
+   // The map's own shape, re-derived from the wave index every time a stage is spawned rather than
+   // toggled by events — so arriving, advancing, dying and respawning all put both crossings where
+   // that wave says they should be, with no way for the two to drift apart. The approach is the one
+   // thing here that is a moment rather than a state, and it is only a moment because it is only
+   // scenery: he is rowing in across wave two, and wave three is true whether or not he finished.
+   onWave(n){ fjordSetPlank(n >= 1); fjordSetLash(n >= 2); if(n === 1) fjordJarlApproach(); },
+   onBoss(){ fjordSetPlank(true); fjordSetLash(true); },
    enter(b){ enterFjordWorld(b || '🌊 Out past the skerries — and they are already alongside'); }},
 ];
 // The leg currently underway. Clamped rather than indexed raw so a stale tripLeg can never return

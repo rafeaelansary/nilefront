@@ -251,12 +251,17 @@ ok &= show("a 1.9-wide troll can walk your whole deck, cargo and all", run("""
   return 'both decks walk end to end at radius '+R;
 """))
 
-# The climax, run for real: 900 frames of animate() per case, with the player standing still. The
+# The climax, run for real: 1500 frames of animate() per case, with the player standing still. The
 # boss walks straight at you and does not slide along what blocks him, so anything he can catch a
 # shoulder on between his deck and yours ends the fight early in his favour -- he stops, you shoot
 # him from cover, and the boarding never happens. This caught exactly that: at a 1.15 rail gap he
-# stalled at the gangway for every player position except dead amidships.
-ok &= show("the troll gets off his ship and onto yours, wherever you stand", run("""
+# stalled at the gangway for every player position except dead amidships, and at a 1.90 one the Jarl
+# grazed the rail from the plank's own edge and stopped a metre and a half short of the deck.
+#
+# 1500 frames rather than the 900 this ran at while the boss stood on the middle deck: the Jarl is
+# two crossings away, not one, and the walk from his stern to your deck takes about 1100 of them.
+# Frames, not seconds -- the headless clock runs as fast as the loop does.
+ok &= show("the Jarl gets off his ship and onto yours, wherever you stand", run("""
   gameStarted=true;
   var wasGod = godMode; godMode = true;                 // the point is where HE gets to, not your HP
   var d=DESTINATIONS.filter(function(x){return x.name==='Sweden';})[0];
@@ -265,12 +270,12 @@ ok &= show("the troll gets off his ship and onto yours, wherever you stand", run
     jumpToDestStage(d,1,FJORD_WAVES.length);
     var boss=bots.filter(function(b){return b.boss;})[0];
     if(!boss) throw new Error('no boss on the boss stage');
-    for(var i=0;i<900;i++){ camera.position.set(1.0,1.7,pz); animate(); }
+    for(var i=0;i<1500;i++){ camera.position.set(1.0,1.7,pz); animate(); }
     var bx=boss.mesh.position.x, bz=boss.mesh.position.z;
     var dist=Math.hypot(bx-1.0, bz-pz);
     // either he is aboard your deck, or he has closed to the range at which a boss stops walking
     if(bx <= FJORD_OWN_DECK.x1 && dist > 4.3)
-      throw new Error('with you at z'+pz+' the troll stalled at x'+bx.toFixed(2)+' z'+bz.toFixed(2)+', '+dist.toFixed(2)+' away');
+      throw new Error('with you at z'+pz+' the Jarl stalled at x'+bx.toFixed(2)+' z'+bz.toFixed(2)+', '+dist.toFixed(2)+' away');
     out.push('z'+pz+':'+(bx > FJORD_OWN_DECK.x1 ? 'aboard' : 'in reach of you'));
   });
   godMode = wasGod;
