@@ -142,6 +142,7 @@ globalThis.__world = {
   aztecColliders:  typeof aztecColliders !== 'undefined' ? aztecColliders : null,
   heightZonesAztec:typeof heightZonesAztec!== 'undefined' ? heightZonesAztec : null,
   heightZonesOriginal:typeof heightZonesOriginal!== 'undefined' ? heightZonesOriginal: null,
+  heightZonesUppsala: typeof heightZonesUppsala !== 'undefined' ? heightZonesUppsala : null,
 };
 // Every world group and its collider array, for the whole-game sweep.
 globalThis.__worlds = {};
@@ -149,7 +150,7 @@ globalThis.__worlds = {};
  ['romanOverworld','romanColliders'],['islamicOverworld','islamicColliders'],
  ['mexicoOverworld','mexicoColliders'],['aztecOverworld','aztecColliders'],
  ['aztecMarketOverworld','aztecMarketColliders'],['swedenOverworld','swedenColliders'],
- ['fjordWorld','fjordColliders'],
+ ['fjordWorld','fjordColliders'],['uppsalaWorld','uppsalaColliders'],
  ['dungeon','dungeonColliders'],['pyramidDungeon','pyramidDungeonColliders'],
  ['greekDungeon','greekDungeonColliders'],['nileWorld','nileColliders'],
  ['hydraArena','hydraColliders'],['colosseumArena','colosseumColliders'],

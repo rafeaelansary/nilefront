@@ -3206,7 +3206,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   camera.rotation.z = 0;   // the Fjord rolls the camera with its deck; nothing else may inherit that
-  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, fjordWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, fjordWorld, uppsalaWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
   clearFieldEffects();
 }
 // Ground effects — the bosses' AoE telegraphs and the Colossus's quake cracks — are added to the SCENE,
@@ -9444,6 +9444,385 @@ function enterFjordWorld(banner){
   selectWeapon(0);
   spawnTripStage();
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
+
+// ===================== GAMLA UPPSALA (Sweden, leg 3) =====================
+// The last leg of the arc, and the only one that is not about ships. Birka is a town, the Fjord is the
+// water, and this is what both of them were sailing between: the cult centre of Svealand — Adam of
+// Bremen's golden temple, the sacred grove beside it, and the three royal mounds the kings were laid
+// in. The arc walks a straight line through its own subject: the living (a trading town), the men
+// (a jarl and his crews), and the dead (a king in a mound who will not stay in it).
+//
+// It is fought at DUSK, and that is the one deliberate break from the rest of the arc. Birka is a
+// white noon and the Fjord is a blue afternoon; a third cold daylight map would read as the same place
+// again. Here the sun is on the horizon, the snow holds the last of it, and every warm thing on screen
+// is a fire somebody lit — which also means the boss has something to take away at half health.
+//
+// The quartering, so nothing on the map is scenery you run past:
+//   NORTH  the temple: gilded gables, the gold chain under the eaves, and three idols in its porch.
+//   WEST   the three royal mounds. The middle one — the king's — is the only climbable thing here, and
+//          from its crown the whole blót ground is a shooting lane. The bow's reason to exist.
+//   EAST   the sacred grove: the evergreen that never bared, the offering poles, and the spring.
+//   SOUTH  the road you arrive on, its rune stones, and the thing-place where judgements were given.
+//   CENTRE the blót ground, open, between the fires — where the last boss of the trip is fought, with
+//          the temple standing behind him.
+const uppsalaColliders = [];
+const heightZonesUppsala = [];
+const uppsalaWorld = new THREE.Group();
+let uppsalaFires = [];        // {flame, light, base, phase} — the braziers, guttered by the Mound King
+let uppsalaOut = false;       // has the Mound King put them out?
+const UPPSALA_HALF = 30;
+// The king's mound: the only high ground, its crown, and the ramp path worn up its east face.
+const MOUND_X = -19, MOUND_Z = 1, MOUND_H = 6.2, MOUND_HW = 5.45;
+const MOUND_RAMP_X0 = MOUND_X + MOUND_HW, MOUND_RAMP_X1 = -5.0, MOUND_RAMP_HZ = 2.2;
+
+addTarget = uppsalaColliders;
+heightZoneTarget = heightZonesUppsala;
+(function buildUppsala(){
+  const timber   = new THREE.MeshLambertMaterial({map:_finish(logTex(),2)});
+  const timberDk = voxMat(0x4a3521,{noise:16});
+  const timberPa = voxMat(0x7a6242,{noise:14});
+  const plank    = new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(),2)});
+  const graniteM = new THREE.MeshLambertMaterial({map:_finish(graniteTex(),3)});
+  const graniteD = voxMat(0x5e6268,{noise:16});
+  const runeMat  = voxMat(0x8e9298,{noise:12});
+  const runeRed  = voxMat(0xa83c2c,{noise:10});
+  const turfMat  = voxMat(0x53663c,{noise:18});    // the mounds are turf, and they are the one green here
+  const turfDark = voxMat(0x3e4d2d,{noise:16});
+  const snowMat  = voxMat(0xdfe6ee,{noise:8});
+  const snowGround = new THREE.MeshLambertMaterial({map:_finish(snowGroundTex(),7)});
+  const gold     = metalMatP(0xc8a23c,80,0xffeeb0);
+  const goldDk   = voxMat(0x8a6f28,{noise:12});
+  const ironMat  = metalMatP(0x6a6f76,60,0xc8d0d8);
+  const leafDark = voxMat(0x24402c,{noise:16});
+  const leafDeep = voxMat(0x1b3222,{noise:14});
+  const clothPa  = voxMat(0xb4b2ad,{noise:12});
+  const boneM    = voxMat(0xd2d6bc,{noise:8});
+  const furM     = voxMat(0x6b5a44,{noise:18});
+  const waterDk  = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),8), color:0x2c4358});
+
+  const ub=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true;
+    uppsalaWorld.add(m); return m; };
+  const ucy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; uppsalaWorld.add(m); return m; };
+  const uco=(r,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; uppsalaWorld.add(m); return m; };
+
+  // ---- the ground ----
+  ub(UPPSALA_HALF*2, 0.5, UPPSALA_HALF*2, snowGround, 0,-0.25,0);
+  // trodden earth over the blót ground and the road: the part of this field that is walked on every day
+  // is not the part that holds snow. Sunk 0.02 into the snow rather than laid flush on it, because two
+  // ground planes at the same height is the oldest flicker in this file.
+  ub(20, 0.46, 34, voxMat(0x5d5346,{noise:14}), 0,-0.21,7);
+  ub(7.2, 0.44, 24, voxMat(0x544c40,{noise:14}), 0,-0.18,20);
+
+  // ================= THE TEMPLE =================
+  // Adam of Bremen's Uppsala: a hall entirely gilded, with a gold chain hung round the gables so that it
+  // is the first thing seen by anyone coming up the road. Built tall and narrow-gabled rather than
+  // broad like Birka's longhouses, because the point of it is to be visible from the far end of the map
+  // and to stand BEHIND the last fight of the trip.
+  const T_X=0, T_Z=-9, T_W=17, T_D=12, T_WALL=5.4;
+  (function temple(){
+    ub(T_W+1.4, 0.44, T_D+1.4, graniteM, T_X, 0.22, T_Z);            // the stone footing it stands on
+    ub(T_W, T_WALL, T_D, timber, T_X, 0.44+T_WALL/2, T_Z);           // the hall itself
+    // corner posts, proud of the walls so the corners are never two faces meeting in one plane
+    // the corner posts run from BELOW the footing rather than from the wall's own floor plane: two
+    // boxes that start at the same y share a face across their whole overlap, and a temple has four
+    // corners to do it at
+    [-1,1].forEach(sx=>[-1,1].forEach(sz=>
+      ub(0.86,T_WALL+0.7,0.86, timberDk, T_X+sx*(T_W/2-0.1), 0.30+(T_WALL+0.7)/2, T_Z+sz*(T_D/2-0.1))));
+    // the wall staves, standing proud down each long side
+    for(let i=0;i<9;i++) ub(0.34,T_WALL-0.4,0.30, timberDk, T_X-T_W/2+1.1+i*1.85, 0.44+T_WALL/2, T_Z+T_D/2+0.16);
+    // the roof: two pitched slabs meeting at a ridge, gilded on the south gable
+    const RH=4.2, RL=Math.hypot(T_W/2+0.7, RH);
+    [-1,1].forEach(sx=>{
+      const r=ub(RL, 0.42, T_D+1.8, timberPa, T_X+sx*(T_W/4+0.35), 0.44+T_WALL+RH/2, T_Z);
+      r.rotation.z = sx*Math.atan2(RH, T_W/2+0.7);
+    });
+    ub(1.0,0.56,T_D+2.2, timberDk, T_X, 0.44+T_WALL+RH, T_Z);        // the ridge beam
+    // gable ends, filled in under the pitch so the roof is not two boards over open air
+    [-1,1].forEach(sz=>{
+      for(let i=0;i<5;i++){
+        const w=(T_W+1.0)*(1-i/5.2);
+        ub(w, 0.86, 0.40, timberPa, T_X, 0.44+T_WALL+0.40+i*0.82, T_Z+sz*(T_D/2+0.72));
+      }
+      // the carved beast heads over each gable, the same language as a ship's stem
+      ub(0.46,1.5,0.46, timberDk, T_X, 0.44+T_WALL+RH+0.9, T_Z+sz*(T_D/2+0.9));
+      ub(0.40,0.46,0.74, goldDk,  T_X, 0.44+T_WALL+RH+1.62, T_Z+sz*(T_D/2+1.16));
+    });
+    // THE GOLD CHAIN, hung round the eaves. Individually placed links rather than a gilded band: a
+    // band is a stripe of paint, and this is the detail the temple is actually remembered for.
+    // ...hung from an eaves board, because a link hanging in front of a wall face touches NOTHING:
+    // the board overlaps the wall, the links overlap the board, and the sag is small enough that even
+    // the lowest of them still does. A chain that floats 30cm off the gable is how that reads.
+    [-1,1].forEach(sz=> ub(T_W+0.2, 0.30, 0.50, timberDk, T_X, 0.44+T_WALL, T_Z+sz*(T_D/2+0.05)));
+    for(let i=0;i<13;i++){
+      const lx = T_X-T_W/2+0.7+i*1.42, sag = Math.sin(i/12*Math.PI)*0.12;
+      [-1,1].forEach(sz=> ub(0.30,0.34,0.30, gold, lx, 0.44+T_WALL-0.08-sag, T_Z+sz*(T_D/2+0.35)));
+    }
+    // the doors, on the south face, facing the road
+    ub(3.2,3.4,0.34, timberDk, T_X, 0.44+1.7, T_Z+T_D/2+0.20);
+    ub(0.28,3.0,0.44, gold,    T_X, 0.44+1.7, T_Z+T_D/2+0.30);       // the gilded centre post between them
+    [-1,1].forEach(s=> ub(0.5,0.5,0.5, gold, T_X+s*1.05, 0.44+2.3, T_Z+T_D/2+0.34));   // ring handles
+    addBox(T_X, T_Z, T_W, T_D);
+  })();
+  // ---- the three idols, standing in front of the doors ----
+  // Thor in the middle with his hammer, Odin to one side, Freyr to the other — which is the order Adam
+  // gives them. Carved posts rather than statues: this is a people who built gods out of the same trees
+  // they built halls out of.
+  [[-5.0,'odin'],[0,'thor'],[5.0,'freyr']].forEach(([ix,who])=>{
+    ub(1.30,4.30,1.30, timberDk, ix, 2.15, -1.6);
+    ub(1.46,0.40,1.46, goldDk,   ix, 3.96, -1.6);                    // a gilded collar under the head
+    ub(1.16,1.05,1.16, timberPa, ix, 4.66, -1.6);                    // the head
+    ub(0.90,0.26,0.24, timber,   ix, 4.70, -1.0);                    // the brow, proud of the face
+    [-1,1].forEach(s=> ub(0.17,0.17,0.16, who==='thor'?gold:runeRed, ix+s*0.26, 4.58, -1.04));  // the eyes
+    ub(0.62,0.50,0.22, furM, ix, 4.18, -1.03);                       // the beard
+    if(who==='thor')  ub(1.10,0.62,0.56, ironMat, ix+0.98, 3.30, -1.6);      // Mjölnir, held out
+    if(who==='thor')  ub(0.34,1.20,0.34, timberPa, ix+0.98, 2.60, -1.6);
+    if(who==='odin')  ub(0.24,3.40,0.24, timberPa, ix-0.92, 2.60, -1.6);     // Gungnir
+    if(who==='odin')  ub(0.20,0.72,0.20, ironMat,  ix-0.92, 4.52, -1.6);
+    if(who==='freyr') ub(0.70,0.90,0.30, gold,     ix+0.86, 2.90, -1.6);     // the gold he is known for
+    addBox(ix, -1.6, 1.5, 1.5);
+  });
+
+  // ================= THE THREE ROYAL MOUNDS =================
+  // Kungshögarna. Turf domes over the kings, snow on their crowns, standing in a line down the west of
+  // the field. Each is ONE mass with a square collider, for the reason the Borg's rock is one block:
+  // a collider covers one rectangle, so a stepped mound is either walled off at the foot or hollow at
+  // the top. The middle one — the king's, and the biggest — is the only one you can get up.
+  function mound(mx, mz, R, H, climbable){
+    ucy(R*0.52, R, H, 14, turfMat, mx, H/2, mz);                     // the dome, as a shallow drum
+    ucy(R*0.30, R*0.55, H*0.34, 14, turfMat, mx, H+H*0.14, mz);      // its crown, set in from the drum
+    ucy(R*0.34, R*0.34, 0.26, 14, snowMat, mx, H+H*0.30, mz);        // snow, on the flat of the top
+    ucy(R*1.06, R*1.12, 0.40, 14, turfDark, mx, 0.16, mz);           // the toe, where it meets the field
+    // grass tufts and a few stones pushing out of the turf, all clear of the crown itself
+    for(let i=0;i<7;i++){
+      const a=i*0.93+mx, rr=R*0.72;
+      ub(0.5,0.34,0.5, turfDark, mx+Math.cos(a)*rr, H*0.42, mz+Math.sin(a)*rr*0.9);
+    }
+    const HW = R*0.84;                                               // the square inside the circle
+    addBox(mx, mz, HW*2, HW*2, climbable ? H : undefined);
+    if(climbable) heightZoneTarget.push({type:'plateau', x1:mx-HW, z1:mz-HW, x2:mx+HW, z2:mz+HW, y:H});
+    return HW;
+  }
+  mound(MOUND_X, -13, 5.6, 4.6, false);
+  mound(MOUND_X, MOUND_Z, 6.5, MOUND_H, true);
+  mound(MOUND_X, 15, 5.2, 4.2, false);
+  // ---- the path up the king's mound ----
+  // Worn turf over the same cribbing Birka's causeway uses, and it sits ENTIRELY OUTSIDE the mound's
+  // own collider, so the ramp's height zone meets the plateau exactly at the mound's edge and the two
+  // never fight. Wide, because a narrow ramp against a wall is a place to get stuck.
+  (function moundPath(){
+    const RL=Math.hypot(MOUND_RAMP_X1-MOUND_RAMP_X0, MOUND_H);
+    const ramp=ub(RL, 0.36, MOUND_RAMP_HZ*2, voxMat(0x6b5f49,{noise:16}),
+                  (MOUND_RAMP_X0+MOUND_RAMP_X1)/2, MOUND_H/2, MOUND_Z);
+    ramp.rotation.z = -Math.atan2(MOUND_H, MOUND_RAMP_X1-MOUND_RAMP_X0);
+    for(let i=0;i<9;i++){                                            // steps cut across the path
+      const t=(i+0.5)/9, x=MOUND_RAMP_X0+(MOUND_RAMP_X1-MOUND_RAMP_X0)*t, y=MOUND_H*(1-t);
+      const st=ub(0.34,0.14,MOUND_RAMP_HZ*2+0.1, timberDk, x, y+0.18, MOUND_Z);
+      st.rotation.z = ramp.rotation.z;
+    }
+    for(let i=0;i<3;i++){                                            // cribbing under the high end
+      const t=(i+0.5)/5, x=MOUND_RAMP_X0+(MOUND_RAMP_X1-MOUND_RAMP_X0)*t, y=MOUND_H*(1-t);
+      ub(0.9, y+0.2, MOUND_RAMP_HZ*1.7, graniteD, x, (y+0.2)/2, MOUND_Z);
+    }
+    heightZoneTarget.push({type:'ramp', axisX:true, x1:MOUND_RAMP_X0, x2:MOUND_RAMP_X1,
+                           z1:MOUND_Z-MOUND_RAMP_HZ, z2:MOUND_Z+MOUND_RAMP_HZ, y1:MOUND_H, y2:0});
+    // posts down the outer edge, so the drop reads as a drop from up there
+    for(let i=0;i<8;i++){
+      const t=(i+0.5)/8, x=MOUND_RAMP_X0+(MOUND_RAMP_X1-MOUND_RAMP_X0)*t, y=MOUND_H*(1-t);
+      ucy(0.08,0.09,1.1,5, timberDk, x, y+0.52, MOUND_Z-MOUND_RAMP_HZ+0.25);
+    }
+    // ...and a rune stone at the foot of the path, which is where one would actually stand
+    ub(0.9,2.6,0.34, runeMat, MOUND_RAMP_X1+0.9, 1.3, MOUND_Z+2.9);
+    ub(0.62,1.9,0.12, runeRed, MOUND_RAMP_X1+0.9, 1.3, MOUND_Z+2.72);
+    addBox(MOUND_RAMP_X1+0.9, MOUND_Z+2.9, 1.0, 0.5);
+  })();
+
+  // ================= THE SACRED GROVE =================
+  // Every tree in it was holy, and the one in the middle of it was evergreen and nobody knew what kind.
+  // So: one enormous conifer nothing else on the map comes near the height of, a spring at its foot,
+  // and the offering poles in a ring round both.
+  (function grove(){
+    const GX=18, GZ=-2;
+    ucy(1.05,1.55,7.0,10, timberDk, GX, 3.5, GZ);
+    for(let i=0;i<5;i++) uco(6.4-i*1.05, 3.4, 11, i%2?leafDeep:leafDark, GX, 6.4+i*2.05, GZ);
+    uco(1.5,2.2,9, leafDeep, GX, 16.3, GZ);
+    addBox(GX, GZ, 2.6, 2.6);
+    // roots, breaking the ground round the trunk — each at its own height so no two share a plane
+    for(let i=0;i<6;i++){
+      const a=i*1.05+0.3;
+      ub(2.4,0.46+i*0.05,0.9, timberDk, GX+Math.cos(a)*1.7, 0.22+i*0.02, GZ+Math.sin(a)*1.7, a);
+    }
+    // the spring: a stone kerb round dark water. Adam says what went into it; this game will settle for
+    // the kerb, the offerings on it, and the fact that you cannot see the bottom.
+    const WX=13.5, WZ=8.5;
+    for(let i=0;i<12;i++){
+      const a=i/12*Math.PI*2;
+      ub(1.05,0.72,0.8, graniteM, WX+Math.cos(a)*2.2, 0.36, WZ+Math.sin(a)*2.2, a);
+    }
+    const w=new THREE.Mesh(new THREE.CircleGeometry(2.05,20), waterDk);
+    w.rotation.x=-Math.PI/2; w.position.set(WX,0.30,WZ); w.receiveShadow=true; uppsalaWorld.add(w);
+    addBox(WX, WZ, 5.2, 5.2);
+    ub(0.44,0.44,0.44, gold, WX-1.5,0.92,WZ+1.5);                    // what somebody left on the kerb
+    ub(0.36,0.52,0.36, ironMat, WX+1.7,0.96,WZ-1.2);
+    // the offering poles. Shields, drinking horns and skulls on the crossbars — the nine-yearly blót,
+    // in the one register a voxel game can carry without being ghoulish about it.
+    [[22.5,-9],[24,-1],[22,7],[16,-12],[11,-5],[19.5,12]].forEach(([px,pz],i)=>{
+      ucy(0.20,0.24,4.2,6, timberPa, px, 2.1, pz);
+      ub(2.6,0.20,0.20, timberDk, px, 3.9, pz);
+      addBox(px, pz, 0.6, 0.6);
+      // each of them overlaps the bar it hangs from. Hung a hand's width below it they are all
+      // floating in mid-air, which is the single easiest thing to get wrong on a map like this.
+      [-1,1].forEach((s,k)=>{
+        if((i+k)%3===0) ub(0.84,0.84,0.10, [voxMat(0xa8322c,{noise:12}),voxMat(0x2f5f94,{noise:12}),
+                           voxMat(0xd8b23c,{noise:12})][(i+k)%3], px+s*1.0, 3.44, pz);
+        else if((i+k)%3===1) ub(0.26,0.62,0.26, boneM, px+s*1.0, 3.56, pz);
+        else ub(0.22,0.22,0.66, timberPa, px+s*1.0, 3.74, pz);
+      });
+    });
+  })();
+
+  // ================= THE ROAD, THE RUNE STONES, THE THING =================
+  // You arrive on the road. It is the only way into this field that is not a mound or a tree line, and
+  // it is lined with the stones that say who paid for it.
+  [[-4.6,22],[4.6,22],[-4.6,15],[4.6,15],[-5.2,28]].forEach(([rx,rz],i)=>{
+    const h=2.2+((i*13)%3)*0.45;
+    ub(1.1,h,0.38, runeMat, rx, h/2, rz, (i%2?0.12:-0.16));
+    ub(0.78,h*0.72,0.14, runeRed, rx, h/2, rz+(i%2?0.20:-0.20));
+    ub(1.26,0.30,0.54, graniteD, rx, 0.15, rz);                      // the stone is set in packed rubble
+    addBox(rx, rz, 1.2, 0.6);
+  });
+  // the thing-place: a ring of seat stones on the east of the road, where the law was spoken. Low enough
+  // to shoot over, solid enough to break a charge on.
+  (function thingPlace(){
+    const TX=16, TZ=19;
+    ucy(4.6,4.8,0.44,16, voxMat(0x6a6152,{noise:14}), TX, 0.22, TZ);
+    for(let i=0;i<10;i++){
+      const a=i/10*Math.PI*2;
+      ub(1.5,0.92,1.0, graniteM, TX+Math.cos(a)*3.9, 0.46, TZ+Math.sin(a)*3.9, a);
+      addBox(TX+Math.cos(a)*3.9, TZ+Math.sin(a)*3.9, 1.5, 1.2);
+    }
+    ub(1.2,1.9,1.2, graniteM, TX, 0.95, TZ);                         // the law-stone in the middle
+    ub(1.44,0.28,1.44, graniteD, TX, 1.98, TZ);
+    addBox(TX, TZ, 1.4, 1.4);
+  })();
+
+  // ================= THE FIRES =================
+  // Two braziers flanking the blót ground, and the torches down the road and across the temple porch.
+  // Every warm thing on this map is one of these, which is what makes the Mound King putting them out
+  // at half health a change you can see rather than a number.
+  function brazier(bx, bz, scale){
+    const s = scale||1;
+    ucy(0.24,0.34,1.5*s,6, ironMat, bx, 0.75*s, bz);
+    ucy(1.05*s,0.72*s,0.72*s,10, ironMat, bx, 1.72*s, bz);
+    ucy(0.94*s,0.64*s,0.26*s,10, voxMat(0x2a2320,{noise:14}), bx, 1.80*s, bz);   // the ash bed, inside it
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.72*s, 1.7*s, 7),
+      new THREE.MeshBasicMaterial({color:0xff8a2a, transparent:true, opacity:0.95, fog:false}));
+    fl.position.set(bx, 2.70*s, bz); uppsalaWorld.add(fl);
+    const li = new THREE.PointLight(0xffa244, 1.45, 24, 2);
+    li.position.set(bx, 3.0*s, bz); uppsalaWorld.add(li);
+    addBox(bx, bz, 1.5*s, 1.5*s);
+    uppsalaFires.push({flame:fl, light:li, base:1.45, phase:uppsalaFires.length*1.7});
+  }
+  brazier(-7.5, 5.5, 1.25);
+  brazier( 7.5, 5.5, 1.25);
+  brazier(-10.2, -3.0, 0.9);
+  brazier( 10.2, -3.0, 0.9);
+  [[-4.0,12],[4.0,12],[-4.0,19],[4.0,19],[-4.0,26],[4.0,26],[-8.6,-1.2],[8.6,-1.2]].forEach(([tx,tz])=>{
+    ucy(0.11,0.14,2.3,6, timberPa, tx, 1.15, tz);
+    const fl=new THREE.Mesh(new THREE.ConeGeometry(0.28,0.72,6),
+      new THREE.MeshBasicMaterial({color:0xffb347, transparent:true, opacity:0.95, fog:false}));
+    fl.position.set(tx, 2.62, tz); uppsalaWorld.add(fl);
+    const li=new THREE.PointLight(0xffa860, 0.8, 13, 2); li.position.set(tx, 2.8, tz); uppsalaWorld.add(li);
+    uppsalaFires.push({flame:fl, light:li, base:0.8, phase:uppsalaFires.length*1.1});
+  });
+
+  // Nothing in the scatter below is placed by eye. A tree or a boulder dropped on a mound, on the
+  // thing-place, or on another tree is a collider overlapping a collider, which is a pair of invisible
+  // walls fighting over the same ground — so each candidate is tested against everything already
+  // standing and simply skipped if it would land on it.
+  function clearOfAll(cx, cz, w, d, pad){
+    const p = pad===undefined ? 0.35 : pad;
+    const x1=cx-w/2-p, x2=cx+w/2+p, z1=cz-d/2-p, z2=cz+d/2+p;
+    for(const c of uppsalaColliders)
+      if(x1 < c.x2 && c.x1 < x2 && z1 < c.z2 && c.z1 < z2) return false;
+    return true;
+  }
+
+  // ================= THE TREE LINE =================
+  // Spruce, all the way round, well outside anything anyone fights over: the field has to end in forest
+  // rather than in fog over nothing.
+  for(let i=0;i<64;i++){
+    const a=i/64*Math.PI*2, r=25.5+((i*7)%5)*1.4;
+    const tx=Math.cos(a)*r, tz=Math.sin(a)*r*0.98;
+    if(Math.abs(tx)<6.5 && tz>14) continue;                          // the road out stays open
+    const s=0.85+((i*11)%4)*0.22;
+    if(!clearOfAll(tx, tz, 1.1*s, 1.1*s)) continue;
+    ucy(0.24*s,0.32*s,1.9*s,6, timberDk, tx, 0.95*s, tz);
+    for(let k=0;k<3;k++) uco((1.9-k*0.42)*s, 2.0*s, 7, k%2?leafDeep:leafDark, tx, (2.3+k*1.25)*s, tz);
+    if(i%3===0) uco(1.5*s, 0.5*s, 7, snowMat, tx, 5.35*s, tz);
+    addBox(tx, tz, 1.1*s, 1.1*s);
+  }
+  // and a few boulders through the field, because a snowfield with nothing in it is a floor
+  [[-11,18],[10,-14],[-8,-17],[13,22],[-24,-22],[24,-20]].forEach(([bx,bz],i)=>{
+    const s=1.0+((i*17)%4)*0.34;
+    if(!clearOfAll(bx, bz, s*1.7, s*1.4)) return;
+    const rk=ub(s*1.7,s*1.05,s*1.4, graniteM, bx, s*0.32, bz, i*0.7);
+    ub(s*1.5,0.22,s*1.2, snowMat, bx, s*0.85, bz, i*0.7);            // snow on the weather side of it
+    addBox(bx, bz, s*1.7, s*1.4);
+    return rk;
+  });
+})();
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
+
+// Gamla Uppsala — the last leg of the Sweden trip. Same shape as every other destination entry: world,
+// lighting, loadout and garrison in one call.
+function enterUppsalaWorld(banner){
+  clearWorldGroups();
+  scene.add(uppsalaWorld);
+  sky.visible = true;
+  activeColliders = uppsalaColliders;
+  activeHeightZones = heightZonesUppsala;
+  playClamp = 28;
+  // DUSK, and it is the arc's one deliberate change of hour. Birka is a white noon and the Fjord a blue
+  // afternoon; a third cold daylight would read as the same field again. The sun is on the horizon and
+  // behind the temple, the snow holds the last of it, and everything else warm on screen is a fire.
+  // Fog is close and blue so the tree line goes to nothing and the mounds stand out of it.
+  scene.background.set(0x2b3a52); scene.fog.color.set(0x35486a);
+  scene.fog.near = 18; scene.fog.far = 92;
+  setDistantGround(0x3a4a60);
+  skyTint(0x4a6488);
+  hemi.intensity=0.50; hemi.color.set(0x5a76a0); hemi.groundColor.set(0x27303e);
+  sun.intensity=0.42; fill.intensity=0.30; fill.color.set(0xd8a05a);   // the last of the sun, warm and low
+  uppsalaSetFires(true);
+  camera.position.set(0,1.7,25); yaw=targetYaw=0; pitch=targetPitch=0;
+  vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  weapons.forEach(w=>w.visible=false);
+  weapons = swedenWeapons;
+  selectWeapon(0);
+  spawnTripStage();
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
+// The fires, on or out. Every warm light on this map is in uppsalaFires, so the Mound King's second
+// phase is one call — and re-derived state, not an event: entering the map lights them again, so dying
+// in phase two and coming back does not leave you fighting in a field that is already dark.
+function uppsalaSetFires(lit){
+  uppsalaOut = !lit;
+  uppsalaFires.forEach(f=>{
+    f.flame.visible = lit;
+    f.light.intensity = lit ? f.base : 0;
+  });
+  if(!lit){
+    // the field itself goes with them: the fires were most of what was lighting it
+    hemi.intensity=0.30; hemi.color.set(0x3c5480);
+    sun.intensity=0.16; fill.intensity=0.12; fill.color.set(0x6a80b0);
+    scene.fog.color.set(0x1d2740); scene.fog.far = 62; scene.background.set(0x141c2e);
+  }
 }
 
 function enterAztecMarketWorld(banner){
@@ -17162,6 +17541,7 @@ function chatSay(text, kind){
 //   /tp sweden 1 boss  the boss that leg ends on
 //   /tp nile           the Nile wave, which sits on neither map
 //   /tp fjord          the Fjord, Sweden's second leg — the raid, fought on lashed decks
+//   /tp uppsala        Gamla Uppsala, Sweden's third and last leg — the temple, the grove, the mounds
 function adminTp(args){
   if(!args.length){ chatSay('/tp needs somewhere to go — try /tp 7 or /tp sweden', 'err'); return false; }
   const first = String(args[0]).toLowerCase();
@@ -17177,6 +17557,7 @@ function adminTp(args){
   }
   if(first === 'nile'){ enterNileWave(); chatSay('✓ the Nile wave', 'ok'); return true; }
   if(first === 'fjord'){ enterFjordWorld('🌊 The fjord — they are already alongside'); chatSay('✓ the Fjord', 'ok'); return true; }
+  if(first === 'uppsala'){ enterUppsalaWorld('🌲 Gamla Uppsala — the fires are lit and the mounds are open'); chatSay('✓ Gamla Uppsala', 'ok'); return true; }
 
   const era = ERA_NAMES.findIndex(nm => nm.toLowerCase() === first);
   if(era >= 0){
