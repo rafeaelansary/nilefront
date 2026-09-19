@@ -1,0 +1,6 @@
+allowBuilds:
+  electron: true
+# pnpm v10+ moved onlyBuiltDependencies here from package.json's "pnpm" field.
+# electron's postinstall (scripts/install.js) downloads its actual binary — without this,
+# `pnpm install` silently skips it and `electron .` fails with "Electron failed to install
+# correctly". See ../README.md.

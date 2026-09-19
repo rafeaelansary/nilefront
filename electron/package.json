@@ -1,0 +1,50 @@
+{
+  "name": "nilefront-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NILEFRONT — desktop build (Electron wrapper around the browser game in ../index.html)",
+  "main": "main.js",
+  "author": "",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build:app": "node scripts/build-app.js",
+    "fetch:electron": "node node_modules/electron/install.js",
+    "start": "node scripts/build-app.js && electron .",
+    "dist": "node scripts/build-app.js && electron-builder",
+    "dist:mac": "node scripts/build-app.js && electron-builder --mac",
+    "dist:win": "node scripts/build-app.js && electron-builder --win",
+    "dist:linux": "node scripts/build-app.js && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.nilefront.desktop",
+    "productName": "NILEFRONT",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/**/*"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.action-games",
+      "target": "dmg",
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "category": "Game",
+      "target": "AppImage"
+    }
+  },
+  "allowScripts": {
+    "electron@32.3.3": true
+  }
+}
