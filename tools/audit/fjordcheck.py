@@ -416,10 +416,14 @@ ok &= show("the shield wall halves what hits it, and the axe reads straight thro
   return 'front 50 of 100, axe '+pierced.toFixed(0)+' of its own '+axe.damage+', behind him 100 of 100';
 """))
 
-# The whole leg, start to finish, in one run: three waves, the boss, and the way home. Every piece of
-# this is asserted somewhere above in isolation -- what this one catches is the ladder coming apart at
-# a JOIN, which is the failure no single-stage test can see.
-ok &= show("the whole leg plays through: three fights, the Jarl, and the road home", run("""
+# The whole leg, start to finish, in one run: three waves, the boss, and the crossing it hands on to.
+# Every piece of this is asserted somewhere above in isolation -- what this one catches is the ladder
+# coming apart at a JOIN, which is the failure no single-stage test can see.
+#
+# The Jarl used to end the Sweden trip and send the player home to Cairo. He does not any more: a third
+# leg follows him now, so what this asserts is the HANDOVER -- his death crosses to Gamla Uppsala, on
+# the leg machinery, with the right map under the player's feet when it lands.
+ok &= show("the whole leg plays through: three fights, the Jarl, and the crossing inland", run("""
   gameStarted=true; var wasGod=godMode; godMode=true;
   var d=DESTINATIONS.filter(function(x){return x.name==='Sweden';})[0];
   jumpToDestStage(d,1,0);
@@ -434,11 +438,15 @@ ok &= show("the whole leg plays through: three fights, the Jarl, and the road ho
     throw new Error('stage '+(k+1)+' was '+seen[k]+', expected '+want[k]+' (whole ladder: '+seen.join(' ')+')');
   if(bossActive) throw new Error('the boss bar is still up after he fell');
   for(var i=0;i<900;i++) animate();
-  if(!inHub) throw new Error('clearing the Jarl did not send you home');
-  if(tripDest) throw new Error('the trip is still running after it ended');
-  if(fjordWorld.parent) throw new Error('the Fjord is still in the scene back in Cairo');
-  if(bots.length) throw new Error(bots.length+' men followed you home');
-  return seen.join(' -> ')+' -> Cairo';
+  if(inHub) throw new Error('clearing the Jarl went home instead of inland');
+  if(!tripDest) throw new Error('the trip ended on the Jarl');
+  var leg = curLeg();
+  if(!leg || leg.place !== 'Gamla Uppsala')
+    throw new Error('the Jarl handed on to '+(leg ? leg.place : 'nowhere'));
+  if(fjordWorld.parent) throw new Error('the Fjord is still in the scene on the next leg');
+  if(!uppsalaWorld.parent) throw new Error('the crossing did not land on Uppsala');
+  if(tripWave !== 0) throw new Error('the next leg started at wave '+(tripWave+1));
+  return seen.join(' -> ')+' -> Gamla Uppsala';
 """))
 
 sys.exit(0 if ok else 1)

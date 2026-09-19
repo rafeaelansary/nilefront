@@ -9473,7 +9473,10 @@ let uppsalaFires = [];        // {flame, light, base, phase} — the braziers, g
 let uppsalaOut = false;       // has the Mound King put them out?
 const UPPSALA_HALF = 30;
 // The king's mound: the only high ground, its crown, and the ramp path worn up its east face.
-const MOUND_X = -19, MOUND_Z = 1, MOUND_H = 6.2, MOUND_HW = 5.45;
+// MOUND_HW is DERIVED from the radius rather than typed beside it: the mound's collider, the foot of
+// its dome and the head of the ramp are all the same edge, and two hand-written numbers for one edge
+// is how a path ends up starting a centimetre inside the hill it climbs.
+const MOUND_X = -19, MOUND_Z = 1, MOUND_H = 6.2, MOUND_R = 6.5, MOUND_HW = MOUND_R*0.84;
 const MOUND_RAMP_X0 = MOUND_X + MOUND_HW, MOUND_RAMP_X1 = -5.0, MOUND_RAMP_HZ = 2.2;
 
 addTarget = uppsalaColliders;
@@ -9591,23 +9594,29 @@ heightZoneTarget = heightZonesUppsala;
   // the field. Each is ONE mass with a square collider, for the reason the Borg's rock is one block:
   // a collider covers one rectangle, so a stepped mound is either walled off at the foot or hollow at
   // the top. The middle one — the king's, and the biggest — is the only one you can get up.
+  // A round mound and a square collider can never agree everywhere, so the profile is built around
+  // where they DO agree. The dome's base radius is the collider's own half-width: at the four flats
+  // you stop exactly at the visible foot of the turf, and at the corners you stop a little short of
+  // it, which is a small gap rather than a man buried to the chest in a hillside. The wide part of
+  // the mound is a TOE only — 0.34 tall, the one thing you clip, and at that height your feet pass
+  // through a skirt of turf instead of your eyeline passing through a hill.
   function mound(mx, mz, R, H, climbable){
-    ucy(R*0.52, R, H, 14, turfMat, mx, H/2, mz);                     // the dome, as a shallow drum
+    const HW = R*0.84;                                               // the square inside the circle
+    ucy(R*0.52, HW, H, 14, turfMat, mx, H/2, mz);                    // the dome, as a shallow drum
     ucy(R*0.30, R*0.55, H*0.34, 14, turfMat, mx, H+H*0.14, mz);      // its crown, set in from the drum
     ucy(R*0.34, R*0.34, 0.26, 14, snowMat, mx, H+H*0.30, mz);        // snow, on the flat of the top
-    ucy(R*1.06, R*1.12, 0.40, 14, turfDark, mx, 0.16, mz);           // the toe, where it meets the field
+    ucy(HW*1.08, R*1.06, 0.34, 14, turfDark, mx, 0.15, mz);          // the toe, where it meets the field
     // grass tufts and a few stones pushing out of the turf, all clear of the crown itself
     for(let i=0;i<7;i++){
       const a=i*0.93+mx, rr=R*0.72;
       ub(0.5,0.34,0.5, turfDark, mx+Math.cos(a)*rr, H*0.42, mz+Math.sin(a)*rr*0.9);
     }
-    const HW = R*0.84;                                               // the square inside the circle
     addBox(mx, mz, HW*2, HW*2, climbable ? H : undefined);
     if(climbable) heightZoneTarget.push({type:'plateau', x1:mx-HW, z1:mz-HW, x2:mx+HW, z2:mz+HW, y:H});
     return HW;
   }
   mound(MOUND_X, -13, 5.6, 4.6, false);
-  mound(MOUND_X, MOUND_Z, 6.5, MOUND_H, true);
+  mound(MOUND_X, MOUND_Z, MOUND_R, MOUND_H, true);
   mound(MOUND_X, 15, 5.2, 4.2, false);
   // ---- the path up the king's mound ----
   // Worn turf over the same cribbing Birka's causeway uses, and it sits ENTIRELY OUTSIDE the mound's
@@ -16690,8 +16699,66 @@ const FJORD_BOSS = {skin:'jarl', col:0xc8a23c, hp:3000, scale:1.50, speed:1.30, 
   call:'⚠ A horn sounds twice on the black-sailed ship — the Jarl comes aft of his mast…',
   callSfx(){ SFX.warHorn(); },
   intro:'👑 JARL HÁKON',
-  fell:'👑 The Jarl goes down on his own deck — the fjord is quiet, and Sweden is yours'};
-// Birka is the first leg; the Fjord is the second and ends the Sweden trip.
+  fell:'👑 The Jarl goes down on his own deck — the fjord is quiet',
+  // `fellOn` is what the trip says instead when another leg follows, and one does now: his death sends
+  // the player inland to Uppsala rather than home.
+  fellOn:'👑 The Jarl goes down on his own deck — and his ships point inland, up the river…'};
+// ---- Gamla Uppsala's garrison: the temple, the grove and the mounds ----
+// Three pools, and each of them is a PLACE rather than a compass point — the same reason Birka's
+// harbour is its own pool. West is the grave-field end of the map, where the mounds are and where the
+// draugr come out of them. East is the grove, which is where anything alive and fast comes from. South
+// is the road, and it is the pool for the men: the temple's own hird and the berserkir walk in the way
+// men arrive at a place, up the road, past the rune stones.
+// These fifteen points are SOLVED against the built map rather than picked off the layout: each is
+// clear of uppsalaColliders at a 1.2 radius, on true ground (no height zone), at least 11 from the
+// player's arrival at (0,25), at least 5 from every other point in its pool, and — the one that is
+// particular to this map — outside the mound path's ramp corridor. A ramp zone is a flat rectangle
+// that reads as sloped ground only to someone already climbing it, so a man spawned inside one stands
+// at y=0 UNDERNEATH the deck of the path, and the three points that first landed there looked from
+// above like enemies buried in a hillside.
+const UPPSALA_WEST  = [[-12.0,-4.5], [-7.0,15.0], [-13.0,-17.0], [-17.0,8.0], [-10.0,4.5]];
+const UPPSALA_EAST  = [[15.5,1.0], [9.0,16.0], [12.5,-14.0], [20.5,10.5], [22.0,-7.5]];
+const UPPSALA_SOUTH = [[0.0,14.0], [-12.0,20.0], [12.0,12.5], [-10.0,9.0], [10.0,20.0]];
+// THREE waves, and they walk the map from its edges to its middle.
+//   1  THE MOUNDS ANSWER. Draugr out of the turf on the west, wargs out of the grove on the east.
+//      Nothing here throws, and the mound path is right there — this is the wave that teaches you the
+//      only high ground on the map is worth having.
+//   2  THE TEMPLE'S OWN. Hirdmen and nisser: the first ranged wave of the leg, fought in the open
+//      between the braziers where the bow and the seax both have work.
+//   3  WHAT ELSE IS BURIED HERE. Draugr again, with the berserkir up the road behind them and a troll
+//      out of the tree line — the heaviest wave of the whole trip before the boss.
+const UPPSALA_WAVES = [
+  {draugr:3, warg:2},
+  {hirdman:3, nisse:2, warg:1},
+  {draugr:3, berserkr:2, troll:1},
+];
+// The draugr and the troll are Birka's own numbers, and that is the point: this is the same country's
+// dead, three waves later and at a difficulty step that makes them mean it. The hirdman and the nisse
+// are the Fjord's and Birka's, unchanged — a roster this late in an arc should be recognised, not
+// re-learned.
+const UPPSALA_STATS = {
+  draugr:   {hp:260, speed:0.95, wt:'knife',   scale:1.15, west:true,  armoured:true, noFlinch:true},
+  warg:     {hp:170, speed:2.60, wt:'knife',   scale:1.00, west:false},
+  nisse:    {hp:70,  speed:1.45, wt:'pistol',  scale:1.00, west:false},
+  hirdman:  {hp:150, speed:1.25, wt:'javelin', scale:1.00, pool:'south'},
+  berserkr: {hp:190, speed:1.70, wt:'knife',   scale:1.05, pool:'south', noFlinch:true},
+  troll:    {hp:850, speed:0.72, wt:'knife',   scale:1.60, west:true,  armoured:true, noFlinch:true},
+};
+const UPPSALA_DIFF = 1.50;   // the last leg of the last destination, and it is the hardest thing bought
+// THE MOUND KING — the end of the Sweden trip and the hardest boss in the game, a shade over the Ifrit
+// King who ends the campaign. He fights on the blót ground between the braziers, with the temple behind
+// him and the mounds at his back: open floor, on purpose, because his whole fight is about the field
+// going dark and about what is walking in it, and neither of those works in a corner.
+// (0,6) is flat, clear at his radius, and off every height zone — a boss dropped on the mound path's
+// ramp would stand at y=0 underneath it, which is the same fault that once buried the Jade-Heart
+// Shaman inside La Venta's pyramid.
+const UPPSALA_BOSS = {skin:'moundking', col:0x8a9a84, hp:3600, scale:1.80, speed:1.20, x:0, z:6, radius:1.3,
+  name:'THE MOUND KING', hud:'the King',
+  call:'\u26a0 The turf splits on the middle mound — something is standing up in it\u2026',
+  callSfx(){ SFX.warHorn(); },
+  intro:'\ud83d\udc51 THE MOUND KING',
+  fell:'\ud83d\udc51 The crown goes into the fire \u2014 Sweden is yours, and the road runs home'};
+// Birka is the first leg, the Fjord is the second, and Gamla Uppsala is the third and ends the trip.
 // `south` is a third spawn pool alongside west/east — see SWEDEN_SOUTH, and `pool` in SWEDEN_STATS.
 const SWEDEN_LEGS = [
   {place:'Birka', icon:'🛡️', diff:SWEDEN_DIFF, era:'Vikings',
@@ -16710,6 +16777,16 @@ const SWEDEN_LEGS = [
    onWave(n){ fjordSetPlank(n >= 1); fjordSetLash(n >= 2); if(n === 1) fjordJarlApproach(); },
    onBoss(){ fjordSetPlank(true); fjordSetLash(true); },
    enter(b){ enterFjordWorld(b || '🌊 Out past the skerries — and they are already alongside'); }},
+  {place:'Gamla Uppsala', icon:'🌲', diff:UPPSALA_DIFF, era:'Vikings',
+   waves:UPPSALA_WAVES, stats:UPPSALA_STATS,
+   west:UPPSALA_WEST, east:UPPSALA_EAST, south:UPPSALA_SOUTH, boss:UPPSALA_BOSS,
+   waveLine:' — something else comes out of the tree line…',
+   // The fires are map state, re-derived per stage exactly as the Fjord's plank is: every wave and the
+   // boss's own first moment light them again, so dying in the dark and coming back never leaves you
+   // fighting a lit field's fight in an unlit one.
+   onWave(){ uppsalaSetFires(true); },
+   onBoss(){ uppsalaSetFires(true); },
+   enter(b){ enterUppsalaWorld(b || '🌲 Gamla Uppsala — the fires are lit, and the mounds are open'); }},
 ];
 // The leg currently underway. Clamped rather than indexed raw so a stale tripLeg can never return
 // undefined and take the spawn/HUD code down with it.
@@ -20286,6 +20363,69 @@ function animate(){
         SFX.warHorn();
         setBanner('⚠ The horn — his hird come up the middle ship!');
         setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
+      }
+    }
+
+    // THE MOUND KING (Gamla Uppsala's boss, the end of the Sweden trip, and the hardest thing in the
+    // game). The house shape — one telegraphed hazard, one summon, one change at half health — and all
+    // three of them are the same idea: he is the cold under the field, and he is taking it back.
+    //
+    //   Grave-cold: a telegraphed patch of frost where the player IS, dodged by moving. It reaches 30,
+    //     so the mound crown is not a safe place to stand and shoot from, only a good one.
+    //   The mounds answer: draugr come up out of the west, from the same turf the wave-one draugr did.
+    //     Capped at 3 live adds, exactly as every other summon in this game is.
+    //   AT HALF HEALTH, HE PUTS THE FIRES OUT. Every warm light on this map is a brazier or a torch
+    //     somebody lit, and he guts all of them at once: the braziers go dark, the fog closes to 62,
+    //     and the field drops to the blue nothing it is underneath. What is left burning is the
+    //     corpse-light in his own sockets and the stone in his crown, which brighten as it happens —
+    //     so the boss becomes the only thing in the field you can see, and the thing you have to aim
+    //     at is the thing that is hunting you. No new system: one call to uppsalaSetFires(false),
+    //     which every wave and the boss's own spawn already undo.
+    if(b.boss && b.skin==='moundking' && player.alive){
+      const dark = b.hp <= b.maxHp*0.5;
+      if(dark && !b.wentDark){
+        b.wentDark = true;
+        b.speed *= 1.25;
+        uppsalaSetFires(false);
+        SFX.boss();
+        shakeAmt = Math.max(shakeAmt, 0.4);
+        setBanner('⚠ The King puts the fires out — and the field goes with them');
+        setTimeout(()=>{ if(bossActive) setBanner(''); },2200);
+      }
+      // what is left of the light is on him. Pulsed rather than held, so it reads as something burning
+      // in a socket and not as a lamp bolted to his face.
+      if(ud.kingGlow){
+        const lit = dark ? 1 : 0.55, pulse = 0.82 + Math.sin(t*2.6 + b.t)*0.18;
+        for(const m of ud.kingGlow) m.material.color.setRGB(0.42*lit*pulse, 0.85*lit*pulse, 1.0*lit*pulse);
+      }
+      b.coldCd = b.coldCd===undefined ? 2.8 : b.coldCd - dt;
+      if(b.coldCd <= 0 && distToPlayer < 30){
+        b.coldCd = (4.4 + Math.random()*1.5) * (dark?0.62:1);
+        const cold=(ox,oz)=> spawnAoeTelegraph(camera.position.x+ox, camera.position.z+oz,
+          {ringColor:0x3f9ac4, fillColor:0x8ad4ee, impactColor:0xe8fbff,
+           ringR:2.0, impactAt:0.7, dur:1.3, hitRadius:2.0, damage:21});
+        cold(0,0);
+        // once the fires are out it comes in pairs, which is the same escalation the Shaman's shards
+        // and the Bearer's serpent use — harder to stand still in, still possible to move out of
+        if(dark){ const a=Math.random()*Math.PI*2; cold(Math.cos(a)*3.4, Math.sin(a)*3.4); }
+        if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
+        b.swing = 1;
+        SFX.boss();
+        setBanner('⚠ Grave-cold!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ Grave-cold!') setBanner(''); },650);
+      }
+      b.deadCd = b.deadCd===undefined ? 6.5 : b.deadCd - dt;
+      if(b.deadCd <= 0 && bots.filter(o=>!o.boss && o.alive).length < 3){
+        b.deadCd = (13 + Math.random()*4) * (dark?0.65:1);
+        const st = UPPSALA_STATS.draugr;
+        for(let i=0;i<(dark?2:1);i++){
+          const sp = UPPSALA_WEST[(i + ((Math.random()*UPPSALA_WEST.length)|0)) % UPPSALA_WEST.length];
+          spawnBot(sp[0], sp[1], ENEMY_COLORS[(Math.random()*ENEMY_COLORS.length)|0],
+                   [sp[0]-2,0,sp[1]], [sp[0]+2,0,sp[1]], st.wt,
+                   {skin:'draugr', hp:st.hp, diff:1.0, speed:st.speed, scale:st.scale,
+                    armoured:st.armoured, noFlinch:st.noFlinch});
+        }
+        SFX.boss();
+        setBanner('⚠ The mounds answer him!'); setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
       }
     }
 
