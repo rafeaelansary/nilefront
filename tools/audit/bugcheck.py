@@ -188,10 +188,10 @@ show("the Dane Axe fills its frame and nothing else", run("""
 """))
 
 print("\n=== 5. every weapon, every operation ===")
-show("fire / reload / scope / switch on all 23 weapons without throwing", run("""
+show("fire / reload / scope / switch on every weapon without throwing", run("""
   gameStarted=true; jumpToWave(1);
   var sets=[originalWeapons,pyramidWeapons,nileWeapons,greekWeapons,romanWeapons,
-            islamicWeapons,mexicoWeapons,aztecWeapons,swedenWeapons];
+            islamicWeapons,mexicoWeapons,aztecWeapons,swedenWeapons,chinaWeapons];
   sets.forEach(function(st){ st.forEach(function(w){ w.userData.__set=st; }); });
   var all=[].concat.apply([],sets);
   var saved=weapons, n=0;

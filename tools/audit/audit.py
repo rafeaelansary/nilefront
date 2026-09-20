@@ -159,7 +159,7 @@ globalThis.__worlds = {};
   if(g) globalThis.__worlds[pair[0]] = {group:g, colliders:c};
 });
 globalThis.__loadouts = {};
-['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons','mexicoWeapons','aztecWeapons','swedenWeapons'].forEach(function(n){
+['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons','mexicoWeapons','aztecWeapons','swedenWeapons','chinaWeapons'].forEach(function(n){
   try { globalThis.__loadouts[n] = eval(n); } catch(e) {}
 });
 """
