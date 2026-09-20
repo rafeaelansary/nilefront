@@ -10795,6 +10795,7 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='songinfantry') return makeSongInfantry();
   if(skinName==='songcrossbowman') return makeSongCrossbowman();
   if(skinName==='songguard') return makeSongGuard();
+  if(skinName==='songfirelance') return makeSongFireLance();
   if(skinName==='songcommander') return makeSongCommander();
   if(skinName==='yamenadmiral') return makeYamenAdmiral();
   const cfg = SKINS[skinName] || SKINS.soldier;
@@ -14607,9 +14608,9 @@ function makeSongInfantry(){
   // the plates: stepped proud courses, each one a slab in its own right rather than a painted stripe --
   // the same "never share a face plane" rule the draugr's mail rows and the hirdman's coat seams follow.
   [0,1,2].forEach(i=> b(0.42-i*0.04,0.09,0.055, i%2?lamelDk:lamel, 0,1.44-i*0.13,0.155));
-  [0,1,2].forEach(i=> b(0.40-i*0.04,0.02,0.06, cordRed, 0,1.395-i*0.13,0.16));  // the lacing between them
+  [0,1,2].forEach(i=> b(0.40-i*0.04,0.02,0.082, cordRed, 0,1.395-i*0.13,0.16));  // the lacing between them
   b(0.47,0.10,0.30, lamelDk, 0,1.16,0);              // girdle over the tunic
-  b(0.44,0.18,0.25, lamel,   0,1.47,-0.005);         // shoulder guards, back
+  b(0.48,0.18,0.21, lamel,   0,1.47,-0.005);         // shoulder guards, back
   [-1,1].forEach(sd=> b(0.15,0.14,0.20, lamel, sd*0.235,1.50,0));
 
   b(0.15,0.10,0.15, skinDk,  0,1.60,0);
@@ -14691,17 +14692,17 @@ function makeSongCrossbowman(){
     p(0.18,0.30,0.19, wool,    -0.16,0);
     p(0.15,0.10,0.16, lamelDk, -0.34,0);
     p(0.13,0.28,0.14, wool,    -0.52,0);
-    p(0.15,0.045,0.16, lamelDk,-0.42,0);
+    p(0.172,0.048,0.182, lamelDk,-0.42,0);
     p(0.16,0.08,0.24, lamelDk, -0.70,0.04);
     return l;
   };
   const legL=mkLeg(1), legR=mkLeg(-1);
 
-  b(0.38,0.15,0.24, lamelDk, 0,0.80,0);
+  b(0.41,0.15,0.28, lamelDk, 0,0.80,0);
   b(0.37,0.28,0.225, wool,   0,1.00,0);              // no cuirass -- a lighter garrison coat, for the draw
   [0,1].forEach(i=> b(0.30-i*0.06,0.06,0.05, lamelDk, 0,1.12-i*0.14,0.137));   // a light chest wrap, not full plate
   b(0.44,0.09,0.28, lamelDk, 0,1.14,0);
-  b(0.42,0.16,0.24, lamel,   0,1.42,-0.005);          // shoulder guards only
+  b(0.46,0.16,0.20, lamel,   0,1.42,-0.005);          // shoulder guards only
 
   b(0.145,0.095,0.145, skinDk, 0,1.55,0);
   b(0.24,0.23,0.22, skin,     0,1.685,0);
@@ -14737,8 +14738,12 @@ function makeSongCrossbowman(){
     const str=new THREE.Mesh(new THREE.BoxGeometry(0.01,0.01,0.36), cordM);
     str.position.set(sd*0.27,0.03,-0.06); str.rotation.y=sd*0.28; xbow.add(str);
   });
+  // the bolt: a shaft running out of the groove, and the head on the end of it. Built as a head alone
+  // it sat 22cm in front of the tiller touching nothing at all, which is what the connectivity sampler
+  // reported as a floating part -- a bolt head hanging in the air ahead of the bow.
+  xg(0.014,0.014,0.26, woodM, 0,0.030,-0.29);
   const boltHead = new THREE.Mesh(new THREE.ConeGeometry(0.018,0.07,4), ironMat);
-  boltHead.rotation.x=-Math.PI/2; boltHead.position.set(0,0.045,-0.42); xbow.add(boltHead);
+  boltHead.rotation.x=-Math.PI/2; boltHead.position.set(0,0.030,-0.44); xbow.add(boltHead);
 
   const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.07),
     new THREE.MeshBasicMaterial({color:0xd8d2bc, transparent:true, opacity:0, fog:false}));
@@ -14753,6 +14758,113 @@ function makeSongCrossbowman(){
 // draugr and the troll play elsewhere. Built as the infantryman's superior rather than a second
 // monster: the same lamellar language, full plate rather than partial, and a guandao instead of a dao —
 // a long-hafted glaive that reads as heavier and slower before he ever swings it.
+// SONG FIRE-LANCE TROOPER — gunpowder infantry, and the one enemy archetype this game has never had.
+// A fire lance is literally a spear with a bamboo powder tube lashed under the head: it gouts flame for
+// a couple of seconds at a few metres, then it is just a spear again. That is exactly the hybrid the bot
+// AI already models as weaponType 'javelin' -- fires from range, closes to hand strokes inside 3.4 -- so
+// one enemy covers both halves of a wall fight without a second roster or a second behaviour, the way
+// the hirdman does in the Fjord.
+//
+// Built light on purpose: no cuirass, a padded coat and an apron, because a man carrying live powder is
+// not also carrying forty pounds of lamellar. The lit slow-match at his wrist is the tell -- it is the
+// only thing burning on him, and it is how you pick him out of a line at range.
+function makeSongFireLance(){
+  const g=new THREE.Group();
+  const skin    = voxMat(0xc8996e,{noise:14});
+  const skinDk  = voxMat(0x926f4e,{noise:12});
+  const coat    = voxMat(0x4a4338,{noise:15});      // undyed padded cotton
+  const coatDk  = voxMat(0x2e2a22,{noise:13});
+  const cordRed = voxMat(0x8a2620,{noise:10});
+  const leather = voxMat(0x53402a,{noise:14});
+  const ironMat = metalMatP(0x74797e,55,0xc4ccd2);
+  const bamboo  = voxMat(0xbfa95e,{noise:12});
+  const bambooDk= voxMat(0x7e6d36,{noise:10});
+  const eyeMat  = new THREE.MeshBasicMaterial({color:0xece6da,fog:false});
+  const pupMat  = new THREE.MeshBasicMaterial({color:0x14100c,fog:false});
+  const emberM  = new THREE.MeshBasicMaterial({color:0xff7a2a,fog:false});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.135,0.75,0); g.add(l);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.185,0.31,0.195, coat,    -0.165,0);
+    p(0.152,0.10,0.162, leather, -0.345,0);
+    p(0.132,0.29,0.142, coatDk,  -0.525,0);
+    p(0.171,0.048,0.181,leather, -0.435,0);          // shin bindings, well proud of the leg
+    p(0.168,0.048,0.178,leather, -0.575,0);
+    p(0.162,0.085,0.245,leather, -0.700,0.045);
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  b(0.41,0.155,0.27, leather, 0,0.805,0);            // belt
+  b(0.44,0.07,0.30, ironMat,  0,0.742,0);            // its plate
+  b(0.38,0.30,0.23, coat,     0,1.005,0);
+  b(0.44,0.33,0.265, coat,    0,1.295,0);            // the padded coat, quilted in rows
+  [0,1,2].forEach(i=> b(0.40-i*0.05,0.055,0.055, coatDk, 0,1.40-i*0.105,0.152));
+  b(0.30,0.34,0.10, leather,  0,1.06,0.155);         // a leather apron over the front, against sparks
+  [0,1].forEach(i=> b(0.26-i*0.06,0.03,0.115, cordRed, 0,1.16-i*0.16,0.16));
+  b(0.46,0.17,0.22, coat,     0,1.455,-0.008);
+  [-1,1].forEach(sd=> b(0.125,0.115,0.18, leather, sd*0.225,1.46,0));
+
+  b(0.145,0.098,0.145, skinDk, 0,1.575,0);
+  b(0.245,0.235,0.225, skin,   0,1.715,0);
+  b(0.098,0.058,0.068, skinDk, 0,1.695,0.123);
+  [-1,1].forEach(sd=> b(0.068,0.058,0.048, eyeMat, sd*0.061,1.755,0.116));
+  [-1,1].forEach(sd=> b(0.032,0.032,0.043,pupMat, sd*0.061,1.752,0.126));
+  // a wrapped cloth cap with a knot, not a helmet -- powder crews went light-headed on purpose
+  b(0.265,0.105,0.255, coatDk, 0,1.855,0);
+  b(0.115,0.085,0.115, coatDk, -0.085,1.925,-0.035);
+  b(0.055,0.16,0.055, coatDk, -0.125,1.96,-0.075);
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.262,1.40,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.155,0.27,0.155, coat,   -0.145,0);
+    p(0.168,0.05,0.168, cordRed,-0.30,0);
+    p(0.128,0.255,0.128,skin,   -0.445,0);
+    p(0.133,0.115,0.143,skinDk, -0.625,0.012);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  // ---- the fire lance itself: a spear, with the powder tube bound under its head ----
+  const lance=new THREE.Group(); lance.position.set(0,-0.62,-0.02); lance.rotation.x=-0.20; lance.rotation.y=Math.PI;
+  lance.scale.setScalar(1.12); armR.add(lance);
+  const lb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); lance.add(m); return m; };
+  lb(0.040,0.040,1.15, leather, 0,0,-0.18);          // the shaft
+  lb(0.054,0.054,0.075, cordRed, 0,0,0.16);          // the grip binding
+  lb(0.050,0.050,0.14, ironMat, 0,0,-0.76);          // the socket
+  lb(0.032,0.032,0.22, ironMat, 0,0,-0.93);          // the spearhead
+  lb(0.066,0.016,0.09, ironMat, 0,0,-0.84);          // its wings
+  // THE TUBE: bamboo, lashed under the head, its mouth open toward the target. This is the weapon.
+  lb(0.088,0.088,0.34, bamboo,   0,-0.062,-0.66);
+  // each node ring cut to its own size: three identical ones on one tube share every x and y face
+  [0,1,2].forEach(i=> lb(0.100+i*0.006,0.022+i*0.004,0.022+i*0.004, bambooDk, 0,-0.062,-0.80+i*0.14));
+  lb(0.118,0.118,0.030, bambooDk, 0,-0.062,-0.838);  // the open muzzle ring, proud of the tube
+  [0,1].forEach(i=> lb(0.019,0.019,0.10, cordRed, 0,-0.028,-0.72+i*0.20));       // the lashings to the shaft
+  // the slow-match, burning, wound at the wrist
+  const matchM=new THREE.Mesh(new THREE.BoxGeometry(0.022,0.022,0.13), leather);
+  matchM.position.set(0.045,0.036,0.10); lance.add(matchM);
+  const ember=new THREE.Mesh(new THREE.BoxGeometry(0.030,0.030,0.030), emberM);
+  ember.position.set(0.045,0.036,0.035); lance.add(ember);
+  const el=new THREE.PointLight(0xff7a2a,0.5,1.6); el.position.copy(ember.position); lance.add(el);
+  // a powder flask and two paper cartridges on the belt, so the ammunition is visibly on him
+  b(0.115,0.155,0.095, bamboo, -0.215,0.90,0.105);
+  b(0.125,0.032,0.105, bambooDk,-0.215,0.985,0.105);
+  [0,1].forEach(i=> b(0.055,0.105,0.055, voxMat(0xc8bc98,{noise:10}), 0.205+i*0.070,0.885,0.10));
+
+  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.08),
+    new THREE.MeshBasicMaterial({color:0xff9a3a, transparent:true, opacity:0, fog:false}));
+  muzzle.position.set(0,-0.062,-0.88); lance.add(muzzle);
+  muzzle.visible=false;
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  g.userData.botMuzzle=muzzle;
+  return rig;
+}
+
 function makeSongGuard(){
   const g=new THREE.Group();
   const skin    = voxMat(0xb88860,{noise:14});
@@ -14774,20 +14886,20 @@ function makeSongGuard(){
     p(0.22,0.34,0.23, lamel,   -0.18,0);              // plated thigh, not cloth
     p(0.175,0.10,0.185,lamelDk,-0.38,0);
     p(0.15,0.32,0.16, lamel,   -0.58,0);               // plated shin too -- fully armoured, not partial
-    p(0.155,0.045,0.165,cordRed,-0.475,0);
+    p(0.174,0.048,0.184,cordRed,-0.475,0);
     p(0.18,0.09,0.28, ironDk,  -0.735,0.05);            // an iron-shod boot
     return l;
   };
   const legL=mkLeg(1), legR=mkLeg(-1);
 
-  b(0.44,0.18,0.28, lamelDk, 0,0.86,0);
+  b(0.47,0.18,0.31, lamelDk, 0,0.86,0);
   b(0.46,0.08,0.30, ironMat, 0,0.78,0);
   b(0.43,0.32,0.26, lamel,   0,1.08,0);
   b(0.49,0.38,0.31, lamel,   0,1.40,0);               // a deeper cuirass than the infantryman's
   [0,1,2,3].forEach(i=> b(0.46-i*0.04,0.09,0.06, i%2?lamelDk:lamel, 0,1.56-i*0.13,0.165));
-  [0,1,2,3].forEach(i=> b(0.44-i*0.04,0.02,0.065, cordRed, 0,1.515-i*0.13,0.17));
+  [0,1,2,3].forEach(i=> b(0.44-i*0.04,0.02,0.086, cordRed, 0,1.515-i*0.13,0.17));
   b(0.51,0.11,0.33, ironMat, 0,1.20,0);                // a girdle of iron plates, not just leather
-  b(0.50,0.22,0.28, lamel,   0,1.56,-0.01);
+  b(0.54,0.22,0.24, lamel,   0,1.56,-0.01);
   [-1,1].forEach(sd=> b(0.20,0.18,0.24, ironMat, sd*0.27,1.60,0));   // pauldrons, iron over lamellar
 
   b(0.16,0.11,0.16, skinDk,  0,1.71,0);
@@ -14808,7 +14920,7 @@ function makeSongGuard(){
     const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
       m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
     p(0.18,0.30,0.18, lamel,   -0.16,0);
-    p(0.16,0.055,0.16,ironMat, -0.33,0);
+    p(0.168,0.058,0.168,ironMat, -0.352,0);
     p(0.145,0.28,0.145,lamel,  -0.50,0);
     p(0.15,0.13,0.16,ironDk,   -0.71,0.01);
     return a;
@@ -14866,20 +14978,20 @@ function makeSongCommander(){
     p(0.22,0.34,0.23, lamel,   -0.18,0);
     p(0.175,0.10,0.185,lamelDk,-0.38,0);
     p(0.15,0.32,0.16, lamel,   -0.58,0);
-    p(0.155,0.045,0.165,gold,  -0.475,0);              // gilded wraps in place of the guard's plain cord
+    p(0.174,0.048,0.184,gold,  -0.475,0);              // gilded wraps in place of the guard's plain cord
     p(0.18,0.09,0.28, ironDk,  -0.735,0.05);
     return l;
   };
   const legL=mkLeg(1), legR=mkLeg(-1);
 
-  b(0.44,0.18,0.28, lamelDk, 0,0.86,0);
+  b(0.47,0.18,0.31, lamelDk, 0,0.86,0);
   b(0.46,0.08,0.30, gold,    0,0.78,0);
   b(0.43,0.32,0.26, lamel,   0,1.08,0);
   b(0.49,0.38,0.31, lamel,   0,1.40,0);
   [0,1,2,3].forEach(i=> b(0.46-i*0.04,0.09,0.06, i%2?lamelDk:lamel, 0,1.56-i*0.13,0.165));
-  [0,1,2,3].forEach(i=> b(0.44-i*0.04,0.02,0.065, gold, 0,1.515-i*0.13,0.17));   // gilded lacing, not red
+  [0,1,2,3].forEach(i=> b(0.44-i*0.04,0.02,0.086, gold, 0,1.515-i*0.13,0.17));   // gilded lacing, not red
   b(0.51,0.11,0.33, gold,    0,1.20,0);
-  b(0.50,0.22,0.28, lamel,   0,1.56,-0.01);
+  b(0.54,0.22,0.24, lamel,   0,1.56,-0.01);
   [-1,1].forEach(sd=> b(0.20,0.18,0.24, gold, sd*0.27,1.60,0));    // gilded pauldrons
 
   b(0.16,0.11,0.16, skinDk,  0,1.71,0);
@@ -14903,10 +15015,14 @@ function makeSongCommander(){
     const pole = new THREE.Group(); pole.position.set(k*0.09,1.55,-0.20); pole.rotation.x=-0.12+k*0.03; g.add(pole);
     const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.028,1.05,0.028), woodM);
     shaft.position.set(0,0.52,0); shaft.castShadow=true; pole.add(shaft);
-    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.42,0.02), bannerM);
-    flag.position.set(0.16,0.86,0); flag.castShadow=true; pole.add(flag);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.06,0.024), bannerGold);
-    trim.position.set(0.16,1.05,0); pole.add(trim);
+    // Each flag is cut to its OWN size and sits at its own depth. Three identical ones on poles 9cm
+    // apart overlap almost completely and share every face between them, which was most of the
+    // z-fighting this model carried.
+    const fw = 0.30 - Math.abs(k)*0.045, fh = 0.42 - Math.abs(k)*0.06;
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, 0.02 + Math.abs(k)*0.016), bannerM);
+    flag.position.set(0.10+fw*0.5, 0.86 - Math.abs(k)*0.05, k*0.038); flag.castShadow=true; pole.add(flag);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.06, 0.044 + Math.abs(k)*0.016), bannerGold);
+    trim.position.set(0.10+fw*0.5, 0.86 + fh*0.5 - 0.03 - Math.abs(k)*0.05, k*0.038); pole.add(trim);
   });
 
   const mkArm=(sd)=>{
@@ -14914,7 +15030,7 @@ function makeSongCommander(){
     const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
       m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
     p(0.18,0.30,0.18, lamel,   -0.16,0);
-    p(0.16,0.055,0.16,gold,    -0.33,0);
+    p(0.168,0.058,0.168,gold,    -0.352,0);
     p(0.145,0.28,0.145,lamel,  -0.50,0);
     p(0.15,0.13,0.16,ironDk,   -0.71,0.01);
     return a;
@@ -14981,20 +15097,20 @@ function makeYamenAdmiral(){
     p(0.22,0.34,0.23, lamel,   -0.18,0);
     p(0.175,0.10,0.185,lamelDk,-0.38,0);
     p(0.15,0.32,0.16, lamel,   -0.58,0);
-    p(0.155,0.045,0.165,jade,  -0.475,0);
+    p(0.174,0.048,0.184,jade,  -0.475,0);
     p(0.18,0.09,0.28, ironDk,  -0.735,0.05);
     return l;
   };
   const legL=mkLeg(1), legR=mkLeg(-1);
 
-  b(0.44,0.18,0.28, lamelDk, 0,0.86,0);
+  b(0.47,0.18,0.31, lamelDk, 0,0.86,0);
   b(0.46,0.08,0.30, gold,    0,0.78,0);
   b(0.43,0.32,0.26, lamel,   0,1.08,0);
   b(0.49,0.38,0.31, lamel,   0,1.40,0);
   [0,1,2,3].forEach(i=> b(0.46-i*0.04,0.09,0.06, i%2?lamelDk:lamel, 0,1.56-i*0.13,0.165));
-  [0,1,2,3].forEach(i=> b(0.44-i*0.04,0.02,0.065, jade, 0,1.515-i*0.13,0.17));   // jade lacing, not gold
+  [0,1,2,3].forEach(i=> b(0.44-i*0.04,0.02,0.086, jade, 0,1.515-i*0.13,0.17));   // jade lacing, not gold
   b(0.51,0.11,0.33, gold,    0,1.20,0);
-  b(0.50,0.22,0.28, lamel,   0,1.56,-0.01);
+  b(0.54,0.22,0.24, lamel,   0,1.56,-0.01);
   [-1,1].forEach(sd=> b(0.20,0.18,0.24, jade, sd*0.27,1.60,0));    // jade pauldrons, not gilded ones
 
   b(0.16,0.11,0.16, skinDk,  0,1.71,0);
@@ -15017,14 +15133,18 @@ function makeYamenAdmiral(){
     const pole = new THREE.Group(); pole.position.set(k*0.09,1.55,-0.20); pole.rotation.x=-0.12+k*0.03; g.add(pole);
     const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.028,1.05,0.028), woodM);
     shaft.position.set(0,0.52,0); shaft.castShadow=true; pole.add(shaft);
-    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.42,0.02), bannerM);
-    flag.position.set(0.16,0.86,0); flag.castShadow=true; pole.add(flag);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.06,0.024), bannerGold);
-    trim.position.set(0.16,1.05,0); pole.add(trim);
+    // Each flag is cut to its OWN size and sits at its own depth. Three identical ones on poles 9cm
+    // apart overlap almost completely and share every face between them, which was most of the
+    // z-fighting this model carried.
+    const fw = 0.30 - Math.abs(k)*0.045, fh = 0.42 - Math.abs(k)*0.06;
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, 0.02 + Math.abs(k)*0.016), bannerM);
+    flag.position.set(0.10+fw*0.5, 0.86 - Math.abs(k)*0.05, k*0.038); flag.castShadow=true; pole.add(flag);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.06, 0.044 + Math.abs(k)*0.016), bannerGold);
+    trim.position.set(0.10+fw*0.5, 0.86 + fh*0.5 - 0.03 - Math.abs(k)*0.05, k*0.038); pole.add(trim);
     // a single gold scale-motif square on the centre flag only, standing proud of its face
     if(k===0){
-      const scale = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.13,0.012), bannerGold);
-      scale.position.set(0.16,0.86,0.017); pole.add(scale);
+      const scale = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.13,0.052), bannerGold);
+      scale.position.set(0.10+0.30*0.5, 0.86, 0.0); pole.add(scale);
     }
   });
   // the dragon's head, on the centre pole above the flags
@@ -15040,7 +15160,7 @@ function makeYamenAdmiral(){
     const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
       m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
     p(0.18,0.30,0.18, lamel,   -0.16,0);
-    p(0.16,0.055,0.16,gold,    -0.33,0);
+    p(0.168,0.058,0.168,gold,    -0.352,0);
     p(0.145,0.28,0.145,lamel,  -0.50,0);
     p(0.15,0.13,0.16,ironDk,   -0.71,0.01);
     return a;
