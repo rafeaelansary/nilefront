@@ -88,4 +88,63 @@ ok &= show("the gate is shut on every entry, and xiangyangSetBreach() is re-deri
   return 'shut by default, breach opens the gap and shows rubble, re-entry always forces it shut again';
 """))
 
+# The wave ladder, fought entirely on the siege side -- the gate stays SHUT through every regular wave,
+# because nothing north of it is reachable until the boss opens the breach. Each wave's roster is
+# checked against XIANGYANG_WAVES directly, the same way fjordcheck.py checks FJORD_WAVES.
+ok &= show("Xiangyang's three waves spawn the right roster, gate shut throughout", run("""
+  gameStarted = true;
+  var d = {name:'China', legs:CHINA_LEGS};
+  for(var w=0; w<XIANGYANG_WAVES.length; w++){
+    jumpToDestStage(d, 0, w);
+    if(xiangyangBreached) throw new Error('wave '+(w+1)+' found the gate open');
+    var want = XIANGYANG_WAVES[w], wantN = Object.keys(want).reduce(function(s,k){return s+want[k];},0);
+    if(bots.length !== wantN) throw new Error('wave '+(w+1)+' spawned '+bots.length+', expected '+wantN);
+    Object.keys(want).forEach(function(skin){
+      var n = bots.filter(function(b){ return b.skin===skin; }).length;
+      if(n !== want[skin]) throw new Error('wave '+(w+1)+': '+n+' of skin '+skin+', expected '+want[skin]);
+    });
+  }
+  // the armoured elite only appears in wave three, and it is armoured
+  var guard = bots.filter(function(b){ return b.skin==='songguard'; })[0];
+  if(!guard) throw new Error('wave three has no songguard in it');
+  if(!guard.armoured) throw new Error('the Song Guard is not armoured -- the Zhanmadao has nothing to answer');
+  return XIANGYANG_WAVES.length+' waves, correct roster each time, gate shut throughout';
+"""))
+
+# The boss stage: the gate opens, the commander stands in the breach, and he is who the Zhanmadao's
+# armourPierce answers next -- the same generic boss:true path the troll and every other boss use, so
+# no new mechanic is required for that part.
+ok &= show("the Siege Commander opens the breach and stands in it", run("""
+  gameStarted = true;
+  var d = {name:'China', legs:CHINA_LEGS};
+  jumpToDestStage(d, 0, XIANGYANG_WAVES.length);
+  var boss = bots.filter(function(b){ return b.boss; })[0];
+  if(!boss) throw new Error('no boss on the boss stage');
+  if(boss.skin !== 'songcommander') throw new Error('Xiangyang ends on a '+boss.skin);
+  if(!xiangyangBreached) throw new Error('the boss stage did not open the breach');
+  if(insideCollider(XIANGYANG_BOSS.x, XIANGYANG_BOSS.z, boss.radius, 0))
+    throw new Error('the commander spawns inside the town geometry');
+  // re-entering an earlier wave must shut the gate again
+  jumpToDestStage(d, 0, 0);
+  if(xiangyangBreached) throw new Error('returning to wave one left the breach open');
+  return 'the commander stands clear in the breach, and leaving re-shuts the gate';
+"""))
+
+# The same "clear spawn points, real rig parts" check bugcheck.py runs for every DESTINATIONS entry --
+# run by hand here since China is not wired into DESTINATIONS yet.
+ok &= show("Xiangyang's own spawn pools are clear, and every actor has real rig parts", run("""
+  gameStarted = true;
+  var d = {name:'China', legs:CHINA_LEGS};
+  jumpToDestStage(d, 0, 0);
+  var blocked = XIANGYANG_WEST.concat(XIANGYANG_EAST).filter(function(p){
+    return insideCollider(p[0],p[1],0.6,0);
+  });
+  if(blocked.length) throw new Error('blocked spawn points '+JSON.stringify(blocked));
+  if(insideCollider(camera.position.x, camera.position.z, 0.45, 0))
+    throw new Error('the arrival point is blocked');
+  var bad = bots.filter(function(b){ return !b.mesh.userData.bodyMeshes || !b.mesh.userData.marker; });
+  if(bad.length) throw new Error(bad.length+' actors are missing rig parts');
+  return XIANGYANG_WEST.length+' west + '+XIANGYANG_EAST.length+' east points, all clear; arrival clear; every actor rigged';
+"""))
+
 sys.exit(0 if ok else 1)

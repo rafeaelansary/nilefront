@@ -9735,14 +9735,15 @@ function enterXiangyangWorld(banner){
   sun.intensity=0.78; fill.intensity=0.36; fill.color.set(0xe0c890);
   camera.position.set(0,1.7,24); yaw=targetYaw=0; pitch=targetPitch=0;
   vel.set(0,0,0); playerHeight=0; stuckTimer=0;
-  // force the gate shut on every entry, including a respawn; spawnTripStage() (once China is wired into
-  // a trip) re-derives the right state for whatever wave this actually is, the same way the Fjord's
-  // plank/lash are forced shut before spawnTripStage() runs
+  // force the gate shut on every entry, including a respawn; spawnTripStage() below re-derives the
+  // right state for whatever wave this actually is, the same way the Fjord's plank/lash are forced
+  // shut before spawnTripStage() runs
   xiangyangBreached = true; xiangyangSetBreach(false);
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   weapons = chinaWeapons;
   selectWeapon(0);
+  spawnTripStage();
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
 
@@ -10042,6 +10043,11 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='berserkr') return makeBerserkr();
   if(skinName==='troll') return makeTroll();
   if(skinName==='hirdman') return makeHirdman();
+  // Xiangyang's garrison (Song China)
+  if(skinName==='songinfantry') return makeSongInfantry();
+  if(skinName==='songcrossbowman') return makeSongCrossbowman();
+  if(skinName==='songguard') return makeSongGuard();
+  if(skinName==='songcommander') return makeSongCommander();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -13807,6 +13813,395 @@ function makeHirdman(){
   return rig;
 }
 
+// ===== XIANGYANG'S GARRISON (Song China) =====
+// Three roles answering the three Sweden ones did: a melee regular, a ranged regular, and one armoured
+// elite the Zhanmadao's armourPierce is for. Lamellar lacquered black-and-red is the palette every one
+// of them shares — a garrison in one uniform, not three separate costumes — with rank told by how much
+// of it a man is wearing rather than by a different colour per role.
+
+// SONG INFANTRYMAN — dao and a round rattan shield. Melee only (weaponType 'knife', no muzzle needed,
+// the same shape the berserkr uses): the crossbowman is what answers you at range, so this one only
+// ever has a reason to close.
+function makeSongInfantry(){
+  const g=new THREE.Group();
+  const skin    = voxMat(0xc8996e,{noise:14});
+  const skinDk  = voxMat(0x926f4e,{noise:12});
+  const lamel   = voxMat(0x241e1c,{noise:14});      // black-lacquered leather lamellar
+  const lamelDk = voxMat(0x141110,{noise:12});
+  const cordRed = voxMat(0x8a2620,{noise:10});      // the red lacing between the plates
+  const wool    = voxMat(0x3c4a52,{noise:14});      // indigo-grey undertunic
+  const ironMat = metalMatP(0x74797e,55,0xc4ccd2);
+  const rattan  = voxMat(0xb89a58,{noise:14});      // woven cane shield face
+  const eyeMat  = new THREE.MeshBasicMaterial({color:0xece6da,fog:false});
+  const pupMat  = new THREE.MeshBasicMaterial({color:0x14100c,fog:false});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.14,0.76,0); g.add(l);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.19,0.32,0.20, wool,    -0.17,0);
+    p(0.155,0.10,0.165,lamelDk,-0.36,0);
+    p(0.135,0.30,0.145,wool,   -0.55,0);
+    p(0.155,0.045,0.165,lamelDk,-0.455,0);          // leg wraps, proud of the shin
+    p(0.152,0.045,0.162,lamelDk,-0.585,0);
+    p(0.165,0.08,0.25, lamelDk,-0.72,0.045);        // a shod foot
+    p(0.13,0.05,0.07, lamelDk, -0.735,0.16);
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  b(0.40,0.16,0.25, lamelDk, 0,0.82,0);              // belt
+  b(0.42,0.07,0.27, ironMat, 0,0.75,0);
+  b(0.39,0.30,0.235, wool,   0,1.02,0);              // tunic, belly
+  b(0.45,0.34,0.28, lamel,   0,1.31,0);              // the lamellar cuirass, chest
+  // the plates: stepped proud courses, each one a slab in its own right rather than a painted stripe --
+  // the same "never share a face plane" rule the draugr's mail rows and the hirdman's coat seams follow.
+  [0,1,2].forEach(i=> b(0.42-i*0.04,0.09,0.055, i%2?lamelDk:lamel, 0,1.44-i*0.13,0.155));
+  [0,1,2].forEach(i=> b(0.40-i*0.04,0.02,0.06, cordRed, 0,1.395-i*0.13,0.16));  // the lacing between them
+  b(0.47,0.10,0.30, lamelDk, 0,1.16,0);              // girdle over the tunic
+  b(0.44,0.18,0.25, lamel,   0,1.47,-0.005);         // shoulder guards, back
+  [-1,1].forEach(sd=> b(0.15,0.14,0.20, lamel, sd*0.235,1.50,0));
+
+  b(0.15,0.10,0.15, skinDk,  0,1.60,0);
+  b(0.25,0.24,0.23, skin,    0,1.74,0);
+  b(0.10,0.06,0.07, skinDk,  0,1.72,0.126);
+  [-1,1].forEach(sd=> b(0.07,0.06,0.05, eyeMat, sd*0.063,1.78,0.118));
+  [-1,1].forEach(sd=> b(0.033,0.033,0.045,pupMat, sd*0.063,1.775,0.128));
+  b(0.16,0.09,0.10, skinDk,  0,1.635,0.085);          // a thin moustache-and-chin beard, not a full one
+  // a lamellar helmet with a rising spike, over a padded liner
+  b(0.28,0.14,0.27, lamel,   0,1.885,0);
+  b(0.30,0.06,0.25, lamelDk, 0,1.805,0);
+  b(0.06,0.16,0.06, ironMat, 0,1.99,0);               // the spike
+  b(0.11,0.08,0.11, ironMat, 0,1.905,-0.01);           // its collar
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.275,1.45,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.16,0.28,0.16, lamel,  -0.15,0);
+    p(0.145,0.05,0.145,cordRed,-0.31,0);
+    p(0.13,0.26,0.13, wool,   -0.46,0);
+    p(0.135,0.12,0.145,skinDk,-0.65,0.01);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  // right hand: the dao, held low and ready rather than raised — a curved single edge, built the same
+  // chained-segment way the Saif's blade is (each segment starting where the last ended, the curve
+  // living entirely in one plane), so it reads as one swept blade and not disconnected shards.
+  const dao=new THREE.Group(); dao.position.set(0,-0.60,-0.02); dao.rotation.y=Math.PI; dao.scale.setScalar(1.15); armR.add(dao);
+  const dg=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); dao.add(m); return m; };
+  dg(0.045,0.20,0.045, lamelDk, 0,0,0.06);            // grip
+  dg(0.11,0.03,0.05, ironMat, 0,0.11,0.06);           // guard
+  let dby=0.13, dbz=0.06, dt=0;
+  [0.09,0.09,0.09,0.09].forEach((len,i)=>{
+    const ddy=Math.cos(dt), ddz=-Math.sin(dt);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(0.032+i*0.006,len,i%2?0.018:0.024), i%2?ironMat:metalMatP(0x8c9298,90,0xe8eef2));
+    seg.position.set(0, dby+ddy*len/2, dbz+ddz*len/2); seg.rotation.x=-dt; dao.add(seg);
+    dby += ddy*len; dbz += ddz*len; dt += 0.16;
+  });
+  const dtip=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.09,4), ironMat);
+  dtip.rotation.x=-dt; dtip.position.set(0, dby+Math.cos(dt)*0.045, dbz-Math.sin(dt)*0.045); dao.add(dtip);
+
+  // left arm: the round rattan shield, held up and across
+  const shield=new THREE.Group(); shield.position.set(0,-0.48,-0.14); shield.rotation.y=0.35; armL.add(shield);
+  const sh=(r,mat,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,0.05,12), mat);
+    m.rotation.x=Math.PI/2; m.position.set(0,0,z); shield.add(m); return m; };
+  sh(0.30, rattan, -0.05);
+  sh(0.24, lamelDk, -0.075);                          // a lacquered rim ring, stepped back so it never
+                                                       // shares the face the rattan disc sits on
+  sh(0.09, ironMat, -0.095);                           // the boss
+  const grip=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.05,0.05), lamelDk); grip.position.set(0,0,-0.02); shield.add(grip);
+
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  return rig;
+}
+
+// SONG CROSSBOWMAN — ranged only (weaponType 'pistol'), holding the same tiller-and-lath silhouette the
+// player's own Repeating Crossbow uses, so the garrison and the thing answering it read as the same
+// family of weapon at a glance. No shield: both hands are on the stock.
+function makeSongCrossbowman(){
+  const g=new THREE.Group();
+  const skin    = voxMat(0xc8996e,{noise:14});
+  const skinDk  = voxMat(0x926f4e,{noise:12});
+  const lamel   = voxMat(0x241e1c,{noise:14});
+  const lamelDk = voxMat(0x141110,{noise:12});
+  const cordRed = voxMat(0x8a2620,{noise:10});
+  const wool    = voxMat(0x3c4a52,{noise:14});
+  const ironMat = metalMatP(0x74797e,55,0xc4ccd2);
+  const woodM   = voxMat(0x6a4522,{noise:14});
+  const eyeMat  = new THREE.MeshBasicMaterial({color:0xece6da,fog:false});
+  const pupMat  = new THREE.MeshBasicMaterial({color:0x14100c,fog:false});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.13,0.75,0); g.add(l);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.18,0.30,0.19, wool,    -0.16,0);
+    p(0.15,0.10,0.16, lamelDk, -0.34,0);
+    p(0.13,0.28,0.14, wool,    -0.52,0);
+    p(0.15,0.045,0.16, lamelDk,-0.42,0);
+    p(0.16,0.08,0.24, lamelDk, -0.70,0.04);
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  b(0.38,0.15,0.24, lamelDk, 0,0.80,0);
+  b(0.37,0.28,0.225, wool,   0,1.00,0);              // no cuirass -- a lighter garrison coat, for the draw
+  [0,1].forEach(i=> b(0.30-i*0.06,0.06,0.05, lamelDk, 0,1.12-i*0.14,0.137));   // a light chest wrap, not full plate
+  b(0.44,0.09,0.28, lamelDk, 0,1.14,0);
+  b(0.42,0.16,0.24, lamel,   0,1.42,-0.005);          // shoulder guards only
+
+  b(0.145,0.095,0.145, skinDk, 0,1.55,0);
+  b(0.24,0.23,0.22, skin,     0,1.685,0);
+  b(0.095,0.055,0.065, skinDk,0,1.665,0.12);
+  [-1,1].forEach(sd=> b(0.065,0.055,0.045,eyeMat, sd*0.06,1.72,0.112));
+  [-1,1].forEach(sd=> b(0.03,0.03,0.04,pupMat, sd*0.06,1.715,0.122));
+  // a cloth wrap round the head instead of a full helmet -- a lighter garrison role, told at a glance
+  b(0.27,0.10,0.26, wool,    0,1.815,0);
+  b(0.10,0.14,0.08, wool,    -0.12,1.72,-0.14);
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.26,1.38,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.15,0.26,0.15, wool,    -0.14,0);
+    p(0.125,0.24,0.125,skin,   -0.42,0);
+    p(0.13,0.11,0.14,skinDk,   -0.60,0.01);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  // the crossbow, held across the body in both hands -- a smaller cousin of the player's own Repeating
+  // Crossbow: the same tiller/lath/string shape, no magazine box (the garrison's own is single-shot,
+  // which is why it needs a wall to hold rather than a rate of fire to rely on).
+  const xbow=new THREE.Group(); xbow.position.set(-0.05,-0.55,-0.12); xbow.rotation.y=Math.PI+0.12; xbow.scale.setScalar(1.05); armR.add(xbow);
+  const xg=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); xbow.add(m); return m; };
+  xg(0.06,0.09,0.42, woodM, 0,-0.01,0.05);
+  xg(0.10,0.05,0.11, ironMat, 0,0.03,-0.14);
+  const cordM=new THREE.MeshBasicMaterial({color:0xe0d6c0,fog:false});
+  [-1,1].forEach(sd=>{
+    const lath=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.03,0.03), ironMat);
+    lath.position.set(sd*0.15,0.03,-0.20); lath.rotation.y=sd*0.28; xbow.add(lath);
+    const str=new THREE.Mesh(new THREE.BoxGeometry(0.01,0.01,0.36), cordM);
+    str.position.set(sd*0.27,0.03,-0.06); str.rotation.y=sd*0.28; xbow.add(str);
+  });
+  const boltHead = new THREE.Mesh(new THREE.ConeGeometry(0.018,0.07,4), ironMat);
+  boltHead.rotation.x=-Math.PI/2; boltHead.position.set(0,0.045,-0.42); xbow.add(boltHead);
+
+  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.07,0.07),
+    new THREE.MeshBasicMaterial({color:0xd8d2bc, transparent:true, opacity:0, fog:false}));
+  muzzle.position.set(0,0.04,-0.46); xbow.add(muzzle);
+  muzzle.visible=false;
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  g.userData.botMuzzle=muzzle;
+  return rig;
+}
+
+// SONG GUARD — the armoured elite, the enemy the Zhanmadao's armourPierce is FOR, on the exact role the
+// draugr and the troll play elsewhere. Built as the infantryman's superior rather than a second
+// monster: the same lamellar language, full plate rather than partial, and a guandao instead of a dao —
+// a long-hafted glaive that reads as heavier and slower before he ever swings it.
+function makeSongGuard(){
+  const g=new THREE.Group();
+  const skin    = voxMat(0xb88860,{noise:14});
+  const skinDk  = voxMat(0x876346,{noise:12});
+  const lamel   = voxMat(0x1c1716,{noise:14});
+  const lamelDk = voxMat(0x100d0c,{noise:12});
+  const cordRed = voxMat(0x8a2620,{noise:10});
+  const ironMat = metalMatP(0x848a90,60,0xd0d8de);
+  const ironDk  = metalMatP(0x565c62,50,0x9aa4aa);
+  const woodM   = voxMat(0x4a3522,{noise:14});
+  const eyeMat  = new THREE.MeshBasicMaterial({color:0xd4a844,fog:false});   // amber, not white -- the one
+                                                                              // cue that this is the elite
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.15,0.78,0); g.add(l);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.22,0.34,0.23, lamel,   -0.18,0);              // plated thigh, not cloth
+    p(0.175,0.10,0.185,lamelDk,-0.38,0);
+    p(0.15,0.32,0.16, lamel,   -0.58,0);               // plated shin too -- fully armoured, not partial
+    p(0.155,0.045,0.165,cordRed,-0.475,0);
+    p(0.18,0.09,0.28, ironDk,  -0.735,0.05);            // an iron-shod boot
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  b(0.44,0.18,0.28, lamelDk, 0,0.86,0);
+  b(0.46,0.08,0.30, ironMat, 0,0.78,0);
+  b(0.43,0.32,0.26, lamel,   0,1.08,0);
+  b(0.49,0.38,0.31, lamel,   0,1.40,0);               // a deeper cuirass than the infantryman's
+  [0,1,2,3].forEach(i=> b(0.46-i*0.04,0.09,0.06, i%2?lamelDk:lamel, 0,1.56-i*0.13,0.165));
+  [0,1,2,3].forEach(i=> b(0.44-i*0.04,0.02,0.065, cordRed, 0,1.515-i*0.13,0.17));
+  b(0.51,0.11,0.33, ironMat, 0,1.20,0);                // a girdle of iron plates, not just leather
+  b(0.50,0.22,0.28, lamel,   0,1.56,-0.01);
+  [-1,1].forEach(sd=> b(0.20,0.18,0.24, ironMat, sd*0.27,1.60,0));   // pauldrons, iron over lamellar
+
+  b(0.16,0.11,0.16, skinDk,  0,1.71,0);
+  b(0.27,0.25,0.25, skin,    0,1.86,0);
+  b(0.11,0.065,0.075, skinDk,0,1.84,0.135);
+  [-1,1].forEach(sd=> b(0.075,0.06,0.05, eyeMat, sd*0.068,1.90,0.128));
+  b(0.20,0.13,0.13, skinDk,  0,1.755,0.10);            // a full beard -- an older, senior man
+  // a full iron helm with a face-guard, unlike the infantryman's open one -- the clearest single tell
+  // at range that this is the one you cannot just walk through
+  b(0.31,0.16,0.30, ironMat, 0,2.02,0);
+  b(0.33,0.07,0.27, ironDk,  0,1.935,0);
+  b(0.24,0.16,0.05, ironDk,  0,1.85,0.155);            // the face-guard bar screen, proud of the face
+  [-1,0,1].forEach(i=> b(0.03,0.14,0.03, ironMat, i*0.08,1.85,0.175));
+  b(0.07,0.19,0.07, ironMat, 0,2.135,0);                // the crest spike
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.30,1.56,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.18,0.30,0.18, lamel,   -0.16,0);
+    p(0.16,0.055,0.16,ironMat, -0.33,0);
+    p(0.145,0.28,0.145,lamel,  -0.50,0);
+    p(0.15,0.13,0.16,ironDk,   -0.71,0.01);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  // the guandao: a long haft carried in both hands, held down the right side -- a heavy, broad, curved
+  // blade at the end rather than in the fist, which is what makes him read as slower and harder before
+  // the fight starts. Built the same flare-toward-the-tip way the Zhanmadao's own blade is.
+  const pole=new THREE.Group(); pole.position.set(0.14,-0.72,-0.05); pole.rotation.x=-0.12; pole.rotation.z=0.08; armR.add(pole);
+  const pg=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); pole.add(m); return m; };
+  pg(0.045,1.35,0.045, woodM, 0,0.55,0);
+  pg(0.052,0.052,0.10, cordRed, 0,0.20,0);
+  pg(0.052,0.052,0.10, cordRed, 0,0.85,0);
+  let gby=1.24, N=7;
+  for(let i=0;i<N;i++){
+    const u=i/(N-1), flare = u<0.3?0.0:(u-0.3)/0.7;
+    const w = 0.07 + flare*flare*0.14;
+    const len=0.10;
+    pg(w, len, i%2?0.026:0.034, i%2?ironMat:ironDk, w*0.5-0.03, gby+len/2, 0);
+    gby += len;
+  }
+  const gtip=new THREE.Mesh(new THREE.ConeGeometry(0.11,0.20,4), ironDk);
+  gtip.rotation.z=-Math.PI/2; gtip.rotation.y=Math.PI/4; gtip.position.set(0.10, gby+0.05,0); pole.add(gtip);
+  pg(0.10,0.05,0.08, ironDk, -0.06, 1.30, 0);           // the back spike, opposite the blade's curve
+
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  return rig;
+}
+
+// THE SIEGE COMMANDER — Xiangyang's boss. Built on the Song Guard's own frame on purpose: same plated
+// legs, same cuirass, same guandao, so that when he comes to the breach you recognise the SHAPE of the
+// garrison's elite and then notice, one beat later, that everything on it is gilded — gold trim over the
+// black lacquer instead of plain iron, and the command banner planted on his back that says what rank
+// this one is before he ever raises the blade.
+function makeSongCommander(){
+  const g=new THREE.Group();
+  const skin    = voxMat(0xb88860,{noise:14});
+  const skinDk  = voxMat(0x876346,{noise:12});
+  const lamel   = voxMat(0x1c1716,{noise:14});
+  const lamelDk = voxMat(0x100d0c,{noise:12});
+  const cordRed = voxMat(0x8a2620,{noise:10});
+  const gold    = metalMatP(0xc8a23c,85,0xffeeb0);
+  const ironDk  = metalMatP(0x565c62,50,0x9aa4aa);
+  const woodM   = voxMat(0x4a3522,{noise:14});
+  const bannerM = voxMat(0x9a2620,{noise:10});
+  const bannerGold = voxMat(0xc8a23c,{noise:8});
+  const eyeMat  = new THREE.MeshBasicMaterial({color:0xd4a844,fog:false});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.15,0.78,0); g.add(l);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.22,0.34,0.23, lamel,   -0.18,0);
+    p(0.175,0.10,0.185,lamelDk,-0.38,0);
+    p(0.15,0.32,0.16, lamel,   -0.58,0);
+    p(0.155,0.045,0.165,gold,  -0.475,0);              // gilded wraps in place of the guard's plain cord
+    p(0.18,0.09,0.28, ironDk,  -0.735,0.05);
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  b(0.44,0.18,0.28, lamelDk, 0,0.86,0);
+  b(0.46,0.08,0.30, gold,    0,0.78,0);
+  b(0.43,0.32,0.26, lamel,   0,1.08,0);
+  b(0.49,0.38,0.31, lamel,   0,1.40,0);
+  [0,1,2,3].forEach(i=> b(0.46-i*0.04,0.09,0.06, i%2?lamelDk:lamel, 0,1.56-i*0.13,0.165));
+  [0,1,2,3].forEach(i=> b(0.44-i*0.04,0.02,0.065, gold, 0,1.515-i*0.13,0.17));   // gilded lacing, not red
+  b(0.51,0.11,0.33, gold,    0,1.20,0);
+  b(0.50,0.22,0.28, lamel,   0,1.56,-0.01);
+  [-1,1].forEach(sd=> b(0.20,0.18,0.24, gold, sd*0.27,1.60,0));    // gilded pauldrons
+
+  b(0.16,0.11,0.16, skinDk,  0,1.71,0);
+  b(0.27,0.25,0.25, skin,    0,1.86,0);
+  b(0.11,0.065,0.075, skinDk,0,1.84,0.135);
+  [-1,1].forEach(sd=> b(0.075,0.06,0.05, eyeMat, sd*0.068,1.90,0.128));
+  b(0.20,0.13,0.13, skinDk,  0,1.755,0.10);
+  b(0.31,0.16,0.30, gold,    0,2.02,0);                // a gilded helm, not plain iron
+  b(0.33,0.07,0.27, lamelDk, 0,1.935,0);
+  b(0.24,0.16,0.05, lamelDk, 0,1.85,0.155);
+  [-1,0,1].forEach(i=> b(0.03,0.14,0.03, gold, i*0.08,1.85,0.175));
+  b(0.07,0.19,0.07, gold,    0,2.135,0);
+
+  // ---- the command banner: three flag-poles fanned off a harness at the back, the flags themselves
+  // standing proud of the pauldrons so they read at a distance before the gilding does. This is the
+  // one silhouette element the Song Guard's frame does not have, and it is deliberately the loudest
+  // thing on him. ----
+  const harness = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.34,0.10), lamelDk);
+  harness.position.set(0,1.44,-0.18); harness.castShadow=true; g.add(harness);
+  [-1,0,1].forEach(k=>{
+    const pole = new THREE.Group(); pole.position.set(k*0.09,1.55,-0.20); pole.rotation.x=-0.12+k*0.03; g.add(pole);
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.028,1.05,0.028), woodM);
+    shaft.position.set(0,0.52,0); shaft.castShadow=true; pole.add(shaft);
+    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.42,0.02), bannerM);
+    flag.position.set(0.16,0.86,0); flag.castShadow=true; pole.add(flag);
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(0.30,0.06,0.024), bannerGold);
+    trim.position.set(0.16,1.05,0); pole.add(trim);
+  });
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.30,1.56,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.18,0.30,0.18, lamel,   -0.16,0);
+    p(0.16,0.055,0.16,gold,    -0.33,0);
+    p(0.145,0.28,0.145,lamel,  -0.50,0);
+    p(0.15,0.13,0.16,ironDk,   -0.71,0.01);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  const pole=new THREE.Group(); pole.position.set(0.14,-0.72,-0.05); pole.rotation.x=-0.12; pole.rotation.z=0.08; armR.add(pole);
+  const pg=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); pole.add(m); return m; };
+  pg(0.045,1.35,0.045, woodM, 0,0.55,0);
+  pg(0.052,0.052,0.10, gold, 0,0.20,0);
+  pg(0.052,0.052,0.10, gold, 0,0.85,0);
+  let gby=1.24, N=7;
+  for(let i=0;i<N;i++){
+    const u=i/(N-1), flare = u<0.3?0.0:(u-0.3)/0.7;
+    const w = 0.07 + flare*flare*0.14;
+    const len=0.10;
+    pg(w, len, i%2?0.026:0.034, i%2?lamelDk:ironDk, w*0.5-0.03, gby+len/2, 0);
+    gby += len;
+  }
+  const gtip=new THREE.Mesh(new THREE.ConeGeometry(0.11,0.20,4), ironDk);
+  gtip.rotation.z=-Math.PI/2; gtip.rotation.y=Math.PI/4; gtip.position.set(0.10, gby+0.05,0); pole.add(gtip);
+  pg(0.10,0.05,0.08, ironDk, -0.06, 1.30, 0);
+
+  // the strike-caller: an invisible, inert marker on the raised free hand — this is what the boss
+  // controller's telegraph reads off, the same botMuzzle convention every boss with a ranged tell uses,
+  // even though the hazard it triggers is not thrown by him but called down from the trebuchet outside.
+  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.08),
+    new THREE.MeshBasicMaterial({color:0xd8d2bc, transparent:true, opacity:0, fog:false}));
+  muzzle.position.set(0,0,-0.10); armL.add(muzzle);
+  muzzle.visible=false;
+
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  g.userData.botMuzzle=muzzle;
+  return rig;
+}
+
 function makeGhoul(){
   const g = new THREE.Group();
   const skinMat = voxMat(0x93a08c,{noise:16});   // corpse-pale grey-green
@@ -16535,6 +16930,54 @@ const SWEDEN_LEGS = [
    onWave(n){ fjordSetPlank(n >= 1); fjordSetLash(n >= 2); if(n === 1) fjordJarlApproach(); },
    onBoss(){ fjordSetPlank(true); fjordSetLash(true); },
    enter(b){ enterFjordWorld(b || '🌊 Out past the skerries — and they are already alongside'); }},
+];
+
+// ---- Xiangyang's garrison: the siege line, fought outside a shut gate ----
+// The gate stays shut through every regular wave — this leg's fighting happens where the player
+// already is, on the siege side, the same way the Fjord's duel and boarding are both fought without
+// the player ever needing to be handed new ground. Only the boss stage opens the breach.
+// Solved against xiangyangColliders: both pools sit in the open ground between the Mongol tents and
+// the wall (z 8 to 16), clear of the paved aprons at the gate (x -4.5..4.5, z 3..9) and of every tent's
+// own footprint.
+const XIANGYANG_WEST = [[-14.0,14.0], [-10.0,10.5], [-16.0,8.5], [-8.0,15.5], [-12.5,9.5]];
+const XIANGYANG_EAST = [[14.0,14.0], [10.0,10.5], [16.0,8.5], [8.0,15.5], [12.5,9.5]];
+// THREE waves, all fought outside the wall — the breach is what the BOSS opens, not the ladder:
+//   1  the first sortie: infantry alone, the melee-only role Xiangyang uses in place of Birka's draugr.
+//   2  the wall answers with its crossbowmen — the ranged half of the garrison, holding the back of
+//      the ground while the infantry presses.
+//   3  the armoured guard comes out with them — the enemy the Zhanmadao's armourPierce is for, and the
+//      heaviest wave before the gate itself gives way.
+const XIANGYANG_WAVES = [
+  {songinfantry:3},
+  {songinfantry:2, songcrossbowman:2},
+  {songinfantry:2, songcrossbowman:2, songguard:1},
+];
+const XIANGYANG_STATS = {
+  songinfantry:    {hp:150, speed:1.25, wt:'knife',  scale:1.00, west:true},
+  songcrossbowman: {hp:95,  speed:1.05, wt:'pistol', scale:1.00, west:false},
+  songguard:       {hp:280, speed:0.85, wt:'knife',  scale:1.05, west:true, armoured:true, noFlinch:true},
+};
+const XIANGYANG_DIFF = 1.20;
+// THE SONG SIEGE COMMANDER — Xiangyang's boss, fought inside the breach once the gate is down. Built on
+// the Song Guard's own frame (same armour language, one rank up) rather than as a second monster: China
+// has no mythological wave-elite the way Greek or Roman eras do, and the escalation this leg earns is
+// tactical, not bestial. His one hazard reads straight off why this siege is happening at all: he calls
+// a strike from the trebuchet outside, the same one standing idle in the siege camp behind the player.
+const XIANGYANG_BOSS = {skin:'songcommander', col:0x1c1716, hp:2600, scale:1.55, speed:1.15, x:0, z:-12, radius:1.05,
+  name:'THE SIEGE COMMANDER', hud:'the commander',
+  call:'⚠ A horn answers from inside the wall — the garrison’s own commander comes to the breach…',
+  intro:'🏰 THE SIEGE COMMANDER',
+  fell:'🏰 The commander falls in the breach — Xiangyang is yours'};
+// Xiangyang is China's first leg. Yamen follows once it is built; until then this destination is
+// reachable only through /tp, the same staged state the Fjord was in before SWEDEN_LEGS grew a second
+// entry.
+const CHINA_LEGS = [
+  {place:'Xiangyang', icon:'🏯', diff:XIANGYANG_DIFF, era:'Yuan China',
+   waves:XIANGYANG_WAVES, stats:XIANGYANG_STATS, west:XIANGYANG_WEST, east:XIANGYANG_EAST,
+   boss:XIANGYANG_BOSS,
+   waveLine:' — the gate holds, for now…',
+   onBoss(){ xiangyangSetBreach(true); },
+   enter(b){ enterXiangyangWorld(b || '🏯 Xiangyang — the wall holds, for now'); }},
 ];
 // The leg currently underway. Clamped rather than indexed raw so a stale tripLeg can never return
 // undefined and take the spawn/HUD code down with it.

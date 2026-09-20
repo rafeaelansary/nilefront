@@ -119,6 +119,10 @@ globalThis.__builders = {
   makeBerserkr: typeof makeBerserkr==='function' ? makeBerserkr : null,
   makeTroll: typeof makeTroll==='function' ? makeTroll : null,
   makeHirdman: typeof makeHirdman==='function' ? makeHirdman : null,
+  makeSongInfantry: typeof makeSongInfantry==='function' ? makeSongInfantry : null,
+  makeSongCrossbowman: typeof makeSongCrossbowman==='function' ? makeSongCrossbowman : null,
+  makeSongGuard: typeof makeSongGuard==='function' ? makeSongGuard : null,
+  makeSongCommander: typeof makeSongCommander==='function' ? makeSongCommander : null,
   makeDaneAxe: typeof makeDaneAxe==='function' ? makeDaneAxe : null,
   makeHunnishBow: typeof makeHunnishBow==='function' ? makeHunnishBow : null,
   makeThrowingSeax: typeof makeThrowingSeax==='function' ? makeThrowingSeax : null,
@@ -206,6 +210,11 @@ ACTORS = [
     ("makeBerserkr", "b=>b()",                              1.05, 0.00, "Berserkr"),
     ("makeTroll",    "b=>b()",                              1.90, 0.00, "Skerry Troll (Fjord boss)"),
     ("makeHirdman",  "b=>b()",                              1.00, 0.00, "Hirdman"),
+    # Xiangyang roster (Song China). Scales will come from XIANGYANG_STATS once the wave ladder lands.
+    ("makeSongInfantry",    "b=>b()",                        1.00, 0.00, "Song Infantry"),
+    ("makeSongCrossbowman", "b=>b()",                        1.00, 0.00, "Song Crossbowman"),
+    ("makeSongGuard",       "b=>b()",                        1.05, 0.00, "Song Guard (armoured elite)"),
+    ("makeSongCommander",   "b=>b()",                        1.55, 0.00, "Song Siege Commander (Xiangyang boss)"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor
