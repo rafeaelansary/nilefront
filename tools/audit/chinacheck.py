@@ -6,6 +6,38 @@ from bugcheck import run, show
 
 ok = True
 
+# The engine change the whole Xiangyang redesign rests on. Before it, spawnBot() placed every actor at
+# y=0 and left groundY unseeded, so the per-frame terrain code (which feeds a bot its own last height as
+# curH) rejected any raised zone on the first frame and every frame after -- an enemy placed on a
+# rampart stood inside the wall forever. Asserted against Birka's Borg, which is the only climbable
+# plateau in the game that predates China, so this is testing the ENGINE and not the new map.
+ok &= show("a bot spawned on raised ground stands on it, not inside it", run("""
+  gameStarted = true;
+  enterSwedenWorld('t');
+  // the Borg's crown: a plateau height zone at BORG_H, with the rock's own collider under it
+  var zone = heightZonesSweden.filter(function(z){ return z.type==='plateau'; })[0];
+  if(!zone) throw new Error('Birka has no plateau zone to test against');
+  var cx = (zone.x1+zone.x2)/2, cz = (zone.z1+zone.z2)/2;
+  if(getTerrainHeight(cx, cz, undefined) < 1) throw new Error('the plateau is not actually raised');
+  clearBots();
+  var m = spawnBot(cx, cz, 0x808080, [cx,0,cz], [cx,0,cz], 'pistol', {skin:'hirdman', hp:100});
+  var bd = m.userData.data;
+  if(Math.abs(bd.groundY - zone.y) > 1e-6)
+    throw new Error('spawned on the crown but groundY is '+bd.groundY+', expected '+zone.y);
+  if(Math.abs(m.position.y - zone.y) > 1e-6)
+    throw new Error('spawned on the crown but sits at y='+m.position.y.toFixed(2));
+  // ...and it must STAY up there across frames rather than sinking once the per-frame rule runs
+  for(var i=0;i<30;i++) animate();
+  if(bd.groundY < zone.y - 0.2)
+    throw new Error('the bot sank to '+bd.groundY.toFixed(2)+' after 30 frames');
+  // a bot on flat ground is unaffected -- this must not have moved anything that already worked
+  clearBots();
+  var f = spawnBot(0, 24, 0x808080, [0,0,24], [0,0,24], 'knife', {skin:'draugr', hp:100});
+  if(Math.abs(f.userData.data.groundY) > 1e-6) throw new Error('a bot on flat ground got groundY '+f.userData.data.groundY);
+  clearBots();
+  return 'plateau spawn holds '+zone.y.toFixed(1)+' across 30 frames; flat ground still 0';
+"""))
+
 ok &= show("the China loadout is three weapons, each with a complete userData block", run("""
   if(typeof chinaWeapons === 'undefined') throw new Error('chinaWeapons is not defined');
   if(chinaWeapons.length !== 3) throw new Error('expected 3 weapons, got '+chinaWeapons.length);

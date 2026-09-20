@@ -491,11 +491,17 @@ function resolveStep(px,pz,R,curH){
   return [px,pz];
 }
 // move an actor along (dirx,dirz); returns true if it was blocked by a collider/arena edge
-function moveActor(mesh, dirx, dirz, dist, radius){
+// curH is the actor's OWN ground height, and passing it is what lets an enemy stand on raised ground.
+// A roof/plateau collider is skipped only for someone already up at its level (see insideCollider's
+// roof rule); hardcoding 0 here told that rule "this actor is at ground level" for every actor in the
+// game, so a bot standing on a mesa was judged to be standing INSIDE it and shoved off the side — a
+// seven-unit ejection on the first frame, for the one bot that ever tried it. Defaults to 0, so every
+// caller on flat ground behaves exactly as it always did.
+function moveActor(mesh, dirx, dirz, dist, radius, curH){
   const len=Math.hypot(dirx,dirz)||1; dirx/=len; dirz/=len;
   let nx=mesh.position.x+dirx*dist, nz=mesh.position.z+dirz*dist;
   const cx=Math.max(-28,Math.min(28,nx)), cz=Math.max(-28,Math.min(28,nz));
-  const [rx,rz]=resolveCollision(cx,cz,radius,0);
+  const [rx,rz]=resolveCollision(cx,cz,radius,curH||0);
   const blocked = Math.abs(rx-nx)>0.0015 || Math.abs(rz-nz)>0.0015;
   mesh.position.x=rx; mesh.position.z=rz;
   return blocked;
@@ -15393,7 +15399,17 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
   // wider than the Sandstone Colossus (2.39 at scale 3.1) and wider than his own patrol lane is clear.
   // A prop should not be a collider; his body should.
   if(opts.radius) radius = opts.radius;
-  bot.position.set(x,0,z);
+  // Seed the bot's own ground height from where it is being PUT, ignoring the continuity rule.
+  //
+  // getTerrainHeight()'s continuity check ("only count a zone you are already near the height of")
+  // exists so a walking actor cannot teleport up the side of a plateau it is standing beside. It is
+  // exactly wrong for placement: the per-frame terrain code below feeds the bot its own last height as
+  // curH, so a bot spawned on a rampart at 5.4 resolves 0 on its first frame (|5.4-0| > 1.5, zone
+  // rejected), records groundY 0, and is then permanently stuck reading 0 — standing inside the wall it
+  // was supposed to be holding. respawnPlayer() already passes `undefined` here for the same reason.
+  // Without this, no enemy can ever be placed on any raised ground in this game.
+  const spawnY = getTerrainHeight(x, z, undefined);
+  bot.position.set(x,spawnY,z);
   bot.userData.isBot = true;
   scene.add(bot);
   const hp = opts.hp || BOT_MAX_HP;
@@ -15403,7 +15419,7 @@ function spawnBot(x,z,color,pA,pB,weaponType,opts){
     // armoured actors take extra from armour-breaking melee (the Dane Axe's armourPierce). Carried on the
     // bot rather than inferred from the skin so a roster entry declares it, the way hp/speed/scale are.
     armoured:!!opts.armoured, noFlinch:!!opts.noFlinch,
-    heading:Math.random()*Math.PI*2, wanderT:0, moving:0, facing:0, radius};
+    heading:Math.random()*Math.PI*2, wanderT:0, moving:0, facing:0, radius, groundY:spawnY};
   bot.userData.data = data;
   bots.push(data);
   return bot;
@@ -20613,8 +20629,8 @@ function animate(){
         b.moving=1;
         const cdx=b.chargeTX-b.mesh.position.x, cdz=b.chargeTZ-b.mesh.position.z;
         const distLeft=Math.hypot(cdx,cdz);
-        if(distLeft>0.3) moveActor(b.mesh, cdx, cdz, Math.min(distLeft, b.speed*5*dt), R);
-      } else if(distToPlayer>4){ b.moving=1; moveActor(b.mesh, toPX, toPZ, b.speed*dt, R); } else b.moving=0;
+        if(distLeft>0.3) moveActor(b.mesh, cdx, cdz, Math.min(distLeft, b.speed*5*dt), R, b.groundY);
+      } else if(distToPlayer>4){ b.moving=1; moveActor(b.mesh, toPX, toPZ, b.speed*dt, R, b.groundY); } else b.moving=0;
     } else if(canEngage){
       b.moving=0;                          // pistol: stop & shoot / knife: in melee range
     } else if(inNileArea && (b.skin==='crocodile'||b.skin==='hippo') && nileBiters && nileBiters.indexOf(b)<0){
@@ -20623,9 +20639,9 @@ function animate(){
       // strafe around the ring.
       b.moving=1;
       const cx=b.mesh.position.x, cz=b.mesh.position.z, distC=Math.hypot(cx,cz)||0.001, standoff=6.5;
-      if(distC < standoff-0.6) moveActor(b.mesh, cx, cz, 2.0*dt, R);
-      else if(distC > standoff+1.6) moveActor(b.mesh, -cx, -cz, 2.0*dt, R);
-      else moveActor(b.mesh, -cz, cx, 1.6*dt, R);
+      if(distC < standoff-0.6) moveActor(b.mesh, cx, cz, 2.0*dt, R, b.groundY);
+      else if(distC > standoff+1.6) moveActor(b.mesh, -cx, -cz, 2.0*dt, R, b.groundY);
+      else moveActor(b.mesh, -cz, cx, 1.6*dt, R, b.groundY);
     // The draugr tracks by scent: it does NOT need line of sight, and its range is the whole map rather
     // than the 16 every other melee enemy gets. This is the brief's "relentlessly tracks player scent"
     // written in the one currency this AI actually has — every other knife enemy loses you behind a
@@ -20637,17 +20653,17 @@ function animate(){
       // pathfinding, so it kept re-issuing the same doomed straight-line move every frame, clamped to
       // the same spot each time while its legs kept animating (moving stayed 1) — read as jittering in
       // place. Slide it sideways along the obstacle instead, same idea as the wander branch below.
-      const chaseBlocked = moveActor(b.mesh, toPX, toPZ, 3.2*dt, R);
+      const chaseBlocked = moveActor(b.mesh, toPX, toPZ, 3.2*dt, R, b.groundY);
       if(chaseBlocked){
         if(!b.slideDir) b.slideDir = Math.random()<0.5 ? 1 : -1;
-        moveActor(b.mesh, -toPZ*b.slideDir, toPX*b.slideDir, 2.4*dt, R);
+        moveActor(b.mesh, -toPZ*b.slideDir, toPX*b.slideDir, 2.4*dt, R, b.groundY);
       } else {
         b.slideDir = 0;
       }
     } else {
       // wander: walk along heading, turn away when blocked, face travel direction
       b.wanderT -= dt;
-      const blocked = moveActor(b.mesh, Math.cos(b.heading), Math.sin(b.heading), 2.3*dt, R);
+      const blocked = moveActor(b.mesh, Math.cos(b.heading), Math.sin(b.heading), 2.3*dt, R, b.groundY);
       if(blocked || b.wanderT<=0){ b.heading += blocked ? (2.0+Math.random()*1.6) : (Math.random()*1.6-0.8); b.wanderT = 1.2+Math.random()*1.8; }
       b.moving=1; facePlayer=false;
     }
