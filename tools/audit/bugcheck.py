@@ -88,7 +88,8 @@ print("\n=== 4. every weapon is actually ON the screen ===")
 # true and reads fine.
 show("no melee weapon hangs off the edge of the screen", run("""
   var all = originalWeapons.concat(pyramidWeapons).concat(nileWeapons).concat(greekWeapons)
-    .concat(romanWeapons).concat(islamicWeapons).concat(mexicoWeapons).concat(aztecWeapons).concat(swedenWeapons);
+    .concat(romanWeapons).concat(islamicWeapons).concat(mexicoWeapons).concat(aztecWeapons)
+    .concat(swedenWeapons).concat(chinaWeapons);
   var tanV = Math.tan(75*Math.PI/180/2), tanH = tanV*(16/9), out=[], bad=[];
   all.forEach(function(w){
     if(!w.userData.melee) return;

@@ -38,6 +38,62 @@ ok &= show("a bot spawned on raised ground stands on it, not inside it", run("""
   return 'plateau spawn holds '+zone.y.toFixed(1)+' across 30 frames; flat ground still 0';
 """))
 
+# The same silhouette guard the Dane Axe carries, re-run for this weapon's own envelope. The box
+# measure in bugcheck.py answers "is it on screen"; this answers "how big may it be", which is the
+# question a two-hander actually has to keep answering -- the axe's own history is a tuning pass that
+# shrank it because it measured a diagonal cylinder as a box and concluded it had no room left.
+ok &= show("the Zhanmadao fills its frame and stays off the crosshair", run("""
+  function applyM(M,x,y,z){ return {x:M[0]*x+M[4]*y+M[8]*z+M[12], y:M[1]*x+M[5]*y+M[9]*z+M[13], z:M[2]*x+M[6]*y+M[10]*z+M[14]}; }
+  function silhouette(w, aspect){
+    w.updateMatrixWorld(true);
+    var p=w.userData.pos, s=w.scale.x;
+    var tanV=Math.tan(75*Math.PI/180/2), tanH=tanV*aspect;
+    var right=-9,left=9,top=-9,bottom=9,cross=9;
+    function take(sx,sy,rad){
+      right=Math.max(right,sx+rad); left=Math.min(left,sx-rad);
+      top=Math.max(top,sy+rad); bottom=Math.min(bottom,sy-rad);
+      cross=Math.min(cross, Math.max(0, Math.hypot(sx,sy)-rad));
+    }
+    w.traverse(function(m){
+      if(!m.isMesh || !m.geometry) return;
+      var g=m.geometry, M=m.matrixWorld;
+      if(g.type==='CylinderGeometry'){
+        var pr=g.parameters;
+        for(var i=0;i<=24;i++){
+          var f=i/24, q=applyM(M,0,(f-0.5)*pr.height,0);
+          var r=pr.radiusBottom+(pr.radiusTop-pr.radiusBottom)*f;
+          q.x+=p.x; q.y+=p.y; q.z+=p.z; if(q.z>-0.1) continue;
+          take(q.x/(-q.z*tanH), q.y/(-q.z*tanV), (r*s)/(-q.z*tanV));
+        }
+      } else {
+        var h=g._half||{x:0,y:0,z:0}, o=g._offset||{x:0,y:0,z:0};
+        for(var a=-1;a<=1;a+=2) for(var b=-1;b<=1;b+=2) for(var c=-1;c<=1;c+=2){
+          var q=applyM(M,o.x+a*h.x,o.y+b*h.y,o.z+c*h.z);
+          q.x+=p.x; q.y+=p.y; q.z+=p.z; if(q.z>-0.1) continue;
+          take(q.x/(-q.z*tanH), q.y/(-q.z*tanV), 0);
+        }
+      }
+    });
+    return {right:right,left:left,top:top,bottom:bottom,cross:cross};
+  }
+  var dao = chinaWeapons.filter(function(w){ return w.userData.name==='Zhanmadao'; })[0];
+  if(!dao) throw new Error('no Zhanmadao in the China loadout');
+  var m = silhouette(dao, 16/9);
+  var swayX=(0.016+0.006+0.05)/(0.76*Math.tan(75*Math.PI/180/2)*(16/9));
+  var riseY=(0.05+0.005)/(0.76*Math.tan(75*Math.PI/180/2));
+  if(m.right > 0.93)        throw new Error('right edge at '+m.right.toFixed(2)+' -- it will clip the frame when it sways');
+  if(m.right + swayX > 1.0) throw new Error('a hard flick takes it off the right of the frame');
+  if(m.top   > 0.90)        throw new Error('the point is at '+m.top.toFixed(2)+' -- it clips the top');
+  if(m.top + riseY > 1.0)   throw new Error('a hard flick takes the point off the top of the frame');
+  if(m.left  < -0.02)       throw new Error('it has crossed to the left of the sight line');
+  if(m.bottom > -1.35)      throw new Error('the grip ends at '+m.bottom.toFixed(2)+' -- inside the frame, so it hangs in mid-air');
+  if(m.cross < 0.25)        throw new Error('only '+m.cross.toFixed(2)+' of clear screen around the crosshair');
+  if(m.top < 0.70)          throw new Error('the point only reaches '+m.top.toFixed(2)+' -- the sabre has shrunk');
+  return 'right '+m.right.toFixed(2)+' left '+m.left.toFixed(2)+' top '+m.top.toFixed(2)+
+         ' bottom '+m.bottom.toFixed(2)+' crosshair '+m.cross.toFixed(2)+
+         ' (worst-case sway: right '+(m.right+swayX).toFixed(2)+', top '+(m.top+riseY).toFixed(2)+')';
+"""))
+
 ok &= show("the China loadout is three weapons, each with a complete userData block", run("""
   if(typeof chinaWeapons === 'undefined') throw new Error('chinaWeapons is not defined');
   if(chinaWeapons.length !== 3) throw new Error('expected 3 weapons, got '+chinaWeapons.length);

@@ -16831,179 +16831,316 @@ function makeThrowingSeax(){
 const swedenWeapons = [makeDaneAxe(), makeHunnishBow(), makeThrowingSeax()];
 
 // ===================== CHINA LOADOUT (Yuan conquest of Song China, 1267-1279) =====================
-// Three weapons answering the two legs' own escalation: a heavy armour-breaking saber for Xiangyang's
-// garrison, a rapid-fire crossbow that is nothing like the Qaws' single heavy bolt, and a thrown
-// gunpowder bomb that is Yamen's whole battle in miniature before Yamen is even built.
+// Three weapons answering the two legs' own escalation, and each of them an archetype this game does
+// not already own: its first RING-POMMEL two-hander, its first MAGAZINE-FED repeater, and its first
+// grenade whose fuse is visibly burning down in your hand before you throw it.
 
-// ZHANMADAO — the "horse-chopping saber": a long, broad, single-edged two-handed blade. Built on the
-// Dane Axe's own two-hander shape (long haft, held across the body, canted off the centre line so the
-// crosshair stays clear) but with a SWORD's silhouette in place of an axe's crescent head — a straight
-// spine and a slowly widening edge, flaring hardest in the last third the way a real horse-chopping
-// saber's does, rather than a uniform-width blade.
+// ZHANMADAO — the horse-chopping sabre. A two-hander like the Dane Axe, and deliberately the opposite
+// shape: where the axe's mass is a crescent out on one side, this is one long continuous curve with the
+// weight carried out toward a broadened tip.
+//
+// Three things make it read as Chinese rather than as a generic big sword, and all three are cheap:
+//   - a RING POMMEL, which is the single most identifying feature on a Chinese sabre and the thing the
+//     eye finds first at the bottom of the frame;
+//   - a disc guard rather than a crossguard, because a dao's hilt is a sabre's, not a longsword's;
+//   - a blade that genuinely CURVES and broadens, with a clipped back-edge at the point.
+// The curve is built the way this file has learned to build every curve (see makeScimitar's comment):
+// each segment starts exactly where the last one ended, direction is (0, cos t, -sin t), and the
+// matching orientation for a box whose length is its local +Y is rotation.x = -t. Built with a naive
+// linear step plus a separate rotation, a curve like this renders as a row of disconnected shards.
 function makeZhanmadao(){
   const g=new THREE.Group();
-  const haftMat = new THREE.MeshLambertMaterial({map:_finish(logTex(),1)});
-  const haftDk  = voxMat(0x3a2a1a,{noise:14});
-  const steel   = metalMatP(0xb8c0c8,120,0xffffff);
-  const steelDk = metalMatP(0x767d86,70,0xc8d0d8);
-  const bronze  = metalMatP(0xad8730,85,0xfff2c8);
-  const leather = voxMat(0x2c221a,{noise:14});
+  const steel   = metalMatP(0xc2c8cd,105,0xffffff);
+  const steelDk = metalMatP(0x7d848b,70,0xc4ccd2);
+  const edgeM   = metalMatP(0xe4eaee,150,0xffffff);   // the bright hardened edge, lighter than the flat
+  const brass   = metalMatP(0xad8730,85,0xfff2c8);
+  const gripWrp = voxMat(0x2c2118,{noise:14});        // cord wrap over the long two-hand grip
+  const gripDk  = voxMat(0x171009,{noise:12});
+  const tasselM = voxMat(0x8a2620,{noise:12});        // the red cord hanging off the ring
   const ab=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); g.add(m); return m; };
   const acy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat); m.position.set(x,y,z); g.add(m); return m; };
-  // ---- the long haft, round in section like the Dane Axe's ----
-  acy(0.026,0.029,0.62,10, haftMat, 0,0.02,0);
-  [[-0.10,0.16],[0.14,0.14]].forEach(([hy,hh])=>{
-    acy(0.031,0.031,hh,10, leather, 0,hy,0);
-    acy(0.033,0.033,0.012,10, haftDk, 0,hy+hh/2,0);
-    acy(0.033,0.033,0.012,10, haftDk, 0,hy-hh/2,0);
+
+  // ---- the ring pommel, at the very bottom of the weapon ----
+  // Built as eight brass segments on a circle rather than a torus: the stub's geometry set has no torus,
+  // and eight boxes on a ring is also how every other ring-shaped thing in this file is made. Each
+  // segment is rotated to sit tangent to the circle so the ring reads as a ring and not as a cog.
+  const RING_Y=-0.40, RING_R=0.055;
+  for(let i=0;i<8;i++){
+    const a=i/8*Math.PI*2;
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(0.048,0.020,0.020), brass);
+    seg.position.set(Math.sin(a)*RING_R, RING_Y+Math.cos(a)*RING_R, 0);
+    seg.rotation.z = -a;
+    g.add(seg);
+  }
+  acy(0.036,0.040,0.06,10, brass, 0,RING_Y+0.085,0);      // the collar the ring hangs from
+  // the tassel: three short cords off the ring, the one soft thing on an otherwise hard object
+  [-1,0,1].forEach((k,i)=> ab(0.016,0.10-Math.abs(k)*0.02,0.016, tasselM, k*0.022, RING_Y-0.11+Math.abs(k)*0.01, 0));
+
+  // ---- the grip: long, round, and cord-wrapped. Two hands' worth, which is what makes this a
+  // two-hander rather than a big one-handed dao. ----
+  // RADII, not just heights, are what keep these apart. Everything here is coaxial with the core, so
+  // two tubes whose radii differ by less than the 0.006 coplanarity epsilon present as one surface from
+  // every angle — 40 of this model's first-pass z-fight pairs were exactly that, the core against its
+  // own wrap. The core is 0.026 and nothing else coaxial with it comes nearer than 0.034, which is also
+  // the truer shape: a cord wrap stands proud of the timber it is wound onto.
+  acy(0.024,0.026,0.40,10, gripDk, 0,-0.14,0);
+  for(let i=0;i<7;i++){
+    acy(0.036+(i%2)*0.002, 0.036+(i%2)*0.002, 0.040, 10, gripWrp, 0, -0.30+i*0.052, 0);
+  }
+  acy(0.034,0.036,0.022,10, brass, 0,0.055,0);             // a brass ferrule under the guard
+
+  // ---- the disc guard ----
+  acy(0.082,0.082,0.020,12, brass, 0,0.078,0);
+  acy(0.056,0.056,0.014,12, steelDk, 0,0.093,0);           // a raised boss on it, stepped clear of the disc
+  [-1,1].forEach(sd=> ab(0.020,0.016,0.10, brass, sd*0.055,0.078,0));   // two lugs, fore and aft
+
+  // ---- the blade ----
+  // Widths run 0.055 -> 0.105: it broadens toward the tip, which is where a chopping sabre's weight
+  // belongs. Thickness alternates every segment, and the bright edge strip is carried on the OUTSIDE of
+  // the curve, offset along each segment's own local x, so it follows the sweep instead of drifting off
+  // it the way a fixed-offset edge would.
+  let by=0.095, bz=0, t=0;
+  const SEGS=[{w:0.055,len:0.105},{w:0.060,len:0.105},{w:0.066,len:0.105},{w:0.074,len:0.103},
+              {w:0.083,len:0.101},{w:0.093,len:0.098},{w:0.105,len:0.094}];
+  // Neighbouring segments MUST touch — it is one blade — so their DEPTHS carry the separation:
+  // 0.020 against 0.036 puts every shared joint 0.008 clear of coplanar. The bright edge is a thin
+  // faceted run rather than one continuous strip: each facet is 0.86 of its segment's length, so
+  // consecutive facets stop short of each other and never share a face at all, and at 0.006 deep each
+  // sits well inside its own segment's thickness. A ground bevel is faceted in life too.
+  SEGS.forEach((s,i)=>{
+    const dy=Math.cos(t), dz=-Math.sin(t);
+    const cy=by+dy*s.len/2, cz=bz+dz*s.len/2;
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(s.w, s.len, i%2?0.020:0.036), i%2?steel:steelDk);
+    seg.position.set(0, cy, cz); seg.rotation.x=-t; g.add(seg);
+    const ed=new THREE.Mesh(new THREE.BoxGeometry(0.018, s.len*0.86, 0.006), edgeM);
+    // seated 0.002 INSIDE the blade's own face, not perched on it: at a 0.005 bite the surface
+    // sampler that decides connectivity missed one facet entirely and called it a floating part.
+    ed.position.set(s.w*0.5-0.002, cy, cz); ed.rotation.x=-t; g.add(ed);
+    // the fuller, on the first three segments only — derived from THIS walk, never from a parallel
+    // formula. A first pass positioned it with its own straight-line approximation of the curve and the
+    // third one drifted 4mm off the blade and became a floating part. Anything that has to sit on a
+    // curve gets its position from the curve's own cursor.
+    if(i<3){
+      const fu=new THREE.Mesh(new THREE.BoxGeometry(0.014, s.len*0.80, 0.006), steelDk);
+      fu.position.set(-0.012, cy, cz); fu.rotation.x=-t; g.add(fu);
+    }
+    by += dy*s.len; bz += dz*s.len; t += 0.085;
   });
-  acy(0.035,0.032,0.06,10, bronze, 0,-0.32,0);        // butt cap, its top face flush with the haft's own bottom
-  // ---- guard: a simple disc, not a crossguard -- a dao's hilt is a saber's, not a longsword's ----
-  acy(0.075,0.075,0.022,10, bronze, 0,0.335,0);
-  // ---- the blade: straight spine down the near side, edge flaring wide in the last third ----
-  // Built as a chain of segments, each its own mesh so neighbours can alternate depth (the standing
-  // rule against sharing a face plane) -- N=9, width held flat for the first five then flaring hard
-  // for the last four, which is the "horse-chopping" silhouette: most of the mass is out at the tip.
-  const N=9;
-  let by=0.36;
-  for(let i=0;i<N;i++){
-    const u=i/(N-1);
-    const flare = u<0.45 ? 0.0 : (u-0.45)/0.55;         // 0 for the first ~half, ramps after
-    const w = 0.052 + flare*flare*0.075;                // the blade widens toward the point
-    const len = 0.11;
-    const thick = i%2 ? 0.020 : 0.026;
-    ab(w, len, thick, i%2?steel:steelDk, w*0.5-0.046, by+len/2, 0);   // spine held near x=-0.046, edge grows +x
-    by += len;
-  }
-  // the bright edge strip, proud of the blade's +x face along its whole run
-  by=0.36;
-  for(let i=0;i<N;i++){
-    const u=i/(N-1);
-    const flare = u<0.45 ? 0.0 : (u-0.45)/0.55;
-    const w = 0.052 + flare*flare*0.075;
-    const len=0.11;
-    ab(0.014, len, i%2?0.022:0.030, steel, w-0.046+0.009, by+len/2, 0);
-    by += len;
-  }
-  // the point: a continuation of the last segment's own flare, angled in rather than squared off
-  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.09,0.16,4), steelDk);
-  tip.rotation.z = -Math.PI/2; tip.rotation.y = Math.PI/4;
-  tip.position.set(0.06, by+0.03, 0); g.add(tip);
-  // Held big and canted, the same solved shape the Dane Axe uses: right edge inside the frame, top
-  // inside the frame, the haft's own butt leaving the BOTTOM of the frame so it reads as held rather
-  // than floating. Tuned against this model's own silhouette once it is on screen (see chinacheck.py's
-  // screen-fit assertion and the "look at it" step below) -- these starting numbers are the Dane Axe's
-  // own solved values, not yet re-solved for this blade's different mass distribution.
-  g.scale.setScalar(1.15);
-  g.rotation.z = -0.40; g.rotation.y = 0.30; g.rotation.x = 0.08;
-  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.42,-0.74),recoil:0.22,name:'Zhanmadao',
-    restRot:{x:0.08,y:0.30,z:-0.40},
+  // the clipped point: a short back-swept wedge continuing along the last segment's own direction, so it
+  // stays attached to the blade instead of floating past the end of it
+  const tipDy=Math.cos(t), tipDz=-Math.sin(t);
+  const tip=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.115,0.028), steel);
+  tip.position.set(0.010, by+tipDy*0.055, bz+tipDz*0.055); tip.rotation.x=-t; tip.rotation.z=0.16; g.add(tip);
+  const tipEdge=new THREE.Mesh(new THREE.BoxGeometry(0.018,0.098,0.006), edgeM);
+  tipEdge.position.set(0.050, by+tipDy*0.055, bz+tipDz*0.055); tipEdge.rotation.x=-t; tipEdge.rotation.z=0.16; g.add(tipEdge);
+
+  // HELD: solved against this weapon's own SILHOUETTE, not inherited from the Dane Axe's numbers.
+  // A first pass did inherit them (scale 1.12, z -0.52, x 0.26) and put the blade across the sight
+  // line — an axe's mass is a crescent out to one side, a sabre's is a long curve up the middle, and
+  // the two do not sit in the same place. Swept the six parameters against the same four constraints
+  // the axe documents (right <= 0.93 and clear after sway, point inside the top, grip OFF the bottom,
+  // crosshair clear), scoring for size: scale 1.25 at (0.38, -0.41, -0.62), cant z -0.54, yaw 0.18.
+  // That lands right 0.82 / left 0.01 / top 0.87 / bottom -2.14 with 0.60 of clear screen around the
+  // aim point — a bigger weapon than the first pass AND nearly double the axe's 0.31 of aim clearance,
+  // because a curve leaning off to the right vacates the middle of the frame in a way a crescent
+  // cannot. The ring pommel is what runs off the bottom.
+  g.scale.setScalar(1.25);
+  g.rotation.z = -0.54; g.rotation.y = 0.18; g.rotation.x = 0.12;
+  g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.38,-0.41,-0.62),recoil:0.22,name:'Zhanmadao',
+    restRot:{x:0.12,y:0.18,z:-0.54},
     melee:true, range:3.0, damage:180, fireRate:0.90, sfx:'axeSwing',
-    // the same "smashes armour" role the Dane Axe plays against the draugr and the troll, now against
-    // Xiangyang's armoured garrison guard
+    // the armour-answering melee weapon of this arc, the job the Dane Axe does against the draugr:
+    // doubled against anything the game calls armoured, which is what makes the Song Guard and the
+    // Imperial Marine a question with a right answer rather than a longer health bar.
     armourPierce:2.0,
-    cleaveArc:1.10, cleaveRays:7,
+    // a sabre SWEEPS, the same as the axe, but through a slightly tighter arc: the axe's crescent is
+    // wider than this blade is long at the shoulder.
+    cleaveArc:1.05, cleaveRays:7,
     swingAnim:true, swingT:99};
   return g;
 }
 
-// REPEATING CROSSBOW (Zhuge Nu) — the historical multi-bolt magazine crossbow: a gravity-fed box of
-// bolts over the tiller, worked by a lever that both draws the string and drops the next bolt into
-// the groove. Built on the Qaws' tiller/lath/string shape (see makeCrossbow()) but with that magazine
-// box added and the stats inverted -- fast and weak instead of slow and heavy -- so it reads as a
-// completely different weapon despite the shared silhouette family.
+// REPEATING CROSSBOW (Zhuge Nu) — the magazine crossbow, and the first weapon in this game fed from a
+// visible box of ammunition rather than an implied belt. One pull of the rocking lever draws the string,
+// drops the next bolt out of the hopper into the groove, and looses it; the player's own trigger is that
+// lever, which is why this fires fast and hits softly where the Islamic-era Qaws is one heavy bolt at a
+// time.
+//
+// The stack of bolts in the hopper is built as real geometry seen through a slot in its side, because
+// that is the whole identity of the weapon: you can see how many are left without looking at the HUD,
+// the same idea the Throwing Seax's handful of knives uses.
 function makeRepeatingCrossbow(){
   const g=new THREE.Group();
-  const wood=metalMatP(0x6a4522,28,0x2e2012), woodDark=metalMatP(0x462c16,22,0x1c1208);
-  const steel=metalMatP(0x9aa2aa,85,0xe8eef2), dark=voxMat(0x241e1a,{noise:10});
-  const bambooM=voxMat(0xc0a860,{noise:10}), bambooDk=voxMat(0x8a7440,{noise:10});
-  const cordMat=new THREE.MeshBasicMaterial({color:0xe0d6c0,fog:false});
-  // ---- tiller ----
-  part(g,0.07,0.12,0.22,wood,0,-0.015,0.24);
-  part(g,0.062,0.088,0.70,wood,0,0.005,-0.05);
-  part(g,0.11,0.06,0.13,woodDark,0,0.005,-0.44);
-  // ---- the magazine box: the feature that names the weapon. Sits ON TOP of the tiller, open at the
-  // bottom over the groove so gravity drops one bolt at a time -- built as a bamboo-slat hopper, wider
-  // at the top than the base so it visibly holds a stack rather than reading as a solid block.
-  part(g,0.09,0.09,0.34, bambooM, 0,0.135,-0.08);
-  part(g,0.075,0.09,0.30, bambooDk, 0,0.135,-0.08);      // inset face, so the hopper reads as a box with walls
-  for(let i=0;i<5;i++) part(g,0.006,0.088,0.30, bambooDk, -0.044+i*0.022,0.135,-0.08);  // the slats
-  part(g,0.10,0.02,0.36, wood, 0,0.185,-0.08);           // its lid
-  // the lever, hinged at the rear of the box -- one stroke both draws the string and re-cocks the box
-  part(g,0.02,0.16,0.03, dark, 0,0.10,0.14).rotation.x=-0.3;
-  // ---- rail groove + a bolt sitting in it (shorter and lighter than the Qaws' single heavy bolt) ----
-  part(g,0.024,0.020,0.66,dark,0,0.052,-0.06);
-  part(g,0.013,0.013,0.30,woodDark,0,0.066,-0.22);
-  const bhead=new THREE.Mesh(new THREE.ConeGeometry(0.015,0.055,4), steel); bhead.rotation.x=-1.5708; bhead.position.set(0,0.066,-0.38); g.add(bhead);
-  // ---- nut / lock housing ----
-  part(g,0.07,0.05,0.085,steel,0,0.045,-0.02);
-  // ---- recurved lath, the same chained-segment construction the Qaws uses (each segment positioned
-  // along the previous segment's own rotated direction, never by a naive linear x-step) ----
-  const LZ=-0.38;
+  const wood     = metalMatP(0x6a4522,28,0x2e2012);
+  const woodDk   = metalMatP(0x40280f,22,0x1a1006);
+  const bamboo   = voxMat(0xc0a860,{noise:12});
+  const bambooDk = voxMat(0x8a7440,{noise:10});
+  const steel    = metalMatP(0x9aa2aa,85,0xe8eef2);
+  const steelDk  = metalMatP(0x656c73,60,0xa8b0b8);
+  const brass    = metalMatP(0xad8730,85,0xfff2c8);
+  const cordMat  = new THREE.MeshBasicMaterial({color:0xe0d6c0,fog:false});
+  const leather  = voxMat(0x3c2c1c,{noise:14});
+  const boltWood = voxMat(0xa8905c,{noise:10});
+
+  // ---- the tiller: a butt comb at the shoulder, the main stock, a tapered nose block ----
+  part(g,0.072,0.125,0.22,wood,    0,-0.018,0.25);
+  part(g,0.084,0.055,0.20,woodDk,  0,-0.075,0.235);      // a cheek rest under the comb
+  part(g,0.062,0.090,0.72,wood,    0,0.004,-0.05);
+  part(g,0.112,0.062,0.14,woodDk,  0,0.004,-0.45);
+  [-1,1].forEach(sd=> part(g,0.006,0.052,0.36,bamboo, sd*0.032,0.008,-0.02));   // inlay panels, both sides
+
+  // ---- the magazine: the feature that names the weapon ----
+  // Sits ON the tiller, open at the bottom over the groove, with a slot cut down its near side so the
+  // stack of bolts inside is visible. Built as four walls plus a lid rather than a solid block, so the
+  // slot is a real gap rather than a painted line.
+  const MX=0, MY=0.138, MZ=-0.07, MW=0.092, ML=0.34;
+  part(g,0.012,0.092,ML, bambooDk, MX-MW/2, MY, MZ);      // far wall
+  part(g,0.012,0.062,ML, bambooDk, MX+MW/2, MY+0.015, MZ); // near wall, SHORTER — this is the slot
+  part(g,MW,0.014,ML,    bambooDk, MX, MY-0.046, MZ);      // floor, with the feed gap ahead of it
+  part(g,MW+0.012,0.016,ML+0.02, bamboo, MX, MY+0.054, MZ);// lid, proud of the walls all round
+  [-1,1].forEach(sd=> part(g,MW+0.016,0.012,0.016, brass, MX, MY+0.006, MZ+sd*(ML/2-0.02)));  // two bands
+  // the stack itself: five bolts lying in the box, each one stepped in y and alternating in depth so no
+  // two share a face — and the topmost sits just under the lid, so the box reads as full
+  // Each bolt varies a millimetre or two in width and length from the one under it. Cut identically
+  // they shared every x and z face in the stack — five boxes presenting as one block through the slot.
+  for(let i=0;i<5;i++){
+    part(g, 0.052-(i%2)*0.008, 0.013, ML-0.05-(i%3)*0.022, i%2?boltWood:bamboo,
+         MX-0.004+(i%2)*0.003, MY-0.030+i*0.017, MZ+(i%3)*0.008);
+  }
+  // ---- the rocking lever, pivoted at the rear of the magazine ----
+  const lev=new THREE.Group(); lev.position.set(0, MY+0.02, MZ+ML/2+0.02); lev.rotation.x=-0.38; g.add(lev);
+  const lv=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); lev.add(m); return m; };
+  lv(0.026,0.030,0.30, wood,    0,-0.02,0.13);
+  lv(0.034,0.038,0.060, leather,0,-0.02,0.27);            // the wrapped handle end
+  lv(0.046,0.046,0.020, steelDk,0,0.006,0.012);           // the pivot boss
+  [-1,1].forEach(sd=> lv(0.010,0.052,0.052, steel, sd*0.026,0.0,0.012));   // its cheek plates
+
+  // ---- the groove, and the one bolt already in it ----
+  part(g,0.026,0.020,0.66,woodDk, 0,0.052,-0.06);
+  part(g,0.014,0.014,0.30,boltWood,0,0.068,-0.24);
+  const bh=new THREE.Mesh(new THREE.ConeGeometry(0.016,0.058,4), steel);
+  bh.rotation.x=-Math.PI/2; bh.position.set(0,0.068,-0.41); g.add(bh);
+  part(g,0.072,0.052,0.088, steelDk, 0,0.044,-0.015);      // the nut housing
+
+  // ---- the lath: three chained segments per arm, each placed along the PREVIOUS segment's own rotated
+  // direction. A naive linear x-step with a separately applied rotation renders as disconnected shards —
+  // this file has hit that bug on the Qaws, the Saif and the bow limbs, and it is written down each time.
+  const LZ=-0.395;
   [-1,1].forEach(side=>{
     let lx=0, lz=LZ, phi=0.10;
-    [{len:0.13,t:0.028},{len:0.12,t:0.022},{len:0.10,t:0.017}].forEach((s,i)=>{
+    [{len:0.135,t:0.030},{len:0.125,t:0.024},{len:0.105,t:0.018}].forEach((s,i)=>{
       const dx=Math.cos(phi), dz=-Math.sin(phi);
       const cx=lx+side*dx*s.len/2, cz=lz+dz*s.len/2;
-      const seg=new THREE.Mesh(new THREE.BoxGeometry(s.len,s.t,s.t), i===2?dark:steel);
+      const seg=new THREE.Mesh(new THREE.BoxGeometry(s.len,s.t,s.t+(i%2?0.006:0)), i===2?steelDk:steel);
       seg.position.set(cx,0.012,cz);
       seg.rotation.y = side>0 ? phi : (Math.PI - phi);
       g.add(seg);
       lx += side*dx*s.len; lz += dz*s.len; phi += 0.26;
     });
-    const tipX=lx, tipZ=lz, nutZ=-0.06;
+    // a horn nock at the tip, and the string running from it back to the nut in one straight angled run
+    const tipX=lx, tipZ=lz, nutZ=-0.05;
+    const nk=new THREE.Mesh(new THREE.BoxGeometry(0.030,0.030,0.024), brass);
+    nk.position.set(tipX,0.012,tipZ); g.add(nk);
     const len=Math.hypot(tipX, nutZ-tipZ);
     const str=new THREE.Mesh(new THREE.BoxGeometry(len,0.008,0.008), cordMat);
     str.position.set(tipX/2, 0.012, (tipZ+nutZ)/2);
     str.rotation.y = Math.atan2(tipZ-nutZ, -tipX);
     g.add(str);
   });
-  // ---- trigger + stirrup ----
-  part(g,0.026,0.08,0.028,steel,0,-0.085,0.1).rotation.x=-0.18;
-  part(g,0.016,0.10,0.016,steel,-0.045,-0.055,-0.46);
-  part(g,0.016,0.10,0.016,steel, 0.045,-0.055,-0.46);
-  part(g,0.106,0.016,0.016,steel,0,-0.105,-0.46);
+  // ---- trigger, guard, and the iron stirrup the foot goes through to span it ----
+  part(g,0.026,0.078,0.028,steel, 0,-0.082,0.10).rotation.x=-0.18;
+  part(g,0.016,0.014,0.16, steel, 0,-0.126,0.13);
+  part(g,0.016,0.052,0.016,steel, 0,-0.094,0.20);
+  part(g,0.016,0.104,0.016,steel,-0.046,-0.056,-0.47);
+  part(g,0.016,0.104,0.016,steel, 0.046,-0.056,-0.47);
+  part(g,0.108,0.016,0.016,steel, 0,-0.104,-0.47);
 
-  g.userData={muzzleZ:-0.50,muzzleY:0.066,pos:new THREE.Vector3(0.23,-0.22,-0.38),recoil:0.06,name:'Repeating Crossbow',
-    // fast and weak, the inverse of the Qaws (damage 156, fireRate 1.3, magSize 4): a stream of light
-    // bolts rather than one heavy one -- distinct in FEEL from every other bow/crossbow/gun in the game,
-    // all of which fire a single projectile at a time
+  g.userData={muzzleZ:-0.52,muzzleY:0.068,pos:new THREE.Vector3(0.23,-0.22,-0.38),recoil:0.06,name:'Repeating Crossbow',
+    // fast and weak — the exact inverse of the Qaws (156 damage, 1.3s, 4 rounds). A stream of light
+    // bolts rather than one heavy one, which is the only ranged FEEL this game does not already have:
+    // every other bow, sling and gun in it fires one projectile per click.
     damage:34, fireRate:0.11, auto:true, spread:0.028, tracer:0xd8d0c0,
     magSize:12, ammo:12, reloadTime:1.7, reloading:false, reloadT:0};
   return g;
 }
 
-// THUNDERCLAP BOMB (Zhen Tian Lei) — a thrown cast-iron gunpowder shell, on the exact grenade
-// mechanism the Naft Pot and the Grenade Launcher already use (userData.grenade routes through
-// launchGrenade()/explodeAt()). A ribbed cast-iron sphere and a twisted-paper fuse in place of the Naft
-// Pot's clay vessel and burning wick -- a different era's incendiary, not a reskin of the same object.
+// THUNDERCLAP BOMB (Zhen Tian Lei) — a cast-iron gunpowder shell on a rope sling, thrown on the exact
+// grenade mechanism the Naft Pot and the Grenade Launcher already use (userData.grenade routes through
+// launchGrenade()/explodeAt()).
+//
+// Deliberately NOT a reskinned Naft Pot: that one is a clay vessel of naphtha with a rag wick, a thing
+// that breaks and spreads fire. This is iron, cast in two halves with the mould seam still on it,
+// wrapped in a rope net, and what it does is burst. The fuse is a spitting length of quickmatch, and it
+// is the one part of the model that is lit — so the thing in your hand is visibly counting down.
 function makeThunderclapBomb(){
   const g=new THREE.Group();
-  const iron=voxMat(0x2c2c2e,{noise:12}), ironDk=voxMat(0x18181a,{noise:10});
-  const paper=voxMat(0xc8bc98,{noise:12}), leather=voxMat(0x4a3320,{noise:14});
-  const PZ=-0.10, PY=-0.03;
-  // the shell: a sphere, segmented by cast ribs -- the historical Zhen Tian Lei was cast in a mould
-  // with a visible seam and ridge, not a smooth ball
-  const shell=new THREE.Mesh(new THREE.SphereGeometry(0.115,10,8), iron); shell.position.set(0,PY,PZ); g.add(shell);
-  [[-0.04,0.113],[0.0,0.117],[0.04,0.113]].forEach(([dy,r])=>{
-    const band=new THREE.Mesh(new THREE.CylinderGeometry(r,r,0.014,10), ironDk); band.position.set(0,PY+dy,PZ); g.add(band);
-  });
-  // the fuse housing at the top, and a twisted paper fuse coming out of it
-  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.030,0.044,0.05,8), ironDk); neck.position.set(0,PY+0.125,PZ); g.add(neck);
-  const fuse=new THREE.Mesh(new THREE.CylinderGeometry(0.010,0.014,0.09,6), paper); fuse.position.set(0,PY+0.19,PZ); fuse.rotation.z=0.18; g.add(fuse);
-  const spark=new THREE.Mesh(new THREE.ConeGeometry(0.024,0.05,6), new THREE.MeshBasicMaterial({color:0xffb347,fog:false}));
-  spark.position.set(0.012,PY+0.235,PZ); g.add(spark);
-  const L=new THREE.PointLight(0xffb347,0.7,1.3); L.position.set(0.012,PY+0.235,PZ); g.add(L);
-  // corded sling into the fist, the same physically-connected-handle shape the Naft Pot uses so the
-  // hand has something real to hold rather than hovering beside the shell
-  [-1,1].forEach(s=>{
-    const cord=new THREE.Mesh(new THREE.BoxGeometry(0.013,0.19,0.013), leather);
-    cord.position.set(s*0.070,PY-0.12,PZ+0.05); cord.rotation.x=-0.3; cord.rotation.z=s*-0.33; g.add(cord);
-  });
-  const knot=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.085,0.14), leather); knot.position.set(0,PY-0.205,PZ+0.11); g.add(knot);
-  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.026,0.026,0.15,8), leather); handle.position.set(0,PY-0.28,PZ+0.14); handle.rotation.x=0.35; g.add(handle);
+  const iron    = voxMat(0x33322f,{noise:14});
+  const ironDk  = voxMat(0x1b1a18,{noise:10});
+  const ironLit = metalMatP(0x4a4844,45,0x8a8880);
+  const rope    = voxMat(0x9a8558,{noise:16});
+  const ropeDk  = voxMat(0x6b5b3a,{noise:12});
+  const leather = voxMat(0x4a3320,{noise:14});
+  const fuseM   = voxMat(0xc8bc98,{noise:12});
+  const PZ=-0.10, PY=-0.02;
 
-  g.userData={muzzleZ:-0.26,muzzleY:0.1,pos:new THREE.Vector3(0.24,-0.24,-0.1),recoil:0.15,name:'Thunderclap Bomb',
+  // ---- the shell: a sphere, with the casting seam standing proud round its equator ----
+  const shell=new THREE.Mesh(new THREE.SphereGeometry(0.118,12,9), iron);
+  shell.position.set(0,PY,PZ); shell.castShadow=true; g.add(shell);
+  const seam=new THREE.Mesh(new THREE.CylinderGeometry(0.1235,0.1235,0.016,12), ironLit);
+  seam.position.set(0,PY,PZ); g.add(seam);                       // the mould line, proud of the sphere
+  // four cast lugs spaced round the seam, which is what the net is lashed to
+  for(let i=0;i<4;i++){
+    const a=i/4*Math.PI*2;
+    const lug=new THREE.Mesh(new THREE.BoxGeometry(0.030,0.026,0.030), ironDk);
+    lug.position.set(Math.cos(a)*0.118, PY, PZ+Math.sin(a)*0.118); lug.rotation.y=-a; g.add(lug);
+  }
+  // ---- the rope net over it: four meridian cords and two rings, each standing clear of the shell's
+  // own surface so none of them shares a face with it ----
+  for(let i=0;i<4;i++){
+    const a=i/4*Math.PI*2 + Math.PI/4;
+    const cord=new THREE.Mesh(new THREE.BoxGeometry(0.016,0.248,0.016), rope);
+    cord.position.set(Math.cos(a)*0.088, PY, PZ+Math.sin(a)*0.088);
+    cord.rotation.z = Math.cos(a)*0.34; cord.rotation.x = -Math.sin(a)*0.34;
+    g.add(cord);
+  }
+  [[-0.052,0.112],[0.052,0.112]].forEach(([dy,r])=>{
+    const ring=new THREE.Mesh(new THREE.CylinderGeometry(r,r,0.014,12), ropeDk);
+    ring.position.set(0,PY+dy,PZ); g.add(ring);
+  });
+
+  // ---- the fuse housing and the quickmatch burning in it ----
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.034,0.050,0.056,8), ironDk);
+  neck.position.set(0,PY+0.128,PZ); g.add(neck);
+  const collar=new THREE.Mesh(new THREE.CylinderGeometry(0.056,0.050,0.016,8), ironLit);
+  collar.position.set(0,PY+0.162,PZ); g.add(collar);
+  const fuse=new THREE.Mesh(new THREE.CylinderGeometry(0.011,0.015,0.10,6), fuseM);
+  fuse.position.set(0.008,PY+0.212,PZ); fuse.rotation.z=0.16; g.add(fuse);
+  // the burn: a bright core, a softer flare round it, and a light. Three sizes so it reads as a spitting
+  // point of fire rather than a lamp — and it is the only emissive thing on the model.
+  const spark=new THREE.Mesh(new THREE.ConeGeometry(0.026,0.058,6),
+    new THREE.MeshBasicMaterial({color:0xffb347,fog:false}));
+  spark.position.set(0.014,PY+0.278,PZ); g.add(spark);
+  const core=new THREE.Mesh(new THREE.ConeGeometry(0.013,0.030,6),
+    new THREE.MeshBasicMaterial({color:0xfff0c0,fog:false}));
+  core.position.set(0.014,PY+0.268,PZ); g.add(core);
+  const L=new THREE.PointLight(0xffb347,0.8,1.5); L.position.set(0.014,PY+0.285,PZ); g.add(L);
+
+  // ---- the sling: two cords off the net, a knot, and a wrapped handle the fist actually closes on.
+  // Every piece physically connected, which is the fix the Naft Pot's own comment records learning. ----
+  [-1,1].forEach(s=>{
+    const cord=new THREE.Mesh(new THREE.BoxGeometry(0.014,0.20,0.014), rope);
+    cord.position.set(s*0.072,PY-0.125,PZ+0.052); cord.rotation.x=-0.30; cord.rotation.z=s*-0.34; g.add(cord);
+  });
+  const knot=new THREE.Mesh(new THREE.BoxGeometry(0.152,0.082,0.132), ropeDk);
+  knot.position.set(0,PY-0.212,PZ+0.112); g.add(knot);
+  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.027,0.027,0.155,8), leather);
+  handle.position.set(0,PY-0.288,PZ+0.145); handle.rotation.x=0.35; g.add(handle);
+  [0,1].forEach(i=>{
+    const wrap=new THREE.Mesh(new THREE.CylinderGeometry(0.030,0.030,0.018,8), ropeDk);
+    wrap.position.set(0,PY-0.246-i*0.082,PZ+0.124+i*0.030); wrap.rotation.x=0.35; g.add(wrap);
+  });
+
+  g.userData={muzzleZ:-0.26,muzzleY:0.10,pos:new THREE.Vector3(0.24,-0.24,-0.10),recoil:0.15,name:'Thunderclap Bomb',
     damage:0, splashDamage:190, splashRadius:4.6, fireRate:1.1, auto:false, spread:0.0, tracer:0xffb347, grenade:true,
     magSize:5, ammo:5, reloadTime:1.9, reloading:false, reloadT:0};
   return g;
