@@ -36,4 +36,56 @@ ok &= show("the China loadout is three weapons, each with a complete userData bl
   return names.join(', ')+' -- all present with complete userData';
 """))
 
+ok &= show("Xiangyang is a real world: enterable, removable, reachable from /tp", run("""
+  gameStarted = true;
+  if(typeof xiangyangWorld === 'undefined') throw new Error('xiangyangWorld is not defined');
+  if(typeof xiangyangColliders === 'undefined') throw new Error('xiangyangColliders is not defined');
+
+  enterXiangyangWorld('test');
+  if(!xiangyangWorld.parent) throw new Error('enterXiangyangWorld did not add the world to the scene');
+  if(activeColliders !== xiangyangColliders) throw new Error('activeColliders was not swapped to Xiangyang');
+  if(insideCollider(camera.position.x, camera.position.z, 0.45, 0))
+    throw new Error('the player arrives inside geometry');
+  if(weapons !== chinaWeapons) throw new Error('the China loadout was not equipped on entry');
+
+  enterSwedenWorld('back');
+  if(xiangyangWorld.parent) throw new Error('clearWorldGroups() does not remove xiangyangWorld');
+  if(activeColliders !== swedenColliders) throw new Error('leaving did not restore Birka colliders');
+
+  if(!adminTp(['xiangyang'])) throw new Error('/tp xiangyang did not work');
+  if(!xiangyangWorld.parent) throw new Error('/tp xiangyang did not enter the world');
+  return 'enter/leave/tp all clean, China loadout equipped';
+"""))
+
+# The gate is the one thing this map mutates. Re-derivable STATE, not an event -- forced shut on every
+# entry (see enterXiangyangWorld()) and re-opened only by a caller that means it -- so a death or a /tp
+# mid-siege can never leave the gate disagreeing with itself.
+ok &= show("the gate is shut on every entry, and xiangyangSetBreach() is re-derivable state", run("""
+  gameStarted = true;
+  enterXiangyangWorld('test');
+  if(xiangyangBreached) throw new Error('the gate is open on a fresh entry');
+  if(!xyGateDoor.visible) throw new Error('the gate leaves are not visible while shut');
+  if(xyGateRubble.visible) throw new Error('the rubble is visible before the gate ever opens');
+  if(xiangyangColliders.indexOf(xyGateCollider) < 0) throw new Error('the shut gate has no collider');
+  if(!insideCollider(0, XY_WALL_Z, 0.45, 0)) throw new Error('the shut gate does not actually block the gap');
+
+  xiangyangSetBreach(true);
+  if(!xiangyangBreached) throw new Error('xiangyangSetBreach(true) did not flip the flag');
+  if(xyGateDoor.visible) throw new Error('the gate leaves are still visible after the breach');
+  if(!xyGateRubble.visible) throw new Error('the rubble never appeared');
+  if(xiangyangColliders.indexOf(xyGateCollider) >= 0) throw new Error('the breached gate still has a collider');
+  if(insideCollider(0, XY_WALL_Z, 0.45, 0)) throw new Error('the breach does not actually open the gap');
+
+  // re-entering the map must force it shut again, regardless of what the last visit left it as
+  enterXiangyangWorld('test');
+  if(xiangyangBreached) throw new Error('re-entering the map left the gate open');
+  if(xiangyangColliders.indexOf(xyGateCollider) < 0) throw new Error('re-entering the map left the gap unguarded');
+
+  // calling it twice with the same value must be a no-op, not a double-push onto the collider list
+  xiangyangSetBreach(false); xiangyangSetBreach(false);
+  var hits = xiangyangColliders.filter(function(c){ return c === xyGateCollider; }).length;
+  if(hits !== 1) throw new Error('the gate collider appears '+hits+' times after calling shut twice');
+  return 'shut by default, breach opens the gap and shows rubble, re-entry always forces it shut again';
+"""))
+
 sys.exit(0 if ok else 1)

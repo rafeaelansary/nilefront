@@ -3206,7 +3206,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   camera.rotation.z = 0;   // the Fjord rolls the camera with its deck; nothing else may inherit that
-  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, fjordWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, fjordWorld, xiangyangWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
   clearFieldEffects();
 }
 // Ground effects — the bosses' AoE telegraphs and the Colossus's quake cracks — are added to the SCENE,
@@ -9443,6 +9443,306 @@ function enterFjordWorld(banner){
   weapons = swedenWeapons;
   selectWeapon(0);
   spawnTripStage();
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
+
+// ===================== XIANGYANG (China, leg 1) =====================
+// The Song river-fortress on the Han River, under Mongol siege — the six-year siege the counterweight
+// trebuchet finally broke. The player arrives with the besiegers, south of the wall; the wall itself is
+// the one obstacle on the map, and the gate through it is shut until xiangyangSetBreach() opens it.
+//
+// The quartering:
+//   SOUTH   the Mongol siege line: tents, campfires, and the trebuchet itself — scenery, not a mechanic,
+//           lobbing at the wall it has already half-broken.
+//   NORTH   (through the wall) the town: modest rammed-earth buildings under dark tile roofs, leading up
+//           to the yamen hall at the far north end, where the boss waits once later work puts one there.
+//   WEST    the Han River — a flat, non-walkable backdrop, the same treatment Birka's lake gets.
+//   CENTRE  the wall, running east-west, with the gate at its middle.
+const xiangyangColliders = [];
+const heightZonesXiangyang = [];
+const xiangyangWorld = new THREE.Group();
+const XIANGYANG_HALF = 30;
+// The wall's own geometry, derived once so the gate/breach code and the build code can never disagree
+// about where the gap is.
+const XY_WALL_Z = 0;             // the wall runs east-west along this z
+const XY_WALL_H = 5.4;           // its height
+const XY_WALL_T = 2.0;           // its thickness
+const XY_GATE_HW = 3.2;          // half-width of the gate gap in the middle of the wall
+let xiangyangBreached = false;   // has the gate come down?
+let xyGateDoor = null, xyGateRubble = null, xyGateCollider = null;
+
+addTarget = xiangyangColliders;
+heightZoneTarget = heightZonesXiangyang;
+(function buildXiangyang(){
+  const earthM   = new THREE.MeshLambertMaterial({map:_finish(dirtTex(),8), color:0xb8a888});   // packed ground
+  const earthDk  = voxMat(0x6a5a42,{noise:16});
+  const wallM    = voxMat(0xa89a7c,{noise:16});      // rammed earth, the wall's own bulk
+  const wallDk   = voxMat(0x7a6e54,{noise:14});
+  const brickM   = new THREE.MeshLambertMaterial({map:_finish(romanBrickTex(),4), color:0x9a8262});  // brick facing at the gate
+  const timberM  = new THREE.MeshLambertMaterial({map:_finish(logTex(),1)});
+  const timberDk = voxMat(0x3a2a1a,{noise:16});
+  const redLac   = voxMat(0x7c2620,{noise:10});      // red-lacquered timber — the one bright colour here
+  const tileM    = new THREE.MeshLambertMaterial({map:_finish(greekRoofTileTex(),3), color:0x3a4550}); // slate-grey tile
+  const tileDk   = voxMat(0x242e36,{noise:12});
+  const wallWhite= voxMat(0xd8d4c4,{noise:10});      // limewashed town walls
+  const flagM    = new THREE.MeshLambertMaterial({map:_finish(harbourFlagstoneTex(),5)});
+  const canvasM  = voxMat(0x9a8258,{noise:14});      // Mongol tent felt/hide
+  const ropeM    = voxMat(0x6f6047,{noise:14});
+
+  const xb=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true; xiangyangWorld.add(m); return m; };
+  const xcy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; xiangyangWorld.add(m); return m; };
+  const xco=(r,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; xiangyangWorld.add(m); return m; };
+
+  // ---- the ground ----
+  xb(XIANGYANG_HALF*2, 0.5, XIANGYANG_HALF*2, earthM, 0,-0.25,0);
+  // a paved apron either side of the gate, both faces of the wall — the ground a siege actually wears bare
+  xb(9, 0.06, 6, flagM, 0, 0.03, 6);
+  xb(9, 0.06, 6, flagM, 0, 0.03, -6);
+
+  // ---- the river, along the west edge ----
+  const RX = -XIANGYANG_HALF - 6;
+  const riverM = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),70),
+    color:0x4f7286, transparent:true, opacity:0.97});
+  const river = new THREE.Mesh(new THREE.BoxGeometry(30, 0.5, XIANGYANG_HALF*2+40), riverM);
+  river.position.set(RX, -0.55, 0); river.receiveShadow=true; xiangyangWorld.add(river);
+  // a bank of packed silt between the ground and the river, so the water does not simply cut the ground off
+  xb(6, 0.10, XIANGYANG_HALF*2, earthDk, -XIANGYANG_HALF+2, 0.02, 0);
+
+  // ================= THE WALL AND THE GATE =================
+  // Every collider on the wall is added here, EXCEPT the gate gap itself, which xiangyangSetBreach()
+  // owns — the same split the Fjord's plank gate uses, so the wall's own geometry never has to agree
+  // with map state at build time.
+  (function wall(){
+    // the two solid runs, either side of the gate gap AND clear of the gatehouse piers, which take the
+    // last 2.2 of each run themselves — crenellated, battlements standing proud.
+    const PIER_HW = 1.1;
+    [[-XIANGYANG_HALF+2, -(XY_GATE_HW+PIER_HW*2)], [XY_GATE_HW+PIER_HW*2, XIANGYANG_HALF-2]].forEach(([x1,x2])=>{
+      const cx=(x1+x2)/2, w=x2-x1;
+      xb(w, XY_WALL_H, XY_WALL_T, wallM, cx, XY_WALL_H/2, XY_WALL_Z);
+      // a darker course along the base, narrower than the wall it fronts so the two never share an exact
+      // x-edge — built at the SAME width as the wall above it is the standing bug this file keeps
+      // re-finding, and the fix is always to make the two deliberately different.
+      xb(w-0.3, 0.9, XY_WALL_T+0.08, wallDk, cx, 0.45, XY_WALL_Z);
+      addBox(cx, XY_WALL_Z, w, XY_WALL_T);
+      // crenellations: merlons standing proud of the top, spaced evenly along the run
+      const n = Math.max(3, Math.round(w/2.4));
+      for(let i=0;i<n;i++){
+        const mx = x1 + (i+0.5)*(w/n);
+        xb(1.3, 0.9, XY_WALL_T+0.10, wallDk, mx, XY_WALL_H+0.45, XY_WALL_Z);
+      }
+    });
+    // ---- the gatehouse: two brick-faced piers flanking the gap, standing where the wall runs above
+    // stop short, and a tiled roof spanning between them well above head height — nothing here has a
+    // collider over the passage itself, so the arch is a roof to walk under rather than a doorway to
+    // walk through. ----
+    [-1,1].forEach(sd=>{
+      const px = sd*(XY_GATE_HW+PIER_HW);
+      xb(PIER_HW*2, XY_WALL_H+1.6, XY_WALL_T+1.2, brickM, px, (XY_WALL_H+1.6)/2, XY_WALL_Z);
+      xb(PIER_HW*2+0.2, 0.7, XY_WALL_T+1.4, wallDk, px, XY_WALL_H+1.6+0.35, XY_WALL_Z);   // its own cap course
+      addBox(px, XY_WALL_Z, PIER_HW*2, XY_WALL_T+1.2);
+      // a corner watchtower rising off each pier, with a single hip-ish cap over it
+      xb(1.8, 2.6, 1.8, brickM, px, XY_WALL_H+1.6+0.7+1.3, XY_WALL_Z);
+      xco(1.6,1.5,4, tileM, px, XY_WALL_H+1.6+0.7+2.6+0.75, XY_WALL_Z);
+    });
+    // the gatehouse roof, spanning the gap — two pitched slabs meeting at a ridge, tiled, with upturned
+    // eave corners (the one unmistakably Chinese-roof cue)
+    const GY = XY_WALL_H+0.6;
+    [-1,1].forEach(sd=>{
+      const r = xb(XY_GATE_HW*2+5.2, 0.30, 3.4, tileM, 0, GY+1.1, XY_WALL_Z+sd*1.2);
+      r.rotation.x = -sd*0.42;
+      const r2 = xb(XY_GATE_HW*2+4.8, 0.14, 3.1, tileDk, 0, GY+1.28, XY_WALL_Z+sd*1.1);
+      r2.rotation.x = -sd*0.42;
+    });
+    xb(XY_GATE_HW*2+5.6, 0.30, 0.6, timberDk, 0, GY+1.65, XY_WALL_Z);   // the ridge beam
+    // upturned eave corners: a short beam kicked up and out at each end of the ridge
+    [-1,1].forEach(sd=>{
+      const e = xb(1.1,0.18,0.9, tileDk, sd*(XY_GATE_HW+2.9), GY+1.2, XY_WALL_Z);
+      e.rotation.z = sd*0.30;
+    });
+    // red-lacquered columns under the roof, standing on the paving either side of the passage — what a
+    // gatehouse arch actually stands on, and the single note of colour on an otherwise grey/tan wall
+    [-1,1].forEach(sd=> xcy(0.18,0.20,XY_WALL_H+1.0, 8, redLac, sd*(XY_GATE_HW-0.55), (XY_WALL_H+1.0)/2, XY_WALL_Z));
+
+    // ---- the gate itself: two timber leaves, shut, with the collider that seals the breach until it
+    // opens. Re-derivable exactly the way fjordSetPlank/fjordSetLash are: xiangyangSetBreach() owns both
+    // the mesh's visibility and the collider, so entry, death and /tp all agree on whether it is open. ----
+    const doorGrp = new THREE.Group(); doorGrp.position.set(0,0,XY_WALL_Z); xiangyangWorld.add(doorGrp);
+    [-1,1].forEach(sd=>{
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(XY_GATE_HW-0.15, XY_WALL_H-0.3, 0.5), timberM);
+      leaf.position.set(sd*(XY_GATE_HW-0.15)/2 - sd*0.05, (XY_WALL_H-0.3)/2, 0);
+      leaf.castShadow=true; doorGrp.add(leaf);
+      for(let i=0;i<4;i++){
+        const band = new THREE.Mesh(new THREE.BoxGeometry(XY_GATE_HW-0.05, 0.14, 0.56), timberDk);
+        band.position.set(sd*(XY_GATE_HW-0.15)/2 - sd*0.05, 0.5+i*1.0, 0);
+        doorGrp.add(band);
+      }
+    });
+    xyGateDoor = doorGrp;
+    // the rubble it becomes once breached: broken timber and brick, low enough to walk over, built once
+    // and simply hidden until it is needed
+    const rubbleGrp = new THREE.Group(); rubbleGrp.position.set(0,0,XY_WALL_Z); xiangyangWorld.add(rubbleGrp);
+    rubbleGrp.visible = false;
+    for(let i=0;i<9;i++){
+      const rx = -XY_GATE_HW+0.6 + (i%5)*1.3, rz = ((i/5)|0)*0.8 - 0.4;
+      const s = 0.5 + ((i*13)%4)*0.18;
+      const rk = new THREE.Mesh(new THREE.BoxGeometry(s*1.4,s*0.9,s*1.2), i%2?brickM:timberDk);
+      rk.position.set(rx, s*0.42, rz); rk.rotation.y = i*0.7; rk.castShadow=true; rubbleGrp.add(rk);
+    }
+    xyGateRubble = rubbleGrp;
+    xyGateCollider = {x1:-XY_GATE_HW, z1:-XY_WALL_T/2, x2:XY_GATE_HW, z2:XY_WALL_T/2};
+  })();
+
+  // ================= THE MONGOL SIEGE LINE (south of the wall) =================
+  (function siegeLine(){
+    // the trebuchet: an A-frame of timber, a long throwing arm on a cross-axle, a counterweight box at
+    // the short end, a sling coiled at the long end. Pure scenery — it never fires — but visibly the
+    // reason the wall has a breach at all.
+    const TX=0, TZ=22, TH=7.2;
+    [-1,1].forEach(sd=>{
+      const leg = xb(0.5, TH, 0.5, timberM, TX+sd*1.6, TH/2, TZ);
+      leg.rotation.z = -sd*0.16;
+    });
+    xb(3.6, 0.4, 0.5, timberDk, TX, TH-0.3, TZ);          // the cap binding the A-frame's two legs
+    // the throwing arm, pivoted off-centre on the cap: short end (counterweight) toward the wall, long
+    // end (sling) away from it — angled up as though mid-cast, which is also what keeps its own two
+    // halves from sharing a face plane with anything else here
+    const arm = new THREE.Group(); arm.position.set(TX,TH-0.3,TZ); arm.rotation.x = 0.55; xiangyangWorld.add(arm);
+    const armBeam = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.32,7.4), timberM);
+    armBeam.position.set(0,0,1.6); armBeam.castShadow=true; arm.add(armBeam);
+    const cwBox = new THREE.Mesh(new THREE.BoxGeometry(1.3,1.3,1.3), timberDk);
+    cwBox.position.set(0,0,-2.2); cwBox.castShadow=true; arm.add(cwBox);
+    for(let i=0;i<3;i++){
+      const band=new THREE.Mesh(new THREE.BoxGeometry(1.36,0.10,1.36), voxMat(0x4a4038,{noise:12}));
+      band.position.set(0,-0.5+i*0.5,-2.2); arm.add(band);
+    }
+    const sling = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.9), voxMat(0x5a4a34,{noise:12}));
+    sling.position.set(0,-0.7,5.0); sling.rotation.x=0.3; sling.castShadow=true; arm.add(sling);
+    for(let i=0;i<2;i++){
+      const rope=new THREE.Mesh(new THREE.BoxGeometry(0.05,1.1,0.05), ropeM);
+      rope.position.set(-0.2+i*0.4,-0.35,4.5); rope.rotation.x=0.3; arm.add(rope);
+    }
+    addBox(TX, TZ, 3.6, 1.6);
+
+    // Mongol tents, a fire, and a scatter of crates — the camp a siege line actually is, not an empty field
+    function tent(x,z,scale){
+      const s=scale||1;
+      const g=new THREE.Group(); g.position.set(x,0,z); xiangyangWorld.add(g);
+      for(let i=0;i<4;i++){
+        const p=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.03,1.6*s,4), timberDk);
+        const a=i/4*Math.PI*2;
+        p.position.set(Math.cos(a)*1.2*s,0.8*s,Math.sin(a)*1.2*s);
+        p.rotation.z=Math.cos(a)*0.35; p.rotation.x=Math.sin(a)*0.35; g.add(p);
+      }
+      const cone=new THREE.Mesh(new THREE.ConeGeometry(1.5*s,1.9*s,8), canvasM);
+      cone.position.set(0,1.55*s,0); cone.castShadow=true; g.add(cone);
+      const trim=new THREE.Mesh(new THREE.ConeGeometry(1.52*s,0.4*s,8), voxMat(0x6a5638,{noise:12}));
+      trim.position.set(0,0.65*s,0); g.add(trim);
+      addBox(x,z,3.0*s,3.0*s);
+    }
+    [[-14,26,1.1],[-9,29,0.9],[10,28,1.0],[15,25,1.15],[20,30,0.85]].forEach(([x,z,s])=>tent(x,z,s));
+    // a campfire
+    xcy(0.45,0.5,0.3,8, voxMat(0x2a2420,{noise:14}), 3,0.15,26);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.30,0.7,6), new THREE.MeshBasicMaterial({color:0xff8a2a,transparent:true,opacity:0.9,fog:false}));
+    flame.position.set(3,0.55,26); xiangyangWorld.add(flame);
+    const fl2 = new THREE.PointLight(0xffa244,1.2,10); fl2.position.set(3,0.7,26); xiangyangWorld.add(fl2);
+    // crates and barrels, the ordinary clutter of a besieging camp
+    [[-4,24],[6,23],[-2,29]].forEach(([x,z],i)=>{
+      xb(0.9,0.7,0.9, timberDk, x, 0.35, z);
+      addBox(x,z,0.9,0.9);
+    });
+  })();
+
+  // ================= THE TOWN (north of the wall) =================
+  // Modest rammed-earth houses under dark tile roofs — a garrisoned town, not a palace. Deliberately
+  // plainer than Birka's longhouses: the escalation this leg carries is the WALL and the breach, not the
+  // buildings behind it.
+  function house(cx,cz,rot,w,d,h){
+    const H=new THREE.Group(); H.position.set(cx,0,cz); H.rotation.y=rot||0; xiangyangWorld.add(H);
+    const hb=(bw,bh,bd,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),mat);
+      m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; H.add(m); return m; };
+    hb(w,h,d, wallWhite, 0,h/2,0);
+    hb(w+0.1,0.5,d+0.1, earthDk, 0,0.25,0);           // a plinth course at the base
+    // the roof: two pitched slabs, tiled, with upturned eave corners at all four ends
+    [-1,1].forEach(sd=>{
+      const r=hb(w+1.0, 0.24, d*0.62, tileM, 0, h+0.45, sd*d*0.19); r.rotation.x = -sd*0.44;
+      const r2=hb(w+0.8, 0.12, d*0.56, tileDk, 0, h+0.60, sd*d*0.17); r2.rotation.x = -sd*0.44;
+    });
+    hb(w+1.2, 0.22, 0.5, timberDk, 0, h+0.86, 0);      // ridge
+    [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{
+      const e = hb(0.7,0.14,0.6, tileDk, sx*(w/2+0.3), h+0.58, sz*(d/2-0.2));
+      e.rotation.z = sx*0.28; e.rotation.x = -sz*0.30;
+    });
+    // a red-lacquered door frame, off-centre, and two columns flanking it
+    hb(1.1,1.9,0.3, timberDk, -w*0.15,0.95,d/2+0.05);
+    [-1,1].forEach(sd=> xcy(0.10,0.11,2.0,6, redLac, -w*0.15+sd*0.62, 1.0, d/2+0.1));
+    addBox(cx,cz,w,d);
+    return H;
+  }
+  house(-11, -8,  0, 5.2, 6.0, 3.0);
+  house( 11, -8,  0, 5.2, 6.0, 3.0);
+  house(-16,-16,  0, 4.4, 5.2, 2.7);
+  house( 16,-16,  0, 4.4, 5.2, 2.7);
+  house(-6, -17,  0, 4.8, 5.6, 2.9);
+  house( 6, -17,  0, 4.8, 5.6, 2.9);
+
+  // ---- a few trees and boulders through the town, so it does not read as an empty stage set ----
+  const leafM = voxMat(0x3f5a38,{noise:16});
+  function chinaTree(x,z,s){
+    xcy(0.13*s,0.17*s,1.8*s,6, timberDk, x,0.9*s,z);
+    for(let i=0;i<3;i++) xco((1.3-i*0.22)*s, 1.3*s, 7, leafM, x, (2.0+i*0.85)*s, z);
+    addBox(x,z,1.1*s,1.1*s);
+  }
+  [[-20,-3,1.0],[20,-4,0.9],[-2,-24,1.1],[3,-13,0.85]].forEach(([x,z,s])=>chinaTree(x,z,s));
+})();
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
+// The gate/breach switch. Re-derivable STATE, not an event, exactly as fjordSetPlank()/fjordSetLash()
+// are: called with the wave's own answer on every entry, respawn and /tp, so nothing can leave the gate
+// open (or shut) for a stage that disagrees with it.
+function xiangyangSetBreach(open){
+  open = !!open;
+  if(xiangyangBreached === open) return;
+  xiangyangBreached = open;
+  if(xyGateDoor) xyGateDoor.visible = !open;
+  if(xyGateRubble) xyGateRubble.visible = open;
+  const i = xiangyangColliders.indexOf(xyGateCollider);
+  if(open){ if(i >= 0) xiangyangColliders.splice(i,1); }
+  else if(i < 0){ xiangyangColliders.push(xyGateCollider); }
+  if(open){
+    setBanner('⚠ The gate comes down — the town is open');
+    setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('gate comes down')>=0) setBanner(''); }, 2600);
+  }
+}
+
+// Same shape as enterFjordWorld(): world, lighting, loadout, garrison, all in one call. Dusty daylight,
+// warmer and flatter than the Fjord's — a siege fought under an ordinary sky, not a dramatic one.
+function enterXiangyangWorld(banner){
+  clearWorldGroups();
+  scene.add(xiangyangWorld);
+  sky.visible = true;
+  activeColliders = xiangyangColliders;
+  activeHeightZones = heightZonesXiangyang;
+  playClamp = 28;
+  scene.background.set(0xd8c8a0); scene.fog.color.set(0xe0d2ac);
+  scene.fog.near = 20; scene.fog.far = 100;
+  setDistantGround(0xc8b888);
+  skyTint(0xecdcb0);
+  hemi.intensity=0.80; hemi.color.set(0xe4d4a8); hemi.groundColor.set(0x8a7454);
+  sun.intensity=0.78; fill.intensity=0.36; fill.color.set(0xe0c890);
+  camera.position.set(0,1.7,24); yaw=targetYaw=0; pitch=targetPitch=0;
+  vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  // force the gate shut on every entry, including a respawn; spawnTripStage() (once China is wired into
+  // a trip) re-derives the right state for whatever wave this actually is, the same way the Fjord's
+  // plank/lash are forced shut before spawnTripStage() runs
+  xiangyangBreached = true; xiangyangSetBreach(false);
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  weapons.forEach(w=>w.visible=false);
+  weapons = chinaWeapons;
+  selectWeapon(0);
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
 
@@ -17195,6 +17495,7 @@ function chatSay(text, kind){
 //   /tp sweden 1 boss  the boss that leg ends on
 //   /tp nile           the Nile wave, which sits on neither map
 //   /tp fjord          the Fjord, Sweden's second and last leg — the raid, fought on lashed decks
+//   /tp xiangyang      Xiangyang, China's first leg — the wall, shut, and the siege line outside it
 function adminTp(args){
   if(!args.length){ chatSay('/tp needs somewhere to go — try /tp 7 or /tp sweden', 'err'); return false; }
   const first = String(args[0]).toLowerCase();
@@ -17210,6 +17511,7 @@ function adminTp(args){
   }
   if(first === 'nile'){ enterNileWave(); chatSay('✓ the Nile wave', 'ok'); return true; }
   if(first === 'fjord'){ enterFjordWorld('🌊 The fjord — they are already alongside'); chatSay('✓ the Fjord', 'ok'); return true; }
+  if(first === 'xiangyang'){ enterXiangyangWorld('🏯 Xiangyang — the wall holds, for now'); chatSay('✓ Xiangyang', 'ok'); return true; }
 
   const era = ERA_NAMES.findIndex(nm => nm.toLowerCase() === first);
   if(era >= 0){
