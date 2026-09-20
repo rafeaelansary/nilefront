@@ -3206,7 +3206,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   camera.rotation.z = 0;   // the Fjord rolls the camera with its deck; nothing else may inherit that
-  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, fjordWorld, uppsalaWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, fjordWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
   clearFieldEffects();
 }
 // Ground effects — the bosses' AoE telegraphs and the Colossus's quake cracks — are added to the SCENE,
@@ -9411,7 +9411,7 @@ function fjordSetLash(on){
     else if(i < 0)   { fjordColliders.push(gt); }
   });
   if(on){
-    setBanner('⚓ Grapnels — the Jarl’s ship is lashed on');
+    setBanner('⚓ Grapnels — the third ship is lashed on');
     setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('lashed')>=0) setBanner(''); }, 2600);
   }
 }
@@ -9444,394 +9444,6 @@ function enterFjordWorld(banner){
   selectWeapon(0);
   spawnTripStage();
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
-}
-
-// ===================== GAMLA UPPSALA (Sweden, leg 3) =====================
-// The last leg of the arc, and the only one that is not about ships. Birka is a town, the Fjord is the
-// water, and this is what both of them were sailing between: the cult centre of Svealand — Adam of
-// Bremen's golden temple, the sacred grove beside it, and the three royal mounds the kings were laid
-// in. The arc walks a straight line through its own subject: the living (a trading town), the men
-// (a jarl and his crews), and the dead (a king in a mound who will not stay in it).
-//
-// It is fought at DUSK, and that is the one deliberate break from the rest of the arc. Birka is a
-// white noon and the Fjord is a blue afternoon; a third cold daylight map would read as the same place
-// again. Here the sun is on the horizon, the snow holds the last of it, and every warm thing on screen
-// is a fire somebody lit — which also means the boss has something to take away at half health.
-//
-// The quartering, so nothing on the map is scenery you run past:
-//   NORTH  the temple: gilded gables, the gold chain under the eaves, and three idols in its porch.
-//   WEST   the three royal mounds. The middle one — the king's — is the only climbable thing here, and
-//          from its crown the whole blót ground is a shooting lane. The bow's reason to exist.
-//   EAST   the sacred grove: the evergreen that never bared, the offering poles, and the spring.
-//   SOUTH  the road you arrive on, its rune stones, and the thing-place where judgements were given.
-//   CENTRE the blót ground, open, between the fires — where the last boss of the trip is fought, with
-//          the temple standing behind him.
-const uppsalaColliders = [];
-const heightZonesUppsala = [];
-const uppsalaWorld = new THREE.Group();
-let uppsalaFires = [];        // {flame, light, base, phase} — the braziers, guttered by the Mound King
-let uppsalaOut = false;       // has the Mound King put them out?
-const UPPSALA_HALF = 30;
-// The king's mound: the only high ground, its crown, and the ramp path worn up its east face.
-// MOUND_HW is DERIVED from the radius rather than typed beside it: the mound's collider, the foot of
-// its dome and the head of the ramp are all the same edge, and two hand-written numbers for one edge
-// is how a path ends up starting a centimetre inside the hill it climbs.
-const MOUND_X = -19, MOUND_Z = 1, MOUND_H = 6.2, MOUND_R = 6.5, MOUND_HW = MOUND_R*0.84;
-const MOUND_RAMP_X0 = MOUND_X + MOUND_HW, MOUND_RAMP_X1 = -5.0, MOUND_RAMP_HZ = 2.2;
-
-addTarget = uppsalaColliders;
-heightZoneTarget = heightZonesUppsala;
-(function buildUppsala(){
-  const timber   = new THREE.MeshLambertMaterial({map:_finish(logTex(),2)});
-  const timberDk = voxMat(0x4a3521,{noise:16});
-  const timberPa = voxMat(0x7a6242,{noise:14});
-  const plank    = new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(),2)});
-  const graniteM = new THREE.MeshLambertMaterial({map:_finish(graniteTex(),3)});
-  const graniteD = voxMat(0x5e6268,{noise:16});
-  const runeMat  = voxMat(0x8e9298,{noise:12});
-  const runeRed  = voxMat(0xa83c2c,{noise:10});
-  const turfMat  = voxMat(0x53663c,{noise:18});    // the mounds are turf, and they are the one green here
-  const turfDark = voxMat(0x3e4d2d,{noise:16});
-  const snowMat  = voxMat(0xdfe6ee,{noise:8});
-  const snowGround = new THREE.MeshLambertMaterial({map:_finish(snowGroundTex(),7)});
-  const gold     = metalMatP(0xc8a23c,80,0xffeeb0);
-  const goldDk   = voxMat(0x8a6f28,{noise:12});
-  const ironMat  = metalMatP(0x6a6f76,60,0xc8d0d8);
-  const leafDark = voxMat(0x24402c,{noise:16});
-  const leafDeep = voxMat(0x1b3222,{noise:14});
-  const clothPa  = voxMat(0xb4b2ad,{noise:12});
-  const boneM    = voxMat(0xd2d6bc,{noise:8});
-  const furM     = voxMat(0x6b5a44,{noise:18});
-  const waterDk  = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),8), color:0x2c4358});
-
-  const ub=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-    m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true;
-    uppsalaWorld.add(m); return m; };
-  const ucy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
-    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; uppsalaWorld.add(m); return m; };
-  const uco=(r,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,seg),mat);
-    m.position.set(x,y,z); m.castShadow=true; uppsalaWorld.add(m); return m; };
-
-  // ---- the ground ----
-  ub(UPPSALA_HALF*2, 0.5, UPPSALA_HALF*2, snowGround, 0,-0.25,0);
-  // trodden earth over the blót ground and the road: the part of this field that is walked on every day
-  // is not the part that holds snow. Sunk 0.02 into the snow rather than laid flush on it, because two
-  // ground planes at the same height is the oldest flicker in this file.
-  ub(20, 0.46, 34, voxMat(0x5d5346,{noise:14}), 0,-0.21,7);
-  ub(7.2, 0.44, 24, voxMat(0x544c40,{noise:14}), 0,-0.18,20);
-
-  // ================= THE TEMPLE =================
-  // Adam of Bremen's Uppsala: a hall entirely gilded, with a gold chain hung round the gables so that it
-  // is the first thing seen by anyone coming up the road. Built tall and narrow-gabled rather than
-  // broad like Birka's longhouses, because the point of it is to be visible from the far end of the map
-  // and to stand BEHIND the last fight of the trip.
-  const T_X=0, T_Z=-9, T_W=17, T_D=12, T_WALL=5.4;
-  (function temple(){
-    ub(T_W+1.4, 0.44, T_D+1.4, graniteM, T_X, 0.22, T_Z);            // the stone footing it stands on
-    ub(T_W, T_WALL, T_D, timber, T_X, 0.44+T_WALL/2, T_Z);           // the hall itself
-    // corner posts, proud of the walls so the corners are never two faces meeting in one plane
-    // the corner posts run from BELOW the footing rather than from the wall's own floor plane: two
-    // boxes that start at the same y share a face across their whole overlap, and a temple has four
-    // corners to do it at
-    [-1,1].forEach(sx=>[-1,1].forEach(sz=>
-      ub(0.86,T_WALL+0.7,0.86, timberDk, T_X+sx*(T_W/2-0.1), 0.30+(T_WALL+0.7)/2, T_Z+sz*(T_D/2-0.1))));
-    // the wall staves, standing proud down each long side
-    for(let i=0;i<9;i++) ub(0.34,T_WALL-0.4,0.30, timberDk, T_X-T_W/2+1.1+i*1.85, 0.44+T_WALL/2, T_Z+T_D/2+0.16);
-    // the roof: two pitched slabs meeting at a ridge, gilded on the south gable
-    const RH=4.2, RL=Math.hypot(T_W/2+0.7, RH);
-    [-1,1].forEach(sx=>{
-      const r=ub(RL, 0.42, T_D+1.8, timberPa, T_X+sx*(T_W/4+0.35), 0.44+T_WALL+RH/2, T_Z);
-      r.rotation.z = sx*Math.atan2(RH, T_W/2+0.7);
-    });
-    ub(1.0,0.56,T_D+2.2, timberDk, T_X, 0.44+T_WALL+RH, T_Z);        // the ridge beam
-    // gable ends, filled in under the pitch so the roof is not two boards over open air
-    [-1,1].forEach(sz=>{
-      for(let i=0;i<5;i++){
-        const w=(T_W+1.0)*(1-i/5.2);
-        ub(w, 0.86, 0.40, timberPa, T_X, 0.44+T_WALL+0.40+i*0.82, T_Z+sz*(T_D/2+0.72));
-      }
-      // the carved beast heads over each gable, the same language as a ship's stem
-      ub(0.46,1.5,0.46, timberDk, T_X, 0.44+T_WALL+RH+0.9, T_Z+sz*(T_D/2+0.9));
-      ub(0.40,0.46,0.74, goldDk,  T_X, 0.44+T_WALL+RH+1.62, T_Z+sz*(T_D/2+1.16));
-    });
-    // THE GOLD CHAIN, hung round the eaves. Individually placed links rather than a gilded band: a
-    // band is a stripe of paint, and this is the detail the temple is actually remembered for.
-    // ...hung from an eaves board, because a link hanging in front of a wall face touches NOTHING:
-    // the board overlaps the wall, the links overlap the board, and the sag is small enough that even
-    // the lowest of them still does. A chain that floats 30cm off the gable is how that reads.
-    [-1,1].forEach(sz=> ub(T_W+0.2, 0.30, 0.50, timberDk, T_X, 0.44+T_WALL, T_Z+sz*(T_D/2+0.05)));
-    for(let i=0;i<13;i++){
-      const lx = T_X-T_W/2+0.7+i*1.42, sag = Math.sin(i/12*Math.PI)*0.12;
-      [-1,1].forEach(sz=> ub(0.30,0.34,0.30, gold, lx, 0.44+T_WALL-0.08-sag, T_Z+sz*(T_D/2+0.35)));
-    }
-    // the doors, on the south face, facing the road
-    ub(3.2,3.4,0.34, timberDk, T_X, 0.44+1.7, T_Z+T_D/2+0.20);
-    ub(0.28,3.0,0.44, gold,    T_X, 0.44+1.7, T_Z+T_D/2+0.30);       // the gilded centre post between them
-    [-1,1].forEach(s=> ub(0.5,0.5,0.5, gold, T_X+s*1.05, 0.44+2.3, T_Z+T_D/2+0.34));   // ring handles
-    addBox(T_X, T_Z, T_W, T_D);
-  })();
-  // ---- the three idols, standing in front of the doors ----
-  // Thor in the middle with his hammer, Odin to one side, Freyr to the other — which is the order Adam
-  // gives them. Carved posts rather than statues: this is a people who built gods out of the same trees
-  // they built halls out of.
-  [[-5.0,'odin'],[0,'thor'],[5.0,'freyr']].forEach(([ix,who])=>{
-    ub(1.30,4.30,1.30, timberDk, ix, 2.15, -1.6);
-    ub(1.46,0.40,1.46, goldDk,   ix, 3.96, -1.6);                    // a gilded collar under the head
-    ub(1.16,1.05,1.16, timberPa, ix, 4.66, -1.6);                    // the head
-    ub(0.90,0.26,0.24, timber,   ix, 4.70, -1.0);                    // the brow, proud of the face
-    [-1,1].forEach(s=> ub(0.17,0.17,0.16, who==='thor'?gold:runeRed, ix+s*0.26, 4.58, -1.04));  // the eyes
-    ub(0.62,0.50,0.22, furM, ix, 4.18, -1.03);                       // the beard
-    if(who==='thor')  ub(1.10,0.62,0.56, ironMat, ix+0.98, 3.30, -1.6);      // Mjölnir, held out
-    if(who==='thor')  ub(0.34,1.20,0.34, timberPa, ix+0.98, 2.60, -1.6);
-    if(who==='odin')  ub(0.24,3.40,0.24, timberPa, ix-0.92, 2.60, -1.6);     // Gungnir
-    if(who==='odin')  ub(0.20,0.72,0.20, ironMat,  ix-0.92, 4.52, -1.6);
-    if(who==='freyr') ub(0.70,0.90,0.30, gold,     ix+0.86, 2.90, -1.6);     // the gold he is known for
-    addBox(ix, -1.6, 1.5, 1.5);
-  });
-
-  // ================= THE THREE ROYAL MOUNDS =================
-  // Kungshögarna. Turf domes over the kings, snow on their crowns, standing in a line down the west of
-  // the field. Each is ONE mass with a square collider, for the reason the Borg's rock is one block:
-  // a collider covers one rectangle, so a stepped mound is either walled off at the foot or hollow at
-  // the top. The middle one — the king's, and the biggest — is the only one you can get up.
-  // A round mound and a square collider can never agree everywhere, so the profile is built around
-  // where they DO agree. The dome's base radius is the collider's own half-width: at the four flats
-  // you stop exactly at the visible foot of the turf, and at the corners you stop a little short of
-  // it, which is a small gap rather than a man buried to the chest in a hillside. The wide part of
-  // the mound is a TOE only — 0.34 tall, the one thing you clip, and at that height your feet pass
-  // through a skirt of turf instead of your eyeline passing through a hill.
-  function mound(mx, mz, R, H, climbable){
-    const HW = R*0.84;                                               // the square inside the circle
-    ucy(R*0.52, HW, H, 14, turfMat, mx, H/2, mz);                    // the dome, as a shallow drum
-    ucy(R*0.30, R*0.55, H*0.34, 14, turfMat, mx, H+H*0.14, mz);      // its crown, set in from the drum
-    ucy(R*0.34, R*0.34, 0.26, 14, snowMat, mx, H+H*0.30, mz);        // snow, on the flat of the top
-    ucy(HW*1.08, R*1.06, 0.34, 14, turfDark, mx, 0.15, mz);          // the toe, where it meets the field
-    // grass tufts and a few stones pushing out of the turf, all clear of the crown itself
-    for(let i=0;i<7;i++){
-      const a=i*0.93+mx, rr=R*0.72;
-      ub(0.5,0.34,0.5, turfDark, mx+Math.cos(a)*rr, H*0.42, mz+Math.sin(a)*rr*0.9);
-    }
-    addBox(mx, mz, HW*2, HW*2, climbable ? H : undefined);
-    if(climbable) heightZoneTarget.push({type:'plateau', x1:mx-HW, z1:mz-HW, x2:mx+HW, z2:mz+HW, y:H});
-    return HW;
-  }
-  mound(MOUND_X, -13, 5.6, 4.6, false);
-  mound(MOUND_X, MOUND_Z, MOUND_R, MOUND_H, true);
-  mound(MOUND_X, 15, 5.2, 4.2, false);
-  // ---- the path up the king's mound ----
-  // Worn turf over the same cribbing Birka's causeway uses, and it sits ENTIRELY OUTSIDE the mound's
-  // own collider, so the ramp's height zone meets the plateau exactly at the mound's edge and the two
-  // never fight. Wide, because a narrow ramp against a wall is a place to get stuck.
-  (function moundPath(){
-    const RL=Math.hypot(MOUND_RAMP_X1-MOUND_RAMP_X0, MOUND_H);
-    const ramp=ub(RL, 0.36, MOUND_RAMP_HZ*2, voxMat(0x6b5f49,{noise:16}),
-                  (MOUND_RAMP_X0+MOUND_RAMP_X1)/2, MOUND_H/2, MOUND_Z);
-    ramp.rotation.z = -Math.atan2(MOUND_H, MOUND_RAMP_X1-MOUND_RAMP_X0);
-    for(let i=0;i<9;i++){                                            // steps cut across the path
-      const t=(i+0.5)/9, x=MOUND_RAMP_X0+(MOUND_RAMP_X1-MOUND_RAMP_X0)*t, y=MOUND_H*(1-t);
-      const st=ub(0.34,0.14,MOUND_RAMP_HZ*2+0.1, timberDk, x, y+0.18, MOUND_Z);
-      st.rotation.z = ramp.rotation.z;
-    }
-    for(let i=0;i<3;i++){                                            // cribbing under the high end
-      const t=(i+0.5)/5, x=MOUND_RAMP_X0+(MOUND_RAMP_X1-MOUND_RAMP_X0)*t, y=MOUND_H*(1-t);
-      ub(0.9, y+0.2, MOUND_RAMP_HZ*1.7, graniteD, x, (y+0.2)/2, MOUND_Z);
-    }
-    heightZoneTarget.push({type:'ramp', axisX:true, x1:MOUND_RAMP_X0, x2:MOUND_RAMP_X1,
-                           z1:MOUND_Z-MOUND_RAMP_HZ, z2:MOUND_Z+MOUND_RAMP_HZ, y1:MOUND_H, y2:0});
-    // posts down the outer edge, so the drop reads as a drop from up there
-    for(let i=0;i<8;i++){
-      const t=(i+0.5)/8, x=MOUND_RAMP_X0+(MOUND_RAMP_X1-MOUND_RAMP_X0)*t, y=MOUND_H*(1-t);
-      ucy(0.08,0.09,1.1,5, timberDk, x, y+0.52, MOUND_Z-MOUND_RAMP_HZ+0.25);
-    }
-    // ...and a rune stone at the foot of the path, which is where one would actually stand
-    ub(0.9,2.6,0.34, runeMat, MOUND_RAMP_X1+0.9, 1.3, MOUND_Z+2.9);
-    ub(0.62,1.9,0.12, runeRed, MOUND_RAMP_X1+0.9, 1.3, MOUND_Z+2.72);
-    addBox(MOUND_RAMP_X1+0.9, MOUND_Z+2.9, 1.0, 0.5);
-  })();
-
-  // ================= THE SACRED GROVE =================
-  // Every tree in it was holy, and the one in the middle of it was evergreen and nobody knew what kind.
-  // So: one enormous conifer nothing else on the map comes near the height of, a spring at its foot,
-  // and the offering poles in a ring round both.
-  (function grove(){
-    const GX=18, GZ=-2;
-    ucy(1.05,1.55,7.0,10, timberDk, GX, 3.5, GZ);
-    for(let i=0;i<5;i++) uco(6.4-i*1.05, 3.4, 11, i%2?leafDeep:leafDark, GX, 6.4+i*2.05, GZ);
-    uco(1.5,2.2,9, leafDeep, GX, 16.3, GZ);
-    addBox(GX, GZ, 2.6, 2.6);
-    // roots, breaking the ground round the trunk — each at its own height so no two share a plane
-    for(let i=0;i<6;i++){
-      const a=i*1.05+0.3;
-      ub(2.4,0.46+i*0.05,0.9, timberDk, GX+Math.cos(a)*1.7, 0.22+i*0.02, GZ+Math.sin(a)*1.7, a);
-    }
-    // the spring: a stone kerb round dark water. Adam says what went into it; this game will settle for
-    // the kerb, the offerings on it, and the fact that you cannot see the bottom.
-    const WX=13.5, WZ=8.5;
-    for(let i=0;i<12;i++){
-      const a=i/12*Math.PI*2;
-      ub(1.05,0.72,0.8, graniteM, WX+Math.cos(a)*2.2, 0.36, WZ+Math.sin(a)*2.2, a);
-    }
-    const w=new THREE.Mesh(new THREE.CircleGeometry(2.05,20), waterDk);
-    w.rotation.x=-Math.PI/2; w.position.set(WX,0.30,WZ); w.receiveShadow=true; uppsalaWorld.add(w);
-    addBox(WX, WZ, 5.2, 5.2);
-    ub(0.44,0.44,0.44, gold, WX-1.5,0.92,WZ+1.5);                    // what somebody left on the kerb
-    ub(0.36,0.52,0.36, ironMat, WX+1.7,0.96,WZ-1.2);
-    // the offering poles. Shields, drinking horns and skulls on the crossbars — the nine-yearly blót,
-    // in the one register a voxel game can carry without being ghoulish about it.
-    [[22.5,-9],[24,-1],[22,7],[16,-12],[11,-5],[19.5,12]].forEach(([px,pz],i)=>{
-      ucy(0.20,0.24,4.2,6, timberPa, px, 2.1, pz);
-      ub(2.6,0.20,0.20, timberDk, px, 3.9, pz);
-      addBox(px, pz, 0.6, 0.6);
-      // each of them overlaps the bar it hangs from. Hung a hand's width below it they are all
-      // floating in mid-air, which is the single easiest thing to get wrong on a map like this.
-      [-1,1].forEach((s,k)=>{
-        if((i+k)%3===0) ub(0.84,0.84,0.10, [voxMat(0xa8322c,{noise:12}),voxMat(0x2f5f94,{noise:12}),
-                           voxMat(0xd8b23c,{noise:12})][(i+k)%3], px+s*1.0, 3.44, pz);
-        else if((i+k)%3===1) ub(0.26,0.62,0.26, boneM, px+s*1.0, 3.56, pz);
-        else ub(0.22,0.22,0.66, timberPa, px+s*1.0, 3.74, pz);
-      });
-    });
-  })();
-
-  // ================= THE ROAD, THE RUNE STONES, THE THING =================
-  // You arrive on the road. It is the only way into this field that is not a mound or a tree line, and
-  // it is lined with the stones that say who paid for it.
-  [[-4.6,22],[4.6,22],[-4.6,15],[4.6,15],[-5.2,28]].forEach(([rx,rz],i)=>{
-    const h=2.2+((i*13)%3)*0.45;
-    ub(1.1,h,0.38, runeMat, rx, h/2, rz, (i%2?0.12:-0.16));
-    ub(0.78,h*0.72,0.14, runeRed, rx, h/2, rz+(i%2?0.20:-0.20));
-    ub(1.26,0.30,0.54, graniteD, rx, 0.15, rz);                      // the stone is set in packed rubble
-    addBox(rx, rz, 1.2, 0.6);
-  });
-  // the thing-place: a ring of seat stones on the east of the road, where the law was spoken. Low enough
-  // to shoot over, solid enough to break a charge on.
-  (function thingPlace(){
-    const TX=16, TZ=19;
-    ucy(4.6,4.8,0.44,16, voxMat(0x6a6152,{noise:14}), TX, 0.22, TZ);
-    for(let i=0;i<10;i++){
-      const a=i/10*Math.PI*2;
-      ub(1.5,0.92,1.0, graniteM, TX+Math.cos(a)*3.9, 0.46, TZ+Math.sin(a)*3.9, a);
-      addBox(TX+Math.cos(a)*3.9, TZ+Math.sin(a)*3.9, 1.5, 1.2);
-    }
-    ub(1.2,1.9,1.2, graniteM, TX, 0.95, TZ);                         // the law-stone in the middle
-    ub(1.44,0.28,1.44, graniteD, TX, 1.98, TZ);
-    addBox(TX, TZ, 1.4, 1.4);
-  })();
-
-  // ================= THE FIRES =================
-  // Two braziers flanking the blót ground, and the torches down the road and across the temple porch.
-  // Every warm thing on this map is one of these, which is what makes the Mound King putting them out
-  // at half health a change you can see rather than a number.
-  function brazier(bx, bz, scale){
-    const s = scale||1;
-    ucy(0.24,0.34,1.5*s,6, ironMat, bx, 0.75*s, bz);
-    ucy(1.05*s,0.72*s,0.72*s,10, ironMat, bx, 1.72*s, bz);
-    ucy(0.94*s,0.64*s,0.26*s,10, voxMat(0x2a2320,{noise:14}), bx, 1.80*s, bz);   // the ash bed, inside it
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(0.72*s, 1.7*s, 7),
-      new THREE.MeshBasicMaterial({color:0xff8a2a, transparent:true, opacity:0.95, fog:false}));
-    fl.position.set(bx, 2.70*s, bz); uppsalaWorld.add(fl);
-    const li = new THREE.PointLight(0xffa244, 1.45, 24, 2);
-    li.position.set(bx, 3.0*s, bz); uppsalaWorld.add(li);
-    addBox(bx, bz, 1.5*s, 1.5*s);
-    uppsalaFires.push({flame:fl, light:li, base:1.45, phase:uppsalaFires.length*1.7});
-  }
-  brazier(-7.5, 5.5, 1.25);
-  brazier( 7.5, 5.5, 1.25);
-  brazier(-10.2, -3.0, 0.9);
-  brazier( 10.2, -3.0, 0.9);
-  [[-4.0,12],[4.0,12],[-4.0,19],[4.0,19],[-4.0,26],[4.0,26],[-8.6,-1.2],[8.6,-1.2]].forEach(([tx,tz])=>{
-    ucy(0.11,0.14,2.3,6, timberPa, tx, 1.15, tz);
-    const fl=new THREE.Mesh(new THREE.ConeGeometry(0.28,0.72,6),
-      new THREE.MeshBasicMaterial({color:0xffb347, transparent:true, opacity:0.95, fog:false}));
-    fl.position.set(tx, 2.62, tz); uppsalaWorld.add(fl);
-    const li=new THREE.PointLight(0xffa860, 0.8, 13, 2); li.position.set(tx, 2.8, tz); uppsalaWorld.add(li);
-    uppsalaFires.push({flame:fl, light:li, base:0.8, phase:uppsalaFires.length*1.1});
-  });
-
-  // Nothing in the scatter below is placed by eye. A tree or a boulder dropped on a mound, on the
-  // thing-place, or on another tree is a collider overlapping a collider, which is a pair of invisible
-  // walls fighting over the same ground — so each candidate is tested against everything already
-  // standing and simply skipped if it would land on it.
-  function clearOfAll(cx, cz, w, d, pad){
-    const p = pad===undefined ? 0.35 : pad;
-    const x1=cx-w/2-p, x2=cx+w/2+p, z1=cz-d/2-p, z2=cz+d/2+p;
-    for(const c of uppsalaColliders)
-      if(x1 < c.x2 && c.x1 < x2 && z1 < c.z2 && c.z1 < z2) return false;
-    return true;
-  }
-
-  // ================= THE TREE LINE =================
-  // Spruce, all the way round, well outside anything anyone fights over: the field has to end in forest
-  // rather than in fog over nothing.
-  for(let i=0;i<64;i++){
-    const a=i/64*Math.PI*2, r=25.5+((i*7)%5)*1.4;
-    const tx=Math.cos(a)*r, tz=Math.sin(a)*r*0.98;
-    if(Math.abs(tx)<6.5 && tz>14) continue;                          // the road out stays open
-    const s=0.85+((i*11)%4)*0.22;
-    if(!clearOfAll(tx, tz, 1.1*s, 1.1*s)) continue;
-    ucy(0.24*s,0.32*s,1.9*s,6, timberDk, tx, 0.95*s, tz);
-    for(let k=0;k<3;k++) uco((1.9-k*0.42)*s, 2.0*s, 7, k%2?leafDeep:leafDark, tx, (2.3+k*1.25)*s, tz);
-    if(i%3===0) uco(1.5*s, 0.5*s, 7, snowMat, tx, 5.35*s, tz);
-    addBox(tx, tz, 1.1*s, 1.1*s);
-  }
-  // and a few boulders through the field, because a snowfield with nothing in it is a floor
-  [[-11,18],[10,-14],[-8,-17],[13,22],[-24,-22],[24,-20]].forEach(([bx,bz],i)=>{
-    const s=1.0+((i*17)%4)*0.34;
-    if(!clearOfAll(bx, bz, s*1.7, s*1.4)) return;
-    const rk=ub(s*1.7,s*1.05,s*1.4, graniteM, bx, s*0.32, bz, i*0.7);
-    ub(s*1.5,0.22,s*1.2, snowMat, bx, s*0.85, bz, i*0.7);            // snow on the weather side of it
-    addBox(bx, bz, s*1.7, s*1.4);
-    return rk;
-  });
-})();
-addTarget = colliders;
-heightZoneTarget = heightZonesOriginal;
-
-
-// Gamla Uppsala — the last leg of the Sweden trip. Same shape as every other destination entry: world,
-// lighting, loadout and garrison in one call.
-function enterUppsalaWorld(banner){
-  clearWorldGroups();
-  scene.add(uppsalaWorld);
-  sky.visible = true;
-  activeColliders = uppsalaColliders;
-  activeHeightZones = heightZonesUppsala;
-  playClamp = 28;
-  // DUSK, and it is the arc's one deliberate change of hour. Birka is a white noon and the Fjord a blue
-  // afternoon; a third cold daylight would read as the same field again. The sun is on the horizon and
-  // behind the temple, the snow holds the last of it, and everything else warm on screen is a fire.
-  // Fog is close and blue so the tree line goes to nothing and the mounds stand out of it.
-  scene.background.set(0x2b3a52); scene.fog.color.set(0x35486a);
-  scene.fog.near = 18; scene.fog.far = 92;
-  setDistantGround(0x3a4a60);
-  skyTint(0x4a6488);
-  hemi.intensity=0.50; hemi.color.set(0x5a76a0); hemi.groundColor.set(0x27303e);
-  sun.intensity=0.42; fill.intensity=0.30; fill.color.set(0xd8a05a);   // the last of the sun, warm and low
-  uppsalaSetFires(true);
-  camera.position.set(0,1.7,25); yaw=targetYaw=0; pitch=targetPitch=0;
-  vel.set(0,0,0); playerHeight=0; stuckTimer=0;
-  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
-  weapons.forEach(w=>w.visible=false);
-  weapons = swedenWeapons;
-  selectWeapon(0);
-  spawnTripStage();
-  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
-}
-// The fires, on or out. Every warm light on this map is in uppsalaFires, so the Mound King's second
-// phase is one call — and re-derived state, not an event: entering the map lights them again, so dying
-// in phase two and coming back does not leave you fighting in a field that is already dark.
-function uppsalaSetFires(lit){
-  uppsalaOut = !lit;
-  uppsalaFires.forEach(f=>{
-    f.flame.visible = lit;
-    f.light.intensity = lit ? f.base : 0;
-  });
-  if(!lit){
-    // the field itself goes with them: the fires were most of what was lighting it
-    hemi.intensity=0.30; hemi.color.set(0x3c5480);
-    sun.intensity=0.16; fill.intensity=0.12; fill.color.set(0x6a80b0);
-    scene.fog.color.set(0x1d2740); scene.fog.far = 62; scene.background.set(0x141c2e);
-  }
 }
 
 function enterAztecMarketWorld(banner){
@@ -10130,8 +9742,6 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='berserkr') return makeBerserkr();
   if(skinName==='troll') return makeTroll();
   if(skinName==='hirdman') return makeHirdman();
-  if(skinName==='jarl') return makeJarl();
-  if(skinName==='moundking') return makeMoundKing();
   const cfg = SKINS[skinName] || SKINS.soldier;
   const g = new THREE.Group();
   const skinC = cfg.skinC;
@@ -13897,264 +13507,6 @@ function makeHirdman(){
   return rig;
 }
 
-// THE JARL — the man whose ships these are, and the end of the whole Sweden trip.
-// Built as the hirdman's superior rather than as a monster, because that is what he is: the same
-// silhouette language — helm, round shield, mail — carried one rank up, so that when he stands up on
-// the third deck you know exactly what he is without a banner having to tell you. What separates him
-// at distance is colour, not shape: GOLD on the helm and the shield boss, and a madder-red cloak that
-// nothing else on this water can afford. Every other Viking here is grey, brown or iron.
-//
-// The mask is the point of the face. A hirdman has eyes and a beard you can read; the Jarl's face is
-// a gilded ocular and a nasal with a beard coming out from under it, so the one enemy in the arc that
-// never shows you a face is the one you have to get round the shield of.
-function makeJarl(){
-  const g=new THREE.Group();
-  const skin    = voxMat(0xc08a63,{noise:16});
-  const mail    = metalMatP(0x7b8189,45,0xc4ccd4);   // riveted iron, brighter than the crew's homespun
-  const mailDk  = voxMat(0x4d5259,{noise:14});
-  const ironMat = metalMatP(0x6f757c,55,0xc0c8d0);
-  const gold    = metalMatP(0xc8a23c,80,0xffeeb0);
-  const cloakM  = voxMat(0x8d2a22,{noise:16});       // madder red — the most expensive thing afloat
-  const furM    = voxMat(0x6a5a44,{noise:20});
-  const leather = voxMat(0x4a3521,{noise:14});
-  const leathDk = voxMat(0x2f2115,{noise:12});
-  const woolDk  = voxMat(0x353b45,{noise:14});
-  const woodM   = voxMat(0x8a7048,{noise:16});
-  const boneM   = voxMat(0xd8d2bc,{noise:8});
-  const shieldC = voxMat(0x1f4166,{noise:12});       // his shield is blue and gold, the crew's is ochre
-  const pupMat  = new THREE.MeshBasicMaterial({color:0x14100c,fog:false});
-  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
-
-  // legs are the hirdman's exactly — a jarl is a man, and the rank is carried above the belt
-  const mkLeg=(sd)=>{
-    const l=new THREE.Group(); l.position.set(sd*0.14,0.76,0); g.add(l);
-    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
-    p(0.19,0.32,0.20, mailDk,  -0.17,0);
-    p(0.155,0.10,0.165,leather,-0.36,0);
-    p(0.135,0.30,0.145,woolDk, -0.55,0);
-    p(0.155,0.045,0.165,leather,-0.455,0);          // leg wraps, proud of the shin
-    p(0.152,0.045,0.162,leather,-0.585,0);
-    p(0.165,0.08,0.25, leathDk,-0.72,0.045);
-    p(0.13,0.05,0.07, leathDk, -0.735,0.16);
-    return l;
-  };
-  const legL=mkLeg(1), legR=mkLeg(-1);
-
-  // ---- the byrnie: a mail coat to the knee, which no man on the crew's decks is wearing ----
-  b(0.52,0.24,0.32, mail,    0,0.86,0);             // its skirt
-  b(0.55,0.06,0.35, mailDk,  0,0.755,0);            // and the hem, hanging proud of it
-  b(0.54,0.15,0.34, leather, 0,0.94,0);             // the belt over it
-  b(0.15,0.12,0.07, gold,    0,0.94,0.155);         // gold buckle, sunk into the belt's face
-  b(0.09,0.09,0.26, boneM,   0.28,0.86,0.02);       // THE HORN, on his hip — he sounds it for his hird
-  b(0.11,0.11,0.05, gold,    0.28,0.86,0.10);
-  b(0.44,0.28,0.30, mail,    0,1.05,0);             // belly
-  b(0.50,0.32,0.32, mail,    0,1.33,0);             // chest
-  b(0.34,0.10,0.28, mailDk,  0,1.52,0);             // the mail collar standing up round his neck
-  [-1,1].forEach(sd=> b(0.16,0.13,0.22, leathDk, sd*0.26,1.47,0));   // shoulder straps
-  b(0.60,0.80,0.11, cloakM,  0,1.16,-0.135);        // the cloak, hung down his back
-  b(0.52,0.12,0.16, furM,    0,1.49,-0.10);         // its fur collar
-  b(0.09,0.09,0.05, gold,    0.20,1.47,0.10);       // and the brooch that pins it, at his right shoulder
-
-  // ---- head: a mask, not a face ----
-  b(0.16,0.10,0.16, mailDk, 0,1.61,0);
-  b(0.26,0.25,0.24, skin,   0,1.76,0);
-  b(0.22,0.26,0.13, furM,   0,1.63,0.115);          // the beard, out from under the mask
-  b(0.11,0.10,0.10, leathDk,0,1.47,0.12);           // bound into a braid at its point
-  b(0.32,0.16,0.29, ironMat,0,1.92,0);              // the helm
-  b(0.36,0.06,0.31, gold,   0,1.845,0);             // its gold brow band
-  b(0.06,0.09,0.31, gold,   0,2.005,0);             // and the ridge over the crown
-  b(0.27,0.07,0.06, gold,   0,1.79,0.135);          // the ocular — a gilded brow over both eyes
-  b(0.055,0.22,0.055, gold, 0,1.70,0.11);           // and the nasal down between them
-  [-1,1].forEach(sd=> b(0.05,0.045,0.07, pupMat, sd*0.065,1.745,0.12));    // what little of him shows
-  [-1,1].forEach(sd=> b(0.05,0.14,0.20, ironMat, sd*0.12,1.78,0.03));      // cheek guards
-
-  const mkArm=(sd)=>{
-    const a=new THREE.Group(); a.position.set(sd*0.275,1.45,0); g.add(a);
-    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
-    p(0.16,0.28,0.16, mail,   -0.15,0);             // mail sleeve to the elbow
-    p(0.145,0.05,0.145,gold,  -0.31,0);             // an arm-ring — the thing a jarl pays his men with
-    p(0.13,0.26,0.13, skin,   -0.46,0);
-    p(0.135,0.12,0.145,leathDk,-0.655,0.01);
-    return a;
-  };
-  const armR=mkArm(1), armL=mkArm(-1);
-
-  // right hand: a broad sword, carried level across his front the way a man carries one he has already
-  // decided to use. Flipped on Y like the hirdman's spear — the blade runs down the group's -Z and the
-  // model faces +Z, so unflipped it would come out of his back.
-  const sword=new THREE.Group(); sword.position.set(0,-0.66,0.02); sword.rotation.x=-0.30; sword.rotation.y=Math.PI; armR.add(sword);
-  const sw=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-    m.position.set(x,y,z); m.castShadow=true; sword.add(m); return m; };
-  sw(0.055,0.055,0.16, leather, 0,0,0.12);          // grip
-  sw(0.075,0.075,0.05, gold,    0,0,0.215);         // pommel, proud of the grip
-  sw(0.24,0.045,0.05, gold,     0,0,0.015);         // the guard, across it
-  sw(0.105,0.032,0.62, ironMat, 0,0,-0.33);         // blade
-  sw(0.119,0.020,0.52, mailDk,  0,0,-0.33);         // its fuller, proud of the blade's flats
-  sw(0.070,0.020,0.13, ironMat, 0,0,-0.70);         // and the point
-
-  // left arm: a shield half again the size of a hirdman's, blue with a gold boss and a gold rim. This
-  // is the thing the fight is about — see the shield-wall phase in the bot AI.
-  const shield=new THREE.Group(); shield.position.set(0,-0.52,-0.18); shield.rotation.y=0.30; armL.add(shield);
-  const sh=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-    m.position.set(x,y,z); m.castShadow=true; shield.add(m); return m; };
-  // alternate boards stepped deeper, the same reason the hirdman's are: no two neighbours coplanar
-  const BOARDS=[[-0.276,0.360],[-0.166,0.564],[-0.055,0.645],[0.055,0.645],[0.166,0.564],[0.276,0.360]];
-  BOARDS.forEach(([bx,bh],i)=> sh(0.116,bh-(i%2)*0.016,0.05+(i%2)*0.014, shieldC, bx,0,-0.05));
-  // gold rim studs. Radius, phase and size are SOLVED rather than picked: a stud whose edge lands on a
-  // plank's edge shares a face plane with it, and sixteen of those round the rim of the one thing he
-  // holds between you and him is the worst place in the game to put a flicker. 0.319/0.195/0.072 keeps
-  // every stud face at least 10mm off every board edge it overlaps.
-  for(let i=0;i<16;i++){
-    const a=(i/16)*Math.PI*2 + 0.195;
-    sh(0.072,0.072,0.062, gold, Math.cos(a)*0.319, Math.sin(a)*0.319, -0.028);
-  }
-  sh(0.15,0.15,0.062, gold,   0,0,-0.096);          // the boss
-  sh(0.085,0.085,0.042, gold, 0,0,-0.136);
-  sh(0.40,0.058,0.042, woodM, 0,0,-0.012);          // grip bar behind it
-
-  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.09),
-    new THREE.MeshBasicMaterial({color:0xffe9a8, transparent:true, opacity:0, fog:false}));
-  muzzle.position.set(0,0,-0.70); sword.add(muzzle);
-  muzzle.visible=false;
-  const rig=_mexRig(g, legL, legR, armR, armL);
-  g.userData.botMuzzle=muzzle;
-  // The shield-wall phase raises this and turns the body to carry it — the AI reads it back off here,
-  // so the tell the player sees and the damage rule that follows from it are the same object.
-  g.userData.jarlShield=shield;
-  g.userData.jarlArmL=armL;
-  return rig;
-}
-
-// THE MOUND KING — what is in the middle mound, and the last thing in the Sweden arc.
-// Built on the Jarl's frame on purpose: same height, same mail, same stance, so that when he comes up
-// out of the turf you recognise the SHAPE of a Viking lord and then notice, one beat later, that
-// everything on it is wrong. The gold is still gold, and the man wearing it has been dead four hundred
-// years — corpse-green skin drawn tight, a jaw with nothing behind it, a crown instead of a helm, and
-// the same blue corpse-light in the sockets that the draugr in Birka's grave field carry, because they
-// are his and this is where it comes from.
-// His sword is broken off a hand above the guard. He does not need the rest of it.
-function makeMoundKing(){
-  const g=new THREE.Group();
-  const flesh   = voxMat(0x8a9a84,{noise:16});       // corpse-green, the draugr's colour one shade paler
-  const fleshDk = voxMat(0x5c6a58,{noise:14});
-  const mail    = metalMatP(0x6e7168,45,0xa8b0a4);   // mail that has been in the ground
-  const mailDk  = voxMat(0x44483f,{noise:14});
-  const rust    = voxMat(0x6a4a2c,{noise:16});
-  const gold    = metalMatP(0xc8a23c,80,0xffeeb0);
-  const goldDk  = voxMat(0x8a6f28,{noise:12});
-  const pelt    = voxMat(0x4a3f33,{noise:20});       // a bear pelt, mostly gone
-  const peltDk  = voxMat(0x322a22,{noise:16});
-  const leathDk = voxMat(0x2f2115,{noise:12});
-  const woolDk  = voxMat(0x353b45,{noise:14});
-  const boneM   = voxMat(0xd2d6bc,{noise:8});
-  const eyeMat  = new THREE.MeshBasicMaterial({color:0x6ad8ff,fog:false});   // corpse-light, not an eye
-  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
-
-  const mkLeg=(sd)=>{
-    const l=new THREE.Group(); l.position.set(sd*0.14,0.76,0); g.add(l);
-    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
-    p(0.19,0.32,0.20, mailDk,  -0.17,0);
-    p(0.155,0.10,0.165,rust,   -0.36,0);
-    p(0.135,0.30,0.145,woolDk, -0.55,0);
-    p(0.155,0.045,0.165,leathDk,-0.455,0);
-    p(0.152,0.045,0.162,leathDk,-0.585,0);
-    p(0.165,0.08,0.25, leathDk,-0.72,0.045);
-    p(0.13,0.05,0.07, boneM,   -0.735,0.16);          // the toes have come through the leather
-    return l;
-  };
-  const legL=mkLeg(1), legR=mkLeg(-1);
-
-  // ---- the byrnie he was buried in ----
-  b(0.52,0.24,0.32, mail,    0,0.86,0);
-  b(0.55,0.06,0.35, rust,    0,0.755,0);              // the hem, rusted through
-  b(0.54,0.15,0.34, leathDk, 0,0.94,0);
-  b(0.15,0.12,0.07, gold,    0,0.94,0.155);
-  b(0.44,0.28,0.30, mail,    0,1.05,0);
-  b(0.50,0.32,0.32, mail,    0,1.33,0);
-  [0,1].forEach(i=> b(0.20,0.09,0.10, rust, -0.10+i*0.20, 1.30-i*0.13, 0.13));    // holes in it, sunk through it
-  b(0.34,0.10,0.28, mailDk,  0,1.52,0);
-  [-1,1].forEach(sd=> b(0.16,0.13,0.22, peltDk, sd*0.26,1.47,0));
-  b(0.60,0.80,0.11, pelt,    0,1.16,-0.135);          // the bear pelt over his back
-  b(0.52,0.12,0.16, peltDk,  0,1.49,-0.10);
-  // THE TORC — a king's neck-ring, and the brightest thing on him
-  b(0.38,0.10,0.30, gold,    0,1.575,0.03);
-  b(0.12,0.12,0.09, goldDk,  0,1.575,0.21);
-
-  // ---- the head: a face, where the Jarl had a mask ----
-  b(0.16,0.10,0.16, fleshDk, 0,1.61,0);
-  b(0.26,0.25,0.24, flesh,   0,1.76,0);
-  b(0.21,0.07,0.10, fleshDk, 0,1.845,0.105);          // the brow, drawn forward over the sockets
-  [-1,1].forEach(sd=> b(0.07,0.07,0.07, eyeMat, sd*0.062,1.80,0.115));
-  b(0.19,0.10,0.11, fleshDk, 0,1.700,0.10);           // the cheekbones, with nothing under them
-  b(0.135,0.10,0.12, boneM,  0,1.595,0.09);           // the jaw, open
-  [-1,1].forEach(sd=> b(0.035,0.05,0.04, boneM, sd*0.045,1.665,0.118));  // and what is left in it
-  b(0.22,0.26,0.13, voxMat(0xb4b0a4,{noise:14}), 0,1.55,0.135);   // the beard, gone white
-  b(0.11,0.10,0.10, leathDk, 0,1.40,0.14);
-  // ---- THE CROWN ----
-  // Not a helm. A king's circlet, and the five points of it are why you can tell what he is from the
-  // far side of the blót ground.
-  b(0.32,0.13,0.30, gold,   0,1.935,0);
-  b(0.35,0.05,0.33, goldDk, 0,1.865,0);               // its lower rim, proud of the band
-  [-0.11,-0.055,0,0.055,0.11].forEach((cx,i)=>{
-    const ph=[0.17,0.24,0.32,0.24,0.17][i];
-    b(0.045,ph,0.045, gold, cx*2.0, 1.99+ph/2, 0.0);           // sunk into the band, not stood on it
-    b(0.062,0.062,0.062, i===2?eyeMat:goldDk, cx*2.0, 1.99+ph+0.02, 0.0);
-  });
-
-  const mkArm=(sd)=>{
-    const a=new THREE.Group(); a.position.set(sd*0.275,1.45,0); g.add(a);
-    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
-    p(0.16,0.28,0.16, mail,   -0.15,0);
-    p(0.145,0.05,0.145,gold,  -0.31,0);               // the arm-rings a king is measured in
-    p(0.152,0.045,0.152,goldDk,-0.385,0);
-    p(0.13,0.26,0.13, flesh,  -0.48,0);
-    p(0.155,0.12,0.165,fleshDk,-0.655,0.01);   // proud of the forearm on every face, not a hair under it
-    return a;
-  };
-  const armR=mkArm(1), armL=mkArm(-1);
-
-  // right hand: the sword, broken off a hand above the guard — the grave-goods sword, bent and snapped
-  // as they were when they went into the ground with their owner.
-  const sword=new THREE.Group(); sword.position.set(0,-0.67,0.02); sword.rotation.x=-0.26; sword.rotation.y=Math.PI; armR.add(sword);
-  const sw=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-    m.position.set(x,y,z); m.castShadow=true; sword.add(m); return m; };
-  sw(0.055,0.055,0.16, leathDk, 0,0,0.12);
-  sw(0.085,0.085,0.05, gold,    0,0,0.215);           // the pommel is still gold
-  sw(0.26,0.045,0.05, goldDk,   0,0,0.015);           // and the guard
-  sw(0.105,0.032,0.30, mail,    0,0,-0.17);           // what is left of the blade
-  sw(0.119,0.020,0.20, rust,    0,0,-0.17);           // rust down its flats, proud of them
-  sw(0.086,0.018,0.09, mail,    0,0,-0.355);          // the break, torn rather than cut
-  sw(0.034,0.008,0.06, mail,    0.018,0,-0.415);
-
-  // left hand: no shield. An open hand, which is the other half of the read — he is not defending
-  // anything, he is coming to take something back.
-  const claw=new THREE.Group(); claw.position.set(0,-0.715,0.06); armL.add(claw);
-  const cl=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-    m.position.set(x,y,z); m.castShadow=true; claw.add(m); return m; };
-  [-1,0,1].forEach((fx,i)=>{
-    cl(0.042,0.055,0.17, flesh,  fx*0.048, -0.02, 0.10);
-    cl(0.034,0.034,0.06, boneM,  fx*0.048, -0.022, 0.196);        // the nails, come through
-  });
-  cl(0.05,0.05,0.13, flesh, -0.078, -0.03, 0.06);                 // the thumb, out to the side
-
-  const muzzle=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.09,0.09),
-    new THREE.MeshBasicMaterial({color:0x9ae8ff, transparent:true, opacity:0, fog:false}));
-  muzzle.position.set(0,0,-0.42); sword.add(muzzle);
-  muzzle.visible=false;
-  const rig=_mexRig(g, legL, legR, armR, armL);
-  g.userData.botMuzzle=muzzle;
-  // Everything on him that is lit rather than shaded. When he puts the fires out these are the only
-  // things left burning in the field, so the AI brightens them — it is the one cue that survives the
-  // dark, and it is what you aim at once the braziers are gone.
-  g.userData.kingGlow = [];
-  g.traverse(o=>{ if(o.isMesh && o.material === eyeMat) g.userData.kingGlow.push(o); });
-  return rig;
-}
-
 function makeGhoul(){
   const g = new THREE.Group();
   const skinMat = voxMat(0x93a08c,{noise:16});   // corpse-pale grey-green
@@ -16640,12 +15992,6 @@ const MEXICO_LEGS = [
 // and a man spawned inside it spends the duel shuffling out of it.
 const FJORD_WEST = [[-10.3,-3.2], [-9.9,-1.6], [-10.6,-2.4], [-10.1,-0.5], [-10.4,-4.2]];
 const FJORD_EAST = [[-10.2,1.0], [-10.6,2.4], [-9.9,3.2], [-11.0,0.2], [-10.3,4.0]];
-// A third pool, on the JARL'S deck, and it exists for the same reason Birka's harbour pool does: the
-// men who hold that deck have to be standing on it, and it is not the deck the other two pools are
-// on. Solved against his hull rather than picked by eye — every point is clear of his one cargo
-// stack, his barrel and both his rails at a 1.1 radius, and none is within 1.2 of his mast.
-// Only wave three ever draws from it, because until wave three that ship is out in the fog.
-const FJORD_JARL_POOL = [[-20.2,3.2], [-19.6,5.0], [-20.6,-3.6], [-19.4,-2.0], [-20.9,6.4]];
 // THREE waves, and they are three different fights rather than one fight three times. Each one is a
 // different distance from the enemy, which is the only thing this map can vary and the only thing it
 // needs to.
@@ -16655,18 +16001,16 @@ const FJORD_JARL_POOL = [[-20.2,3.2], [-19.6,5.0], [-20.6,-3.6], [-19.4,-2.0], [
 //   2  THE BOARDING. The plank goes down. Three more hirdmen and two berserkir, and now YOU have to
 //      cross, because standing on your own deck just means being thrown at by five men instead of
 //      three. Won with the axe.
-//   3  THE SHIELD WALL. The black-sailed ship that has been heaving out in the fog since you arrived
+//   3  THE LAST STAND. The black-sailed ship that has been heaving out in the fog since you arrived
 //      comes alongside THEIRS, and the arena grows by a whole deck at the moment you have just
-//      finished clearing one. His hird hold the middle hull and the Skerry Troll holds the gangway
-//      onto his — which is what that model was built for, and a better home for it than a third
-//      ground wave at Birka. Won by killing the troll in the gap he is standing in, because there is
-//      nowhere to go round him.
+//      finished clearing one — the heaviest wave of the leg, and the last thing between you and
+//      whatever is waiting at that third ship's stern.
 // The counts stay small and that is still the point. The first version of this put eight melee
 // enemies on decks touching yours and it killed you on arrival.
 const FJORD_WAVES = [
   {hirdman:3},
   {hirdman:3, berserkr:2},
-  {hirdman:2, berserkr:2, troll:1},
+  {hirdman:2, berserkr:3},
 ];
 // The hirdman carries 'javelin', which the bot AI already treats as a hybrid: it throws from up to 30
 // away and only closes to hand strokes inside 3.4. That one property is what lets a single enemy type
@@ -16674,91 +16018,25 @@ const FJORD_WAVES = [
 // no second behaviour, and the fight changes character because the GEOMETRY changed, not the cast.
 // The berserkir hold the far deck: they cannot throw, so they exist purely to make the crossing cost
 // something, and their frenzy means the last one is the dangerous one.
-// The troll's numbers here are the LEG's, not Birka's: 620 rather than 850, because a champion in a
-// wave of five on a deck you have to get past him on is a different animal from a boss fought alone
-// with the whole ship to circle in. At wave three's difficulty he lands just under a thousand, which
-// is three Dane Axe strokes through his armour and about nine without — the difference between the
-// right weapon and the wrong one, which is what an armoured enemy is for.
 const FJORD_STATS = {
   hirdman:  {hp:150, speed:1.25, wt:'javelin', scale:1.00, west:true},
   berserkr: {hp:190, speed:1.70, wt:'knife',   scale:1.05, west:false, noFlinch:true},
-  troll:    {hp:620, speed:0.78, wt:'knife',   scale:1.60, pool:'jarl', armoured:true, noFlinch:true},
 };
 const FJORD_DIFF = 1.25;   // down from 1.5: this is a duel and a boarding, not a brawl
-// THE JARL — the last thing between the player and home, and the end of the whole Sweden trip.
-// He stands aft on his OWN deck, two crossings from where you started, and the plank behind him stays
-// down: he can come back over it, and so can you go round it, which is the entire point of a boss
-// whose defence is a shield you have to get past rather than a health bar you have to outlast.
-// 3000 puts him a shade over the Xiuhcoatl Bearer (2900), who ends the only other destination in the
-// game and is bought for ten less.
-// radius is set explicitly for the same reason the troll's was: the boss branch in spawnBot() measures
-// the bounding box from the model ORIGIN, which counts the sword he is holding out in front of him,
-// and a body 2.4 across does not fit between his own cargo and his rail.
-const FJORD_BOSS = {skin:'jarl', col:0xc8a23c, hp:3000, scale:1.50, speed:1.30, x:-20.3, z:5.2, radius:0.95,
-  name:'JARL HÁKON', hud:'the Jarl',
-  call:'⚠ A horn sounds twice on the black-sailed ship — the Jarl comes aft of his mast…',
-  callSfx(){ SFX.warHorn(); },
-  intro:'👑 JARL HÁKON',
-  fell:'👑 The Jarl goes down on his own deck — the fjord is quiet',
-  // `fellOn` is what the trip says instead when another leg follows, and one does now: his death sends
-  // the player inland to Uppsala rather than home.
-  fellOn:'👑 The Jarl goes down on his own deck — and his ships point inland, up the river…'};
-// ---- Gamla Uppsala's garrison: the temple, the grove and the mounds ----
-// Three pools, and each of them is a PLACE rather than a compass point — the same reason Birka's
-// harbour is its own pool. West is the grave-field end of the map, where the mounds are and where the
-// draugr come out of them. East is the grove, which is where anything alive and fast comes from. South
-// is the road, and it is the pool for the men: the temple's own hird and the berserkir walk in the way
-// men arrive at a place, up the road, past the rune stones.
-// These fifteen points are SOLVED against the built map rather than picked off the layout: each is
-// clear of uppsalaColliders at a 1.2 radius, on true ground (no height zone), at least 11 from the
-// player's arrival at (0,25), at least 5 from every other point in its pool, and — the one that is
-// particular to this map — outside the mound path's ramp corridor. A ramp zone is a flat rectangle
-// that reads as sloped ground only to someone already climbing it, so a man spawned inside one stands
-// at y=0 UNDERNEATH the deck of the path, and the three points that first landed there looked from
-// above like enemies buried in a hillside.
-const UPPSALA_WEST  = [[-12.0,-4.5], [-7.0,15.0], [-13.0,-17.0], [-17.0,8.0], [-10.0,4.5]];
-const UPPSALA_EAST  = [[15.5,1.0], [9.0,16.0], [12.5,-14.0], [20.5,10.5], [22.0,-7.5]];
-const UPPSALA_SOUTH = [[0.0,14.0], [-12.0,20.0], [12.0,12.5], [-10.0,9.0], [10.0,20.0]];
-// THREE waves, and they walk the map from its edges to its middle.
-//   1  THE MOUNDS ANSWER. Draugr out of the turf on the west, wargs out of the grove on the east.
-//      Nothing here throws, and the mound path is right there — this is the wave that teaches you the
-//      only high ground on the map is worth having.
-//   2  THE TEMPLE'S OWN. Hirdmen and nisser: the first ranged wave of the leg, fought in the open
-//      between the braziers where the bow and the seax both have work.
-//   3  WHAT ELSE IS BURIED HERE. Draugr again, with the berserkir up the road behind them and a troll
-//      out of the tree line — the heaviest wave of the whole trip before the boss.
-const UPPSALA_WAVES = [
-  {draugr:3, warg:2},
-  {hirdman:3, nisse:2, warg:1},
-  {draugr:3, berserkr:2, troll:1},
-];
-// The draugr and the troll are Birka's own numbers, and that is the point: this is the same country's
-// dead, three waves later and at a difficulty step that makes them mean it. The hirdman and the nisse
-// are the Fjord's and Birka's, unchanged — a roster this late in an arc should be recognised, not
-// re-learned.
-const UPPSALA_STATS = {
-  draugr:   {hp:260, speed:0.95, wt:'knife',   scale:1.15, west:true,  armoured:true, noFlinch:true},
-  warg:     {hp:170, speed:2.60, wt:'knife',   scale:1.00, west:false},
-  nisse:    {hp:70,  speed:1.45, wt:'pistol',  scale:1.00, west:false},
-  hirdman:  {hp:150, speed:1.25, wt:'javelin', scale:1.00, pool:'south'},
-  berserkr: {hp:190, speed:1.70, wt:'knife',   scale:1.05, pool:'south', noFlinch:true},
-  troll:    {hp:850, speed:0.72, wt:'knife',   scale:1.60, west:true,  armoured:true, noFlinch:true},
-};
-const UPPSALA_DIFF = 1.50;   // the last leg of the last destination, and it is the hardest thing bought
-// THE MOUND KING — the end of the Sweden trip and the hardest boss in the game, a shade over the Ifrit
-// King who ends the campaign. He fights on the blót ground between the braziers, with the temple behind
-// him and the mounds at his back: open floor, on purpose, because his whole fight is about the field
-// going dark and about what is walking in it, and neither of those works in a corner.
-// (0,6) is flat, clear at his radius, and off every height zone — a boss dropped on the mound path's
-// ramp would stand at y=0 underneath it, which is the same fault that once buried the Jade-Heart
-// Shaman inside La Venta's pyramid.
-const UPPSALA_BOSS = {skin:'moundking', col:0x8a9a84, hp:3600, scale:1.80, speed:1.20, x:0, z:6, radius:1.3,
-  name:'THE MOUND KING', hud:'the King',
-  call:'\u26a0 The turf splits on the middle mound — something is standing up in it\u2026',
-  callSfx(){ SFX.warHorn(); },
-  intro:'\ud83d\udc51 THE MOUND KING',
-  fell:'\ud83d\udc51 The crown goes into the fire \u2014 Sweden is yours, and the road runs home'};
-// Birka is the first leg, the Fjord is the second, and Gamla Uppsala is the third and ends the trip.
+// THE SKERRY TROLL — the thing that walks out onto the third ship's stern, and the end of the whole
+// Sweden trip. Built as a champion (see makeTroll()) and promoted here to the last fight in the arc:
+// there is no jarl to command this water, only the one thing out here that nobody sailed.
+// 3600 puts it a shade over the Xiuhcoatl Bearer (2900) and level with the hardest thing this game has
+// fielded — it is the true end of the destination now, not a mid-leg champion.
+// radius is bumped well past its champion value (which needed none, set implicitly): the boss branch
+// in spawnBot() measures the bounding box from the model ORIGIN, and a club held out at the shoulder
+// reaches further than the body armour a plain wave-mob radius was ever sized for.
+const FJORD_BOSS = {skin:'troll', col:0x7a8074, hp:3600, scale:1.90, speed:1.05, x:-20.3, z:5.2, radius:1.15,
+  name:'THE SKERRY TROLL', hud:'the troll',
+  call:'⚠ Something stands up at the black-sailed ship’s stern — stone-shouldered, amber-eyed…',
+  intro:'🪨 THE SKERRY TROLL',
+  fell:'🪨 The troll goes down on the stern deck — the fjord is quiet'};
+// Birka is the first leg and the Fjord is the second and last — it ends the trip.
 // `south` is a third spawn pool alongside west/east — see SWEDEN_SOUTH, and `pool` in SWEDEN_STATS.
 const SWEDEN_LEGS = [
   {place:'Birka', icon:'🛡️', diff:SWEDEN_DIFF, era:'Vikings',
@@ -16766,7 +16044,7 @@ const SWEDEN_LEGS = [
    waveLine:' — a keel grinds up the shingle…',
    enter(b){ enterSwedenWorld(b || '🛡️ Birka — the hall doors are open and nothing living came out'); }},
   {place:'The Fjord', icon:'🌊', diff:FJORD_DIFF, era:'Vikings',
-   waves:FJORD_WAVES, stats:FJORD_STATS, west:FJORD_WEST, east:FJORD_EAST, jarl:FJORD_JARL_POOL,
+   waves:FJORD_WAVES, stats:FJORD_STATS, west:FJORD_WEST, east:FJORD_EAST,
    boss:FJORD_BOSS,
    waveLine:' — another keel comes out of the fog…',
    // The map's own shape, re-derived from the wave index every time a stage is spawned rather than
@@ -16777,16 +16055,6 @@ const SWEDEN_LEGS = [
    onWave(n){ fjordSetPlank(n >= 1); fjordSetLash(n >= 2); if(n === 1) fjordJarlApproach(); },
    onBoss(){ fjordSetPlank(true); fjordSetLash(true); },
    enter(b){ enterFjordWorld(b || '🌊 Out past the skerries — and they are already alongside'); }},
-  {place:'Gamla Uppsala', icon:'🌲', diff:UPPSALA_DIFF, era:'Vikings',
-   waves:UPPSALA_WAVES, stats:UPPSALA_STATS,
-   west:UPPSALA_WEST, east:UPPSALA_EAST, south:UPPSALA_SOUTH, boss:UPPSALA_BOSS,
-   waveLine:' — something else comes out of the tree line…',
-   // The fires are map state, re-derived per stage exactly as the Fjord's plank is: every wave and the
-   // boss's own first moment light them again, so dying in the dark and coming back never leaves you
-   // fighting a lit field's fight in an unlit one.
-   onWave(){ uppsalaSetFires(true); },
-   onBoss(){ uppsalaSetFires(true); },
-   enter(b){ enterUppsalaWorld(b || '🌲 Gamla Uppsala — the fires are lit, and the mounds are open'); }},
 ];
 // The leg currently underway. Clamped rather than indexed raw so a stale tripLeg can never return
 // undefined and take the spawn/HUD code down with it.
@@ -17247,12 +16515,12 @@ const DESTINATIONS = [
   // water that answers it. See SWEDEN_LEGS.
   // Sweden still comes home to Cairo — there is no hub out here to sell passage onward, and the
   // Aztec Market is where you bought this trip. Only the banner is its own: a destination that ends
-  // on a jarl's deck should not land you back in the bazaar with the same line the Nile wave uses.
-  {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka, the fjord and Uppsala, 800–1050', price:60, ready:true,
+  // on a troll's deck should not land you back in the bazaar with the same line the Nile wave uses.
+  {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka and the fjord, 800–1050', price:60, ready:true,
    lon: 17, lat: 60,
-   legs:SWEDEN_LEGS, homeBanner:'🏠 Home in Cairo — and a dead king’s gold came back with you',
+   legs:SWEDEN_LEGS, homeBanner:'🏠 Home in Cairo — and the fjord is quiet behind you',
    go(){ travelTo({name:'Sweden', legs:SWEDEN_LEGS,
-     homeBanner:'🏠 Home in Cairo — and a dead king’s gold came back with you'}); }},
+     homeBanner:'🏠 Home in Cairo — and the fjord is quiet behind you'}); }},
   {flag:'🐉', name:'China & Japan', era:'Yuan China to Kyushu · 1271–1281',       price:70, ready:false,
    lon:116, lat: 39, leg:{lon:133, lat:33}},   // the leg is the sea crossing to Kyushu, drawn dashed
 ];
@@ -17746,8 +17014,7 @@ function chatSay(text, kind){
 //   /tp sweden 1 2     that destination, leg 1, wave 2
 //   /tp sweden 1 boss  the boss that leg ends on
 //   /tp nile           the Nile wave, which sits on neither map
-//   /tp fjord          the Fjord, Sweden's second leg — the raid, fought on lashed decks
-//   /tp uppsala        Gamla Uppsala, Sweden's third and last leg — the temple, the grove, the mounds
+//   /tp fjord          the Fjord, Sweden's second and last leg — the raid, fought on lashed decks
 function adminTp(args){
   if(!args.length){ chatSay('/tp needs somewhere to go — try /tp 7 or /tp sweden', 'err'); return false; }
   const first = String(args[0]).toLowerCase();
@@ -17763,7 +17030,6 @@ function adminTp(args){
   }
   if(first === 'nile'){ enterNileWave(); chatSay('✓ the Nile wave', 'ok'); return true; }
   if(first === 'fjord'){ enterFjordWorld('🌊 The fjord — they are already alongside'); chatSay('✓ the Fjord', 'ok'); return true; }
-  if(first === 'uppsala'){ enterUppsalaWorld('🌲 Gamla Uppsala — the fires are lit and the mounds are open'); chatSay('✓ Gamla Uppsala', 'ok'); return true; }
 
   const era = ERA_NAMES.findIndex(nm => nm.toLowerCase() === first);
   if(era >= 0){
@@ -18543,7 +17809,7 @@ function onAllDead(){
         pending='tripboss'; betweenTimer=4.2;
         setBanner(leg.boss.call || '⚠ Something is coming…');
         // a boss may announce itself with a sound of its own during the four seconds before it walks
-        // out. The Jarl's call says a horn sounds twice; this is what makes it actually sound.
+        // out, by carrying a callSfx() of its own — this is what makes it actually sound.
         if(leg.boss.callSfx) leg.boss.callSfx();
         return;
       }
@@ -18888,8 +18154,8 @@ const SFX = (function(){
       noise(t+0.10,0.30,'lowpass',700,0.12,0.5,120,true); },
     // A lur, blown twice: a low brass blast with a fifth riding on it, the second a fourth higher.
     // Every other cue in this game is a transient — a crack, a slap, a thud — and this one is held,
-    // because it is the only sound in the arc that CALLS something. When the Jarl sounds it, men come
-    // up the middle ship, and you should know that from the sound before you see them.
+    // because it is the only sound in the arc that CALLS something — a boss's own horn, or a hird
+    // reinforcement wave, sounded so you know it from the sound before you see them.
     warHorn(){ if(!actx)return; const t=actx.currentTime;
       [147, 196].forEach((f,i)=>{
         const o = i*0.62;
@@ -19283,16 +18549,12 @@ function spawnFireMeteor(x,z){
 }
 function damageBot(bd, dmg, point){
   if(!bd.alive) return;
-  if(bd.skin==='minotaur' || bd.skin==='vanguard' || (bd.skin==='jarl' && bd.wallUp)){
-    // the lowered horned head, the Monolith Vanguard's carved stone shield, and the Jarl's own shield
-    // once he sets it at half health: damage from within the facing arc is reduced (not nearly blocked)
-    // — flanking, or hitting it from behind while its slow turn rate hasn't caught up, still lands full
-    // damage, but frontal hits aren't supposed to feel like shooting a brick wall. One rule, three
-    // enemies: "immune to frontal damage" expressed through the mechanic this game already has rather
-    // than a second system beside it.
-    // For the Jarl it is also the fight's whole question, because the Dane Axe's armourPierce is x2
-    // against a boss and this is x0.5: the axe comes through the wall at exactly full damage, and
-    // nothing else does.
+  if(bd.skin==='minotaur' || bd.skin==='vanguard'){
+    // the lowered horned head and the Monolith Vanguard's carved stone shield: damage from within the
+    // facing arc is reduced (not nearly blocked) — flanking, or hitting it from behind while its slow
+    // turn rate hasn't caught up, still lands full damage, but frontal hits aren't supposed to feel
+    // like shooting a brick wall. One rule, two enemies: "immune to frontal damage" expressed through
+    // the mechanic this game already has rather than a second system beside it.
     const dx=camera.position.x-bd.mesh.position.x, dz=camera.position.z-bd.mesh.position.z;
     let da = Math.atan2(-dx,-dz) - bd.facing;
     da = ((da+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2) - Math.PI;
@@ -19459,16 +18721,6 @@ function animate(){
   // the forge coals breathe, and the hillfort beacon gutters — both are MeshBasicMaterial, so this is the
   // only thing that makes them read as fire rather than as orange plastic
   if(birkaForge) birkaForge.material.color.setHex(Math.sin(t*3.1)>0.1 ? 0xff7a1a : 0xff9a3a);
-  // Uppsala's braziers and torches breathe. Each reads off its OWN phase and its own rate, so twelve
-  // fires are twelve fires rather than one animation played twelve times — and a guttered one is
-  // skipped entirely, because after the Mound King goes to work there is nothing left to breathe.
-  if(uppsalaWorld.parent && !uppsalaOut){
-    for(let i=0;i<uppsalaFires.length;i++){
-      const f = uppsalaFires[i];
-      f.flame.scale.set(1, 0.86 + Math.sin(t*(5.2+(i%3)*0.9) + f.phase)*0.14, 1);
-      f.light.intensity = f.base * (0.88 + Math.sin(t*(3.7+(i%5)*0.3) + f.phase)*0.12);
-    }
-  }
   if(birkaBeacon){
     birkaBeacon.scale.y = 1 + Math.sin(t*5.7)*0.16;
     birkaBeacon.rotation.y = t*0.9;
@@ -20311,131 +19563,39 @@ function animate(){
       }
     }
 
-    // JARL HÁKON (the Fjord's boss, and the end of the whole Sweden trip). The same two-tool shape
-    // every boss here has — one telegraphed hazard, one summon — plus a single change at half health.
-    // What makes him his own fight is WHERE he is: two crossings away, on a deck you have to come to,
-    // which means both of his tools have to work at range or the answer to him is to stand on your own
-    // ship and shoot. So the cast reaches across all three hulls and the horn fills the deck between
-    // you and him.
+    // THE SKERRY TROLL (the Fjord's boss, and the end of the whole Sweden trip). It has no hird to
+    // call up out of a horn and no shield to set — only its own club and its own temper, so the house
+    // shape every boss here uses is cut down to what a lone troll actually needs: one telegraphed
+    // hazard, and a change at half health.
     //
-    //   The spear cast: a telegraphed strike where the player IS, dodged by moving, out to 34 — far
-    //     enough to reach your own deck from his stern. Half a fjord away is not out of his reach.
-    //   The horn: his hird come up out of the middle ship, which is exactly the deck you have just
-    //     finished clearing. Capped at 3 live adds, as every other summon in this game is.
-    //   THE SHIELD WALL, at half health: he sets his shield and keeps it there for the rest of the
-    //     fight. Frontal damage is halved by the same facing-arc rule the minotaur's lowered head and
-    //     the Vanguard's stone shield already use — and the Dane Axe's armourPierce is x2 against a
-    //     boss, so the axe comes through the wall at full damage while the bow and the seax come
-    //     through it at half. The answer to the last enemy in the arc is the arc's own first weapon,
-    //     or going round him on a deck 4.9 wide. It is not a phase to learn; it is a reason to move.
-    if(b.boss && b.skin==='jarl' && player.alive){
-      const walled = b.hp <= b.maxHp*0.5;
-      if(walled && !b.wallUp){
-        b.wallUp = true;
+    //   The slam: the club comes down where the player IS, telegraphed and dodged by moving — the same
+    //     spawnAoeTelegraph() every other boss's hazard uses, just wider and harder, because a
+    //     standing stone pulled out of a grave field is not a spear.
+    //   AT HALF HEALTH, IT GOES INTO A RAGE: faster, and the slam lands more often. Nothing new is
+    //     built for this — b.speed and the cast cooldown are the same two numbers Jarl's wallUp and
+    //     the Mound King's dark phase used to tune. armourPierce already answers it at full strength
+    //     without a mechanic of its own: damageBot() doubles the Dane Axe against anything with
+    //     `boss:true`, the same as every other boss in the game.
+    if(b.boss && b.skin==='troll' && player.alive){
+      const raging = b.hp <= b.maxHp*0.5;
+      if(raging && !b.enraged){
+        b.enraged = true;
         b.speed *= 1.2;
         SFX.boss();
-        shakeAmt = Math.max(shakeAmt, 0.25);
-        setBanner('⚠ The Jarl sets his shield — come round it, or break it');
+        shakeAmt = Math.max(shakeAmt, 0.3);
+        setBanner('⚠ The troll goes into a rage');
         setTimeout(()=>{ if(bossActive) setBanner(''); },2000);
       }
-      // the tell, and it is the same object the damage rule reads: the shield comes up across his
-      // body and stays up. Eased rather than snapped, so it reads as a man setting himself.
-      if(ud.jarlShield){
-        const wantY = b.wallUp ? -0.34 : -0.52, wantR = b.wallUp ? 1.18 : 0.30;
-        ud.jarlShield.position.y += (wantY - ud.jarlShield.position.y) * Math.min(1, dt*3);
-        ud.jarlShield.rotation.y += (wantR - ud.jarlShield.rotation.y) * Math.min(1, dt*3);
-      }
-      b.castCd = b.castCd===undefined ? 3 : b.castCd - dt;
-      if(b.castCd <= 0 && distToPlayer < 34){
-        b.castCd = (4.6 + Math.random()*1.6) * (b.wallUp?0.65:1);
-        const cast=(ox,oz)=> spawnAoeTelegraph(camera.position.x+ox, camera.position.z+oz,
-          {ringColor:0x8f9aa6, fillColor:0xc4ced8, impactColor:0xf2f7fb,
-           ringR:1.9, impactAt:0.7, dur:1.25, hitRadius:1.9, damage:20});
-        cast(0,0);
-        // once the shield is up he throws a second one down the deck beside the first, so standing
-        // still is punished harder — but on a hull 4.9 across there is still somewhere to move TO
-        if(b.wallUp){ const a=Math.random()*Math.PI*2; cast(Math.cos(a)*3.0, Math.sin(a)*3.0); }
+      b.slamCd = b.slamCd===undefined ? 3.2 : b.slamCd - dt;
+      if(b.slamCd <= 0 && distToPlayer < 14){
+        b.slamCd = (4.8 + Math.random()*1.6) * (raging?0.6:1);
+        spawnAoeTelegraph(camera.position.x, camera.position.z,
+          {ringColor:0x8a8c86, fillColor:0xb8bab0, impactColor:0xf0f2ec,
+           ringR:2.6, impactAt:0.85, dur:1.4, hitRadius:2.6, damage:26});
         if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
         b.swing = 1;
         SFX.boss();
-        setBanner('⚠ The Jarl casts!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ The Jarl casts!') setBanner(''); },650);
-      }
-      b.hirdCd = b.hirdCd===undefined ? 7 : b.hirdCd - dt;
-      if(b.hirdCd <= 0 && bots.filter(o=>!o.boss && o.alive).length < 3){
-        b.hirdCd = (13 + Math.random()*4) * (b.wallUp?0.65:1);
-        const st = FJORD_STATS.hirdman;
-        for(let i=0;i<(b.wallUp?2:1);i++){
-          const sp = FJORD_WEST[(i + ((Math.random()*FJORD_WEST.length)|0)) % FJORD_WEST.length];
-          spawnBot(sp[0], sp[1], ENEMY_COLORS[(Math.random()*ENEMY_COLORS.length)|0],
-                   [sp[0]-2,0,sp[1]], [sp[0]+2,0,sp[1]], st.wt,
-                   {skin:'hirdman', hp:st.hp, diff:1.0, speed:st.speed, scale:st.scale});
-        }
-        SFX.warHorn();
-        setBanner('⚠ The horn — his hird come up the middle ship!');
-        setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
-      }
-    }
-
-    // THE MOUND KING (Gamla Uppsala's boss, the end of the Sweden trip, and the hardest thing in the
-    // game). The house shape — one telegraphed hazard, one summon, one change at half health — and all
-    // three of them are the same idea: he is the cold under the field, and he is taking it back.
-    //
-    //   Grave-cold: a telegraphed patch of frost where the player IS, dodged by moving. It reaches 30,
-    //     so the mound crown is not a safe place to stand and shoot from, only a good one.
-    //   The mounds answer: draugr come up out of the west, from the same turf the wave-one draugr did.
-    //     Capped at 3 live adds, exactly as every other summon in this game is.
-    //   AT HALF HEALTH, HE PUTS THE FIRES OUT. Every warm light on this map is a brazier or a torch
-    //     somebody lit, and he guts all of them at once: the braziers go dark, the fog closes to 62,
-    //     and the field drops to the blue nothing it is underneath. What is left burning is the
-    //     corpse-light in his own sockets and the stone in his crown, which brighten as it happens —
-    //     so the boss becomes the only thing in the field you can see, and the thing you have to aim
-    //     at is the thing that is hunting you. No new system: one call to uppsalaSetFires(false),
-    //     which every wave and the boss's own spawn already undo.
-    if(b.boss && b.skin==='moundking' && player.alive){
-      const dark = b.hp <= b.maxHp*0.5;
-      if(dark && !b.wentDark){
-        b.wentDark = true;
-        b.speed *= 1.25;
-        uppsalaSetFires(false);
-        SFX.boss();
-        shakeAmt = Math.max(shakeAmt, 0.4);
-        setBanner('⚠ The King puts the fires out — and the field goes with them');
-        setTimeout(()=>{ if(bossActive) setBanner(''); },2200);
-      }
-      // what is left of the light is on him. Pulsed rather than held, so it reads as something burning
-      // in a socket and not as a lamp bolted to his face.
-      if(ud.kingGlow){
-        const lit = dark ? 1 : 0.55, pulse = 0.82 + Math.sin(t*2.6 + b.t)*0.18;
-        for(const m of ud.kingGlow) m.material.color.setRGB(0.42*lit*pulse, 0.85*lit*pulse, 1.0*lit*pulse);
-      }
-      b.coldCd = b.coldCd===undefined ? 2.8 : b.coldCd - dt;
-      if(b.coldCd <= 0 && distToPlayer < 30){
-        b.coldCd = (4.4 + Math.random()*1.5) * (dark?0.62:1);
-        const cold=(ox,oz)=> spawnAoeTelegraph(camera.position.x+ox, camera.position.z+oz,
-          {ringColor:0x3f9ac4, fillColor:0x8ad4ee, impactColor:0xe8fbff,
-           ringR:2.0, impactAt:0.7, dur:1.3, hitRadius:2.0, damage:21});
-        cold(0,0);
-        // once the fires are out it comes in pairs, which is the same escalation the Shaman's shards
-        // and the Bearer's serpent use — harder to stand still in, still possible to move out of
-        if(dark){ const a=Math.random()*Math.PI*2; cold(Math.cos(a)*3.4, Math.sin(a)*3.4); }
-        if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
-        b.swing = 1;
-        SFX.boss();
-        setBanner('⚠ Grave-cold!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ Grave-cold!') setBanner(''); },650);
-      }
-      b.deadCd = b.deadCd===undefined ? 6.5 : b.deadCd - dt;
-      if(b.deadCd <= 0 && bots.filter(o=>!o.boss && o.alive).length < 3){
-        b.deadCd = (13 + Math.random()*4) * (dark?0.65:1);
-        const st = UPPSALA_STATS.draugr;
-        for(let i=0;i<(dark?2:1);i++){
-          const sp = UPPSALA_WEST[(i + ((Math.random()*UPPSALA_WEST.length)|0)) % UPPSALA_WEST.length];
-          spawnBot(sp[0], sp[1], ENEMY_COLORS[(Math.random()*ENEMY_COLORS.length)|0],
-                   [sp[0]-2,0,sp[1]], [sp[0]+2,0,sp[1]], st.wt,
-                   {skin:'draugr', hp:st.hp, diff:1.0, speed:st.speed, scale:st.scale,
-                    armoured:st.armoured, noFlinch:st.noFlinch});
-        }
-        SFX.boss();
-        setBanner('⚠ The mounds answer him!'); setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
+        setBanner('⚠ The club comes up!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ The club comes up!') setBanner(''); },650);
       }
     }
 

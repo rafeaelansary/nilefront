@@ -119,8 +119,6 @@ globalThis.__builders = {
   makeBerserkr: typeof makeBerserkr==='function' ? makeBerserkr : null,
   makeTroll: typeof makeTroll==='function' ? makeTroll : null,
   makeHirdman: typeof makeHirdman==='function' ? makeHirdman : null,
-  makeJarl: typeof makeJarl==='function' ? makeJarl : null,
-  makeMoundKing: typeof makeMoundKing==='function' ? makeMoundKing : null,
   makeDaneAxe: typeof makeDaneAxe==='function' ? makeDaneAxe : null,
   makeHunnishBow: typeof makeHunnishBow==='function' ? makeHunnishBow : null,
   makeThrowingSeax: typeof makeThrowingSeax==='function' ? makeThrowingSeax : null,
@@ -143,7 +141,6 @@ globalThis.__world = {
   aztecColliders:  typeof aztecColliders !== 'undefined' ? aztecColliders : null,
   heightZonesAztec:typeof heightZonesAztec!== 'undefined' ? heightZonesAztec : null,
   heightZonesOriginal:typeof heightZonesOriginal!== 'undefined' ? heightZonesOriginal: null,
-  heightZonesUppsala: typeof heightZonesUppsala !== 'undefined' ? heightZonesUppsala : null,
 };
 // Every world group and its collider array, for the whole-game sweep.
 globalThis.__worlds = {};
@@ -151,7 +148,7 @@ globalThis.__worlds = {};
  ['romanOverworld','romanColliders'],['islamicOverworld','islamicColliders'],
  ['mexicoOverworld','mexicoColliders'],['aztecOverworld','aztecColliders'],
  ['aztecMarketOverworld','aztecMarketColliders'],['swedenOverworld','swedenColliders'],
- ['fjordWorld','fjordColliders'],['uppsalaWorld','uppsalaColliders'],
+ ['fjordWorld','fjordColliders'],
  ['dungeon','dungeonColliders'],['pyramidDungeon','pyramidDungeonColliders'],
  ['greekDungeon','greekDungeonColliders'],['nileWorld','nileColliders'],
  ['hydraArena','hydraColliders'],['colosseumArena','colosseumColliders'],
@@ -207,10 +204,8 @@ ACTORS = [
     ("makeWarg",     "b=>b()",                              1.00, 0.00, "Warg"),
     ("makeNisse",    "b=>b()",                              1.00, 0.00, "Nisse"),
     ("makeBerserkr", "b=>b()",                              1.05, 0.00, "Berserkr"),
-    ("makeTroll",    "b=>b()",                              1.60, 0.00, "Troll"),
+    ("makeTroll",    "b=>b()",                              1.90, 0.00, "Skerry Troll (Fjord boss)"),
     ("makeHirdman",  "b=>b()",                              1.00, 0.00, "Hirdman"),
-    ("makeJarl",     "b=>b()",                              1.50, 0.00, "Jarl (Fjord boss)"),
-    ("makeMoundKing","b=>b()",                              1.80, 0.00, "Mound King (Uppsala)"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor

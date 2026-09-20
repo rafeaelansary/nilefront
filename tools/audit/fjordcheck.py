@@ -264,13 +264,13 @@ ok &= show("a 1.9-wide troll can walk your whole deck, cargo and all", run("""
 # boss walks straight at you and does not slide along what blocks him, so anything he can catch a
 # shoulder on between his deck and yours ends the fight early in his favour -- he stops, you shoot
 # him from cover, and the boarding never happens. This caught exactly that: at a 1.15 rail gap he
-# stalled at the gangway for every player position except dead amidships, and at a 1.90 one the Jarl
+# stalled at the gangway for every player position except dead amidships, and at a 1.90 one the boss
 # grazed the rail from the plank's own edge and stopped a metre and a half short of the deck.
 #
-# 1500 frames rather than the 900 this ran at while the boss stood on the middle deck: the Jarl is
+# 1500 frames rather than the 900 this ran at while the boss stood on the middle deck: the troll is
 # two crossings away, not one, and the walk from his stern to your deck takes about 1100 of them.
 # Frames, not seconds -- the headless clock runs as fast as the loop does.
-ok &= show("the Jarl gets off his ship and onto yours, wherever you stand", run("""
+ok &= show("the troll gets off his ship and onto yours, wherever you stand", run("""
   gameStarted=true;
   var wasGod = godMode; godMode = true;                 // the point is where HE gets to, not your HP
   var d=DESTINATIONS.filter(function(x){return x.name==='Sweden';})[0];
@@ -284,7 +284,7 @@ ok &= show("the Jarl gets off his ship and onto yours, wherever you stand", run(
     var dist=Math.hypot(bx-1.0, bz-pz);
     // either he is aboard your deck, or he has closed to the range at which a boss stops walking
     if(bx <= FJORD_OWN_DECK.x1 && dist > 4.3)
-      throw new Error('with you at z'+pz+' the Jarl stalled at x'+bx.toFixed(2)+' z'+bz.toFixed(2)+', '+dist.toFixed(2)+' away');
+      throw new Error('with you at z'+pz+' the troll stalled at x'+bx.toFixed(2)+' z'+bz.toFixed(2)+', '+dist.toFixed(2)+' away');
     out.push('z'+pz+':'+(bx > FJORD_OWN_DECK.x1 ? 'aboard' : 'in reach of you'));
   });
   godMode = wasGod;
@@ -292,77 +292,57 @@ ok &= show("the Jarl gets off his ship and onto yours, wherever you stand", run(
 """))
 
 # ---- the third keel: wave three, and the deck the arena grows by ----
-# The whole set piece is built on "the arena grows as you win", and until the Jarl's ship there was
-# exactly one growth in it. This asserts the second one from both ends: nothing of his exists while
-# the duel is on -- not the hull's position, not the plank, not the gap in the rail -- and all three
-# are there on wave three, on a stage that can be entered cold.
+# The whole set piece is built on "the arena grows as you win", and this is the second growth in it.
+# This asserts it from both ends: nothing of the third ship exists while the duel is on -- not the
+# hull's position, not the plank, not the gap in the rail -- and all three are there on wave three, on
+# a stage that can be entered cold. Nobody stands on that deck yet, though: it is quiet until the boss.
 ok &= show("wave three lashes the third ship on, and only wave three", run("""
   gameStarted=true;
   var d=DESTINATIONS.filter(function(x){return x.name==='Sweden';})[0];
   var gateX = FJORD_JARL_X + FJORD_RAIL_X;
   jumpToDestStage(d,1,0);
-  if(fjordLashed) throw new Error('the Jarl is alongside during the duel');
-  if(fjordJarlPlank.visible) throw new Error('his plank is down during the duel');
-  if(!insideCollider(gateX,0,0.45,0)) throw new Error('his rail gap is open before he is there');
+  if(fjordLashed) throw new Error('the third ship is alongside during the duel');
+  if(fjordJarlPlank.visible) throw new Error('its plank is down during the duel');
+  if(!insideCollider(gateX,0,0.45,0)) throw new Error('its rail gap is open before it is there');
   if(Math.abs(fjordJarlShip.grp.position.x - FJORD_JARL_FAR.x) > 0.01)
-    throw new Error('his hull is not out in the fog: x='+fjordJarlShip.grp.position.x.toFixed(2));
-  if(fjordDecks(false).indexOf(FJORD_JARL_DECK) >= 0) throw new Error('his deck is walkable in wave one');
+    throw new Error('its hull is not out in the fog: x='+fjordJarlShip.grp.position.x.toFixed(2));
+  if(fjordDecks(false).indexOf(FJORD_JARL_DECK) >= 0) throw new Error('its deck is walkable in wave one');
   jumpToDestStage(d,1,2);
-  if(!fjordLashed) throw new Error('wave three did not lash him on');
+  if(!fjordLashed) throw new Error('wave three did not lash it on');
   if(!fjordJarlPlank.visible) throw new Error('the second plank never dropped');
-  if(insideCollider(gateX,0,0.45,0)) throw new Error('his rail gap never opened');
+  if(insideCollider(gateX,0,0.45,0)) throw new Error('its rail gap never opened');
   if(Math.abs(fjordJarlShip.grp.position.x - FJORD_JARL_X) > 0.01)
-    throw new Error('his hull did not come alongside: x='+fjordJarlShip.grp.position.x.toFixed(2));
-  if(fjordJarlShip.grp.rotation.y !== 0) throw new Error('he lashed on at an angle');
-  if(!fjordJarlShip.lashed) throw new Error('his hull is still riding the swell with men on it');
-  if(fjordDecks(false).indexOf(FJORD_JARL_DECK) < 0) throw new Error('his deck is not floor');
-  if(fjordDecks(true).indexOf(FJORD_JARL_DECK) < 0) throw new Error('his deck is not floor for the crew');
-  // the champion is on it, and he is the armoured one
-  var troll = bots.filter(function(b){ return b.skin==='troll'; })[0];
-  if(!troll) throw new Error('wave three has no troll in it');
-  if(!troll.armoured) throw new Error('the troll is not armoured -- the axe has nothing to answer');
-  if(fjordNearestDeck(troll.mesh.position.x, troll.mesh.position.z, [FJORD_JARL_DECK])[2] > 1e-8)
-    throw new Error('the champion is not on the jarl deck');
+    throw new Error('its hull did not come alongside: x='+fjordJarlShip.grp.position.x.toFixed(2));
+  if(fjordJarlShip.grp.rotation.y !== 0) throw new Error('it lashed on at an angle');
+  if(!fjordJarlShip.lashed) throw new Error('its hull is still riding the swell with men on it');
+  if(fjordDecks(false).indexOf(FJORD_JARL_DECK) < 0) throw new Error('its deck is not floor');
+  if(fjordDecks(true).indexOf(FJORD_JARL_DECK) < 0) throw new Error('its deck is not floor for the crew');
+  // nobody spawns there in wave three -- the troll waits for the boss stage, not the crew
+  var onThird = bots.some(function(b){
+    return fjordNearestDeck(b.mesh.position.x, b.mesh.position.z, [FJORD_JARL_DECK])[2] <= 1e-8;
+  });
+  if(onThird) throw new Error('wave three put a bot on the third deck before the boss');
   // ...and going back to the duel sends the whole thing out to sea again
   jumpToDestStage(d,1,0);
-  if(fjordLashed || fjordJarlPlank.visible) throw new Error('re-entering wave one left him lashed on');
-  if(!insideCollider(gateX,0,0.45,0)) throw new Error('re-entering wave one left his rail gap open');
-  return 'out in the fog for waves one and two, alongside for three, and back out on re-entry';
-"""))
-
-# His deck is spawn ground for the only pool in the game that is a ship -- and the troll standing on
-# it is 1.9 across, so "clear" here means clear at a radius nothing else in this leg is measured at.
-ok &= show("every place a man stands on the Jarl's deck is on it, and clear", run("""
-  gameStarted=true;
-  var d=DESTINATIONS.filter(function(x){return x.name==='Sweden';})[0];
-  jumpToDestStage(d,1,2);
-  FJORD_JARL_POOL.forEach(function(p){
-    if(fjordNearestDeck(p[0],p[1],[FJORD_JARL_DECK])[2] > 1e-8)
-      throw new Error('spawn '+p+' is not on his deck at all');
-    if(insideCollider(p[0],p[1],1.1,0)) throw new Error('spawn '+p+' is inside his cargo at a 1.1 radius');
-  });
-  // no two of them on top of each other, or wave three spawns men inside men
-  for(var i=0;i<FJORD_JARL_POOL.length;i++) for(var j=i+1;j<FJORD_JARL_POOL.length;j++){
-    var a=FJORD_JARL_POOL[i], b=FJORD_JARL_POOL[j];
-    if(Math.hypot(a[0]-b[0], a[1]-b[1]) < 1.6) throw new Error('spawns '+a+' and '+b+' are on top of each other');
-  }
-  return FJORD_JARL_POOL.length+' places to stand, all aboard him and all clear at 1.1';
+  if(fjordLashed || fjordJarlPlank.visible) throw new Error('re-entering wave one left it lashed on');
+  if(!insideCollider(gateX,0,0.45,0)) throw new Error('re-entering wave one left its rail gap open');
+  return 'out in the fog for waves one and two, alongside and empty for three, and back out on re-entry';
 """))
 
 # The boss himself. He ends the trip, so the two things that can silently ruin that are: he spawns
 # inside his own ship, or there is no walkable line from where you respawn to where he stands.
-ok &= show("the Jarl stands clear on his own deck, and you can walk to him", run("""
+ok &= show("the troll stands clear on the third deck, and you can walk to him", run("""
   gameStarted=true;
   var d=DESTINATIONS.filter(function(x){return x.name==='Sweden';})[0];
   jumpToDestStage(d,1,FJORD_WAVES.length);
   var boss = bots.filter(function(b){ return b.boss; })[0];
   if(!boss) throw new Error('no boss on the boss stage');
-  if(boss.skin !== 'jarl') throw new Error('the Fjord ends on a '+boss.skin);
+  if(boss.skin !== 'troll') throw new Error('the Fjord ends on a '+boss.skin);
   if(!fjordPlanked || !fjordLashed) throw new Error('the boss stage did not open both crossings');
   if(insideCollider(FJORD_BOSS.x, FJORD_BOSS.z, boss.radius, 0))
-    throw new Error('the Jarl spawns inside his own ship');
+    throw new Error('the troll spawns inside its own ship');
   if(fjordNearestDeck(FJORD_BOSS.x, FJORD_BOSS.z, [FJORD_JARL_DECK])[2] > 1e-8)
-    throw new Error('the Jarl is not on his own deck');
+    throw new Error('the troll is not on the third deck');
   // flood the walkable floor from where a death puts you, at the player's own radius, and see
   // whether it reaches him
   var R=0.45, step=0.25, rects=fjordDecks(false);
@@ -379,51 +359,46 @@ ok &= show("the Jarl stands clear on his own deck, and you can walk to him", run
       seen[k]=1; stack.push([nx,nz]);
     });
   }
-  if(best > 2.6) throw new Error('the closest you can walk to the Jarl is '+best.toFixed(2)+' -- out of axe reach');
+  if(best > 2.6) throw new Error('the closest you can walk to the troll is '+best.toFixed(2)+' -- out of axe reach');
   return Object.keys(seen).length+' walkable spots from the respawn, closest approach '+best.toFixed(2);
 """))
 
-# THE SHIELD WALL, as arithmetic. At half health frontal damage halves, and the Dane Axe's
-# armourPierce is x2 against a boss -- so the axe comes through the wall at exactly its own damage
-# and everything else comes through at half. If either number ever moves, this is the fight that
-# quietly stops having a question in it.
-ok &= show("the shield wall halves what hits it, and the axe reads straight through", run("""
+# THE RAGE, as arithmetic, and the axe reads straight through regardless. There is no facing-arc
+# gimmick on this boss -- damageBot() already doubles the Dane Axe against anything with `boss:true`,
+# the same as every other boss in the game -- so what this asserts is the one thing that IS new:
+# the half-health speed jump, once and only once.
+ok &= show("the troll goes into a rage at half health, once, and the axe reads full through it", run("""
   gameStarted=true;
   var d=DESTINATIONS.filter(function(x){return x.name==='Sweden';})[0];
   jumpToDestStage(d,1,FJORD_WAVES.length);
   var boss = bots.filter(function(b){ return b.boss; })[0];
-  var axe = swedenWeapons[0].userData, bow = swedenWeapons[1].userData;
+  var axe = swedenWeapons[0].userData;
   if(!axe.armourPierce) throw new Error('the Dane Axe has no armourPierce left');
-  // stand in front of him, and make him face you
-  boss.mesh.position.set(FJORD_BOSS.x, 0, FJORD_BOSS.z);
-  camera.position.set(FJORD_BOSS.x, 1.7, FJORD_BOSS.z-3.2);
-  boss.facing = 0;
+  var baseSpeed = boss.speed;
   function hit(dmg){ var h0=boss.hp; damageBot(boss, dmg); var d0=h0-boss.hp; boss.hp=h0; return d0; }
-  if(boss.wallUp) throw new Error('the wall is up before he is hurt');
-  if(Math.abs(hit(100)-100) > 1e-6) throw new Error('the wall is already reducing damage at full health');
-  // drive him under half and let the AI set the shield, the way the fight does
+  if(boss.enraged) throw new Error('the troll is already enraged before it is hurt');
+  if(Math.abs(hit(axe.damage*axe.armourPierce)-axe.damage*axe.armourPierce) > 1e-6)
+    throw new Error('the axe does not read its own armourPierce damage against the boss');
+  // drive it under half and let the AI notice, the way the fight does
   boss.hp = boss.maxHp*0.4;
   for(var i=0;i<20;i++) animate();
-  if(!boss.wallUp) throw new Error('he never set his shield at 40% health');
-  var frontal = hit(100), pierced = hit(axe.damage*axe.armourPierce), plain = hit(bow.damage);
-  if(Math.abs(frontal-50) > 1e-6) throw new Error('frontal damage is '+frontal+', not halved');
-  if(Math.abs(pierced-axe.damage) > 1e-6)
-    throw new Error('the axe reads '+pierced.toFixed(1)+' through the wall, not its own '+axe.damage);
-  if(Math.abs(plain-bow.damage*0.5) > 1e-6) throw new Error('the bow reads '+plain.toFixed(1)+' through the wall');
-  // ...and from behind him the shield is not in the way
-  camera.position.set(FJORD_BOSS.x, 1.7, FJORD_BOSS.z+3.2);
-  if(Math.abs(hit(100)-100) > 1e-6) throw new Error('the wall works from behind him too');
-  return 'front 50 of 100, axe '+pierced.toFixed(0)+' of its own '+axe.damage+', behind him 100 of 100';
+  if(!boss.enraged) throw new Error('it never went into a rage at 40% health');
+  if(Math.abs(boss.speed-baseSpeed*1.2) > 1e-6)
+    throw new Error('rage speed is '+boss.speed.toFixed(2)+', expected '+(baseSpeed*1.2).toFixed(2));
+  // and it does not re-trigger or re-multiply on a second animate() pass
+  for(var j=0;j<20;j++) animate();
+  if(Math.abs(boss.speed-baseSpeed*1.2) > 1e-6)
+    throw new Error('rage speed drifted to '+boss.speed.toFixed(2)+' on a second pass');
+  return 'base '+baseSpeed.toFixed(2)+', enraged '+boss.speed.toFixed(2)+', axe '+(axe.damage*axe.armourPierce).toFixed(0)+' through clean';
 """))
 
-# The whole leg, start to finish, in one run: three waves, the boss, and the crossing it hands on to.
+# The whole leg, start to finish, in one run: three waves, the boss, and the road home.
 # Every piece of this is asserted somewhere above in isolation -- what this one catches is the ladder
 # coming apart at a JOIN, which is the failure no single-stage test can see.
 #
-# The Jarl used to end the Sweden trip and send the player home to Cairo. He does not any more: a third
-# leg follows him now, so what this asserts is the HANDOVER -- his death crosses to Gamla Uppsala, on
-# the leg machinery, with the right map under the player's feet when it lands.
-ok &= show("the whole leg plays through: three fights, the Jarl, and the crossing inland", run("""
+# The Fjord is Sweden's last leg now, so what this asserts is the HANDOVER -- the troll's death sends
+# the player home to Cairo, on the leg machinery, with nothing of the Fjord left in the scene.
+ok &= show("the whole leg plays through: three fights, the troll, and the road home", run("""
   gameStarted=true; var wasGod=godMode; godMode=true;
   var d=DESTINATIONS.filter(function(x){return x.name==='Sweden';})[0];
   jumpToDestStage(d,1,0);
@@ -436,17 +411,13 @@ ok &= show("the whole leg plays through: three fights, the Jarl, and the crossin
   }
   for(var k=0;k<want.length;k++) if(seen[k] !== want[k])
     throw new Error('stage '+(k+1)+' was '+seen[k]+', expected '+want[k]+' (whole ladder: '+seen.join(' ')+')');
-  if(bossActive) throw new Error('the boss bar is still up after he fell');
+  if(bossActive) throw new Error('the boss bar is still up after it fell');
   for(var i=0;i<900;i++) animate();
-  if(inHub) throw new Error('clearing the Jarl went home instead of inland');
-  if(!tripDest) throw new Error('the trip ended on the Jarl');
-  var leg = curLeg();
-  if(!leg || leg.place !== 'Gamla Uppsala')
-    throw new Error('the Jarl handed on to '+(leg ? leg.place : 'nowhere'));
-  if(fjordWorld.parent) throw new Error('the Fjord is still in the scene on the next leg');
-  if(!uppsalaWorld.parent) throw new Error('the crossing did not land on Uppsala');
-  if(tripWave !== 0) throw new Error('the next leg started at wave '+(tripWave+1));
-  return seen.join(' -> ')+' -> Gamla Uppsala';
+  if(!inHub) throw new Error('clearing the troll did not send the player home');
+  if(tripDest) throw new Error('the trip did not end on the troll');
+  if(fjordWorld.parent) throw new Error('the Fjord is still in the scene after the trip ends');
+  godMode = wasGod;
+  return seen.join(' -> ')+' -> home';
 """))
 
 sys.exit(0 if ok else 1)
