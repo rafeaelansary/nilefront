@@ -60,6 +60,7 @@ PLAYER_ENTRY = {
     "swedenOverworld": (0, 24),
     "fjordWorld": (0, 3.4),
     "xiangyangWorld": (0, 24),
+    "yamenWorld": (-16, 3.0),
 }
 # Built but never reached: startGame() drops the player straight into the pyramid
 # overworld, and enterDungeon() only ever runs with dungeonWasPyramid true.

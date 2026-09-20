@@ -123,6 +123,7 @@ globalThis.__builders = {
   makeSongCrossbowman: typeof makeSongCrossbowman==='function' ? makeSongCrossbowman : null,
   makeSongGuard: typeof makeSongGuard==='function' ? makeSongGuard : null,
   makeSongCommander: typeof makeSongCommander==='function' ? makeSongCommander : null,
+  makeYamenAdmiral: typeof makeYamenAdmiral==='function' ? makeYamenAdmiral : null,
   makeDaneAxe: typeof makeDaneAxe==='function' ? makeDaneAxe : null,
   makeHunnishBow: typeof makeHunnishBow==='function' ? makeHunnishBow : null,
   makeThrowingSeax: typeof makeThrowingSeax==='function' ? makeThrowingSeax : null,
@@ -152,7 +153,7 @@ globalThis.__worlds = {};
  ['romanOverworld','romanColliders'],['islamicOverworld','islamicColliders'],
  ['mexicoOverworld','mexicoColliders'],['aztecOverworld','aztecColliders'],
  ['aztecMarketOverworld','aztecMarketColliders'],['swedenOverworld','swedenColliders'],
- ['fjordWorld','fjordColliders'],['xiangyangWorld','xiangyangColliders'],
+ ['fjordWorld','fjordColliders'],['xiangyangWorld','xiangyangColliders'],['yamenWorld','yamenColliders'],
  ['dungeon','dungeonColliders'],['pyramidDungeon','pyramidDungeonColliders'],
  ['greekDungeon','greekDungeonColliders'],['nileWorld','nileColliders'],
  ['hydraArena','hydraColliders'],['colosseumArena','colosseumColliders'],
@@ -215,6 +216,7 @@ ACTORS = [
     ("makeSongCrossbowman", "b=>b()",                        1.00, 0.00, "Song Crossbowman"),
     ("makeSongGuard",       "b=>b()",                        1.05, 0.00, "Song Guard (armoured elite)"),
     ("makeSongCommander",   "b=>b()",                        1.55, 0.00, "Song Siege Commander (Xiangyang boss)"),
+    ("makeYamenAdmiral",    "b=>b()",                        1.60, 0.00, "Yamen Admiral (China finale boss)"),
 ]
 
 TOLERANCE = 0.02  # a model may sit at most this far above/below its floor
