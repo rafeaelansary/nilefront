@@ -145,35 +145,114 @@ ok &= show("Xiangyang is a real world: enterable, removable, reachable from /tp"
   return 'enter/leave/tp all clean, China loadout equipped';
 """))
 
-# The gate is the one thing this map mutates. Re-derivable STATE, not an event -- forced shut on every
-# entry (see enterXiangyangWorld()) and re-opened only by a caller that means it -- so a death or a /tp
-# mid-siege can never leave the gate disagreeing with itself.
-ok &= show("the gate is shut on every entry, and xiangyangSetBreach() is re-derivable state", run("""
+# The rampart is the point of this map, and it only exists if a defender can actually stand on it.
+ok &= show("the wall carries a real rampart, reachable by its own stair", run("""
   gameStarted = true;
-  enterXiangyangWorld('test');
-  if(xiangyangBreached) throw new Error('the gate is open on a fresh entry');
-  if(!xyGateDoor.visible) throw new Error('the gate leaves are not visible while shut');
-  if(xyGateRubble.visible) throw new Error('the rubble is visible before the gate ever opens');
-  if(xiangyangColliders.indexOf(xyGateCollider) < 0) throw new Error('the shut gate has no collider');
-  if(!insideCollider(0, XY_WALL_Z, 0.45, 0)) throw new Error('the shut gate does not actually block the gap');
+  enterXiangyangWorld('t');
+  // the walk itself: a plateau at the wall's height, over the wall's own footprint
+  var walk = heightZonesXiangyang.filter(function(z){ return z.type==='plateau' && Math.abs(z.y-XY_WALL_H)<1e-6; });
+  if(!walk.length) throw new Error('the wall has no rampart plateau at all');
+  var onWalk = walk.filter(function(z){ return z.x1 < -8 && z.x2 > -12; })[0];
+  if(!onWalk) throw new Error('no rampart bay covers x=-10, where the garrison is meant to stand');
+  if(Math.abs(getTerrainHeight(-10, XY_WALL_Z, undefined) - XY_WALL_H) > 1e-6)
+    throw new Error('terrain at x=-10 on the wall reads '+getTerrainHeight(-10,XY_WALL_Z,undefined));
+  // a bot put up there stays up there -- the whole reason the engine fix exists
+  clearBots();
+  var m = spawnBot(-10, XY_WALL_Z, 0x808080, [-10,0,XY_WALL_Z], [-10,0,XY_WALL_Z], 'pistol',
+                   {skin:'songcrossbowman', hp:100});
+  if(Math.abs(m.userData.data.groundY - XY_WALL_H) > 1e-6)
+    throw new Error('a crossbowman on the wall seeded groundY '+m.userData.data.groundY);
+  // ...across a long run, with the player far away and out of his line, so he is on the WANDER branch
+  // the whole time -- which is exactly the case that used to walk him off a 2.7-wide walk in under a
+  // second. The leash in xiangyangTick() is what holds him.
+  camera.position.set(0, 1.7, 26);
+  for(var i=0;i<300;i++) animate();
+  if(m.userData.data.groundY < XY_WALL_H - 0.3)
+    throw new Error('he sank to '+m.userData.data.groundY.toFixed(2)+' after 300 frames of wandering');
+  if(Math.abs(m.position.z - XY_WALL_Z) > XY_WALL_T)
+    throw new Error('he wandered to z='+m.position.z.toFixed(2)+', off the wall entirely');
+  clearBots();
+  // the stair on the inside face: a ramp zone that actually reaches the walk
+  var stair = heightZonesXiangyang.filter(function(z){ return z.type==='ramp' && z.axisX===false
+                 && Math.max(z.y1,z.y2) >= XY_WALL_H-1e-6 && z.z2 < XY_WALL_Z; })[0];
+  if(!stair) throw new Error('there is no stair up the inside of the wall');
+  var lowZ = (stair.y1 > stair.y2) ? stair.z2 : stair.z1;
+  if(Math.abs(getTerrainHeight((stair.x1+stair.x2)/2, lowZ, undefined)) > 0.2)
+    throw new Error('the stair does not start at ground level');
+  return 'rampart at '+XY_WALL_H+' over '+walk.length+' bays, a crossbowman holds it, and a stair reaches it';
+"""))
+
+# The breach: shut is a solid bay with no way through it; open is a climbable pile with no collider.
+# Re-derivable state on the fjordSetPlank pattern, so entering, dying or /tp-ing can never disagree.
+ok &= show("the breach is re-derivable state: solid bay, then a pile you climb", run("""
+  gameStarted = true;
+  enterXiangyangWorld('t');
+  var bx = (XY_BREACH_X0+XY_BREACH_X1)/2;
+  if(xiangyangBreached) throw new Error('the wall is already breached on a fresh entry');
+  if(!xyBreachWall.visible) throw new Error('the intact bay is not visible while the wall is whole');
+  if(xyBreachRubble.visible) throw new Error('the rubble is visible before anything has come down');
+  if(!insideCollider(bx, XY_WALL_Z, 0.45, 0)) throw new Error('the intact bay does not block the gap');
+  if(heightZonesXiangyang.indexOf(xyBreachZone[0]) >= 0) throw new Error('the rubble ramp exists before the breach');
 
   xiangyangSetBreach(true);
-  if(!xiangyangBreached) throw new Error('xiangyangSetBreach(true) did not flip the flag');
-  if(xyGateDoor.visible) throw new Error('the gate leaves are still visible after the breach');
-  if(!xyGateRubble.visible) throw new Error('the rubble never appeared');
-  if(xiangyangColliders.indexOf(xyGateCollider) >= 0) throw new Error('the breached gate still has a collider');
-  if(insideCollider(0, XY_WALL_Z, 0.45, 0)) throw new Error('the breach does not actually open the gap');
+  if(xyBreachWall.visible) throw new Error('the intact bay is still visible after the breach');
+  if(!xyBreachRubble.visible) throw new Error('no rubble after the breach');
+  if(insideCollider(bx, XY_WALL_Z, 0.45, 0)) throw new Error('the breach is still solid');
+  // and it must be CLIMBABLE from the outside: ground at the foot, rising to a crest on the wall line
+  var foot = getTerrainHeight(bx, XY_WALL_Z+XY_WALL_T/2+2.0, undefined);
+  var crest = getTerrainHeight(bx, XY_WALL_Z, undefined);
+  if(crest <= foot + 1.5) throw new Error('the rubble does not rise: foot '+foot.toFixed(2)+' crest '+crest.toFixed(2));
+  var inside = getTerrainHeight(bx, XY_WALL_Z-XY_WALL_T/2-2.0, undefined);
+  if(inside > crest - 1.5) throw new Error('the rubble does not fall away on the city side');
 
-  // re-entering the map must force it shut again, regardless of what the last visit left it as
-  enterXiangyangWorld('test');
-  if(xiangyangBreached) throw new Error('re-entering the map left the gate open');
-  if(xiangyangColliders.indexOf(xyGateCollider) < 0) throw new Error('re-entering the map left the gap unguarded');
+  // re-entry always puts the wall back up, whatever the last visit left
+  enterXiangyangWorld('t');
+  if(xiangyangBreached) throw new Error('re-entering left the wall breached');
+  if(!insideCollider(bx, XY_WALL_Z, 0.45, 0)) throw new Error('re-entering left the gap open');
+  if(heightZonesXiangyang.indexOf(xyBreachZone[0]) >= 0) throw new Error('re-entering left the rubble ramp in place');
+  // calling it twice is a no-op, not a second splice
+  xiangyangSetBreach(true); xiangyangSetBreach(true);
+  var n = heightZonesXiangyang.filter(function(z){ return z===xyBreachZone[0]; }).length;
+  if(n !== 1) throw new Error('the rubble ramp is in the zone list '+n+' times');
+  return 'solid bay blocks; breached it rises '+(crest-foot).toFixed(1)+' to a crest and falls away inside';
+"""))
 
-  // calling it twice with the same value must be a no-op, not a double-push onto the collider list
-  xiangyangSetBreach(false); xiangyangSetBreach(false);
-  var hits = xiangyangColliders.filter(function(c){ return c === xyGateCollider; }).length;
-  if(hits !== 1) throw new Error('the gate collider appears '+hits+' times after calling shut twice');
-  return 'shut by default, breach opens the gap and shows rubble, re-entry always forces it shut again';
+# The gate is its own switch, and the leg OPENS with it open -- the garrison has come out to fight.
+ok &= show("the gate opens the leg and shuts behind the sortie", run("""
+  gameStarted = true;
+  enterXiangyangWorld('t');
+  if(xyGateShut) throw new Error('the leg starts with the gate shut');
+  if(xyGateDoor.visible) throw new Error('the leaves are drawn while the gate is open');
+  if(insideCollider(0, XY_WALL_Z, 0.45, 0)) throw new Error('the open gate is still solid');
+  xiangyangSetGate(true);
+  if(!xyGateDoor.visible) throw new Error('the leaves are not drawn once it is shut');
+  if(!insideCollider(0, XY_WALL_Z, 0.45, 0)) throw new Error('the shut gate does not block the passage');
+  enterXiangyangWorld('t');
+  if(xyGateShut) throw new Error('re-entering left the gate shut');
+  return 'open on arrival, solid when shut, open again on re-entry';
+"""))
+
+# The trebuchet is a machine, not a prop: it cycles, it looses, and a stone lands somewhere real.
+ok &= show("the trebuchet winds, looses, and lands a stone where it was aimed", run("""
+  gameStarted = true;
+  enterXiangyangWorld('t');
+  if(!xyTreb) throw new Error('there is no trebuchet');
+  if(xyTreb.state !== 'wind') throw new Error('it does not start winding, it starts '+xyTreb.state);
+  var landed = null;
+  trebLooseAt(6.0, XY_WALL_Z, function(x,z){ landed = [x,z]; });
+  // run it forward far enough to cover hold -> loose -> the stone's whole flight
+  var seen = {};
+  for(var i=0;i<400;i++){ xiangyangTrebTick(0.016, i*0.016); seen[xyTreb.state]=1; if(landed) break; }
+  if(!landed) throw new Error('400 ticks and nothing landed; state is '+xyTreb.state);
+  if(Math.abs(landed[0]-6.0) > 1e-6 || Math.abs(landed[1]-XY_WALL_Z) > 1e-6)
+    throw new Error('it landed at '+landed+' rather than where it was aimed');
+  if(!seen['loose']) throw new Error('it never passed through the loose state');
+  if(!xyTreb.dust.visible) throw new Error('no dust where the stone hit');
+  // and it recovers back to winding on its own, ready to fire again
+  for(var j=0;j<600 && xyTreb.state!=='wind'; j++) xiangyangTrebTick(0.016, j*0.016);
+  if(xyTreb.state !== 'wind') throw new Error('it never returned to winding; stuck in '+xyTreb.state);
+  if(xyTreb.stone.parent !== xyTreb.sling) throw new Error('it did not reload the stone into its sling');
+  return 'wind -> hold -> loose -> flight -> impact at the aim point -> reloaded and winding again';
 """))
 
 # The wave ladder, fought entirely on the siege side -- the gate stays SHUT through every regular wave,
@@ -202,20 +281,39 @@ ok &= show("Xiangyang's three waves spawn the right roster, gate shut throughout
 # The boss stage: the gate opens, the commander stands in the breach, and he is who the Zhanmadao's
 # armourPierce answers next -- the same generic boss:true path the troll and every other boss use, so
 # no new mechanic is required for that part.
-ok &= show("the Siege Commander opens the breach and stands in it", run("""
+ok &= show("the Siege Commander is fought inside the city, past a wall that is already down", run("""
   gameStarted = true;
   var d = {name:'China', legs:CHINA_LEGS};
   jumpToDestStage(d, 0, XIANGYANG_WAVES.length);
   var boss = bots.filter(function(b){ return b.boss; })[0];
   if(!boss) throw new Error('no boss on the boss stage');
   if(boss.skin !== 'songcommander') throw new Error('Xiangyang ends on a '+boss.skin);
-  if(!xiangyangBreached) throw new Error('the boss stage did not open the breach');
+  if(!xiangyangBreached) throw new Error('the boss is fought with the wall still whole');
+  // he stands INSIDE: north of the wall line, on open ground, clear of the yamen and the drum tower
+  if(XIANGYANG_BOSS.z > XY_WALL_Z - 6)
+    throw new Error('the boss at z='+XIANGYANG_BOSS.z+' is not properly inside the city');
   if(insideCollider(XIANGYANG_BOSS.x, XIANGYANG_BOSS.z, boss.radius, 0))
-    throw new Error('the commander spawns inside the town geometry');
-  // re-entering an earlier wave must shut the gate again
-  jumpToDestStage(d, 0, 0);
-  if(xiangyangBreached) throw new Error('returning to wave one left the breach open');
-  return 'the commander stands clear in the breach, and leaving re-shuts the gate';
+    throw new Error('the commander spawns inside the city geometry');
+  if(Math.abs(getTerrainHeight(XIANGYANG_BOSS.x, XIANGYANG_BOSS.z, undefined)) > 0.01)
+    throw new Error('the commander spawns on raised ground rather than the square');
+  // and the player can actually walk to him from where a death puts them
+  var R=0.45, step=0.5, seen={}, sp=usableSpawns()[0], stack=[[sp.x,sp.z]], best=1e9;
+  seen[Math.round(sp.x/step)+','+Math.round(sp.z/step)]=1;
+  var guard=0;
+  while(stack.length && guard++ < 40000){
+    var c=stack.pop();
+    best=Math.min(best, Math.hypot(c[0]-XIANGYANG_BOSS.x, c[1]-XIANGYANG_BOSS.z));
+    [[step,0],[-step,0],[0,step],[0,-step]].forEach(function(dv){
+      var nx=c[0]+dv[0], nz=c[1]+dv[1], k=Math.round(nx/step)+','+Math.round(nz/step);
+      if(seen[k]) return;
+      if(Math.abs(nx)>28 || Math.abs(nz)>28) return;
+      var h=getTerrainHeight(nx,nz,undefined);
+      if(insideCollider(nx,nz,R,h)) return;
+      seen[k]=1; stack.push([nx,nz]);
+    });
+  }
+  if(best > 2.0) throw new Error('the closest reachable point to the commander is '+best.toFixed(2)+' away -- he is walled off');
+  return 'fought at z='+XIANGYANG_BOSS.z+' inside a breached wall, reachable to within '+best.toFixed(2);
 """))
 
 # The same "clear spawn points, real rig parts" check bugcheck.py runs for every DESTINATIONS entry --
