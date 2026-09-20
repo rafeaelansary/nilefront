@@ -18081,23 +18081,39 @@ const SWEDEN_LEGS = [
 // Solved against xiangyangColliders: both pools sit in the open ground between the Mongol tents and
 // the wall (z 8 to 16), clear of the paved aprons at the gate (x -4.5..4.5, z 3..9) and of every tent's
 // own footprint.
-const XIANGYANG_WEST = [[-14.0,14.0], [-10.0,10.5], [-16.0,8.5], [-8.0,15.5], [-12.5,9.5]];
-const XIANGYANG_EAST = [[14.0,14.0], [10.0,10.5], [16.0,8.5], [8.0,15.5], [12.5,9.5]];
-// THREE waves, all fought outside the wall — the breach is what the BOSS opens, not the ladder:
-//   1  the first sortie: infantry alone, the melee-only role Xiangyang uses in place of Birka's draugr.
-//   2  the wall answers with its crossbowmen — the ranged half of the garrison, holding the back of
-//      the ground while the infantry presses.
-//   3  the armoured guard comes out with them — the enemy the Zhanmadao's armourPierce is for, and the
-//      heaviest wave before the gate itself gives way.
+// ---- Xiangyang's garrison, and the three grounds it is fought on ----
+// FIELD: the open approach in front of the gate, where a sortie forms up.
+// WALL:  the rampart walk itself. These are the points that were impossible before spawnBot() learned
+//        to seed groundY -- an enemy placed here used to stand inside the masonry at y=0. Note the east
+//        run skips x 8.5..15.5 entirely: that is the bay that comes down in wave three, and a man
+//        standing on it when it goes would be left in mid-air.
+// BREACH: the gap itself, once there is one.
+const XIANGYANG_FIELD  = [[-7.5,9.0], [7.5,9.0], [-3.0,12.5], [3.0,12.5], [0,7.5], [-10.5,13.5], [10.5,13.5]];
+const XIANGYANG_WALL   = [[-20.0,0], [-14.0,0], [-8.5,0], [6.5,0], [17.5,0], [21.5,0], [24.5,0]];
+const XIANGYANG_BREACH = [[10.0,-1.2], [13.5,-1.2], [11.8,-3.4], [9.0,-3.6], [14.6,-3.6]];
+// THREE waves, and each is fought at a different HEIGHT rather than a different distance -- which is
+// the one variable a wall has, the way distance was the Fjord's.
+//   1  THE SORTIE. The gate stands open and the garrison has come out: infantry in the open, with
+//      crossbowmen on the rampart shooting down over them. Won with the Zhanmadao, in the field.
+//   2  UNDER THE WALL. The gate is shut behind the survivors and nothing up there can be reached at
+//      all: crossbowmen and fire-lancers hold the walk and you answer them from below. Won with the
+//      Repeating Crossbow -- this is the wave that exists because the rampart does.
+//   3  THE BREACH. The trebuchet brings a bay down; the armoured guard holds the gap, fire-lancers
+//      shoot into it from the wall above, and the last of the infantry come round. Won with the
+//      Thunderclap Bomb, because a breach is the only place on this map where men are packed together.
 const XIANGYANG_WAVES = [
-  {songinfantry:3},
-  {songinfantry:2, songcrossbowman:2},
-  {songinfantry:2, songcrossbowman:2, songguard:1},
+  {songinfantry:3, songcrossbowman:2},
+  {songcrossbowman:3, songfirelance:2},
+  {songguard:2, songfirelance:2, songinfantry:2},
 ];
+// Each role carries the ground it belongs on, so a skin never has to mean two different places on two
+// different waves: crossbowmen and fire-lancers are wall troops, infantry sortie into the field, and
+// the guard is what is standing in the gap when the wall opens.
 const XIANGYANG_STATS = {
-  songinfantry:    {hp:150, speed:1.25, wt:'knife',  scale:1.00, west:true},
-  songcrossbowman: {hp:95,  speed:1.05, wt:'pistol', scale:1.00, west:false},
-  songguard:       {hp:280, speed:0.85, wt:'knife',  scale:1.05, west:true, armoured:true, noFlinch:true},
+  songinfantry:    {hp:150, speed:1.25, wt:'knife',   scale:1.00, pool:'field'},
+  songcrossbowman: {hp:95,  speed:1.05, wt:'pistol',  scale:1.00, pool:'wall'},
+  songfirelance:   {hp:130, speed:1.10, wt:'javelin', scale:1.00, pool:'wall'},
+  songguard:       {hp:280, speed:0.85, wt:'knife',   scale:1.05, pool:'breach', armoured:true, noFlinch:true},
 };
 const XIANGYANG_DIFF = 1.20;
 // THE SONG SIEGE COMMANDER — Xiangyang's boss, fought inside the breach once the gate is down. Built on
@@ -18139,10 +18155,18 @@ const YAMEN_BOSS = {skin:'yamenadmiral', col:0x18201c, hp:3700, scale:1.60, spee
   fell:'🐉 The admiral goes down on his own flagship — the delta is quiet'};
 const CHINA_LEGS = [
   {place:'Xiangyang', icon:'🏯', diff:XIANGYANG_DIFF, era:'Yuan China',
-   waves:XIANGYANG_WAVES, stats:XIANGYANG_STATS, west:XIANGYANG_WEST, east:XIANGYANG_EAST,
+   waves:XIANGYANG_WAVES, stats:XIANGYANG_STATS,
+   // west/east are the shape every leg has had and the generic sweeps still read them; this leg's own
+   // three grounds are named pools on top of that, reached through `pool` in XIANGYANG_STATS.
+   west:XIANGYANG_FIELD, east:XIANGYANG_FIELD,
+   field:XIANGYANG_FIELD, wall:XIANGYANG_WALL, breach:XIANGYANG_BREACH,
    boss:XIANGYANG_BOSS,
-   waveLine:' — the gate holds, for now…',
-   onBoss(){ xiangyangSetBreach(true); },
+   waveLine:' — the wall answers…',
+   // The map's own shape, re-derived from the wave index every time a stage is spawned rather than
+   // toggled by an event: the gate stands open for the sortie and is shut behind it, and the wall
+   // comes down for wave three. Arriving, dying, respawning and /tp all land on the same answer.
+   onWave(n){ xiangyangSetGate(n >= 1); xiangyangSetBreach(n >= 2); },
+   onBoss(){ xiangyangSetGate(true); xiangyangSetBreach(true); },
    enter(b){ enterXiangyangWorld(b || '🏯 Xiangyang — the wall holds, for now'); }},
   {place:'Yamen', icon:'⚓', diff:YAMEN_DIFF, era:'Yuan China',
    waves:YAMEN_WAVES, stats:YAMEN_STATS, west:YAMEN_FLAGSHIP, east:YAMEN_FLAGSHIP,
@@ -21764,15 +21788,23 @@ function animate(){
         setTimeout(()=>{ if(bossActive) setBanner(''); },2000);
       }
       b.strikeCd = b.strikeCd===undefined ? 2.6 : b.strikeCd - dt;
-      if(b.strikeCd <= 0 && distToPlayer < 30){
-        b.strikeCd = (5.2 + Math.random()*1.8) * (raging?0.6:1);
-        spawnAoeTelegraph(camera.position.x, camera.position.z,
+      if(b.strikeCd <= 0 && distToPlayer < 30 && xyTreb && xyTreb.state==='wind'){
+        b.strikeCd = (5.6 + Math.random()*1.8) * (raging?0.62:1);
+        // He signals, and the MACHINE answers: the same trebuchet standing in the camp behind the
+        // player winds, looses, and throws a real stone on a real arc at the marked ground. The
+        // telegraph ring and the stone are aimed at the same point and land together, so what the
+        // player dodges is the thing they can see coming rather than a decal that happens to hurt.
+        // This is the whole reason the siege engine was built as a machine instead of a prop.
+        const tx = camera.position.x, tz = camera.position.z;
+        spawnAoeTelegraph(tx, tz,
           {ringColor:0x9a8a6a, fillColor:0xc8b898, impactColor:0xf4ecd8,
-           ringR:3.0, impactAt:1.15, dur:1.7, hitRadius:3.0, damage:28});
+           ringR:3.0, impactAt:1.9, dur:2.4, hitRadius:3.0, damage:28});
+        trebLooseAt(tx, tz);
         if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
         b.swing = 1;
-        SFX.boss();
-        setBanner('⚠ The trebuchet answers!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ The trebuchet answers!') setBanner(''); },700);
+        SFX.warHorn();
+        setBanner('⚠ He signals the trebuchet — move!');
+        setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('signals the trebuchet')>=0) setBanner(''); },900);
       }
     }
 

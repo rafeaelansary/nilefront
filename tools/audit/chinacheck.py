@@ -255,32 +255,120 @@ ok &= show("the trebuchet winds, looses, and lands a stone where it was aimed", 
   return 'wind -> hold -> loose -> flight -> impact at the aim point -> reloaded and winding again';
 """))
 
-# The wave ladder, fought entirely on the siege side -- the gate stays SHUT through every regular wave,
-# because nothing north of it is reachable until the boss opens the breach. Each wave's roster is
-# checked against XIANGYANG_WAVES directly, the same way fjordcheck.py checks FJORD_WAVES.
-ok &= show("Xiangyang's three waves spawn the right roster, gate shut throughout", run("""
+# The ladder, and the thing that makes it a siege: each wave is fought at a different HEIGHT.
+ok &= show("the three waves are fought in the field, on the wall, and in the breach", run("""
   gameStarted = true;
   var d = {name:'China', legs:CHINA_LEGS};
-  for(var w=0; w<XIANGYANG_WAVES.length; w++){
-    jumpToDestStage(d, 0, w);
-    if(xiangyangBreached) throw new Error('wave '+(w+1)+' found the gate open');
-    var want = XIANGYANG_WAVES[w], wantN = Object.keys(want).reduce(function(s,k){return s+want[k];},0);
-    if(bots.length !== wantN) throw new Error('wave '+(w+1)+' spawned '+bots.length+', expected '+wantN);
-    Object.keys(want).forEach(function(skin){
-      var n = bots.filter(function(b){ return b.skin===skin; }).length;
-      if(n !== want[skin]) throw new Error('wave '+(w+1)+': '+n+' of skin '+skin+', expected '+want[skin]);
-    });
-  }
-  // the armoured elite only appears in wave three, and it is armoured
-  var guard = bots.filter(function(b){ return b.skin==='songguard'; })[0];
-  if(!guard) throw new Error('wave three has no songguard in it');
-  if(!guard.armoured) throw new Error('the Song Guard is not armoured -- the Zhanmadao has nothing to answer');
-  return XIANGYANG_WAVES.length+' waves, correct roster each time, gate shut throughout';
+
+  // WAVE ONE -- the sortie. Gate open, infantry in the field, crossbowmen up on the wall.
+  jumpToDestStage(d, 0, 0);
+  if(xyGateShut) throw new Error('wave one has the gate shut, so nothing can have sortied');
+  if(xiangyangBreached) throw new Error('wave one already has the wall down');
+  var inf = bots.filter(function(b){ return b.skin==='songinfantry'; });
+  var xb  = bots.filter(function(b){ return b.skin==='songcrossbowman'; });
+  if(inf.length !== 3 || xb.length !== 2) throw new Error('wave one is '+inf.length+' infantry / '+xb.length+' crossbowmen');
+  inf.forEach(function(b){
+    if(b.groundY > 0.5) throw new Error('an infantryman spawned at height '+b.groundY.toFixed(2)+' -- he belongs in the field');
+    if(b.mesh.position.z < XY_WALL_Z) throw new Error('an infantryman sortied to the wrong side of the wall');
+  });
+  xb.forEach(function(b){
+    if(Math.abs(b.groundY - XY_WALL_H) > 1e-6)
+      throw new Error('a crossbowman is at height '+b.groundY.toFixed(2)+', not up on the rampart at '+XY_WALL_H);
+  });
+
+  // WAVE TWO -- under the wall. The gate is shut and EVERY enemy is up on the walk: this wave cannot
+  // be answered in melee at all, which is the whole reason it exists.
+  jumpToDestStage(d, 0, 1);
+  if(!xyGateShut) throw new Error('wave two left the gate open');
+  if(xiangyangBreached) throw new Error('wave two already breached the wall');
+  if(!bots.length) throw new Error('wave two spawned nothing');
+  bots.forEach(function(b){
+    if(Math.abs(b.groundY - XY_WALL_H) > 1e-6)
+      throw new Error('wave two has a '+b.skin+' at height '+b.groundY.toFixed(2)+' -- it is meant to be fought entirely on the wall');
+  });
+
+  // WAVE THREE -- the breach. The wall is down and the armoured guard is standing in the gap.
+  jumpToDestStage(d, 0, 2);
+  if(!xiangyangBreached) throw new Error('wave three did not bring the wall down');
+  var gd = bots.filter(function(b){ return b.skin==='songguard'; });
+  if(gd.length !== 2) throw new Error('wave three has '+gd.length+' guards');
+  gd.forEach(function(b){
+    if(!b.armoured) throw new Error('the Song Guard is not armoured -- the Zhanmadao has nothing to answer');
+    if(b.mesh.position.x < XY_BREACH_X0-2.5 || b.mesh.position.x > XY_BREACH_X1+2.5)
+      throw new Error('a guard at x='+b.mesh.position.x.toFixed(1)+' is nowhere near the gap');
+  });
+  if(!bots.some(function(b){ return b.skin==='songfirelance' && Math.abs(b.groundY-XY_WALL_H)<1e-6; }))
+    throw new Error('nobody is shooting into the breach from the wall above it');
+
+  // ...and going back to wave one puts the wall and the gate back where wave one wants them
+  jumpToDestStage(d, 0, 0);
+  if(xiangyangBreached || xyGateShut) throw new Error('returning to wave one did not re-derive the map');
+  return 'field sortie under covering fire; a wall that can only be shot at; then a breach held by armour';
 """))
 
-# The boss stage: the gate opens, the commander stands in the breach, and he is who the Zhanmadao's
-# armourPierce answers next -- the same generic boss:true path the troll and every other boss use, so
-# no new mechanic is required for that part.
+# Every pool is checked on ITS OWN ground. The shared sweep in bugcheck.py tests west/east at curH 0,
+# which is the right question for a field and the wrong one for a rampart -- a wall spawn point sits on
+# top of a collider that is only passable to someone already at its height.
+ok &= show("all three of Xiangyang's spawn grounds are clear, each at its own height", run("""
+  gameStarted = true;
+  var d = {name:'China', legs:CHINA_LEGS};
+  jumpToDestStage(d, 0, 0);
+  var bad = [];
+  XIANGYANG_FIELD.forEach(function(p){
+    if(insideCollider(p[0],p[1],0.6,0)) bad.push('field '+p);
+    if(getTerrainHeight(p[0],p[1],undefined) > 0.2) bad.push('field '+p+' is not at ground level');
+  });
+  XIANGYANG_WALL.forEach(function(p){
+    var h = getTerrainHeight(p[0],p[1],undefined);
+    if(Math.abs(h-XY_WALL_H) > 1e-6) bad.push('wall '+p+' reads height '+h.toFixed(2));
+    if(insideCollider(p[0],p[1],0.6,h)) bad.push('wall '+p+' is inside geometry even at rampart height');
+  });
+  // the breach points only have to be clear once there IS a breach
+  jumpToDestStage(d, 0, 2);
+  XIANGYANG_BREACH.forEach(function(p){
+    if(insideCollider(p[0],p[1],0.6,getTerrainHeight(p[0],p[1],undefined))) bad.push('breach '+p);
+  });
+  if(bad.length) throw new Error(bad.join('; '));
+  // no wall point may sit on the bay that comes down, or its man is left standing in mid-air
+  var onDoomed = XIANGYANG_WALL.filter(function(p){ return p[0] > XY_BREACH_X0-0.8 && p[0] < XY_BREACH_X1+0.8; });
+  if(onDoomed.length) throw new Error('wall spawns on the bay that collapses: '+JSON.stringify(onDoomed));
+  var badRig = bots.filter(function(b){ return !b.mesh.userData.bodyMeshes || !b.mesh.userData.marker; });
+  if(badRig.length) throw new Error(badRig.length+' actors are missing rig parts');
+  return XIANGYANG_FIELD.length+' field, '+XIANGYANG_WALL.length+' wall, '+XIANGYANG_BREACH.length+' breach -- all clear';
+"""))
+
+ok &= show("the commander's strike is thrown by the real trebuchet, at the marked ground", run("""
+  gameStarted = true; var wasGod = godMode; godMode = true;
+  var d = {name:'China', legs:CHINA_LEGS};
+  jumpToDestStage(d, 0, XIANGYANG_WAVES.length);
+  var boss = bots.filter(function(b){ return b.boss; })[0];
+  if(!boss) throw new Error('no boss on the boss stage');
+  // stand still, in range, and let him call one down
+  camera.position.set(XIANGYANG_BOSS.x + 5, 1.7, XIANGYANG_BOSS.z + 5);
+  var fired = false;
+  for(var i=0;i<900 && !fired;i++){
+    camera.position.set(XIANGYANG_BOSS.x + 5, 1.7, XIANGYANG_BOSS.z + 5);
+    animate();
+    if(xyTreb.flight || xyTreb.state==='loose') fired = true;
+  }
+  if(!fired) throw new Error('the commander never signalled the trebuchet in 900 frames');
+  // the stone has to be going where the player was marked, not at the wall's default bay
+  for(var j=0;j<400 && !xyTreb.flight;j++) animate();
+  if(!xyTreb.flight) throw new Error('it loosed but no stone is in flight');
+  // within a stride of where the player was standing when he signalled -- the camera settles a little
+  // inside the frame before the boss reads it, so this is aimed AT THE PLAYER rather than at a fixed
+  // point, which is the property that matters
+  var miss = Math.hypot(xyTreb.flight.x1 - camera.position.x, xyTreb.flight.z1 - camera.position.z);
+  if(miss > 1.5)
+    throw new Error('the stone is aimed at '+xyTreb.flight.x1.toFixed(1)+','+xyTreb.flight.z1.toFixed(1)+
+                    ' -- '+miss.toFixed(1)+' from the player, so it is not aimed at them at all');
+  // and it must NOT be the idle default, which throws at the wall bay far behind
+  if(Math.abs(xyTreb.flight.z1 - XY_WALL_Z) < 0.5)
+    throw new Error('it threw at the wall on its idle clock rather than at the marked ground');
+  godMode = wasGod;
+  return 'signalled, loosed, and the stone is on its way to the marked ground';
+"""))
+
 ok &= show("the Siege Commander is fought inside the city, past a wall that is already down", run("""
   gameStarted = true;
   var d = {name:'China', legs:CHINA_LEGS};
@@ -316,22 +404,6 @@ ok &= show("the Siege Commander is fought inside the city, past a wall that is a
   return 'fought at z='+XIANGYANG_BOSS.z+' inside a breached wall, reachable to within '+best.toFixed(2);
 """))
 
-# The same "clear spawn points, real rig parts" check bugcheck.py runs for every DESTINATIONS entry --
-# run by hand here since China is not wired into DESTINATIONS yet.
-ok &= show("Xiangyang's own spawn pools are clear, and every actor has real rig parts", run("""
-  gameStarted = true;
-  var d = {name:'China', legs:CHINA_LEGS};
-  jumpToDestStage(d, 0, 0);
-  var blocked = XIANGYANG_WEST.concat(XIANGYANG_EAST).filter(function(p){
-    return insideCollider(p[0],p[1],0.6,0);
-  });
-  if(blocked.length) throw new Error('blocked spawn points '+JSON.stringify(blocked));
-  if(insideCollider(camera.position.x, camera.position.z, 0.45, 0))
-    throw new Error('the arrival point is blocked');
-  var bad = bots.filter(function(b){ return !b.mesh.userData.bodyMeshes || !b.mesh.userData.marker; });
-  if(bad.length) throw new Error(bad.length+' actors are missing rig parts');
-  return XIANGYANG_WEST.length+' west + '+XIANGYANG_EAST.length+' east points, all clear; arrival clear; every actor rigged';
-"""))
 
 ok &= show("Yamen is a real world: enterable, removable, reachable from /tp, all hulls safe on entry", run("""
   gameStarted = true;
