@@ -3423,8 +3423,10 @@ function mergeStatic(root, keep){
   // open water in every direction — a big flat sea, no walls, no ceiling, with a rippled surface texture instead of a flat color
   const rippleTex=_finish(waterRippleTex(),24);
   const waterMat = new THREE.MeshPhongMaterial({map:rippleTex, color:0x3a8fc0, shininess:110, specular:0xbfefff, transparent:true, opacity:0.9, emissive:0x0a3a52});
-  const water = new THREE.Mesh(new THREE.BoxGeometry(400,1,400), waterMat);
-  water.position.set(0,-0.5,0); water.userData.isWater=true; nileWorld.add(water);
+  // 1.4 deep rather than 1.0, hung so the surface still sits on y=0: at 1.0 its underside landed on
+  // y=-1 alongside the boat's keel plate and the two shared a buried plane.
+  const water = new THREE.Mesh(new THREE.BoxGeometry(400,1.4,400), waterMat);
+  water.position.set(0,-0.7,0); water.userData.isWater=true; nileWorld.add(water);
   // the boat: back to the wooden hull look (this reads better than the all-reed hunting-skiff version did) —
   // tapered hull, curled prow, mast/sail/rigging, oars, a steering platform — plus one clear Egyptian touch:
   // a painted Eye of Horus on the bow, the actual protective symbol real Nile boats carried.
@@ -3586,6 +3588,16 @@ function mergeStatic(root, keep){
     return new THREE.MeshLambertMaterial({map:t, color:tint||0xffffff});
   }
   function bankMesh(w,h,d,mat,x,y,z){
+    // The river's surface is the plane y=0, and every chunk here takes its height and its burial from
+    // hashes — so a few tops land on that plane every time the bank is built, and each one is several
+    // square metres of shimmer right at the waterline where the player is looking. This is not a
+    // coincidence to correct once; it is a band to keep the tops out of. It has to be pushed out by a
+    // VARYING amount, though — a fixed drop just moves every offender onto one new shared plane, which
+    // traded five river pairs for twelve bank-on-bank ones. Hashed off the chunk's own position, the
+    // tops that move land spread through 0.10-0.32 below the water instead of stacking.
+    const top = y + h/2;
+    if(Math.abs(top) < 0.07)
+      y -= 0.10 + (Math.abs(Math.sin(x*12.9898 + z*78.233) * 43758.5453) % 1) * 0.22;
     const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z);
     m.receiveShadow=true; nileWorld.add(m); return m;
   }
@@ -7536,9 +7548,14 @@ heightZoneTarget = heightZonesAztec;
   // map" into an enclosure you step inside, and it frames the pyramid from the plaza.
   function coatepantli(cx,cz,w,d,gapW){
     const seg=(sx,sz,sw,sd)=>{
+      // Inset along whichever axis the segment RUNS, proud across the one it is thin in. Written
+      // sw-0.5 / sw-1.2 flat, the two 0.8-wide side runs got a 0.3-wide cap and a NEGATIVE-width
+      // band — an inside-out box that culls to nothing and flickers at grazing angles.
+      const capW = sw>1.2 ? sw-0.5  : sw+0.16, capD = sd>1.2 ? sd-0.5  : sd+0.16;
+      const bndW = sw>1.6 ? sw-1.2  : sw+0.26, bndD = sd>1.6 ? sd-1.2  : sd+0.26;
       lb(sw,1.35,sd, tezontle, sx,0.620,sz);           // serpent wall     base -0.055
-      lb(sw-0.5,0.22,sd+0.16, tezDark, sx,1.40,sz);    // its cap, proud and shorter
-      lb(sw-1.2,0.14,sd+0.24, bandBlue, sx,1.16,sz);   // a painted band, shorter again
+      lb(capW,0.22,capD, tezDark, sx,1.40,sz);         // its cap, proud across, inset along
+      lb(bndW,0.14,bndD, bandBlue, sx,1.145,sz);       // a painted band, inset again
       addBox(sx,sz,sw,sd);
     };
     const half=(w-gapW)/2;
@@ -7739,10 +7756,16 @@ heightZoneTarget = heightZonesAztec;
 
   // ================= CANALS =================
   // Cut through the quarters rather than round them, so the city reads as built ON water.
+  // The bed and the water both stand PROUD of the island's own top face, and that is load-bearing.
+  // Cut flush with it — bed top at y=0, exactly the ground slab's top — the canal bed and the ground
+  // shared one plane across 88 square metres, and the two fought for every pixel of it down the whole
+  // length of each canal. That is the shimmering "river" texture: not a texture problem at all, two
+  // surfaces at identical depth. The audit could not see it either, because __worldCoplanar skips any
+  // mesh spanning more than ~48 units and the island is 58 across.
   [[-24,8,3.4,26,0],[24,-2,3.4,22,0],[0,16,40,3.4,1]].forEach(([cx,cz,w,d,horiz])=>{
-    lb(w,0.62,d, basaltDark, cx,-0.31,cz);
+    lb(w,0.62,d, basaltDark, cx,-0.27,cz);                       // bed top at +0.04
     const wm=new THREE.Mesh(new THREE.BoxGeometry(w-0.8,0.32,d-0.8), lakeMat);
-    wm.position.set(cx,-0.14,cz); wm.receiveShadow=true; scene.add(wm);
+    wm.position.set(cx,-0.07,cz); wm.receiveShadow=true; scene.add(wm);   // water top at +0.09
     // the kerbs either side
     if(horiz){ [-1,1].forEach(s=>{ lb(w,0.34,0.7, basaltMat, cx,0.040,cz+s*(d/2+0.35)); addBox(cx,cz+s*(d/2+0.35),w,0.7); }); }
     else      { [-1,1].forEach(s=>{ lb(0.7,0.34,d, basaltMat, cx+s*(w/2+0.35),0.040,cz); addBox(cx+s*(w/2+0.35),cz,0.7,d); }); }   // canal kerb base -0.130
@@ -8671,7 +8694,9 @@ let birkaSnow = null, birkaForge = null, birkaBeacon = null;
     // the quench trough, tools, and a rack of finished blades
     sb(0.7,0.42,1.5, timberPa, 1.6,0.21,0.9);
     const qw=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.05,1.36),
-      new THREE.MeshLambertMaterial({color:0x2c3a44})); qw.position.set(1.6,0.40,0.9); S.add(qw);
+      // water DOWN inside the trough, not skimming its rim: at 0.40 the surface came out 5mm proud of
+      // the timber and the two read as one flickering plane.
+      new THREE.MeshLambertMaterial({color:0x2c3a44})); qw.position.set(1.6,0.345,0.9); S.add(qw);
     sb(1.9,0.10,0.10, timberDk, -0.4,1.92,1.85);
     for(let i=0;i<5;i++) sb(0.10,0.55,0.05, ironMat, -1.1+i*0.36,1.60,1.85);
     for(let r=0;r<2;r++) for(let i=0;i<5-r;i++){
@@ -9494,6 +9519,9 @@ const XY_BREACH_X0 = 8.5, XY_BREACH_X1 = 15.5;
 let xiangyangBreached = false;
 let xyBreachWall = null, xyBreachRubble = null, xyBreachCollider = null, xyBreachZone = null;
 let xyGateShut = false, xyGateDoor = null, xyGateCollider = null;
+let xyGateLeaves = [], xyGateOpenColliders = [];
+let xyGateSwing = 1, xyGateSnapNext = false;   // 0 = shut across the passage, 1 = swung fully open
+const XY_GATE_ARC = 1.62;                  // radians a leaf turns, ~93°, inward into the city
 let xyTreb = null;             // {arm, sling, cw, stone, dust, state, t} — the trebuchet, which fires
 let xyRiver = null;            // {mesh, geo, cols, seg, size}
 let xyLanterns = [];
@@ -9593,8 +9621,8 @@ heightZoneTarget = heightZonesXiangyang;
       kb(2.4,1.30,0.5, redDeep,  0,0.95,-4.0);           // the high transom stern
       kb(2.0,0.70,0.4, timberPa, 0,1.45,-3.9);
       kb(0.26,4.6,0.26, timberM, 0,2.3,0.6);
-      const sl=kb(3.0,3.0,0.12, voxMat(0xb8a880,{noise:12}), 1.2,2.6,0.6);
-      for(let b=0;b<5;b++) kb(2.9,0.09,0.16, timberDk, 1.2,1.3+b*0.62,0.53);
+      const sl=kb(3.0,3.0,0.12, voxMat(0xb8a880,{noise:12}), 1.2,2.6,0.52);
+      for(let b=0;b<5;b++) kb(2.9,0.09,0.18, timberDk, 1.2,1.3+b*0.62,0.44);
       kb(1.0,0.5,0.7, timberDk, 0,0.75,4.1);
     });
   })();
@@ -9711,15 +9739,15 @@ heightZoneTarget = heightZonesXiangyang;
     xb(XY_GATE_HW*2+0.6, 1.5, XY_WALL_T, rammed, 0, XY_WALL_H-0.75, XY_WALL_Z);
     for(let i=0;i<7;i++){                       // the arch ring, voussoirs stepped round the opening
       const a=Math.PI*(0.12+i*0.126), rr=XY_GATE_HW+0.25;
-      xb(0.7,0.55,0.34, stoneM, Math.cos(a)*rr, XY_WALL_H-1.5+Math.sin(a)*1.5, XY_WALL_Z+XY_WALL_T/2+0.02, -a*0.4);
+      xb(0.7,0.55,0.38, stoneM, Math.cos(a)*rr, XY_WALL_H-1.42+Math.sin(a)*1.5, XY_WALL_Z+XY_WALL_T/2+0.09, -a*0.4);
     }
     // the gate house above the passage: tiled roof, red columns, a name board
     const GY=XY_WALL_H+0.6;
-    [-1,1].forEach(sd=>{
-      const r=xb(XY_GATE_HW*2+6.4, 0.32, 3.6, tileM, 0, GY+1.25, XY_WALL_Z+sd*1.3); r.rotation.x=-sd*0.44;
-      const r2=xb(XY_GATE_HW*2+6.0, 0.15, 3.3, tileDk, 0, GY+1.44, XY_WALL_Z+sd*1.2); r2.rotation.x=-sd*0.44;
+    [-1,1].forEach((sd,si)=>{
+      const r=xb(XY_GATE_HW*2+6.4-si*0.34, 0.32+si*0.09, 3.6, tileM, 0, GY+1.25+si*0.07, XY_WALL_Z+sd*1.3); r.rotation.x=-sd*0.44;
+      const r2=xb(XY_GATE_HW*2+5.7-si*0.30, 0.15+si*0.07, 3.06, tileDk, 0, GY+1.50+si*0.07, XY_WALL_Z+sd*1.2); r2.rotation.x=-sd*0.44;
     });
-    xb(XY_GATE_HW*2+6.8, 0.34, 0.66, timberDk, 0, GY+1.82, XY_WALL_Z);
+    xb(XY_GATE_HW*2+7.1, 0.40, 0.94, timberDk, 0, GY+1.86, XY_WALL_Z);
     [-1,1].forEach(sd=>{ const e=xb(1.3,0.20,1.0, tileDk, sd*(XY_GATE_HW+3.5), GY+1.34, XY_WALL_Z); e.rotation.z=sd*0.34; });
     [-1,1].forEach(sd=> xcy(0.20,0.22,2.2,8, redLac, sd*(XY_GATE_HW-0.5), GY+1.1-1.1, XY_WALL_Z-1.2));
     xb(2.8,0.85,0.18, redDeep, 0, GY+0.55, XY_WALL_Z+XY_WALL_T/2+0.30);      // the name board
@@ -9731,22 +9759,43 @@ heightZoneTarget = heightZonesXiangyang;
     });
 
     // ---- the gate leaves, and the collider that shuts the passage ----
+    // Two leaves on real hinges, each in its own pivot group set at the jamb it hangs from, so the
+    // gate SWINGS. The geometry inside a pivot is written from the hinge inward toward the middle;
+    // rotating the pivot about y is then the whole animation.
     const doorGrp=new THREE.Group(); xiangyangWorld.add(doorGrp); xyGateDoor=doorGrp;
-    doorGrp.visible=false;                                   // wave one begins with the gate OPEN
+    // The leaves hang on the INSIDE face of the wall, not in the archway. That is how a city gate of
+    // this size actually works, and here it is also the only place they can go: a leaf is as long as
+    // the passage is wide, so one swinging inside a 3.2-thick wall would bury itself in the masonry.
+    // Hung clear of the inner face, ninety-odd degrees puts them square across the road, in the open.
+    xyGateLeaves=[];
+    const LW=XY_GATE_HW, LH=XY_WALL_H-1.6;
+    const HZ=XY_WALL_Z-XY_WALL_T/2-0.26;
     [-1,1].forEach(sd=>{
-      const leaf=new THREE.Mesh(new THREE.BoxGeometry(XY_GATE_HW-0.12, XY_WALL_H-1.6, 0.42), timberM);
-      leaf.position.set(sd*(XY_GATE_HW-0.12)/2, (XY_WALL_H-1.6)/2, XY_WALL_Z);
-      leaf.castShadow=true; doorGrp.add(leaf);
+      const pivot=new THREE.Group();
+      pivot.position.set(sd*XY_GATE_HW, 0, HZ);              // the hinge post, at the jamb
+      doorGrp.add(pivot); xyGateLeaves.push({pivot, sd});
+      // Written from the hinge toward the middle, so the pair meet exactly on x=0 with no seam to
+      // z-fight and no daylight between them.
+      const leaf=new THREE.Mesh(new THREE.BoxGeometry(LW, LH, 0.42), timberM);
+      leaf.position.set(-sd*LW/2, LH/2, 0);
+      leaf.castShadow=true; pivot.add(leaf);
       for(let i=0;i<4;i++){
-        const band=new THREE.Mesh(new THREE.BoxGeometry(XY_GATE_HW-0.02,0.16,0.48), ironM);
-        band.position.set(sd*(XY_GATE_HW-0.12)/2, 0.55+i*0.95, XY_WALL_Z); doorGrp.add(band);
+        const band=new THREE.Mesh(new THREE.BoxGeometry(LW-0.10,0.16,0.48+i*0.006), ironM);
+        band.position.set(-sd*LW/2, 0.55+i*0.95, 0); pivot.add(band);
       }
       for(let i=0;i<3;i++) for(let k=0;k<3;k++){
-        const st=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.54), goldM);
-        st.position.set(sd*(0.5+k*0.85), 0.9+i*1.2, XY_WALL_Z); doorGrp.add(st);
+        const st=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.54+k*0.004), goldM);
+        st.position.set(-sd*(0.5+k*0.85), 0.9+i*1.2, 0); pivot.add(st);
       }
+      // the iron pintle the leaf turns on, so the hinge is a thing you can see
+      const pin=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,LH+0.3,8), ironM);
+      pin.position.set(0, (LH+0.3)/2, 0); pivot.add(pin);
     });
     xyGateCollider = {x1:-XY_GATE_HW, z1:XY_WALL_Z-XY_WALL_T/2, x2:XY_GATE_HW, z2:XY_WALL_Z+XY_WALL_T/2};
+    // Thrown open, the leaves stand square across the road inside the gate — solid timber you should
+    // not be able to walk through just because it moved. One thin rect each, live only while open.
+    xyGateOpenColliders = [-1,1].map(sd=>({
+      x1:sd*XY_GATE_HW-0.30, x2:sd*XY_GATE_HW+0.30, z1:HZ-LW-0.12, z2:HZ+0.12 }));
 
     // ---- the stair up the INSIDE of the wall: the garrison's own way onto the rampart, and the
     // player's once the breach lets them round to this side. One rotated slab, not a stack of steps —
@@ -9813,7 +9862,9 @@ heightZoneTarget = heightZonesXiangyang;
     [-1,1].forEach(sd=> xb(0.36,1.0,0.36, timberM, TX+sd*1.1, 0.5, TZ+3.4));   // the posts it turns on
     addBox(TX, TZ, 7.0, 5.2);
     // the dust burst the stone makes where it lands — one group, moved to the impact and flashed
-    const dust=new THREE.Group(); dust.visible=false; xiangyangWorld.add(dust);
+    // Parked well below the world when idle, not at the origin: the origin is the gate passage, and a
+    // hidden dust cloud sitting in it still counts as geometry occupying the same space as the gate.
+    const dust=new THREE.Group(); dust.visible=false; dust.position.set(0,-80,0); xiangyangWorld.add(dust);
     for(let i=0;i<7;i++){
       const s=0.9+i*0.42;
       const pf=new THREE.Mesh(new THREE.BoxGeometry(s,s*0.8,s),
@@ -9910,9 +9961,12 @@ heightZoneTarget = heightZonesXiangyang;
         hb(w-0.2,0.16,0.10, timberDk, 0, h+0.30, sd*(d/2+0.03));
       });
       // roof: two pitched tiled slabs, a ridge, and upturned corners
-      [-1,1].forEach(sd=>{
-        const r=hb(w+1.3,0.26,d*0.64, tileM, 0, h+0.86, sd*d*0.20); r.rotation.x=-sd*0.46;
-        const r2=hb(w+1.0,0.13,d*0.58, tileDk, 0, h+1.02, sd*d*0.18); r2.rotation.x=-sd*0.46;
+      // the two pitches are cut to slightly different sizes and heights. Mirrored identically they
+      // share every face where they meet at the ridge -- on nine houses at once, the yamen hall
+      // included, which is the roof standing behind the boss for the whole last fight.
+      [-1,1].forEach((sd,si)=>{
+        const r=hb(w+1.3-si*0.16, 0.26+si*0.035, d*0.64, tileM, 0, h+0.86+si*0.03, sd*d*0.20); r.rotation.x=-sd*0.46;
+        const r2=hb(w+1.0-si*0.14, 0.13+si*0.025, d*0.58, tileDk, 0, h+1.02+si*0.03, sd*d*0.18); r2.rotation.x=-sd*0.46;
       });
       hb(w+1.5,0.26,0.56, timberDk, 0, h+1.30, 0);
       [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{
@@ -9977,9 +10031,11 @@ heightZoneTarget = heightZonesXiangyang;
       heightZoneTarget.push({type:'plateau', x1:DX-3.1, z1:DZ-3.1, x2:DX+3.1, z2:DZ+3.1, y:2.95});
       xb(4.4,3.0,4.4, plasterM, DX,4.45,DZ);
       [-1,1].forEach(sx=>[-1,1].forEach(sz=> xcy(0.22,0.24,3.2,8, redLac, DX+sx*1.9, 4.5, DZ+sz*1.9)));
-      [-1,1].forEach(sd=>{
-        const r=xb(7.4,0.30,3.4, tileM, DX,6.4,DZ+sd*1.4); r.rotation.x=-sd*0.5;
-        const r2=xb(7.0,0.14,3.1, tileDk, DX,6.58,DZ+sd*1.3); r2.rotation.x=-sd*0.5;
+      // the two pitches are cut to slightly different sizes and sit at slightly different heights:
+      // identical slabs meeting at a ridge share every face along the join
+      [-1,1].forEach((sd,si)=>{
+        const r=xb(7.4-si*0.18, 0.30+si*0.04, 3.4, tileM, DX, 6.4+si*0.035, DZ+sd*1.4); r.rotation.x=-sd*0.5;
+        const r2=xb(7.0-si*0.16, 0.14+si*0.03, 3.1, tileDk, DX, 6.58+si*0.035, DZ+sd*1.3); r2.rotation.x=-sd*0.5;
       });
       xb(7.6,0.30,0.6, timberDk, DX,6.95,DZ);
       [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{
@@ -10056,18 +10112,46 @@ function xiangyangSetBreach(open){
 }
 // The gate, shut or open. Same re-derivable shape. The leg opens with it OPEN — the garrison has come
 // out to fight — and shuts it behind them once that sortie is dead.
-function xiangyangSetGate(shut){
+// State, not an event: called with the wave's own answer on entry, on every death and on /tp, so it is
+// always safe to call twice. `snap` skips the swing — used when the world is (re)entered and the gate
+// should simply already be where that stage says it is.
+function xiangyangSetGate(shut, snap){
   shut = !!shut;
-  if(xyGateShut === shut) return;
+  snap = snap || xyGateSnapNext;
+  const changed = xyGateShut !== shut;
   xyGateShut = shut;
-  if(xyGateDoor) xyGateDoor.visible = shut;
-  const i = xiangyangColliders.indexOf(xyGateCollider);
-  if(shut){ if(i < 0) xiangyangColliders.push(xyGateCollider); }
-  else if(i >= 0){ xiangyangColliders.splice(i,1); }
+  if(snap){ xyGateSwing = shut ? 0 : 1; }
+  xiangyangApplyGate();
+  if(snap || !changed) return;
   if(shut){
     setBanner('⚓ The gate shuts — they are back behind the wall');
     setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('gate shuts')>=0) setBanner(''); }, 2400);
+  } else {
+    if(SFX && SFX.gateOpen) SFX.gateOpen();
+    setBanner('🐉 The gate grinds open — the Siege Commander comes out to meet you');
+    setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('grinds open')>=0) setBanner(''); }, 3200);
   }
+}
+// Push the current swing onto the two pivots AND onto the colliders, so what blocks you is always what
+// you can see. One place, so the tick and the snap cannot disagree. The passage is solid while the
+// leaves are across it; once they are mostly open the leaves themselves become the solid thing.
+function xiangyangApplyGate(){
+  for(const L of xyGateLeaves) L.pivot.rotation.y = -L.sd * XY_GATE_ARC * xyGateSwing;
+  const set = (c, on)=>{ if(!c) return; const i = xiangyangColliders.indexOf(c);
+    if(on){ if(i < 0) xiangyangColliders.push(c); } else if(i >= 0) xiangyangColliders.splice(i,1); };
+  set(xyGateCollider, xyGateSwing < 0.35);
+  const leavesOut = xyGateSwing > 0.55;
+  for(const c of xyGateOpenColliders) set(c, leavesOut);
+}
+// Eased over ~1.6s. Heavy timber does not snap.
+function xiangyangGateTick(dt){
+  if(!xyGateLeaves.length) return;
+  const want = xyGateShut ? 0 : 1;
+  if(xyGateSwing === want) return;
+  const step = dt / 1.6;
+  xyGateSwing += Math.min(step, Math.abs(want - xyGateSwing)) * (want > xyGateSwing ? 1 : -1);
+  if(Math.abs(want - xyGateSwing) < 1e-4) xyGateSwing = want;
+  xiangyangApplyGate();
 }
 
 // ---- the trebuchet ----
@@ -10096,7 +10180,7 @@ function xiangyangTrebTick(dt, t){
     T.dustT -= dt*0.9;
     T.dust.children.forEach((c,i)=>{ c.material.opacity = Math.max(0, (0.5-i*0.055)*T.dustT);
                                      c.position.y = 0.5+i*0.55 + (1-T.dustT)*1.8; });
-    if(T.dustT <= 0) T.dust.visible = false;
+    if(T.dustT <= 0){ T.dust.visible = false; T.dust.position.set(0,-80,0); }
   }
   // the stone in flight
   if(T.flight){
@@ -10152,6 +10236,7 @@ function xiangyangTrebTick(dt, t){
 }
 // the river's surface, and the lanterns breathing
 function xiangyangTick(dt, t){
+  xiangyangGateTick(dt);
   if(xyRiver){
     const pos=xyRiver.geo.attributes.position, cols=xyRiver.cols;
     const seg=xyRiver.seg, size=xyRiver.size, step=size/seg;
@@ -10218,15 +10303,19 @@ function enterXiangyangWorld(banner){
   // Force the map's own state cold on every entry, including a respawn; spawnTripStage() below then
   // re-derives whatever the current wave actually wants. Same ordering the Fjord uses.
   xiangyangBreached = true;  xiangyangSetBreach(false);
-  xyGateShut = true;         xiangyangSetGate(false);
+  xyGateShut = true;         xiangyangSetGate(false, true);
   if(xyTreb){ xyTreb.state='wind'; xyTreb.t=XY_TREB_WIND; xyTreb.flight=null; xyTreb.aim=null;
-              xyTreb.dustT=0; xyTreb.dust.visible=false;
+              xyTreb.dustT=0; xyTreb.dust.visible=false; xyTreb.dust.position.set(0,-80,0);
               xyTreb.sling.add(xyTreb.stone); xyTreb.stone.position.set(0,-1.35,0.1); xyTreb.stone.visible=true; }
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   weapons = chinaWeapons;
   selectWeapon(0);
+  // The stage below re-derives the gate for whatever wave this is. On an ENTRY that has to be already
+  // true, not swing shut in the player's face, so the call it makes snaps instead of animating.
+  xyGateSnapNext = true;
   spawnTripStage();
+  xyGateSnapNext = false;
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
 
@@ -10340,7 +10429,7 @@ heightZoneTarget = heightZonesYamen;
     for(let i=0;i<3;i++) kb(W-0.62+i*0.30, 0.24, L-0.32-i*0.52, i%2?hullRed:hullDk, 0,-0.64+i*0.24,0);
     // NOT wider than the hull. Lashed beam to beam, a strake that overhangs laps its neighbour's and
     // shares both faces with it; the height is also stepped per hull so two touching ones never agree.
-    kb(W-0.06, 0.22+idx*0.03, L-0.62, timberDk, 0, 0.17+idx*0.015, 0);
+    kb(W-0.06, 0.25+idx*0.03, L-0.62, timberDk, 0, 0.195+idx*0.015, 0);
     kb(W,0.18,L, plankF, 0,-0.09,0);
     // deck planking runs fore-and-aft: a few proud strakes so it is not one blank sheet
     // sunk INTO the planking rather than laid on it: a strake whose underside is exactly the deck's own
@@ -10353,7 +10442,7 @@ heightZoneTarget = heightZonesYamen;
     kb(W-0.34,0.26,0.72, timberDk, 0,2.14,-L/2+0.28);
     addBox(hullX, -L/2+0.32, W-0.24, 0.9);
     // the stern cabin proper, which is the one real piece of cover on the deck
-    kb(2.8,1.55,1.9, timberPa, 0,0.78,-L/2+1.95);
+    kb(2.8,1.55,1.9, timberPa, 0,0.775,-L/2+1.95);
     kb(3.0,0.22,2.1, timberDk, 0,1.62,-L/2+1.95);
     [-1,1].forEach(sd=> kb(0.16,0.85,0.16, hullRed, sd*1.25, 0.60, -L/2+2.84));
     addBox(hullX, -L/2+1.95, 2.8, 1.9);
@@ -10369,7 +10458,7 @@ heightZoneTarget = heightZonesYamen;
     kb(5.0,0.14,0.14, timberDk, 2.0,5.92,-0.5);          // the yard
     kb(0.14,0.14,1.6, ropeF, 0.9,3.5,-0.5);              // sheets running back to the deck
     // the winch the sail is worked from, and two cargo crates lashed abaft it — cover, and colliders
-    kb(1.0,0.55,0.8, timberDk, -1.5,0.28,1.9); addBox(hullX-1.5, 1.9, 1.0, 0.8);
+    kb(1.0,0.55,0.8, timberDk, -1.5,0.275,1.9); addBox(hullX-1.5, 1.9, 1.0, 0.8);
     kb(1.15,0.16,0.95, ironDk, -1.5,0.60,1.9);
     [[1.55,2.6,1.15],[1.35,4.4,0.95]].forEach(([cx,cz,ch])=>{
       kb(1.25,ch,1.15, timberPa, cx,ch/2,cz);
@@ -10409,12 +10498,12 @@ heightZoneTarget = heightZonesYamen;
     for(let i=0;i<9;i++){
       const cz=-L/2+1.2+i*(L-2.4)/8;
       const c=new THREE.Mesh(new THREE.BoxGeometry(W-0.3-((i%3)*0.4), 0.06, (L-2.4)/8*0.85), i%2?charM:charDk);
-      c.position.set(((i%3)-1)*0.35, 0.035, cz); char.add(c);
+      c.position.set(((i%3)-1)*0.35, 0.03, cz); char.add(c);
     }
     for(let i=0;i<5;i++){
       const s=0.4+((i*7)%3)*0.22;
       const c=new THREE.Mesh(new THREE.BoxGeometry(s,s*0.7,s*0.9), charDk);
-      c.position.set(-1.6+((i*11)%4)*1.1, s*0.35+0.05, -4.0+i*2.1); c.rotation.y=i*0.8; char.add(c);
+      c.position.set(-1.6+((i*11)%4)*1.1, s*0.35, -4.0+i*2.1); c.rotation.y=i*0.8; char.add(c);
     }
     yamenCharred.push(char);
     return K;
@@ -10429,12 +10518,12 @@ heightZoneTarget = heightZonesYamen;
     [-5.4,-1.6,2.2,5.8].forEach((sz,k)=>{
       for(let l=0;l<7;l++){
         const link=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.17+((l%2)*0.05),0.17+((l%2)*0.05)), ironDk);
-        link.position.set(seamX-0.95+l*0.32, 0.22+((l%2)*0.03), sz);
+        link.position.set(seamX-0.95+l*0.32, 0.34+((l%2)*0.03), sz);
         link.rotation.x = (l%2)*0.9;
         link.castShadow=true; yamenWorld.add(link);
       }
       const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.17,0.12,8), ironF);
-      ring.rotation.z=Math.PI/2; ring.position.set(seamX, 0.24, sz); yamenWorld.add(ring);
+      ring.rotation.z=Math.PI/2; ring.position.set(seamX, 0.36, sz); yamenWorld.add(ring);
     });
     // planking laid over the seam, so the join reads as crossed rather than merely adjacent
     fb(1.1,0.12,YAMEN_HULL_HL*1.8, plankF, seamX, 0.02, 0.0);
@@ -10474,16 +10563,21 @@ heightZoneTarget = heightZonesYamen;
   // ---- the rest of the fleet, and the fireships coming in ----
   // Scenery, well outside play: the fortress the player is standing on is three hulls of a thousand,
   // and the Mongol fireships are what is about to arrive.
+  // each one cut to its own size and waterline: six identical hulls drifting in the same haze lap each
+  // other and share every face where they do, which is the one thing that reads as a glitch at distance
   [[-44,-30,0.5],[40,26,-0.4],[-14,-40,0.2],[34,-34,1.1],[-38,22,0.8],[8,42,-0.2]].forEach(([hx,hz,rot],i)=>{
-    const D=new THREE.Group(); D.position.set(hx,-0.2,hz); D.rotation.y=rot; yamenWorld.add(D);
+    const D=new THREE.Group(); D.position.set(hx,-0.2+i*0.06,hz); D.rotation.y=rot; yamenWorld.add(D);
     const db=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
       m.position.set(x,y,z); D.add(m); return m; };
-    db(4.4,0.9,12.0, timberDk, 0,0.1,0);
-    db(3.8,0.5,11.0, hullRed, 0,0.6,0);
-    db(3.4,1.6,0.6, hullDk, 0,1.4,-5.2);
-    db(0.30,5.4,0.30, timber, 0,2.9,-0.6);
-    db(4.0,4.0,0.14, i%2?sailM:sailDk, 1.6,3.2,-0.6);
-    for(let b=0;b<5;b++) db(3.9,0.10,0.18, battenM, 1.6,1.6+b*0.78,-0.68);
+    const k=1 + (i%3)*0.07;
+    db(4.4*k,0.9+i*0.05,12.0*k, timberDk, 0,0.1+i*0.04,0);
+    db(3.8*k,0.5+i*0.04,11.0*k, hullRed, 0,0.6+i*0.05,0);
+    db(3.4*k,1.6,0.6, hullDk, 0,1.4+i*0.05,-5.0*k);   // pulled forward off the hull's own stern face
+    db(0.30,5.4+i*0.2,0.30, timber, 0,2.9,-0.6);
+    // the sail hangs clear of the mast rather than straddling it -- a lugsail does set to one side, and
+    // straddling it put the sail's own faces on the mast's at every rotation these hulls drift at
+    db(4.0+i*0.15,4.0+i*0.12,0.14, i%2?sailM:sailDk, 2.45,3.2+i*0.06,-0.6);
+    for(let b=0;b<5;b++) db(3.9+i*0.14,0.10,0.18, battenM, 2.45,1.6+b*0.78+i*0.05,-0.72);
   });
   // ---- the flagship's own two bands of fire, for the boss fight. Built here, hidden, and shown by
   // yamenSetFlagCut() as the Admiral takes the deck apart under the player. ----
@@ -10493,9 +10587,12 @@ heightZoneTarget = heightZonesYamen;
       .forEach(([bz])=>{
         const grp=new THREE.Group(); grp.visible=false; yamenWorld.add(grp);
         [-1.6,0,1.6].forEach((ox,k)=>{
-          const fl=new THREE.Mesh(new THREE.ConeGeometry(0.60+((k%2)*0.12), 2.1+((k%2)*0.35), 7),
+          // seated so the cone's BASE is on the deck rather than hanging through it -- a flame whose
+          // underside sits level with the planking's own underside fights it across the whole deck
+          const fh = 2.1+((k%2)*0.35);
+          const fl=new THREE.Mesh(new THREE.ConeGeometry(0.60+((k%2)*0.12), fh, 7),
             new THREE.MeshBasicMaterial({color:0xff7a2a, transparent:true, opacity:0.93, fog:false}));
-          fl.position.set(fx+ox, 1.05, bz+((k%2)?0.9:-0.9)); grp.add(fl);
+          fl.position.set(fx+ox, fh*0.5+0.02, bz+((k%2)?0.9:-0.9)); grp.add(fl);
           const core=new THREE.Mesh(new THREE.ConeGeometry(0.26,1.0,6),
             new THREE.MeshBasicMaterial({color:0xffd27a, transparent:true, opacity:0.95, fog:false}));
           core.position.set(fx+ox, 0.65, bz+((k%2)?0.9:-0.9)); grp.add(core);
@@ -10511,21 +10608,26 @@ heightZoneTarget = heightZonesYamen;
   }
 
   // two fireships, already alight, standing off the flank
-  [[30,-16,0.3],[26,-24,0.8]].forEach(([hx,hz,rot])=>{
+  [[30,-16,0.3],[26,-24,0.8]].forEach(([hx,hz,rot],i)=>{
     const D=new THREE.Group(); D.position.set(hx,-0.2,hz); D.rotation.y=rot; yamenWorld.add(D);
     const db=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
       m.position.set(x,y,z); D.add(m); return m; };
-    db(3.4,0.8,9.0, charM, 0,0.1,0);
-    db(0.26,4.0,0.26, charDk, 0,2.2,-0.4);
+    db(3.4,0.86+i*0.14,9.0, charM, 0,0.13+i*0.14,0);
+    db(0.26,4.0+i*0.3,0.26, charDk, 0,2.2,-0.4);
     for(let k=0;k<4;k++){
-      const fl=new THREE.Mesh(new THREE.ConeGeometry(0.75-k*0.14, 2.2, 7),
+      // sized and placed per ship: two burning hulls cut identically overlap in the haze and share
+      // every face between their flames, which at distance is exactly what reads as flicker
+      const fl=new THREE.Mesh(new THREE.ConeGeometry(0.75-k*0.14+i*0.11, 2.2+i*0.35, 7),
         new THREE.MeshBasicMaterial({color:0xff7a2a, transparent:true, opacity:0.85-k*0.13, fog:false}));
-      fl.position.set(0, 1.2+k*1.3, -2.6+k*1.7); D.add(fl);
+      fl.position.set(i*0.3, 1.2+k*1.3+i*0.22, -2.6+k*1.7+i*0.4); D.add(fl);
     }
     for(let s=0;s<4;s++){
-      const sm=new THREE.Mesh(new THREE.BoxGeometry(2.4+s*1.6,1.8+s*1.2,2.4+s*1.6),
+      // the x step must NOT be half the width growth. At 0.8 against a 1.6 widening the two cancel
+      // exactly and every box in the plume shares one left face all the way up the column -- which is
+      // the whole plume fighting itself, and the last real flicker on this map.
+      const sm=new THREE.Mesh(new THREE.BoxGeometry(2.4+s*1.6+i*0.5,1.8+s*1.2+i*0.35,2.6+s*1.5+i*0.5),
         new THREE.MeshBasicMaterial({color:0x2a2620, transparent:true, opacity:0.3-s*0.06, fog:false, depthWrite:false}));
-      sm.position.set(s*0.8, 3.4+s*2.4, -1.0+s*0.5); D.add(sm);
+      sm.position.set(s*0.35, 3.4+s*2.4+i*0.3, -1.0+s*0.28); D.add(sm);
     }
     const li=new THREE.PointLight(0xff7a2a, 1.4, 26); li.position.set(0,2.6,-1.0); D.add(li);
   });
@@ -18459,10 +18561,12 @@ const CHINA_LEGS = [
    boss:XIANGYANG_BOSS,
    waveLine:' — the wall answers…',
    // The map's own shape, re-derived from the wave index every time a stage is spawned rather than
-   // toggled by an event: the gate stands open for the sortie and is shut behind it, and the wall
-   // comes down for wave three. Arriving, dying, respawning and /tp all land on the same answer.
+   // toggled by an event: the gate stands open for the sortie and is barred behind it, the wall comes
+   // down for wave three — and then the gate SWINGS OPEN again for the boss, because the commander
+   // does not hide behind it. open → barred → barred → open is the whole leg in one object, and that
+   // last swing is what starts the fight. Arriving, dying, respawning and /tp all land on the same answer.
    onWave(n){ xiangyangSetGate(n >= 1); xiangyangSetBreach(n >= 2); },
-   onBoss(){ xiangyangSetGate(true); xiangyangSetBreach(true); },
+   onBoss(){ xiangyangSetGate(false); xiangyangSetBreach(true); },
    enter(b){ enterXiangyangWorld(b || '🏯 Xiangyang — the wall holds, for now'); }},
   {place:'Yamen', icon:'⚓', diff:YAMEN_DIFF, era:'Yuan China',
    waves:YAMEN_WAVES, stats:YAMEN_STATS, west:YAMEN_FLAGSHIP, east:YAMEN_FLAGSHIP,
@@ -20637,6 +20741,16 @@ const SFX = (function(){
       noise(t,0.46,'bandpass',900,0.22,2.6,260,true);
       tone(t,0.30,'sawtooth',150,60,0.12,{drive:8});
       noise(t+0.04,0.30,'highpass',2400,0.07,1.4,1400);
+    },
+    // Xiangyang's gate swinging wide for the Siege Commander. Two tons of banded timber on an iron
+    // pintle: a long dry grind for the swing, then the boom of the leaves reaching their stops. It has
+    // to last about as long as the 1.6s swing does or the sound finishes before the door does.
+    gateOpen(){ if(!actx)return; const t=actx.currentTime;
+      noise(t,1.30,'bandpass',260,0.16,3.0,90);            // timber dragging on stone
+      tone(t,1.20,'sawtooth',48,38,0.13,{drive:5});         // the weight of it turning
+      noise(t+0.10,0.90,'highpass',1500,0.05,2.4,1100);     // iron complaining in the socket
+      tone(t+1.40,0.50,'sine',62,30,0.26,{drive:3});        // and the stops taking it
+      noise(t+1.40,0.30,'lowpass',600,0.20,0.9,180);
     }
   };
 })();

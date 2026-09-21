@@ -6,7 +6,8 @@ Runs every check across every map, every weapon and every actor:
   actors   - ground contact, connectivity, coplanarity   (see audit.py)
   weapons  - connectivity, coplanarity, muzzle placement
   maps     - collider overlaps, blocked spawns, ramp corridors through
-             buildings, near-coplanar world faces, floating scenery
+             buildings, near-coplanar world faces (including the big ground and
+             water surfaces the grid check exempts), floating scenery
 
 Exit code is 0 only when nothing is reported.
 
@@ -28,6 +29,10 @@ REPO = HERE.parents[1]
 # World coplanarity is looser than the per-model one: map geometry is huge, and a 5mm
 # seam on a 40-unit wall is far more visible than the same seam on a 0.3-unit weapon part.
 WORLD_COPLANAR_EPS = 0.006
+# Ground slabs, lake planes and backing walls are exempt from the grid check by design (they touch
+# every cell). They get their own sweep instead — see __worldBigCoplanar — reported only when the
+# shared plane is this many square units or more, which is the scale a player actually sees flicker.
+BIG_COPLANAR_MIN_AREA = 4.0
 WORLD_OVERLAP_MIN = 0.30
 # A viewmodel is held about 0.4 from the camera, so a shared face far too small to matter on a building
 # fills a chunk of the screen on a weapon. OVERLAP_MIN (0.12 m^2) was sized for world geometry and hid
@@ -190,12 +195,14 @@ def main():
     spawns = json.loads(ctx.eval("JSON.stringify(globalThis.__world.SPAWN_POINTS)"))
 
     mfn = ctx.eval("""
-    (function(name, eps, omin, groundY, minGap, touchEps){
+    (function(name, eps, omin, groundY, minGap, touchEps, BIG_COPLANAR_MIN_AREA){
       var W = globalThis.__worlds[name];
       var cop = globalThis.__worldCoplanar(W.group, eps, omin, 4, groundY);
+      var big = globalThis.__worldBigCoplanar(W.group, eps, BIG_COPLANAR_MIN_AREA, groundY);
       var flo = globalThis.__worldFloaters(W.group, groundY, minGap, touchEps);
       var n = 0; W.group.traverse(function(o){ if(o.isMesh) n++; });
       return JSON.stringify({meshes:n, coplanar:cop.slice(0,6), coplanarN:cop.length,
+                             big:big.slice(0,6), bigN:big.length,
                              floaters:flo.slice(0,6), floatersN:flo.length,
                              colliders: W.colliders ? W.colliders.length : null});
     })
@@ -206,7 +213,7 @@ def main():
         if dead and args.skip_dead:
             continue
         r = json.loads(mfn(name, WORLD_COPLANAR_EPS, WORLD_OVERLAP_MIN, 0.0,
-                          FLOAT_MIN_GAP, FLOAT_TOUCH_EPS))
+                          FLOAT_MIN_GAP, FLOAT_TOUCH_EPS, BIG_COPLANAR_MIN_AREA))
         tag = "  [built but never reachable]" if dead else ""
         print(f"\n--- {name}{tag}")
         print(f"    meshes {r['meshes']}, colliders {r['colliders']}")
@@ -345,6 +352,9 @@ def main():
         report("near-coplanar world faces", r["coplanarN"],
                [f"{h['axis']} gap {h['gap']} at ({h['x']}, {h['y']}, {h['z']})"
                 for h in r["coplanar"]])
+        report("near-coplanar ground / water surfaces", r["bigN"],
+               [f"{h['axis']} gap {h['gap']} over {h['area']} sq units "
+                f"at ({h['x']}, {h['y']}, {h['z']})" for h in r["big"]])
         report("ramp corridors through buildings", len(ramp_hits),
                [f"ramp x[{zn['x1']:.1f},{zn['x2']:.1f}] z[{zn['z1']:.1f},{zn['z2']:.1f}] "
                 f"hits ({desc(b)}) by {ox}x{oz}" for zn, b, ox, oz in ramp_hits])

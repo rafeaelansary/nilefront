@@ -1012,6 +1012,60 @@ global.__worldCoplanar = function(group, eps, omin, cell, groundY){
   return hits;
 };
 
+// The other half of the coplanarity check, and the half that was missing.
+//
+// __worldCoplanar above drops any mesh spanning more than 12 cells, because a ground slab touches
+// every bucket and everything standing on a floor is legitimately flush with it. That exemption is
+// right for the grid, and it also meant the biggest surfaces in the game — ground slabs, lake and
+// river planes, backing walls — were never compared to ANYTHING. A canal bed cut to exactly the
+// island's ground height z-fought across 130 m^2 in plain sight of the player and the suite reported
+// the map clean.
+//
+// So: sweep the enormous meshes separately, against everything, and keep the report honest by
+// demanding a large shared area (minArea, in square units). A floor face flush with a wall's footprint
+// over half a square metre is noise; one flush with another floor over a hundred is the bug.
+global.__worldBigCoplanar = function(group, eps, minArea, groundY){
+  const boxes = global.__worldBoxes(group);
+  const span = b => Math.max(b.box.max.x-b.box.min.x, b.box.max.z-b.box.min.z);
+  const bigIdx = [];
+  boxes.forEach((b,i)=>{ if(span(b) > 48) bigIdx.push(i); });
+  const AX=['x','y','z'];
+  const seen=new Set(), hits=[];
+  for(const ia of bigIdx){
+    const ma = boxes[ia].mesh;
+    if(ma.material && ma.material.polygonOffset) continue;
+    for(let ib=0; ib<boxes.length; ib++){
+      if(ib === ia) continue;
+      const pk = ia<ib ? ia+':'+ib : ib+':'+ia;
+      if(seen.has(pk)) continue; seen.add(pk);
+      const mb = boxes[ib].mesh;
+      if(mb.material && mb.material.polygonOffset) continue;
+      const cmp = global.__comparableBoxes(ma, boxes[ia].box, mb, boxes[ib].box);
+      if(!cmp) continue;
+      const A=cmp[0], B=cmp[1];
+      for(let k=0;k<3;k++){
+        const ax=AX[k], u=AX[(k+1)%3], v=AX[(k+2)%3];
+        const ou=Math.min(A.max[u],B.max[u])-Math.max(A.min[u],B.min[u]);
+        const ov=Math.min(A.max[v],B.max[v])-Math.max(A.min[v],B.min[v]);
+        if(ou<=0 || ov<=0 || ou*ov < minArea) continue;
+        if(Math.min(A.max[ax],B.max[ax])-Math.max(A.min[ax],B.min[ax]) <= 0) continue;
+        for(const [pp,qq,side] of [[A.min[ax],B.min[ax],'min'],[A.max[ax],B.max[ax],'max']]){
+          const d=Math.abs(pp-qq);
+          // both undersides on the floor: buried, pointing down, invisible from every angle
+          if(groundY !== null && groundY !== undefined && ax==='y' && side==='min'
+             && Math.abs(pp-groundY)<0.02 && Math.abs(qq-groundY)<0.02) continue;
+          if(d<eps) hits.push({axis:ax+side, gap:Math.round(d*10000)/10000,
+                               area:Math.round(ou*ov),
+                               x:Math.round((B.min.x+B.max.x)/2*10)/10,
+                               y:Math.round((B.min.y+B.max.y)/2*100)/100,
+                               z:Math.round((B.min.z+B.max.z)/2*10)/10});
+        }
+      }
+    }
+  }
+  return hits;
+};
+
 // Scenery that floats: a mesh whose underside is well above the ground and which touches nothing else.
 global.__worldFloaters = function(group, groundY, minGap, eps){
   // Exclude only the genuinely enormous: ground slabs (60-400 units) and the 1400-unit backing planes.

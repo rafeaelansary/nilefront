@@ -218,18 +218,71 @@ ok &= show("the breach is re-derivable state: solid bay, then a pile you climb",
 """))
 
 # The gate is its own switch, and the leg OPENS with it open -- the garrison has come out to fight.
-ok &= show("the gate opens the leg and shuts behind the sortie", run("""
+ok &= show("the gate is a door on hinges: it swings, and what blocks you is what you can see", run("""
   gameStarted = true;
   enterXiangyangWorld('t');
   if(xyGateShut) throw new Error('the leg starts with the gate shut');
-  if(xyGateDoor.visible) throw new Error('the leaves are drawn while the gate is open');
+  if(xyGateSwing !== 1) throw new Error('entering did not snap the leaves open, swing is '+xyGateSwing);
+  if(!xyGateDoor.visible) throw new Error('the leaves vanish instead of swinging');
   if(insideCollider(0, XY_WALL_Z, 0.45, 0)) throw new Error('the open gate is still solid');
+  // thrown open the leaves stand across the road inside, and are solid there
+  if(!insideCollider(XY_GATE_HW, XY_WALL_Z-3.0, 0.30, 0))
+    throw new Error('the open leaves are not solid where they stand');
   xiangyangSetGate(true);
-  if(!xyGateDoor.visible) throw new Error('the leaves are not drawn once it is shut');
+  if(xyGateSwing !== 1) throw new Error('shutting teleported the leaves rather than swinging them');
+  // it takes real time: half a second in it is still moving, and not yet solid across the passage
+  for(var i=0;i<30;i++) xiangyangGateTick(0.016);
+  if(!(xyGateSwing > 0.4 && xyGateSwing < 0.9)) throw new Error('mid-swing reads '+xyGateSwing);
+  for(var j=0;j<140;j++) xiangyangGateTick(0.016);
+  if(xyGateSwing !== 0) throw new Error('it never finished shutting; swing '+xyGateSwing);
   if(!insideCollider(0, XY_WALL_Z, 0.45, 0)) throw new Error('the shut gate does not block the passage');
+  if(insideCollider(XY_GATE_HW, XY_WALL_Z-3.0, 0.30, 0))
+    throw new Error('the leaves are still solid across the road after shutting');
+  // the pivots really turned; the leaves are not merely flagged
+  if(Math.abs(xyGateLeaves[0].pivot.rotation.y) > 1e-6) throw new Error('the shut leaf is not square in the arch');
+  xiangyangSetGate(false);
+  for(var k=0;k<140;k++) xiangyangGateTick(0.016);
+  if(Math.abs(Math.abs(xyGateLeaves[0].pivot.rotation.y) - XY_GATE_ARC) > 1e-6)
+    throw new Error('the open leaf did not reach its stop');
   enterXiangyangWorld('t');
   if(xyGateShut) throw new Error('re-entering left the gate shut');
-  return 'open on arrival, solid when shut, open again on re-entry';
+  return 'open on arrival, swings shut over ~1.6s, solid only where the timber actually is';
+"""))
+
+# The user asked for this by name: the door opens when the boss comes. It is derived from the stage,
+# so it is open whether you walked into the boss or respawned into it.
+ok &= show("the gate swings open for the boss, having been barred behind the sortie", run("""
+  gameStarted = true;
+  var d = {name:'China', legs:CHINA_LEGS};
+  var want = [false, true, true];     // the sortie comes out through it; then it is barred
+  var seen = [];
+  for(var w=0; w<3; w++){             // tripWave is 0-based; 0..2 are the three waves
+    jumpToDestStage(d, 0, w);
+    for(var i=0;i<140;i++) xiangyangGateTick(0.016);
+    seen.push('w'+(w+1)+(xyGateShut?':shut':':open'));
+    if(xyGateShut !== want[w]) throw new Error('wave '+(w+1)+' gate reads '+(xyGateShut?'shut':'open'));
+    if(insideCollider(0, XY_WALL_Z, 0.45, 0) !== want[w])
+      throw new Error('wave '+(w+1)+' passage does not match the leaves');
+  }
+  jumpToDestStage(d, 0, 3);           // tripWave === waves.length is the boss stage
+  if(!bossActive) throw new Error('stage 4 did not put the boss up');
+  if(xyGateShut) throw new Error('the boss came and the gate stayed shut');
+  for(var j=0;j<140;j++) xiangyangGateTick(0.016);
+  if(xyGateSwing !== 1) throw new Error('the gate never finished opening for the boss');
+  if(insideCollider(0, XY_WALL_Z, 0.45, 0)) throw new Error('the passage is still barred at the boss');
+  // and the road THROUGH the arch is genuinely open its whole length, not just at the threshold
+  var blocked = [];
+  for(var z=8.0; z>=-6.0; z-=0.25){
+    var hh = getTerrainHeight(0, z, 0);
+    if(insideCollider(0, z, 0.42, hh)) blocked.push(z.toFixed(2));
+  }
+  if(blocked.length) throw new Error('the road in is still blocked at z='+blocked.slice(0,5).join(','));
+  // with it shut, that same road is not passable -- so the sweep above is measuring the door
+  jumpToDestStage(d, 0, 2); for(var m=0;m<140;m++) xiangyangGateTick(0.016);
+  var anyBlocked = false;
+  for(var z2=2.0; z2>=-2.0; z2-=0.25) if(insideCollider(0, z2, 0.42, getTerrainHeight(0,z2,0))) anyBlocked = true;
+  if(!anyBlocked) throw new Error('the shut gate does not close that road at all');
+  return seen.join(' ')+' -> boss: it grinds open and the road through the arch is clear end to end';
 """))
 
 # The trebuchet is a machine, not a prop: it cycles, it looses, and a stone lands somewhere real.
