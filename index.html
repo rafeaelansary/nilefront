@@ -7593,11 +7593,26 @@ heightZoneTarget = heightZonesAztec;
   });
   const TM_TOP = ty;                                   // 12.4
   lb(12.6, 0.32, 9.0, plaster, TM_X, TM_TOP+0.10, TM_Z);   // the summit deck's own paving, bedded in
-  addBox(TM_X, TM_Z, 26, 20, TM_TOP);                  // solid from below, walkable once you are up
   heightZoneTarget.push({type:'plateau', x1:TM_X-5.9, z1:TM_Z-4.2, x2:TM_X+5.9, z2:TM_Z+4.2, y:TM_TOP});
 
   // ---- the double stair, running SOUTH off the deck and down into the precinct ----
   const ST_Z0 = TM_Z+4.2, ST_Z1 = TM_Z+13.8;           // from the deck edge out to the precinct floor
+  const ST_HW = 5.3;                                   // both flights plus the middle: the corridor
+
+  // The pyramid is solid — but NOT across its own stair, and that is the whole bug. It was one
+  // 26x20 box with roofY TM_TOP, and a roofY only lifts a block once you have ACTUALLY REACHED that
+  // roof: climbing the stair you cross into the footprint at z=TM_Z+10 about four units up, nowhere
+  // near 12.4, so the box slammed shut a third of the way to the top. An invisible wall on a stair
+  // you can see continuing, and a shove out of it that could drop you inside the pyramid. Three
+  // boxes instead, leaving the stair corridor open the whole way down.
+  addBox(TM_X, (TM_Z-10 + ST_Z0)/2, 26, ST_Z0-(TM_Z-10), TM_TOP);        // everything north of the stair
+  [-1,1].forEach(sd=> addBox(TM_X + sd*(ST_HW+13)/2, (ST_Z0 + TM_Z+10)/2,
+                             13-ST_HW, (TM_Z+10)-ST_Z0, TM_TOP));        // the flanks either side of it
+  // The central balustrade is a real wall down the middle, and it has to be: the two ramp zones stop
+  // at +-0.7, so without it you could step off a flight into the 1.4-wide gap between them, where no
+  // zone reaches, and drop to ground level inside the pyramid. 1.1 wide plus the player's radius keeps
+  // you out of the strip entirely.
+  addBox(TM_X, (ST_Z0+ST_Z1)/2, 1.1, ST_Z1-ST_Z0);
   [-1,1].forEach(sd=>{
     const cx = TM_X + sd*3.0;
     // the flight itself: one wedge per tier so it reads as steps without 60 separate boxes
@@ -7620,7 +7635,10 @@ heightZoneTarget = heightZonesAztec;
   });
   // ---- the serpent heads at the stair foot: the Coatepec myth, and the map's best single object ----
   [-1,1].forEach(sd=>{
-    const hx = TM_X + sd*5.9;
+    // 6.7, not 5.9: at 5.9 the head block reached x=4.6, which is 0.8 INSIDE the 5.3-wide stair
+    // corridor — a solid snout eating the outer edge of each flight right where you step onto it.
+    // Out here it sits at the foot of the outer balustrade, which is where it belongs anyway.
+    const hx = TM_X + sd*6.7;
     lb(2.6,1.5,3.6, tezLight, hx, 0.76, ST_Z1-0.6);             // the head block  base +0.010
     lb(2.9,0.34,1.4, tezDark, hx, 1.62, ST_Z1-2.0);             // its brow
     lb(1.9,0.62,1.5, boneMat, hx, 0.62, ST_Z1+1.3);             // the open lower jaw
@@ -7630,7 +7648,7 @@ heightZoneTarget = heightZonesAztec;
     }
     [-1,1].forEach(e=> lb(0.5,0.5,0.4, boneMat, hx+e*0.75, 1.72, ST_Z1-0.2));
     [-1,1].forEach(e=> lb(0.26,0.26,0.24, basaltDark, hx+e*0.75, 1.78, ST_Z1+0.06));
-    addBox(hx, ST_Z1, 2.8, 4.2);
+    addBox(hx, ST_Z1, 2.6, 4.2);           // 2.6 so its inner face stops exactly at the corridor edge
   });
 
   // ---- the twin shrines on the deck ----
@@ -7705,9 +7723,17 @@ heightZoneTarget = heightZonesAztec;
   (function eagleHouse(cx,cz){
     lb(11.0,1.60,9.0, tezontle, cx,0.685,cz);          // eagle house      base -0.115
     lb(11.4,0.24,9.4, tezDark, cx,1.68,cz);
-    addBox(cx,cz,11.0,9.0);
+    // ...with a ROOF. Written as a plain addBox it was solid at every height, so the plateau above it
+    // and the ramp up to it were both unreachable: you climbed the ramp and the platform's own
+    // footprint stopped you at the top of it.
+    addBox(cx,cz,11.0,9.0,1.55);
     heightZoneTarget.push({type:'plateau', x1:cx-5.5, z1:cz-4.5, x2:cx+5.5, z2:cz+4.5, y:1.55});
-    heightZoneTarget.push({type:'ramp', x1:cx-1.5, x2:cx+1.5, z1:cz+4.5, z2:cz+8.2, y1:1.55, y2:0});
+    // Off the WEST side, into the precinct. Run south (cx+-1.5 out to cz+8.2) it went through the
+    // coatepantli's south wall and then died in the canal kerb beyond it — the only way up onto this
+    // platform was blocked at both ends, and the platform's own collider had no roof either, so the
+    // ramp led nowhere even where it was clear. West there is four units of open floor to land on.
+    heightZoneTarget.push({type:'ramp', axisX:true, x1:cx-9.5, x2:cx-5.5,
+                           z1:cz-1.5, z2:cz+1.5, y1:0, y2:1.55});
     for(let i=0;i<8;i++) lb(3.1,0.22+i*0.012,0.48, plasterDk, cx, 1.55*(1-i/7)+0.11, cz+4.7+i*0.44);
     // the hall itself, with square columns and a flat roof
     lb(9.4,2.9,7.2, plaster, cx, 3.05, cz);
@@ -7741,9 +7767,15 @@ heightZoneTarget = heightZonesAztec;
   })(-13,-22);
 
   // ================= THE QUAY AND THE CAUSEWAYS =================
+  // A quay is a DOCK. This was a solid 34x3 collider with no roof — knee-high stonework that walled off
+  // the entire south edge of the island — and the player arrives at z=23.25, directly against it. The
+  // first thing the map did was pin you there. It is a height zone you step up onto now, with the
+  // collider kept only as its roof so nothing walks through the stone at ground level.
   lb(34,0.62,3.0, basaltMat, 0, 0.155, 25.4);        // quay             base -0.155
   lb(34.4,0.2,3.4, basaltDark, 0, 0.545, 25.4);   // laps the quay's top, which moved when it was bedded
-  addBox(0,25.4,34,3.0);
+  const QUAY_Y = 0.645;                            // the dark cap's top face: what you actually stand on
+  addBox(0,25.4,34,3.0, QUAY_Y);
+  heightZoneTarget.push({type:'plateau', x1:-17.2, z1:23.7, x2:17.2, z2:27.1, y:QUAY_Y});
   // three causeways running out over the water, which is what made this an island city
   [[0,1,34],[-1,0,29],[1,0,29]].forEach(([dx,dz,from])=>{
     for(let i=0;i<16;i++){
@@ -7762,13 +7794,46 @@ heightZoneTarget = heightZonesAztec;
   // length of each canal. That is the shimmering "river" texture: not a texture problem at all, two
   // surfaces at identical depth. The audit could not see it either, because __worldCoplanar skips any
   // mesh spanning more than ~48 units and the island is 58 across.
-  [[-24,8,3.4,26,0],[24,-2,3.4,22,0],[0,16,40,3.4,1]].forEach(([cx,cz,w,d,horiz])=>{
+  // ...and every one of them was cut with a continuous kerb down both banks and NOTHING across it.
+  // The z=16 canal alone is 40 units of unbroken 21cm stone, and the player arrives at z=23.25 facing
+  // straight up it: walk north toward the Templo Mayor, which is the one thing the arrival view is
+  // composed around, and you stop dead against a kerb you can see over. Tenochtitlan was crossed by
+  // bridges at every street; each canal gets one, on the axis the player actually walks, and the kerb
+  // is laid in two runs so the bridge mouth is genuinely open rather than merely drawn.
+  // `at` lists where that canal is bridged: one on the arrival axis, and one at x=19 where the eagle
+  // house's ramp comes down, which otherwise ran straight into the kerb.
+  const BR_HW = 3.0, BR_Y = 0.30;         // half-width of a crossing, and its deck top
+  [{cx:-24, cz: 8, w: 3.4, d:26,  horiz:0, at:[8]},
+   {cx: 24, cz:-2, w: 3.4, d:22,  horiz:0, at:[-2]},
+   {cx:  0, cz:16, w:40.0, d:3.4, horiz:1, at:[0, 19]}].forEach(({cx,cz,w,d,horiz,at})=>{
     lb(w,0.62,d, basaltDark, cx,-0.27,cz);                       // bed top at +0.04
     const wm=new THREE.Mesh(new THREE.BoxGeometry(w-0.8,0.32,d-0.8), lakeMat);
     wm.position.set(cx,-0.07,cz); wm.receiveShadow=true; scene.add(wm);   // water top at +0.09
-    // the kerbs either side
-    if(horiz){ [-1,1].forEach(s=>{ lb(w,0.34,0.7, basaltMat, cx,0.040,cz+s*(d/2+0.35)); addBox(cx,cz+s*(d/2+0.35),w,0.7); }); }
-    else      { [-1,1].forEach(s=>{ lb(0.7,0.34,d, basaltMat, cx+s*(w/2+0.35),0.040,cz); addBox(cx+s*(w/2+0.35),cz,0.7,d); }); }   // canal kerb base -0.130
+    const kerb=(kx,kz,kw,kd)=>{ if(kw<=0.05||kd<=0.05) return;
+      lb(kw,0.34,kd, basaltMat, kx,0.040,kz); addBox(kx,kz,kw,kd); };     // canal kerb base -0.130
+    // Walk the length of the cut laying kerb between one crossing and the next, so every gap the
+    // bridges need is a gap in the COLLIDER and not just in the stonework drawn over it.
+    const runs=[]; let cur = horiz ? cx-w/2 : cz-d/2;
+    const end = horiz ? cx+w/2 : cz+d/2;
+    at.slice().sort((p,q)=>p-q).forEach(b=>{ runs.push([cur, b-BR_HW]); cur = b+BR_HW; });
+    runs.push([cur, end]);
+    runs.forEach(([a,b])=>{ if(b-a <= 0.05) return;
+      if(horiz) [-1,1].forEach(s=> kerb((a+b)/2, cz+s*(d/2+0.35), b-a, 0.7));
+      else      [-1,1].forEach(s=> kerb(cx+s*(w/2+0.35), (a+b)/2, 0.7, b-a));
+    });
+    // The decks: 0.08 to 0.30, which clears the canal bed under them, stands proud of the kerb tops,
+    // and — the one that actually bit — does not share an underside with the plaza slab at 0.06.
+    at.forEach(b=>{
+      if(horiz){
+        lb(BR_HW*2, 0.22, d+2.4, basaltMat, b, BR_Y-0.11, cz);
+        heightZoneTarget.push({type:'plateau', x1:b-BR_HW, z1:cz-(d/2+1.2),
+                                               x2:b+BR_HW, z2:cz+(d/2+1.2), y:BR_Y});
+      } else {
+        lb(w+2.4, 0.22, BR_HW*2, basaltMat, cx, BR_Y-0.11, b);
+        heightZoneTarget.push({type:'plateau', x1:cx-(w/2+1.2), z1:b-BR_HW,
+                                               x2:cx+(w/2+1.2), z2:b+BR_HW, y:BR_Y});
+      }
+    });
   });
 
   // ================= HOUSES — the lived-in quarters =================
@@ -7812,7 +7877,9 @@ heightZoneTarget = heightZonesAztec;
   });
 
   // ================= BRAZIERS, BANNERS, TREES =================
-  [[-9,10],[9,10],[-9,-1],[9,-1],[0,20],[-15,3],[15,3]].forEach(([bx,bz])=>{
+  // The pair at z=20 flank the approach rather than standing in it: one was written at x=0, dead on
+  // the line the player walks from the quay to the bridge.
+  [[-9,10],[9,10],[-9,-1],[9,-1],[-3.4,20],[3.4,20],[-15,3],[15,3]].forEach(([bx,bz])=>{
     lcy(0.66,0.78,0.72,10, basaltMat, bx,0.280,bz);    // brazier          base -0.080
     lcy(0.72,0.72,0.16,10, gold, bx,0.77,bz);
     for(let i=0;i<6;i++){ const a=i/6*Math.PI*2;
@@ -9934,14 +10001,51 @@ heightZoneTarget = heightZonesXiangyang;
       if(!xyClearOf(x+1.3,z+0.5,0.9,0.9)) return;
       xcy(0.42,0.38,0.85,9, timberM, x+1.3,0.42,z+0.5); addBox(x+1.3,z+0.5,0.9,0.9);
     });
-    (function cart(){
+    // A Mongol supply wagon. The first one had both its wheels written to CZ+0.95 instead of
+    // CZ+sd*0.95 — the whole pair ended up on the far side, so from the near side, which is the side
+    // you actually walk past, the wagon stood in mid-air with its shadow on open ground under it.
+    // Built as a real four-wheeled cart now: two axles, a wheel at each END of each, and a bed that
+    // rests ON them rather than hovering over where they should have been.
+    (function wagon(){
       const CX=3.5, CZ=18.5;
-      xb(3.2,0.45,1.8, timberM, CX,0.95,CZ);
-      [-1,1].forEach(sd=> xb(3.0,0.55,0.16, timberDk, CX,1.35,CZ+sd*0.82));
-      [-1,1].forEach(sd=>{ const wh=xcy(0.72,0.72,0.20,12, timberDk, CX+sd*1.1, 0.72, CZ+0.95);
-        wh.rotation.x=Math.PI/2; });
-      xb(0.18,0.18,2.4, timberM, CX-1.2,0.95,CZ-1.9);
-      addBox(CX,CZ,3.4,2.2);
+      const WR=0.62, AXY=WR;                 // axle height IS the wheel radius: that is what makes it roll
+      const BEDY=0.84;
+      [-1,1].forEach(ax=>{
+        const az=CZ+ax*1.10;
+        xb(2.9,0.19,0.19, timberDk, CX, AXY, az);          // the axle tree
+        [-1,1].forEach(sd=>{
+          const wx=CX+sd*1.42;
+          const wh=xcy(WR,WR,0.20,12, timberDk, wx, WR, az); wh.rotation.x=Math.PI/2;
+          // spokes and hub stand PROUD of the felloe on both faces (0.24 and 0.32 against 0.20), so a
+          // wheel reads as a wheel from either side and nothing shares a plane with the disc
+          for(let i=0;i<6;i++){
+            const sp=xb(0.10, WR*1.52, 0.24, timberM, wx, WR, az);
+            sp.rotation.z = i*Math.PI/6;
+          }
+          const hub=xcy(0.19,0.19,0.32,8, timberM, wx, WR, az); hub.rotation.x=Math.PI/2;
+        });
+      });
+      xb(3.3,0.26,2.05, timberM, CX, BEDY, CZ);            // the bed, seated down onto the axles
+      // sides: a bottom rail with vertical staves standing on it, which is what a cart side actually is
+      [-1,1].forEach(sd=>{
+        const bz=CZ+sd*0.98;
+        xb(3.3,0.22,0.14, timberDk, CX, BEDY+0.24, bz);
+        for(let i=0;i<7;i++) xb(0.26,0.62,0.11+i*0.004, timberM, CX-1.38+i*0.46, BEDY+0.62, bz);
+        xb(3.34,0.13,0.18, timberDk, CX, BEDY+0.96, bz);   // the capping rail over the staves
+      });
+      xb(0.16,0.74,2.1, timberDk, CX+1.70, BEDY+0.50, CZ); // the tailboard
+      // the shafts, running down to the ground the way an unhitched cart stands
+      [-1,1].forEach(sd=>{
+        const sh=xb(0.16,0.16,2.7, timberM, CX+sd*0.56, 0.436, CZ-2.26);
+        sh.rotation.x = -0.30;
+      });
+      xb(1.5,0.14,0.14, timberDk, CX, 0.09, CZ-3.45);      // the swingletree at their tips
+      // the load: sacks and a crate, varied so no two share a face
+      xb(0.86,0.52,0.74, voxMat(0x6b5a3e,{noise:16}), CX-0.92, BEDY+0.39, CZ-0.24);
+      xb(0.78,0.58,0.68, voxMat(0x5f5136,{noise:16}), CX-0.02, BEDY+0.42, CZ+0.22);
+      xb(0.94,0.46,0.80, timberDk,                    CX+0.96, BEDY+0.36, CZ-0.10);
+      xb(0.70,0.36,0.62, voxMat(0x736244,{noise:16}), CX+0.34, BEDY+0.83, CZ-0.20);
+      addBox(CX,CZ,3.9,2.8);
     })();
   })();
 
@@ -18696,6 +18800,9 @@ function enterAztecWorld(banner){
   sky.visible = true;
   activeColliders = aztecColliders;
   activeHeightZones = heightZonesAztec;
+  // This map never set its own clamp, so its boundary was whatever the LAST map happened to leave
+  // behind — 20 arriving from one place, 32 from another. 27 puts the edge just past the south quay.
+  playClamp = 27;
   // The valley of Mexico sits at 2,200m and the map is built on a lake: thin, clean, high-altitude air
   // over a lot of water. So the sky goes deeper and colder than the basin's, the haze goes pale blue
   // rather than warm green, and the fog reaches much further — the causeways have to run visibly out over

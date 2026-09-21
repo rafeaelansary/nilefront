@@ -285,6 +285,33 @@ ok &= show("the gate swings open for the boss, having been barred behind the sor
   return seen.join(' ')+' -> boss: it grinds open and the road through the arch is clear end to end';
 """))
 
+# The camp's supply wagon was drawn with both its wheels at CZ+0.95 instead of CZ+sd*0.95 — the pair
+# ended up on the far side, and from the side you actually walk past it the wagon stood in mid-air.
+# Nothing caught it: every mesh was connected to its neighbours, so the floating-scenery sweep was
+# satisfied by a bed resting on nothing but its own side boards.
+ok &= show("the supply wagon stands on four wheels, one at each end of each axle", run("""
+  gameStarted = true;
+  enterXiangyangWorld('t');
+  var wheels = [];
+  xiangyangWorld.traverse(function(o){
+    if(!o.isMesh || !o.geometry || !o.geometry.parameters) return;
+    var p = o.geometry.parameters;
+    // a wheel: a cylinder of radius 0.62 laid on its side
+    if(p.radiusTop === 0.62 && p.height === 0.20 && Math.abs(o.rotation.x - Math.PI/2) < 1e-6)
+      wheels.push([Math.round(o.position.x*100)/100, Math.round(o.position.y*100)/100,
+                   Math.round(o.position.z*100)/100]);
+  });
+  if(wheels.length !== 4) throw new Error('found '+wheels.length+' wheels, expected 4');
+  var xs = {}, zs = {};
+  wheels.forEach(function(w){ xs[w[0]]=1; zs[w[2]]=1; });
+  if(Object.keys(xs).length !== 2 || Object.keys(zs).length !== 2)
+    throw new Error('the four wheels are not one at each corner: '+JSON.stringify(wheels));
+  wheels.forEach(function(w){
+    if(Math.abs(w[1] - 0.62) > 1e-6) throw new Error('a wheel rides at y='+w[1]+', off the ground');
+  });
+  return '4 wheels at y0.62, two axle lines and two tracks: '+JSON.stringify(wheels);
+"""))
+
 # The trebuchet is a machine, not a prop: it cycles, it looses, and a stone lands somewhere real.
 ok &= show("the trebuchet winds, looses, and lands a stone where it was aimed", run("""
   gameStarted = true;

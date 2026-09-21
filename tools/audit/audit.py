@@ -148,6 +148,14 @@ globalThis.__world = {
   aztecColliders:  typeof aztecColliders !== 'undefined' ? aztecColliders : null,
   heightZonesAztec:typeof heightZonesAztec!== 'undefined' ? heightZonesAztec : null,
   heightZonesOriginal:typeof heightZonesOriginal!== 'undefined' ? heightZonesOriginal: null,
+  // The engine's own movement rules, so the map checks can ASK the game whether a point is walkable
+  // instead of re-deriving an approximation of it. Approximating is how the Templo Mayor shipped with
+  // an invisible wall a third of the way up its stair: the ramp check skipped every collider carrying
+  // a roofY, and a roofY collider across a ramp is the single worst case there is — the roof rule only
+  // lifts the block once you have already CLIMBED to roof height, which on a ramp you have not.
+  getTerrainHeight: typeof getTerrainHeight !== 'undefined' ? getTerrainHeight : null,
+  insideCollider:   typeof insideCollider   !== 'undefined' ? insideCollider   : null,
+  setActive: function(cols, zones){ activeColliders = cols || []; activeHeightZones = zones || []; },
 };
 // Every world group and its collider array, for the whole-game sweep.
 globalThis.__worlds = {};

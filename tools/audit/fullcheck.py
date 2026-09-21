@@ -208,6 +208,63 @@ def main():
     })
     """)
 
+    # Both of these hand the question back to the engine: same colliders, same height zones, same
+    # insideCollider() the player is moved by. A check that re-implements the rules can only ever be
+    # a second opinion, and it is the wrong one exactly where the rules are subtle.
+    spawn_fn = ctx.eval("""
+    (function(name, zonesName, ptsJson){
+      var pts = JSON.parse(ptsJson);
+      var W = globalThis.__worlds[name];
+      var Z = (zonesName && globalThis.__world[zonesName]) || [];
+      globalThis.__world.setActive(W.colliders, Z);
+      var gth = globalThis.__world.getTerrainHeight, ic = globalThis.__world.insideCollider;
+      var out = [];
+      pts.forEach(function(p){
+        var sx=p[1], sz=p[2], rr=p[3];
+        var h = gth(sx, sz, undefined);
+        if(!ic(sx, sz, rr, h)) return;
+        // name the box it is actually in, for the report
+        var hit = null;
+        W.colliders.forEach(function(b){
+          if(hit) return;
+          var nx=Math.min(Math.max(sx,b.x1),b.x2), nz=Math.min(Math.max(sz,b.z1),b.z2);
+          if((sx-nx)*(sx-nx)+(sz-nz)*(sz-nz) < rr*rr) hit = b;
+        });
+        out.push([p[0], sx, sz, hit]);
+      });
+      return JSON.stringify(out);
+    })
+    """)
+    ramp_fn = ctx.eval("""
+    (function(name, zonesName, radius){
+      var W = globalThis.__worlds[name];
+      var Z = (zonesName && globalThis.__world[zonesName]) || [];
+      globalThis.__world.setActive(W.colliders, Z);
+      var gth = globalThis.__world.getTerrainHeight, ic = globalThis.__world.insideCollider;
+      var out = [];
+      Z.forEach(function(zn){
+        if(zn.type !== 'ramp') return;
+        var bad=0, tot=0, first=null;
+        for(var t=0; t<=1.0001; t+=0.04){
+          // three lines along the ramp -- the middle and both shoulders, inset by the player's radius
+          for(var u=0.25; u<=0.76; u+=0.25){
+            var x, z;
+            if(zn.axisX){ x = zn.x1 + (zn.x2-zn.x1)*t; z = zn.z1 + (zn.z2-zn.z1)*u; }
+            else        { x = zn.x1 + (zn.x2-zn.x1)*u; z = zn.z1 + (zn.z2-zn.z1)*t; }
+            var h = gth(x, z, undefined);
+            tot++;
+            if(ic(x, z, radius, h)){
+              bad++;
+              if(!first) first = [Math.round(x*10)/10, Math.round(z*10)/10, Math.round(h*100)/100];
+            }
+          }
+        }
+        if(bad) out.push({bad:bad, tot:tot, at:first, rect:[zn.x1, zn.z1, zn.x2, zn.z2]});
+      });
+      return JSON.stringify(out);
+    })
+    """)
+
     for name in names:
         dead = name in DEAD_WORLDS
         if dead and args.skip_dead:
@@ -301,37 +358,28 @@ def main():
             # 0.85 is the measured widest enemy radius, not 0.55: a spawn that only clears a narrow
             # enemy still drops a manticore or a mud golem inside the scenery.
             pts += [(f"SPAWN[{i}]", tuple(p), 0.85) for i, p in enumerate(pool)]
-            for label, (sx, sz), rr in pts:
-                for b in cols:
-                    x0, x1, z0, z1 = rect(b)
-                    # Circular distance to the nearest point on the box -- the same test insideCollider()
-                    # uses in the game. Expanding the box as a SQUARE, which this did, is stricter at the
-                    # corners than the game is: it flagged spawns a clear 1.03 away as blocked because
-                    # they were inside a square that the circle never reaches.
-                    nx = min(max(sx, x0), x1)
-                    nz = min(max(sz, z0), z1)
-                    if (sx - nx) ** 2 + (sz - nz) ** 2 < rr * rr:
-                        bad_spawns.append((label, (sx, sz), b))
-                        break
+            # Ask the GAME, rather than re-deriving its rules here. The hand-rolled box test had no
+            # notion of roofY, so it called a walkable dock a blocked spawn -- and anything it got
+            # wrong in the other direction would have been a real bug reported as clean.
+            hits = json.loads(spawn_fn(name, HEIGHT_ZONES.get(name, ""),
+                                       json.dumps([[l, float(sx), float(sz), rr]
+                                                   for l, (sx, sz), rr in pts])))
+            for label, sx, sz, b in hits:
+                bad_spawns.append((label, (sx, sz), b))
 
-        # ramp corridors running through buildings. A watchtower stair is a walkable corridor: if a
-        # building collider sits inside it the player climbs into a wall — the collider stops them while the
-        # height zone keeps lifting. Towers got taller once, their stairs got longer with them, and seven
-        # buildings ended up inside a flight before anyone noticed.
+        # Ramps you cannot actually climb. A stair is a walkable corridor: if anything solid sits in
+        # it the player climbs into a wall — the collider stops them while the height zone keeps
+        # lifting. This used to compare rectangles and SKIP every collider carrying a roofY, on the
+        # theory that a tower's own footprint legitimately abuts its ramp. That exemption hid the
+        # worst case in the game: the Templo Mayor's 26x20 roofY box covered its own stair, and a
+        # roofY only lifts once you have reached the roof, so the stair sealed a third of the way up.
+        # It now walks each ramp and asks insideCollider() at the height the ramp itself puts you at.
         ramp_hits = []
         zones = json.loads(ctx.eval(
             "JSON.stringify(globalThis.__world['%s'] || [])" % HEIGHT_ZONES[name])) \
             if name in HEIGHT_ZONES else []
-        for zn in zones:
-            if zn.get("type") != "ramp":
-                continue
-            for b in cols:
-                if b.get("roofY") is not None:
-                    continue        # the tower's own footprint legitimately abuts its ramp
-                ox = min(zn["x2"], b["x2"]) - max(zn["x1"], b["x1"])
-                oz = min(zn["z2"], b["z2"]) - max(zn["z1"], b["z1"])
-                if ox > 0.2 and oz > 0.2:
-                    ramp_hits.append((zn, b, round(ox, 2), round(oz, 2)))
+        if zones:
+            ramp_hits = json.loads(ramp_fn(name, HEIGHT_ZONES.get(name, ""), 0.45))
 
         if not dead:
             problems += (bool(ov) + bool(bad_spawns) + bool(r["coplanarN"])
@@ -355,9 +403,10 @@ def main():
         report("near-coplanar ground / water surfaces", r["bigN"],
                [f"{h['axis']} gap {h['gap']} over {h['area']} sq units "
                 f"at ({h['x']}, {h['y']}, {h['z']})" for h in r["big"]])
-        report("ramp corridors through buildings", len(ramp_hits),
-               [f"ramp x[{zn['x1']:.1f},{zn['x2']:.1f}] z[{zn['z1']:.1f},{zn['z2']:.1f}] "
-                f"hits ({desc(b)}) by {ox}x{oz}" for zn, b, ox, oz in ramp_hits])
+        report("ramps blocked by something solid", len(ramp_hits),
+               [f"ramp x[{h['rect'][0]:.1f},{h['rect'][2]:.1f}] z[{h['rect'][1]:.1f},{h['rect'][3]:.1f}] "
+                f"blocked at {h['bad']}/{h['tot']} points, first at "
+                f"({h['at'][0]}, {h['at'][1]}) y={h['at'][2]}" for h in ramp_hits])
         report("floating scenery", r["floatersN"],
                [f"underside y={f['y']} at ({f['x']}, {f['z']})" for f in r["floaters"]])
 
