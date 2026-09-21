@@ -544,6 +544,63 @@ ok &= show("the Admiral stands on the flagship with rear and mid already burning
 
 # The whole trip, start to finish: Xiangyang's three waves and the Commander hand on to Yamen (not home
 # -- Xiangyang now carries a fellOn), and Yamen's three waves and the Admiral send the player home.
+ok &= show("the Admiral burns the flagship out from under you, band by band", run("""
+  gameStarted = true; var wasGod = godMode; godMode = true;
+  var d = {name:'China', legs:CHINA_LEGS};
+  jumpToDestStage(d, 1, YAMEN_WAVES.length);
+  var boss = bots.filter(function(b){ return b.boss; })[0];
+  if(!boss) throw new Error('no boss on the boss stage');
+  if(yamenFlagCut !== 0) throw new Error('the flagship is already cut down at full health');
+  var full = yamenDecks().filter(function(r){ return r.x2 > YAMEN_HULLS[2].x; })[0];
+  var fullLen = full.z2 - full.z1;
+
+  // two thirds of his health: the stern third goes
+  boss.hp = boss.maxHp*0.60;
+  for(var i=0;i<20;i++) animate();
+  if(yamenFlagCut !== 1) throw new Error('at 60% health the stern has not gone (cut='+yamenFlagCut+')');
+  var mid = yamenDecks().filter(function(r){ return r.x2 > YAMEN_HULLS[2].x; })[0];
+  if(mid.z2 - mid.z1 >= fullLen - 0.01) throw new Error('the deck did not actually shrink');
+  if(Math.abs(mid.z1 - (full.z1 + YAMEN_FLAG_BAND)) > 1e-6) throw new Error('the wrong end burned');
+
+  // a third: the bow goes too, and the fight finishes in the waist
+  boss.hp = boss.maxHp*0.20;
+  for(var j=0;j<20;j++) animate();
+  if(yamenFlagCut !== 2) throw new Error('at 20% health the bow has not gone');
+  var waist = yamenDecks().filter(function(r){ return r.x2 > YAMEN_HULLS[2].x; })[0];
+  if(waist.z2 - waist.z1 >= mid.z2 - mid.z1 - 0.01) throw new Error('the bow band did not come off');
+
+  // the Admiral has to still be standing on what is left -- burning the boss off his own deck would
+  // make the fight unwinnable
+  if(yamenNearestDeck(YAMEN_BOSS.x, YAMEN_BOSS.z, [waist])[2] > 1e-8)
+    throw new Error('the Admiral is standing on deck that has burned away');
+  // ...and so does the player, who gets clamped forward as it goes
+  camera.position.set(YAMEN_BOSS.x, 1.7, full.z1 + 0.5);
+  yamenTick(0.016, 1.0);
+  if(yamenNearestDeck(camera.position.x, camera.position.z, yamenDecks())[2] > 1e-8)
+    throw new Error('the player was left standing on burned deck');
+
+  // re-entering the map puts the whole deck back
+  enterYamenWorld('t');
+  if(yamenFlagCut !== 0) throw new Error('re-entering left the flagship cut down');
+  godMode = wasGod;
+  return 'full deck -> stern gone at 60% -> bow gone at 20%, boss and player both still on floor';
+"""))
+
+ok &= show("Yamen fields its own marines, not the wall garrison in a boat", run("""
+  gameStarted = true;
+  var d = {name:'China', legs:CHINA_LEGS};
+  jumpToDestStage(d, 1, 0);
+  if(!bots.length) throw new Error('wave one spawned nothing');
+  if(bots.some(function(b){ return b.skin==='songinfantry'; }))
+    throw new Error('the land infantry from Xiangyang are fighting on the fleet');
+  if(!bots.every(function(b){ return b.skin==='songmarine'; }))
+    throw new Error('wave one is not all marines');
+  jumpToDestStage(d, 1, YAMEN_WAVES.length-1);
+  if(!bots.some(function(b){ return b.skin==='songguard' && b.armoured; }))
+    throw new Error('the last wave before the Admiral has no armoured elite in it');
+  return 'marines on the decks, the armoured guard for the last wave';
+"""))
+
 ok &= show("the whole trip plays through: Xiangyang hands on to Yamen, and Yamen sends you home", run("""
   gameStarted = true; var wasGod = godMode; godMode = true;
   var d = {name:'China', legs:CHINA_LEGS};

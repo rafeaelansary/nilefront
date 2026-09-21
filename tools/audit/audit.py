@@ -123,6 +123,7 @@ globalThis.__builders = {
   makeSongCrossbowman: typeof makeSongCrossbowman==='function' ? makeSongCrossbowman : null,
   makeSongGuard: typeof makeSongGuard==='function' ? makeSongGuard : null,
   makeSongFireLance: typeof makeSongFireLance==='function' ? makeSongFireLance : null,
+  makeSongMarine: typeof makeSongMarine==='function' ? makeSongMarine : null,
   makeSongCommander: typeof makeSongCommander==='function' ? makeSongCommander : null,
   makeYamenAdmiral: typeof makeYamenAdmiral==='function' ? makeYamenAdmiral : null,
   makeDaneAxe: typeof makeDaneAxe==='function' ? makeDaneAxe : null,
@@ -217,6 +218,7 @@ ACTORS = [
     ("makeSongCrossbowman", "b=>b()",                        1.00, 0.00, "Song Crossbowman"),
     ("makeSongGuard",       "b=>b()",                        1.05, 0.00, "Song Guard (armoured elite)"),
     ("makeSongFireLance",   "b=>b()",                        1.00, 0.00, "Song Fire-Lance trooper"),
+    ("makeSongMarine",      "b=>b()",                        1.00, 0.00, "Song Marine (Yamen)"),
     ("makeSongCommander",   "b=>b()",                        1.55, 0.00, "Song Siege Commander (Xiangyang boss)"),
     ("makeYamenAdmiral",    "b=>b()",                        1.60, 0.00, "Yamen Admiral (China finale boss)"),
 ]

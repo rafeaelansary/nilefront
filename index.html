@@ -10279,6 +10279,13 @@ let yamenFire = [false,false,false];
 let yamenFlames = [];           // one group per hull, shown/hidden by yamenSetFire()
 let yamenCharred = [];          // the scorching that stays once a hull has gone up
 let yamenSmoke = [];            // {mesh, base} — the columns, animated in yamenTick
+// The flagship never burns as a WHOLE hull — it is the one deck the fight has to happen on. What it
+// does instead is lose it a band at a time during the boss fight: 0 is the whole deck, 1 has lost the
+// stern third, 2 has lost the bow third as well and the Admiral is fought in the waist. See
+// yamenSetFlagCut(), and the boss controller that drives it.
+let yamenFlagCut = 0;
+let yamenFlagFlames = [];       // one group per band, shown as that band goes
+const YAMEN_FLAG_BAND = YAMEN_HULL_HL*2/3;   // a third of the flagship's length
 
 addTarget = yamenColliders;
 heightZoneTarget = heightZonesYamen;
@@ -10478,6 +10485,31 @@ heightZoneTarget = heightZonesYamen;
     db(4.0,4.0,0.14, i%2?sailM:sailDk, 1.6,3.2,-0.6);
     for(let b=0;b<5;b++) db(3.9,0.10,0.18, battenM, 1.6,1.6+b*0.78,-0.68);
   });
+  // ---- the flagship's own two bands of fire, for the boss fight. Built here, hidden, and shown by
+  // yamenSetFlagCut() as the Admiral takes the deck apart under the player. ----
+  {
+    const fx = YAMEN_HULLS[2].x;
+    [[-YAMEN_HULL_HL + YAMEN_FLAG_BAND*0.5, 'stern'], [YAMEN_HULL_HL - YAMEN_FLAG_BAND*0.5, 'bow']]
+      .forEach(([bz])=>{
+        const grp=new THREE.Group(); grp.visible=false; yamenWorld.add(grp);
+        [-1.6,0,1.6].forEach((ox,k)=>{
+          const fl=new THREE.Mesh(new THREE.ConeGeometry(0.60+((k%2)*0.12), 2.1+((k%2)*0.35), 7),
+            new THREE.MeshBasicMaterial({color:0xff7a2a, transparent:true, opacity:0.93, fog:false}));
+          fl.position.set(fx+ox, 1.05, bz+((k%2)?0.9:-0.9)); grp.add(fl);
+          const core=new THREE.Mesh(new THREE.ConeGeometry(0.26,1.0,6),
+            new THREE.MeshBasicMaterial({color:0xffd27a, transparent:true, opacity:0.95, fog:false}));
+          core.position.set(fx+ox, 0.65, bz+((k%2)?0.9:-0.9)); grp.add(core);
+          const li=new THREE.PointLight(0xff8a30, 1.6, 15); li.position.set(fx+ox,1.5,bz); grp.add(li);
+        });
+        for(let s2=0;s2<3;s2++){
+          const sm=new THREE.Mesh(new THREE.BoxGeometry(2.2+s2*1.4, 1.4+s2*1.05, 2.4+s2*1.3),
+            new THREE.MeshBasicMaterial({color:0x28241f, transparent:true, opacity:0.32-s2*0.07, fog:false, depthWrite:false}));
+          sm.position.set(fx+s2*0.4, 3.0+s2*2.1, bz+s2*0.3); grp.add(sm);
+        }
+        yamenFlagFlames.push(grp);
+      });
+  }
+
   // two fireships, already alight, standing off the flank
   [[30,-16,0.3],[26,-24,0.8]].forEach(([hx,hz,rot])=>{
     const D=new THREE.Group(); D.position.set(hx,-0.2,hz); D.rotation.y=rot; yamenWorld.add(D);
@@ -10508,7 +10540,17 @@ heightZoneTarget = heightZonesOriginal;
 // of edge. The fire needs no kill condition of its own; it only needs to stop being floor.
 function yamenDecks(){
   const r=[];
-  for(let i=0;i<YAMEN_HULLS.length;i++) if(!yamenFire[i]) r.push(yamenDeckRect(i));
+  for(let i=0;i<YAMEN_HULLS.length;i++){
+    if(yamenFire[i]) continue;
+    const rect = yamenDeckRect(i);
+    // the flagship, during the boss fight, is trimmed a band at a time rather than removed whole: the
+    // Admiral has to have somewhere to stand, and the point is that it gets smaller
+    if(i === YAMEN_HULLS.length-1 && yamenFlagCut > 0){
+      rect.z1 += YAMEN_FLAG_BAND;                                  // the stern third goes first
+      if(yamenFlagCut > 1) rect.z2 -= YAMEN_FLAG_BAND;             // then the bow third
+    }
+    r.push(rect);
+  }
   return r;
 }
 function yamenNearestDeck(px, pz, rects){
@@ -10596,6 +10638,23 @@ function yamenSetFire(lit){
   }
 }
 
+// The flagship's bands, as re-derivable state like everything else on this map. `n` is how many bands
+// have gone (0, 1 or 2), applied wholesale rather than stepped, so a death and a respawn mid-boss
+// cannot leave the deck a different size than the fight thinks it is.
+function yamenSetFlagCut(n){
+  n = Math.max(0, Math.min(2, n|0));
+  if(yamenFlagCut === n) return;
+  const grew = n > yamenFlagCut;
+  yamenFlagCut = n;
+  for(let i=0;i<yamenFlagFlames.length;i++) yamenFlagFlames[i].visible = (i < n);
+  if(grew){
+    SFX.boss();
+    shakeAmt = Math.max(shakeAmt, 0.4);
+    setBanner(n === 1 ? '⚠ The stern goes up — forward!' : '⚠ The bow is gone — nowhere left but here');
+    setTimeout(()=>{ if(bossActive) setBanner(''); }, 2400);
+  }
+}
+
 function enterYamenWorld(banner){
   clearWorldGroups();
   scene.add(yamenWorld);
@@ -10615,6 +10674,7 @@ function enterYamenWorld(banner){
   vel.set(0,0,0); playerHeight=0; stuckTimer=0;
   // every hull cold on entry; spawnTripStage() below re-derives what this stage actually wants
   yamenFire = [true,true,true]; yamenSetFire([false,false,false]);
+  yamenFlagCut = 1; yamenSetFlagCut(0);
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
   weapons = chinaWeapons;
@@ -10924,6 +10984,7 @@ function makeVoxelBot(color, weaponType, skinName){
   if(skinName==='songcrossbowman') return makeSongCrossbowman();
   if(skinName==='songguard') return makeSongGuard();
   if(skinName==='songfirelance') return makeSongFireLance();
+  if(skinName==='songmarine') return makeSongMarine();
   if(skinName==='songcommander') return makeSongCommander();
   if(skinName==='yamenadmiral') return makeYamenAdmiral();
   const cfg = SKINS[skinName] || SKINS.soldier;
@@ -14993,6 +15054,102 @@ function makeSongFireLance(){
   return rig;
 }
 
+// SONG MARINE — the fleet's own boarding troops, and deliberately not the wall garrison in a boat.
+// A marine fights on a wet moving deck and expects to go into the water, so he is the lightest man in
+// this army: a short padded jacket instead of lamellar, bare forearms, straw sandals, and a broad
+// boarding dao paired with a hooked grapnel on his belt. The straw rain-cape across his shoulders is
+// the silhouette cue -- nothing on land wears one, and it reads at a distance against the fire.
+function makeSongMarine(){
+  const g=new THREE.Group();
+  const skin    = voxMat(0xc08a5e,{noise:15});      // weathered darker than the garrison's
+  const skinDk  = voxMat(0x8a6340,{noise:13});
+  const jacket  = voxMat(0x2f4450,{noise:14});      // indigo-dyed cotton, the fleet's own colour
+  const jacketDk= voxMat(0x1c2a33,{noise:12});
+  const strawM  = voxMat(0xb49a58,{noise:20});      // the rain cape
+  const strawDk = voxMat(0x8a7238,{noise:16});
+  const leather = voxMat(0x53402a,{noise:14});
+  const ironMat = metalMatP(0x7c828a,55,0xc8d0d8);
+  const ironDk  = metalMatP(0x515860,45,0x98a0a8);
+  const cordRed = voxMat(0x8a2620,{noise:10});
+  const eyeMat  = new THREE.MeshBasicMaterial({color:0xece6da,fog:false});
+  const pupMat  = new THREE.MeshBasicMaterial({color:0x14100c,fog:false});
+  const b=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); m.castShadow=true; g.add(m); return m; };
+
+  const mkLeg=(sd)=>{
+    const l=new THREE.Group(); l.position.set(sd*0.132,0.74,0); g.add(l);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; l.add(m); return m; };
+    p(0.182,0.30,0.192, jacketDk, -0.16,0);
+    p(0.148,0.10,0.158, leather,  -0.335,0);
+    p(0.128,0.285,0.138,skin,     -0.515,0);        // bare shin: he is going in the water sooner or later
+    p(0.169,0.046,0.179,cordRed,  -0.415,0);        // a bright leg wrap, the one colour on him
+    p(0.158,0.075,0.235,strawDk,  -0.690,0.042);    // a straw sandal, not a boot
+    return l;
+  };
+  const legL=mkLeg(1), legR=mkLeg(-1);
+
+  b(0.40,0.145,0.265, leather, 0,0.795,0);
+  b(0.43,0.065,0.295, ironDk,  0,0.735,0);
+  b(0.375,0.29,0.225, jacket,  0,0.995,0);
+  b(0.425,0.315,0.255, jacket, 0,1.275,0);
+  [0,1].forEach(i=> b(0.38-i*0.06,0.05,0.048, jacketDk, 0,1.36-i*0.115,0.145));
+  b(0.455,0.16,0.20, jacket,   0,1.44,-0.006);
+  // the straw rain-cape, hanging in two stepped courses off the shoulders
+  b(0.52,0.20,0.30, strawM,    0,1.475,-0.02);
+  b(0.50,0.045,0.32, strawDk,  0,1.578,-0.02);
+  b(0.46,0.26,0.13, strawM,    0,1.30,-0.165);
+  // each fringe course has to LAP the one above it, and the first has to lap the panel: cut 0.055 tall
+  // at 0.13 spacing they hung with 0.075 of air between them and two of the three touched nothing.
+  [0,1,2].forEach(i=> b(0.40-i*0.08,0.11,0.055, strawDk, 0,1.24-i*0.09,-0.215));
+  [-1,1].forEach(sd=> b(0.135,0.22,0.155, strawM, sd*0.235,1.385,-0.03));
+
+  b(0.142,0.095,0.142, skinDk, 0,1.545,0);
+  b(0.238,0.228,0.218, skin,   0,1.678,0);
+  b(0.096,0.056,0.066, skinDk, 0,1.658,0.119);
+  [-1,1].forEach(sd=> b(0.066,0.056,0.046, eyeMat, sd*0.060,1.715,0.112));
+  [-1,1].forEach(sd=> b(0.031,0.031,0.042,pupMat, sd*0.060,1.712,0.122));
+  // a conical straw hat, which nothing on land in this game wears
+  const hat=new THREE.Mesh(new THREE.ConeGeometry(0.34,0.26,10), strawM);
+  hat.position.set(0,1.885,0); hat.castShadow=true; g.add(hat);
+  const hatBand=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.15,0.07,9), strawDk);
+  hatBand.position.set(0,1.80,0); g.add(hatBand);
+
+  const mkArm=(sd)=>{
+    const a=new THREE.Group(); a.position.set(sd*0.255,1.395,0); g.add(a);
+    const p=(w,h,d,mat,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(0,y,z||0); m.castShadow=true; a.add(m); return m; };
+    p(0.152,0.24,0.152, jacket, -0.135,0);
+    p(0.165,0.048,0.165,cordRed,-0.275,0);
+    p(0.125,0.245,0.125,skin,   -0.415,0);          // bare forearm
+    p(0.130,0.112,0.140,skinDk, -0.595,0.012);
+    return a;
+  };
+  const armR=mkArm(1), armL=mkArm(-1);
+
+  // the boarding dao: shorter and broader than the garrison's, built on the same chained-segment curve
+  const dao=new THREE.Group(); dao.position.set(0,-0.58,-0.02); dao.rotation.y=Math.PI; dao.scale.setScalar(1.10); armR.add(dao);
+  const dg=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); dao.add(m); return m; };
+  dg(0.046,0.17,0.046, leather, 0,0,0.055);
+  dg(0.105,0.028,0.048, ironDk, 0,0.098,0.055);
+  let by=0.118, bz=0.055, t=0;
+  [0.085,0.085,0.085].forEach((len,i)=>{
+    const dy=Math.cos(t), dz=-Math.sin(t);
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(0.052+i*0.013, len, i%2?0.020:0.034), i%2?ironMat:ironDk);
+    seg.position.set(0, by+dy*len/2, bz+dz*len/2); seg.rotation.x=-t; dao.add(seg);
+    by+=dy*len; bz+=dz*len; t+=0.19;
+  });
+  const dtip=new THREE.Mesh(new THREE.ConeGeometry(0.046,0.10,4), ironMat);
+  dtip.rotation.x=-t; dtip.position.set(0, by+Math.cos(t)*0.05, bz-Math.sin(t)*0.05); dao.add(dtip);
+  // the grapnel on his belt -- the tool of the job, and it says "boarding" before the sword does
+  b(0.075,0.075,0.075, ironDk, -0.215,0.86,0.10);
+  [0,1,2].forEach(i=>{ const a2=i/3*Math.PI*2;
+    b(0.032,0.090,0.032, ironMat, -0.215+Math.cos(a2)*0.055, 0.915, 0.10+Math.sin(a2)*0.055); });
+  b(0.030,0.16,0.030, voxMat(0x7a6a48,{noise:14}), -0.215,0.775,0.10);
+
+  const rig=_mexRig(g, legL, legR, armR, armL);
+  return rig;
+}
+
 function makeSongGuard(){
   const g=new THREE.Group();
   const skin    = voxMat(0xb88860,{noise:14});
@@ -18255,11 +18412,13 @@ const XIANGYANG_BOSS = {skin:'songcommander', col:0x1c1716, hp:2600, scale:1.55,
   call:'⚠ A horn answers from inside the wall — the garrison’s own commander comes to the breach…',
   intro:'🏰 THE SIEGE COMMANDER',
   fellOn:'🏰 The commander falls in the breach — Xiangyang is yours, and the road runs to the water…'};
-// ---- Yamen's garrison: reused, not reinvented ----
-// The marine and the naval crossbowman are the SAME two skins Xiangyang fields — songinfantry and
-// songcrossbowman, same stat blocks, same models. A shipboard fight does not need a second roster any
-// more than the hirdman's javelin needs a second weapon to cover both halves of the Fjord: the escalation
-// this leg carries is the burning floor under them, not a new cast of enemies.
+// ---- Yamen's garrison ----
+// Its own melee troops: the SONG MARINE, who is not the wall garrison in a boat. Marines fight on a wet
+// moving deck and expect to go into the water, so they are the lightest men in this army — padded
+// jackets, bare forearms, straw capes and hats — and they read against the fire as something this
+// destination has not shown before. The crossbowman and the armoured guard are shared with Xiangyang
+// on purpose: it is the same dynasty's army, and an archer is an archer whether he is on a wall or a
+// deck. What this leg escalates is the floor, not the cast.
 // Both pools point at the SAME array, the flagship's own open deck — the one hull that never burns, so
 // nothing spawned here is ever placed somewhere the fire is about to take back.
 // Solved against the flagship's OWN furniture rather than picked by eye — its mast, winch, crates and
@@ -18267,19 +18426,25 @@ const XIANGYANG_BOSS = {skin:'songcommander', col:0x1c1716, hp:2600, scale:1.55,
 // them. Every point below is clear at a 0.75 radius and at least 2.0 from its neighbours.
 const YAMEN_FLAGSHIP = [[3.1,-6.25],[3.1,-4.25],[3.1,-1.0],[3.1,3.0],[3.1,5.0],[4.1,0.75],[4.6,-2.75],[4.85,4.0]];
 const YAMEN_WAVES = [
-  {songinfantry:3},
-  {songinfantry:2, songcrossbowman:2},
-  {songinfantry:2, songcrossbowman:3},
+  {songmarine:3},
+  {songmarine:3, songcrossbowman:2},
+  {songmarine:2, songcrossbowman:2, songguard:2},
 ];
 const YAMEN_STATS = {
-  songinfantry:    {hp:150, speed:1.25, wt:'knife',  scale:1.00, west:true},
+  songmarine:      {hp:145, speed:1.35, wt:'knife',  scale:1.00, west:true},
   songcrossbowman: {hp:95,  speed:1.05, wt:'pistol', scale:1.00, west:false},
+  // the armoured elite arrives for the last wave before the Admiral, which is the one place on this
+  // trip where the Zhanmadao's armourPierce and a shrinking deck are asked about at the same time
+  songguard:       {hp:280, speed:0.85, wt:'knife',  scale:1.05, west:true, armoured:true, noFlinch:true},
 };
 const YAMEN_DIFF = 1.35;   // the trip's true finale, and it plays that way
 // THE YAMEN ADMIRAL — the end of the whole China trip. 3700 puts him a shade over the Skerry Troll
 // (3600), which is deliberate: China is the destination bought after Sweden, and its own finale should
 // not read as easier than the one before it.
-const YAMEN_BOSS = {skin:'yamenadmiral', col:0x18201c, hp:3700, scale:1.60, speed:1.10, x:7.2, z:-3.0, radius:1.10,
+// He stands in the WAIST of the flagship — the middle third, the one band that never burns. Placed on
+// the stern instead, as a first pass had him, the boss would be standing on deck that goes up at 60%
+// of his own health, which the harness caught before it ever ran.
+const YAMEN_BOSS = {skin:'yamenadmiral', col:0x18201c, hp:3700, scale:1.60, speed:1.10, x:7.85, z:-2.27, radius:1.10,
   name:'THE YAMEN ADMIRAL', hud:'the admiral',
   call:'⚠ The flagship’s own drum sounds — the admiral comes forward, past the burning hulls…',
   intro:'🐉 THE YAMEN ADMIRAL',
@@ -21944,6 +22109,14 @@ function animate(){
     // (yamenSetFire) read into a boss hazard instead of a per-wave state change: the fire that has been
     // driving the player forward all leg is, at the end, something the admiral can start on purpose.
     if(b.boss && b.skin==='yamenadmiral' && player.alive){
+      // THE DECK GOES, A BAND AT A TIME. This is the leg's own mechanic escalated into the boss rather
+      // than a second unrelated gimmick bolted beside it: the fire that has been driving the player
+      // forward across three hulls finally arrives on the last one, and the arena closes. Two thirds
+      // of his health and the stern is gone; one third and the bow goes too, leaving the Admiral and
+      // the player in the waist of the flagship with nowhere to retreat to. Driven off his HEALTH, not
+      // a timer, so it is re-derived correctly if the player dies and comes back mid-fight.
+      const want = b.hp <= b.maxHp/3 ? 2 : (b.hp <= b.maxHp*2/3 ? 1 : 0);
+      if(want !== yamenFlagCut) yamenSetFlagCut(want);
       const raging = b.hp <= b.maxHp*0.5;
       if(raging && !b.enraged){
         b.enraged = true;
