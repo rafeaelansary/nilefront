@@ -5349,7 +5349,11 @@ heightZoneTarget = heightZonesGreek;
     addBox(x,z,1.0,1.0);
   }
   // spread across the fighting ground: the crossroads, the approach to the Pharos, the agora edges
-  lowWall(8.5,-4.5,5.5,0);    lowWall(-2.0,-17.0,4.5,0);   // clear of the wave spawn at (-2,-20) and the tower stair
+  // 8.2/5.0, not 8.5/5.5: the east end stood at x=11.25 and the west tower's stair corridor starts at
+  // x=11.63 — a 0.38 gap for a player of radius 0.45, so you could not stand in the bottom corner of
+  // that flight. "Clear of the tower stair" was the intent; it missed by seven centimetres. 10.70
+  // leaves 0.93, which is clear for the 0.85-radius enemies too.
+  lowWall(8.2,-4.5,5.0,0);    lowWall(-2.0,-17.0,4.5,0);   // clear of the wave spawn at (-2,-20)
   lowWall(14.0,4.5,5.0,0.35); lowWall(-24.0,1.0,4.8,Math.PI/2);  // x=14: at 12 it sat on the obelisk
   lowWall(-13.0,-16.0,5.0,0); // flanking the Pharos approach, so that walk up isn't open ground
   cistern(9.0,-1.0);   cistern(-4.5,6.5);   cistern(19.0,-10.0);   // clear of the east tower's stair corridor
