@@ -163,6 +163,7 @@ globalThis.__worlds = {};
  ['romanOverworld','romanColliders'],['islamicOverworld','islamicColliders'],
  ['mexicoOverworld','mexicoColliders'],['aztecOverworld','aztecColliders'],
  ['aztecMarketOverworld','aztecMarketColliders'],['swedenOverworld','swedenColliders'],
+ ['ladogaOverworld','ladogaColliders'],
  ['fjordWorld','fjordColliders'],['xiangyangWorld','xiangyangColliders'],['yamenWorld','yamenColliders'],
  ['dungeon','dungeonColliders'],['pyramidDungeon','pyramidDungeonColliders'],
  ['greekDungeon','greekDungeonColliders'],['nileWorld','nileColliders'],

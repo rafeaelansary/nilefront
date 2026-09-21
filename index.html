@@ -355,14 +355,15 @@ scene.add(sun);
 const BOOTH_POS = {x:0, z:0};
 const CAIRO_BOOTH_POS = {x:0, z:0};
 const AZTEC_MARKET_BOOTH_POS = {x:0, z:0};
+const LADOGA_BOOTH_POS = {x:0, z:0};
 // Hub state. Declared up here rather than beside the rest of the hub code because selectWeapon() reads
 // inHub and runs during initial weapon setup, long before that section — a `let` further down puts it in
 // the temporal dead zone at load time and throws.
 let inHub = false;
-let currentHub = 'cairo';   // which hub enter*Hub() last entered — 'cairo' or 'aztecMarket'
+let currentHub = 'cairo';   // which hub enter*Hub() last entered — 'cairo', 'aztecMarket' or 'ladoga'
 let boothOpen = false;
 let boothBeacon = null;   // the CURRENT hub's beacon crystal; spun by the animate loop
-let CAIRO_BOOTH_BEACON = null, AZTEC_MARKET_BOOTH_BEACON = null;   // each hub's own crystal, set at build time
+let CAIRO_BOOTH_BEACON = null, AZTEC_MARKET_BOOTH_BEACON = null, LADOGA_BOOTH_BEACON = null;   // each hub's own crystal, set at build time
 // There is no raft. A trip used to end at a physical return interactable — walk to the landing, press [E],
 // sail home — and both Mexican maps carried one. It is gone: the Mexico arc now MOVES you, at the two
 // moments that matter. The Jade-Heart Shaman's death carries you from La Venta to Tenochtitlan, and
@@ -389,6 +390,7 @@ const mexicoColliders = [];      // La Venta basin colliders (Olmec Mexico — t
 const aztecColliders = [];       // Tenochtitlan colliders (the Mexico trip's second leg, reached from La Venta)
 const aztecMarketColliders = []; // Aztec Market colliders — the new hub reached once Tenochtitlan is cleared
 const swedenColliders = [];      // Birka colliders (Viking Age Sweden — the second booth destination)
+const ladogaColliders = [];      // Aldeigjuborg colliders — the hub reached once the Fjord is cleared
 let addTarget = colliders;       // where addBox pushes during world build
 let activeColliders = colliders; // which set physics currently uses
 function addBox(cx,cz,w,d,roofY){ addTarget.push({x1:cx-w/2, z1:cz-d/2, x2:cx+w/2, z2:cz+d/2, roofY}); }
@@ -409,6 +411,7 @@ const heightZonesMexico = [];    // the Great Pyramid's stair and summit
 const heightZonesAztec = [];     // the Templo Mayor's twin stair and summit deck
 const heightZonesAztecMarket = [];   // flat market plaza — no climbable geometry, stays empty
 const heightZonesSweden = [];        // Birka is flat ground and jetties — nothing climbable, stays empty
+const heightZonesLadoga = [];        // flat bank and a plank quay — nothing climbable, stays empty
 let heightZoneTarget = heightZonesOriginal;   // where sniperTower()/plaza() push during world build
 let activeHeightZones = heightZonesPyramid;   // which set getTerrainHeight() reads at runtime (pyramid phase starts active)
 function getTerrainHeight(x,z,curH){
@@ -3212,7 +3215,7 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   camera.rotation.z = 0;   // the Fjord rolls the camera with its deck; nothing else may inherit that
-  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, fjordWorld, xiangyangWorld, yamenWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, ladogaOverworld, fjordWorld, xiangyangWorld, yamenWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
   clearFieldEffects();
 }
 // Ground effects — the bosses' AoE telegraphs and the Colossus's quake cracks — are added to the SCENE,
@@ -3246,11 +3249,15 @@ function enterDungeon(){
     // sky, so it gets daylight coming down through the breach rather than the blue cave lighting the Greek
     // dungeon still uses. Warm, high-contrast and directional: bright where the shaft lands, deep shadow
     // in the corners, which is the whole point of opening the roof.
-    sky.visible=true; skyTint(0xffd9a0);
-    scene.background.set(0x2a2318); scene.fog.color.set(0x3a2f1e); scene.fog.near=26; scene.fog.far=95;
-    setDistantGround(0x2a2318);
-    hemi.intensity=0.55; hemi.color.set(0xffd9a0); hemi.groundColor.set(0x3a2c18);
-    sun.intensity=0.45; fill.intensity=0.20; fill.color.set(0xc9a877);
+    // The background is what shows THROUGH the breach, so it is desert sky, not chamber shadow. At
+    // 0x2a2318 the hole in the roof was the darkest thing on screen, which is backwards for a hole
+    // letting daylight in. The FOG stays warm and dark — that is what keeps the far corners of the room
+    // in shadow — so the contrast the collapsed roof exists for survives the brighter opening.
+    sky.visible=true; skyTint(0xffe6c4);
+    scene.background.set(0xb6c6cc); scene.fog.color.set(0x5c4a30); scene.fog.near=26; scene.fog.far=95;
+    setDistantGround(0x6a5638);
+    hemi.intensity=0.68; hemi.color.set(0xffe2b4); hemi.groundColor.set(0x4c3a22);
+    sun.intensity=0.62; fill.intensity=0.22; fill.color.set(0xdcbb8a);
   } else {
     sky.visible=false;
     scene.background.set(0x141726); scene.fog.color.set(0x141726); scene.fog.near=14; scene.fog.far=58;
@@ -3886,7 +3893,10 @@ function enterNileWave(){
   boatHoleMeshes.forEach(m=>nileWorld.remove(m)); boatHoleMeshes.length = 0; // fresh hull on a replay
   clearWorldGroups(); scene.add(nileWorld); sky.visible=true;
   activeColliders = nileColliders; activeHeightZones = heightZonesNone;   // a boat deck has nothing to climb
-  scene.background.set(0x4a90b8); scene.fog.color.set(0x4a90b8); scene.fog.near=30; scene.fog.far=140;
+  // Sky and fog stay the SAME colour — that is what runs the river out to a horizon with no seam in it —
+  // but both go up: at 0x4a90b8 the pair rendered at luminance 92 once WORLD_DAMP had taken its 30%,
+  // which is dusk, not the "bright river haze" the tint below is reaching for.
+  scene.background.set(0x78bce0); scene.fog.color.set(0x78bce0); scene.fog.near=30; scene.fog.far=140;
   setDistantGround(0x2f7fae); // open river running to the horizon
   skyTint(0xd6ecf7); // bright river haze
   hemi.intensity=0.9; hemi.color.set(0xcfe8f5); hemi.groundColor.set(0x1a4a5f);
@@ -8889,6 +8899,483 @@ scene.children.slice().forEach(o=>{
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
+// ===================== ALDEIGJUBORG (Staraya Ladoga) — the Rus' river market =====================
+// The hub Sweden comes home to, the way the Tianquiztli is the hub Mexico comes home to. The Fjord ends
+// out on open water with a troll dead on a deck; the ships that were fighting there have to make port
+// SOMEWHERE, and the port a Swedish crew actually made for — once it had silver to spend and furs to
+// sell — was up the Volkhov. Aldeigjuborg is the Norse name for it. It is the first town on the road
+// east, and the road east is the Volga to the Caspian and the Silk Road beyond it: which is the whole
+// reason a booth selling passage to Yuan China can stand on this quay without being a joke. The silk
+// bolts and weighed dirhams in its eastern stalls came up that road, and the trip the player buys here
+// goes back down it.
+//
+// Nothing spawns here. It is a hub: quiet, warm, and the only map in the Nordic arc that is not cold.
+//
+//   SOUTH  the river and the plank quay — where you make port, and where the travel booth stands
+//   EAST   the eastern stalls: silk, glass beads, spice, and a balance weighing hacksilver
+//   WEST   the fur row: pelt racks, drying frames, wax and honey, amber on a mat
+//   NORTH  the log fort, its gate, and the hall behind it; the rune stone and the well before it
+//   CENTRE the market street between them, its braziers and its banner poles
+addTarget = ladogaColliders;
+heightZoneTarget = heightZonesLadoga;
+(function buildLadoga(){
+  const timber    = new THREE.MeshLambertMaterial({map:_finish(logTex(),2)});
+  const timberDk  = voxMat(0x4a3521,{noise:16});
+  const timberPa  = voxMat(0x7a6242,{noise:14});
+  const plankMat  = new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(),2)});
+  const bankMat   = new THREE.MeshLambertMaterial({map:_finish(dryGrassTex(),8)});
+  const streetMat = new THREE.MeshLambertMaterial({map:_finish(dirtTex(),10)});
+  const turfMat   = voxMat(0x5a7040,{noise:18});     // sod roofs, the same as Birka's
+  const turfDark  = voxMat(0x445731,{noise:16});
+  const thatchDk  = voxMat(0x63512c,{noise:16});
+  const graniteM  = new THREE.MeshLambertMaterial({map:_finish(graniteTex(),3)});
+  const runeMat   = voxMat(0x8e9298,{noise:12});
+  const runePaint = voxMat(0xa83c2c,{noise:10});
+  const ironMat   = metalMatP(0x6a6f76,60,0xc8d0d8);
+  const ironDark  = voxMat(0x33373c,{noise:12});
+  const silverMat = metalMatP(0xc8cdd4,90,0xffffff);  // hacksilver: the currency this town actually used
+  const shieldRed = voxMat(0xa8322c,{noise:12});
+  const shieldYel = voxMat(0xd8b23c,{noise:12});
+  const shieldBlu = voxMat(0x2f5f94,{noise:12});
+  const shieldGrn = voxMat(0x3f6a42,{noise:12});
+  const sailWhite = voxMat(0xd8d2c0,{noise:10});      // the wool sail, and the awnings cut from old ones
+  const sailRed   = voxMat(0xa8322c,{noise:10});
+  const matMat    = voxMat(0xc2a468,{noise:16});      // woven reed, what goods were laid out on
+  const leafDark  = voxMat(0x2f4a30,{noise:16});
+  const birchBark = voxMat(0xd8d8cc,{noise:10});
+  const birchLeaf = voxMat(0x8a9a4a,{noise:16});
+  const furMat    = voxMat(0x6b5a44,{noise:18});
+  const furDark   = voxMat(0x3a3028,{noise:16});
+  const furPale   = voxMat(0xb0a48c,{noise:16});
+  const clothPale = voxMat(0xc8c0b0,{noise:12});
+  const amberMat  = new THREE.MeshLambertMaterial({color:0xd08a20, transparent:true, opacity:0.88});
+  const waxMat    = voxMat(0xd8c070,{noise:10});
+  const spiceRed  = voxMat(0xb2402a,{noise:14});
+  const spiceOch  = voxMat(0xc8983c,{noise:14});
+  const silkRed   = voxMat(0xa8283c,{noise:6});       // the eastern goods: flat, saturated, no bevel noise
+  const silkGold  = voxMat(0xd4a828,{noise:6});
+  const silkGrn   = voxMat(0x2f9e6a,{noise:6});
+  const silkBlu   = voxMat(0x2f6f9c,{noise:6});
+  // A saturated river blue, not a desaturated slate one. Lambert MULTIPLIES by the light, so a washed-out
+  // blue under a warm sky comes out olive — 0x5a7f95 under the old golden-hour hemisphere rendered as
+  // (90,110,101), which is green water. The colour has to have enough blue in it to survive being lit.
+  const riverMat  = new THREE.MeshLambertMaterial({map:_finish(waterRippleTex(),70),
+    color:0x3f7fb4, transparent:true, opacity:0.97});
+
+  // Every point light on this map goes in here, and this group is scooped into ladogaOverworld with the
+  // rest of the geometry — a light added straight to the scene is skipped by the scoop below (it tests
+  // o.isLight) and would stay burning on whatever map loads next.
+  const LL = new THREE.Group(); scene.add(LL);
+  const lb=(w,h,d,mat,x,y,z,rot)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); if(rot) m.rotation.y=rot; m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  const lcy=(rt,rb,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; scene.add(m); return m; };
+  const lco=(r,h,seg,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,seg),mat);
+    m.position.set(x,y,z); m.castShadow=true; scene.add(m); return m; };
+
+  // ---- the ground: the bank, the river it stands on, and the street worn down the middle ----
+  // The river is the SOUTH edge and only the south edge, which is what makes this a river town rather
+  // than another island. The land slab stops at z=+21.5 and playClamp (20.5, see enterLadogaWorld) stops
+  // the player a metre short of it, so there is no waterline to fall off and no quay kerb to get wedged
+  // against — the piers that carry on past the shore are scenery you look at, not floor you walk on.
+  const HALF = 24, SHORE = 21.5;
+  lb(HALF*2, 0.5, HALF+SHORE, bankMat, 0, -0.25, (SHORE-HALF)/2);
+  const river = new THREE.Mesh(new THREE.BoxGeometry(400,0.5,300), riverMat);
+  river.position.set(0,-0.62,SHORE+150); river.receiveShadow=true; scene.add(river);   // top at -0.37: the bank has freeboard
+  // the trodden market street, gate to quay. 0.06 up and 0.06 thick, so it clears the bank's top plane
+  lb(7.4, 0.06, 30, streetMat, 0, 0.06, -1);
+
+  // ================= SOUTH — THE QUAY =================
+  // Plank decking laid along the bank, and the finger piers running out past the shore with the ships
+  // tied up to them. You arrive standing on this.
+  lb(34, 0.10, 8.2, plankMat, 0, 0.09, 17.4);
+  for(let i=0;i<9;i++) lb(34, 0.05, 0.12, timberDk, 0, 0.145, 13.6+i*0.95);   // the seams between runs
+  // three piers, and the piles they stand on
+  [-13, 0, 13].forEach(px=>{
+    lb(2.6, 0.16, 7.4, plankMat, px, 0.00, 25.2);
+    // piles topping out at 0.04, INSIDE the deck above rather than flush with its own top face: at the
+    // same 0.08 every one of the 24 shared a plane with the deck it carries
+    [22.2,24.4,26.6,28.4].forEach(pz=>{ [-0.95,0.95].forEach(ox=>
+      lcy(0.16,0.19,1.4,6, timberDk, px+ox, -0.66, pz)); });
+    lb(2.9, 0.10, 0.34, timberPa, px, 0.12, 21.8);             // the cleat at its head
+  });
+  // ---- the ships: a laden knarr at the centre pier, a second one further out ----
+  function knarr(kx, kz, rot, sailA, sailB){
+    const K=new THREE.Group(); K.position.set(kx,0,kz); K.rotation.y=rot||0; scene.add(K);
+    const kb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; K.add(m); return m; };
+    // the hull sits IN the water, not on it: it runs from -1.15 up to 0.46, so the river's own top
+    // plane (-0.37) cuts it at a waterline instead of leaving it perched on the surface
+    kb(3.2,1.6,9.0, timber,    0,-0.35,0);
+    kb(3.5,0.34,9.3, timberPa, 0, 0.29,0);            // the sheer strake, proud of the hull
+    kb(2.9,0.30,8.6, plankMat, 0, 0.02,0);            // the deck inside it
+    [-4.5,4.5].forEach((sz,i)=>{                      // stem and stern, raked up out of the water
+      const p=new THREE.Mesh(new THREE.BoxGeometry(0.5,2.6,1.1), timber);
+      p.position.set(0, 0.62, sz); p.rotation.x = (i?1:-1)*0.42; p.castShadow=true; K.add(p); });
+    const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.2,7.4,8), timber);
+    mast.position.set(0,3.6,0); mast.castShadow=true; K.add(mast);
+    kb(0.26,0.26,6.2, timberDk, 0, 6.35, 0);          // the yard, across the mast near its head
+    for(let i=0;i<6;i++) kb(0.9,2.8,0.06, i%2?sailA:sailB, 0, 4.85, -2.6+i*1.04);   // the striped wool sail
+    // shields along the gunwale, which is what a knarr carried them on in port
+    for(let i=0;i<5;i++){ const c=[shieldRed,shieldYel,shieldBlu,shieldGrn,shieldRed][i];
+      [-1.79,1.79].forEach(sx=>{
+        const s=new THREE.Mesh(new THREE.CylinderGeometry(0.52,0.52,0.10,12), c);
+        s.position.set(sx, 0.46, -3.3+i*1.65); s.rotation.z=Math.PI/2; s.castShadow=true; K.add(s);
+        const b=new THREE.Mesh(new THREE.SphereGeometry(0.13,8,6), ironMat);
+        b.position.set(sx+(sx>0?0.07:-0.07), 0.46, -3.3+i*1.65); K.add(b); });
+    }
+    // cargo lashed amidships — this is a trader, not a raider
+    [[-0.7,-1.4],[0.7,-1.1],[-0.5,1.5],[0.8,1.9]].forEach(([bx,bz],i)=>{
+      const br=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.38,0.9,10), timberPa);
+      br.position.set(bx,0.62,bz); br.castShadow=true; K.add(br);
+      if(i%2) kb(0.8,0.5,0.8, furMat, bx+0.1, 1.32, bz);
+    });
+  }
+  knarr(4.6, 25.6, 0.06, sailRed, sailWhite);
+  knarr(-8.8, 27.0, -0.10, shieldBlu, sailWhite);
+
+  // ---- the travel booth: a Norse trestle stall under an old sail, and the beacon over it ----
+  function riverBooth(x,z,rot){
+    const B=new THREE.Group(); B.position.set(x,0,z); B.rotation.y=rot||0; scene.add(B);
+    const bb=(w,h,d,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(px,py,pz); m.castShadow=true; m.receiveShadow=true; B.add(m); return m; };
+    const bcy=(rt,rb,h,seg,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+      m.position.set(px,py,pz); m.castShadow=true; B.add(m); return m; };
+    bb(4.8,0.30,3.7, timber,   0,0.30,0);                        // its own plank platform, up off the quay
+    bb(5.1,0.22,4.0, timberDk, 0,0.18,0);                        // and the sill under it, on its own plane
+    bb(4.4,0.16,3.3, plankMat, 0,0.51,0);                        // bedded 0.02 into the platform, not laid on it
+    [[-1.85,-1.45],[1.85,-1.45],[-1.85,1.45],[1.85,1.45]].forEach(([px,pz])=>
+      bcy(0.13,0.16,4.0,8, timber, px,2.20,pz));                 // four posts, run long through the awning
+    bb(4.2,0.22,3.0, sailRed,  0,3.86,0);                        // an old sail stretched for a roof
+    bb(4.35,0.10,3.15, sailWhite, 0,3.71,0);                     // its white stripe, lapping the red's underside
+    for(let i=0;i<5;i++) bb(0.52,0.44,0.06, i%2?sailWhite:sailRed, -1.56+i*0.78, 3.50, 1.56);
+    // the route board: a carved plank with the ports on it, STANDING ON the awning the way Cairo's does.
+    // Hung off the back of the stall it was supported by nothing at all and read as floating.
+    bb(3.2,0.84,0.20, timberPa, 0,4.37,-1.40);
+    for(let i=0;i<4;i++) bb(0.50,0.44,0.05, i%2?shieldBlu:shieldYel, -1.14+i*0.60, 4.37, -1.51);
+    bb(3.35,0.16,0.26, ironDark, 0,4.85,-1.40);
+    bb(3.0,0.92,2.0, timber,   0,0.99,0.1);                      // the counter
+    bb(3.15,0.14,2.15, timberPa, 0,1.51,0.1);
+    // a merchant's folding balance and a heap of hacksilver: the cue that this stall sells passage east
+    bcy(0.07,0.07,1.05,6, ironMat, -0.95,2.06,0.05);
+    bb(1.30,0.07,0.07, ironMat, -0.95,2.56,0.05);
+    [-0.58,0.58].forEach(ox=>{ bcy(0.02,0.02,0.36,4, ironMat, -0.95+ox,2.38,0.05);
+      bcy(0.24,0.24,0.06,10, silverMat, -0.95+ox,2.19,0.05); });
+    // one layer of hacksilver, not two: the second course was stepped in z as well as y, so none of it
+    // was standing on anything
+    for(let i=0;i<7;i++) bb(0.14,0.09,0.14, silverMat, -1.32+(i%4)*0.26, 1.62, -0.36+Math.floor(i/4)*0.22);
+    // tallies and a rolled chart on the counter
+    for(let i=0;i<5;i++){ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.10,0.44,8), voxMat(0xe0d6bc,{noise:8}));
+      r.position.set(0.55+(i%3)*0.32, 1.66+Math.floor(i/3)*0.22, -0.26+(i%3)*0.28); r.rotation.z=Math.PI/2; B.add(r); }
+    bb(0.82,0.14,0.60, shieldBlu, 1.34,1.66,0.46);   // clear of the tally roll's end face at z=0.20
+    // two oil lamps hung off the awning, so the stall reads as open at any hour
+    [-1.55,1.55].forEach(lx=>{
+      bcy(0.03,0.03,0.66,5, ironMat, lx,3.34,0.98);
+      bb(0.34,0.42,0.34, ironDark, lx,2.82,0.98);
+      const glow=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.28,0.22), new THREE.MeshBasicMaterial({color:0xffcf72,fog:false}));
+      glow.position.set(lx,2.82,0.98); B.add(glow);
+      const L=new THREE.PointLight(0xffcf72,0.7,9); L.position.set(x+lx*Math.cos(rot||0), 2.8, z+lx*Math.sin(rot||0)); LL.add(L);
+    });
+    // the waypoint beacon: a shaft of pale silver-blue light standing on the stall's own platform and
+    // rising above every roof in the town, with a slowly turning crystal at its head (spun in animate()).
+    const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.52,1.00,13.4,12,1,true),
+      new THREE.MeshBasicMaterial({color:0x9fd8f0, transparent:true, opacity:0.16, side:THREE.DoubleSide, depthWrite:false, fog:false}));
+    beam.position.set(0,7.3,0); B.add(beam);
+    const crystal=new THREE.Mesh(new THREE.OctahedronGeometry(0.80),
+      new THREE.MeshBasicMaterial({color:0xcdeeff, fog:false}));
+    crystal.position.set(0,13.0,0); B.add(crystal);
+    const bl=new THREE.PointLight(0xa8dcf4,0.9,15); bl.position.set(x,12.1,z); LL.add(bl);
+    LADOGA_BOOTH_BEACON = crystal;
+    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=5.1, d=4.0;
+    addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
+    LADOGA_BOOTH_POS.x=x; LADOGA_BOOTH_POS.z=z;
+  }
+  // rot 0 so the counter faces +z — you step off the pier and it is looking at you
+  riverBooth(-6.5, 17.0, 0);
+
+  // ---- what else is on a working quay ----
+  // stacked cargo, kept east of the street so the walk up from the water stays open
+  [[8.0,16.4],[10.4,16.0],[12.6,16.6],[14.8,16.2]].forEach(([bx,bz],i)=>{
+    for(let j=0;j<(i%2?3:2);j++){
+      const br=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.42,1.0,10), timberPa);
+      br.position.set(bx+(j%2)*0.05, 0.66+j*1.02, bz+(j%2)*0.06); br.castShadow=true; scene.add(br);
+      for(let h=0;h<2;h++) lb(0.98,0.08,0.98, ironDark, bx+(j%2)*0.05, 0.42+j*1.02+h*0.48, bz+(j%2)*0.06);
+    }
+    addBox(bx,bz,1.1,1.1);
+  });
+  [[16.8,19.0],[9.2,19.4]].forEach(([sx,sz])=>{          // sacks under a tarpaulin
+    for(let i=0;i<4;i++) lb(1.0-i*0.12,0.52,0.9-i*0.10, clothPale, sx+(i%2)*0.12, 0.42+i*0.46, sz-(i%2)*0.10);
+    addBox(sx,sz,1.2,1.1);
+  });
+  // ship's timber, stacked to season
+  for(let i=0;i<5;i++) lb(0.3,0.3,6.4, timber, -14.2+(i%3)*0.34, 0.30+Math.floor(i/3)*0.32, 17.6);
+  addBox(-13.9,17.6,1.4,6.6);
+  // coils of walrus-hide rope — Ladoga's other export, and the reason the ships get anywhere
+  [[-10.6,19.6],[2.6,19.8],[15.4,14.6]].forEach(([rx,rz])=>{
+    for(let i=0;i<3;i++){ const t=new THREE.Mesh(new THREE.TorusGeometry(0.52-i*0.09,0.11,6,14), timberPa);
+      t.position.set(rx,0.24+i*0.19,rz); t.rotation.x=Math.PI/2; t.castShadow=true; scene.add(t); }
+  });
+  // the harbour derrick: what put the cargo on the quay in the first place
+  (function derrick(dx,dz){
+    lcy(0.30,0.36,5.4,8, timber, dx,2.80,dz);
+    lb(0.34,0.34,4.2, timber, dx,5.10,dz+1.9);         // the jib, through the post's head
+    lb(0.22,1.9,0.22, timberDk, dx,4.20,dz+3.4);       // the fall, hanging off its end
+    lb(0.72,0.5,0.72, timberPa, dx,3.02,dz+3.4);       // and the crate on the end of that
+    lb(1.5,0.44,1.5, graniteM, dx,0.22,dz);            // the stone the post is stepped into
+    addBox(dx,dz,1.6,1.6);
+  })(-16.4,15.2);
+
+  // ================= EAST AND WEST — THE TWO ROWS =================
+  // A trestle stall under an awning cut from a worn-out sail, which is what every one of these was.
+  // `goods` dresses the table; everything structural is the same stall twice over, so the two rows read
+  // as one market with two trades in it rather than as two different pieces of scenery.
+  function stall(x, z, rot, awn, goods){
+    const S=new THREE.Group(); S.position.set(x,0,z); S.rotation.y=rot||0; scene.add(S);
+    const sb=(w,h,d,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(px,py,pz); m.castShadow=true; m.receiveShadow=true; S.add(m); return m; };
+    const scy=(rt,rb,h,seg,mat,px,py,pz)=>{ const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mat);
+      m.position.set(px,py,pz); m.castShadow=true; S.add(m); return m; };
+    [[-1.42,-0.92],[1.42,-0.92],[-1.42,0.92],[1.42,0.92]].forEach(([lx,lz])=>
+      sb(0.20,0.86,0.20, timberDk, lx,0.43,lz));                 // the trestle legs
+    sb(3.20,0.22,2.10, plankMat, 0,0.95,0);                      // the table, bedded onto the trestle heads
+    sb(3.32,0.08,2.22, matMat,   0,1.11,0);                      // the mat the goods lie on — top at 1.15
+    [[-1.62,-1.12],[1.62,-1.12],[-1.62,1.12],[1.62,1.12]].forEach(([px,pz])=>
+      scy(0.10,0.12,3.1,7, timber, px,1.55,pz));                 // the awning posts
+    sb(3.70,0.18,2.70, awn,       0,2.92,0);                     // the awning
+    sb(3.80,0.08,2.82, sailWhite, 0,2.78,0);                     // its lining, on its own plane
+    sb(3.50,0.86,0.18, timberPa,  0,1.86,-1.06);                 // the back board, carried on the two rear posts
+    for(let i=0;i<4;i++) sb(0.62,0.40,0.05, i%2?awn:sailWhite, -1.05+i*0.70, 1.86, -1.16);
+    if(goods) goods(sb, scy, S);
+    const c=Math.cos(rot||0), s=Math.sin(rot||0), w=3.6, d=2.6;
+    addBox(x, z, Math.abs(w*c)+Math.abs(d*s), Math.abs(w*s)+Math.abs(d*c));
+  }
+  // --- EAST: the eastern stalls. Silk, glass, spice, silver — everything that came UP the Volga, and
+  //     the one quarter of this town that explains why its booth sells China.
+  // Every one of these lays its goods on the mat, whose top is at 1.15, and any second course stands
+  // squarely on the first. The first pass stepped alternate items up by 0.32 while sliding them along in
+  // x, which put half of everything in this market in mid-air.
+  const bolts = (sb)=>{
+    [silkRed,silkGold,silkGrn,silkBlu,silkRed,silkGold].forEach((m,i)=>
+      sb(0.46,0.30,1.70, m, -1.28+i*0.50, 1.30, 0.06));
+    [silkGrn,silkRed,silkBlu].forEach((m,i)=>
+      sb(0.46,0.30,1.60, m, -1.28+i*1.00, 1.60, 0.06));                  // a second course, on the first
+  };
+  const beads = (sb,scy,S)=>{
+    [silkBlu,silkGrn,silkGold,silkRed].forEach((m,i)=>{
+      sb(0.74,0.16,0.62, timberDk, -1.14+i*0.76, 1.23, 0.10);          // four open trays
+      for(let j=0;j<6;j++){ const b=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.11,0.11), m);
+        b.position.set(-1.38+i*0.76+(j%3)*0.22, 1.37, -0.08+Math.floor(j/3)*0.30); S.add(b); } });
+    for(let i=0;i<3;i++){ const t=new THREE.Mesh(new THREE.TorusGeometry(0.30,0.045,6,16), silkGold);
+      t.position.set(-0.9+i*0.9, 2.10, -1.00); S.add(t); }   // strung, hung ON the back board
+  };
+  const spice = (sb,scy)=>{ [spiceRed,spiceOch,spiceRed,spiceOch,spiceRed].forEach((m,i)=>{
+    scy(0.30,0.34,0.44,10, clothPale, -1.28+i*0.64, 1.35, 0.02);
+    scy(0.26,0.26,0.12,10, m,         -1.28+i*0.64, 1.61, 0.02); }); };
+  const scales = (sb,scy,S)=>{
+    scy(0.09,0.09,1.30,6, ironMat, -0.4,1.80,0.04);                      // the balance itself
+    sb(1.60,0.08,0.08, ironMat, -0.4,2.41,0.04);
+    [-0.72,0.72].forEach(ox=>{ scy(0.02,0.02,0.40,4, ironMat, -0.4+ox,2.19,0.04);
+      scy(0.27,0.27,0.07,10, silverMat, -0.4+ox,1.97,0.04); });
+    for(let i=0;i<9;i++) sb(0.15,0.10,0.15, silverMat, 0.62+(i%3)*0.26, 1.20+Math.floor(i/3)*0.10, -0.42+(i%3)*0.24);
+    const chest=sb(0.94,0.52,0.70, timber, 1.02,1.41,0.62); chest.rotation.y=0.18;
+  };
+  [[9.0,11,bolts],[9.0,6,beads],[9.0,-1,spice],[9.0,-8,scales]].forEach(([sx,sz,g],i)=>
+    stall(sx, sz, -Math.PI/2, [silkRed,silkBlu,silkGold,silkGrn][i], g));
+  [[19.0,11,spice],[19.0,6,bolts],[19.0,-1,scales],[19.0,-8,beads]].forEach(([sx,sz,g],i)=>
+    stall(sx, sz, Math.PI/2, [silkGrn,silkGold,silkRed,silkBlu][i], g));
+
+  // --- WEST: the fur row. What went the other way, and what this town was actually rich on.
+  const pelts = (sb,scy,S)=>{
+    [furDark,furMat,furPale,furDark,furMat].forEach((m,i)=>
+      sb(0.52,0.14,1.80, m, -1.24+i*0.56, 1.22, 0.04));
+    [furPale,furDark].forEach((m,i)=> sb(0.52,0.14,1.66, m, -0.68+i*1.12, 1.36, 0.04));
+  };
+  const hides = (sb,scy,S)=>{
+    for(let i=0;i<3;i++) sb(1.00,0.18,1.70, [furMat,furPale,furDark][i], 0, 1.24+i*0.18, 0.02);
+    const h=sb(1.5,0.10,1.2, furDark, 0.3,2.10,-1.00); h.rotation.x=0.24;     // one hung on the board to show
+  };
+  const honey = (sb,scy)=>{ [0,1,2,3].forEach(i=>{
+    scy(0.30,0.27,0.56,10, timberPa, -1.14+i*0.76, 1.43, 0.04);
+    scy(0.25,0.25,0.09,10, waxMat,   -1.14+i*0.76, 1.75, 0.04); });
+    sb(0.90,0.34,0.62, waxMat, 0.9,1.32,-0.60); };
+  const amber = (sb,scy,S)=>{
+    sb(2.40,0.12,1.20, timberDk, 0,1.21,0.06);
+    for(let i=0;i<12;i++){ const a=new THREE.Mesh(new THREE.OctahedronGeometry(0.15), amberMat);
+      a.position.set(-1.00+(i%6)*0.40, 1.35, -0.22+Math.floor(i/6)*0.42); a.rotation.y=i*0.7; S.add(a); }
+    for(let i=0;i<2;i++){ const t=new THREE.Mesh(new THREE.TorusGeometry(0.26,0.05,6,14), amberMat);
+      t.position.set(-0.5+i*1.0, 2.10, -1.00); S.add(t); } };
+  [[-9.0,11,pelts],[-9.0,6,honey],[-9.0,-1,hides],[-9.0,-8,amber]].forEach(([sx,sz,g],i)=>
+    stall(sx, sz, Math.PI/2, [sailRed,sailWhite,sailRed,sailWhite][i], g));
+  [[-19.0,11,hides],[-19.0,6,amber],[-19.0,-1,pelts],[-19.0,-8,honey]].forEach(([sx,sz,g],i)=>
+    stall(sx, sz, -Math.PI/2, [sailWhite,sailRed,sailWhite,sailRed][i], g));
+
+  // drying frames down the back of the fur row, hung with skins
+  [[-22.4,8.5],[-22.4,1.5],[-22.4,-5.5]].forEach(([fx,fz])=>{
+    [-2.2,2.2].forEach(oz=> lcy(0.13,0.15,2.9,6, timberDk, fx,1.45,fz+oz));
+    lb(0.18,0.18,4.6, timber, fx,2.82,fz);
+    // 2.00, not 1.96: the skins hung 0.02 clear of the rail they hang from, which is not hanging
+    [-1.4,0,1.4].forEach((oz,i)=> lb(0.10,1.5,1.05, [furMat,furPale,furDark][i], fx,2.00,fz+oz));
+    addBox(fx,fz,0.6,4.8);
+  });
+  // and the cooper's yard behind the eastern row: barrels, hoops and a half-built cask
+  [[22.4,8.0],[22.4,5.6],[21.4,2.0],[22.6,-4.4]].forEach(([bx,bz],i)=>{
+    const br=new THREE.Mesh(new THREE.CylinderGeometry(0.50,0.44,1.15,10), timberPa);
+    br.position.set(bx,0.63,bz); br.castShadow=true; scene.add(br);
+    for(let h=0;h<2;h++) lb(1.06,0.09,1.06, ironDark, bx,0.34+h*0.58,bz);
+    addBox(bx,bz,1.15,1.15);
+  });
+
+  // ================= CENTRE — THE STREET =================
+  // braziers in pairs down the EDGES of the street, never on its centre line: the middle of this street is
+  // the walk from the quay to the fort gate, and it stays open from end to end.
+  [12,5,-2,-9].forEach(bz=>{ [-2.6,2.6].forEach(bx=>{
+    lcy(0.48,0.58,0.72,9, ironDark, bx,0.34,bz);            // bedded 0.02 into the street's top plane
+    lcy(0.54,0.54,0.13,9, ironMat,  bx,0.75,bz);
+    for(let i=0;i<5;i++){ const a=i/5*Math.PI*2;
+      lb(0.16,0.32,0.16, timberDk, bx+Math.cos(a)*0.44, 0.90, bz+Math.sin(a)*0.44); }
+    const f=new THREE.Mesh(new THREE.ConeGeometry(0.36,0.94,8), new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false}));
+    f.position.set(bx,1.20,bz); scene.add(f);
+    const L=new THREE.PointLight(0xffa93a,0.85,12); L.position.set(bx,1.6,bz); LL.add(L);
+    addBox(bx,bz,1.2,1.2);
+  }); });
+  // banner poles outside the braziers, in the colours of the four crews using the port
+  // (-4.6,-13) stood in the rune stone's own base; moved up the street, clear of both it and the well
+  [[-4.6,13],[4.6,8],[-4.6,1],[4.6,-6],[-4.6,-9]].forEach(([px,pz],i)=>{
+    lcy(0.11,0.13,4.6,6, timber, px,2.36,pz);
+    lb(0.12,2.0,0.92, [sailRed,shieldBlu,shieldYel,shieldGrn,sailRed][i], px+0.10,3.30,pz);
+    lco(0.20,0.44,6, ironMat, px,4.86,pz);
+    addBox(px,pz,0.5,0.5);
+  });
+
+  // ================= NORTH — THE FORT, THE HALL, AND WHAT STANDS BEFORE THE GATE =================
+  // The palisade, with the gate the street runs through. Each run BUTTS its gate post and its corner
+  // tower rather than overlapping them: run through, the wall's own end face sat inside both, which is
+  // four colliders occupying the same ground and four pairs of z-fighting faces.
+  [[-9.7,12.2],[9.7,12.2]].forEach(([wx,ww])=>{
+    lb(ww,3.4,0.9, timber, wx,1.70,-15);
+    lb(ww+0.2,0.3,1.1, timberDk, wx,3.52,-15);                 // its capping rail
+    const n=Math.round(ww/1.1);
+    for(let i=0;i<n;i++) lco(0.34,0.55,5, timberDk, wx-ww/2+(i+0.5)*(ww/n), 3.92, -15);   // the sharpened heads
+    addBox(wx,-15,ww,0.9);
+  });
+  [-3.1,3.1].forEach(gx=>{                                     // the gate posts
+    lb(1.0,4.6,1.2, timber, gx,2.30,-15);
+    lco(0.62,0.9,5, timberDk, gx,4.95,-15);                    // bedded into the post, not perched on it
+    addBox(gx,-15,1.0,1.2);
+  });
+  // the lintel over the gap — you walk under it. 4.24, not 4.30: level with the posts its top face and
+  // theirs were the same plane, across the whole 1.0 x 1.0 each post laps it by
+  lb(7.4,0.6,1.0, timber, 0,4.24,-15);
+  // the crews' shields hung on the wall either side of the gate, bedded 0.03 into its face
+  [-7.0,-5.0,5.0,7.0].forEach((sx,i)=>{ const c=[shieldRed,shieldYel,shieldBlu,shieldGrn][i];
+    const s=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.10,12), c);
+    s.position.set(sx, 2.30, -14.52); s.rotation.x=Math.PI/2; s.castShadow=true; scene.add(s); });
+  // the two corner towers, capped, not climbable — this is a hub, and nothing is shot from up there
+  [-17,17].forEach(tx=>{
+    lb(2.4,4.8,2.4, timber, tx,2.40,-15);
+    lb(3.0,0.34,3.0, timberPa, tx,4.93,-15);
+    lb(2.6,0.9,2.6, timberDk, tx,5.53,-15);
+    lco(2.0,1.5,4, turfDark, tx,6.70,-15);
+    addBox(tx,-15,2.4,2.4);
+  });
+  // the hall, behind the gate: turf-roofed, doors open, the fire inside showing at the threshold
+  (function hall(hx,hz){
+    lb(20.0,4.0,5.6, timber, hx,2.00,hz);
+    lb(20.4,0.36,6.0, timberDk, hx,4.14,hz);                   // the wall plate, lapping the wall head
+    for(let i=0;i<4;i++) lb(20.8-i*0.9, 0.62, 5.8-i*1.28, i%2?turfMat:turfDark, hx, 4.56+i*0.58, hz);
+    lb(21.2,0.4,0.5, timberDk, hx,6.76,hz);                    // the ridge, down onto the top course
+    // the carved gable beasts, 0.44 deep so they sit INSIDE the ridge's 0.5 rather than flush with both
+    // of its faces — matched, each one z-fought the ridge down its whole length
+    [-1,1].forEach(s=> lb(0.5,1.6,0.44, timberDk, hx+s*10.2, 7.50, hz));
+    [-1,1].forEach(s=>{ const g=new THREE.Mesh(new THREE.ConeGeometry(0.42,1.5,4), timberPa);
+      g.position.set(hx+s*10.2, 8.55, hz); g.rotation.x=0.4; g.castShadow=true; scene.add(g); });
+    lb(3.0,3.0,0.40, ironDark, hx,1.50,hz+2.90);               // the doorway, standing open
+    lb(3.6,0.4,0.6, timberPa, hx,3.16,hz+2.90);
+    const glow=new THREE.Mesh(new THREE.BoxGeometry(2.4,2.4,0.12), new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false}));
+    glow.position.set(hx,1.42,hz+3.06); scene.add(glow);
+    const L=new THREE.PointLight(0xff9a3a,1.1,15); L.position.set(hx,1.8,hz+4.0); LL.add(L);
+    addBox(hx,hz,20.4,5.8);
+  })(0,-21.2);
+  // two storehouses inside the wall, raised on staddle posts the way a grain store is
+  [[-15.5,-19.6],[15.5,-19.6]].forEach(([sx,sz])=>{
+    [[-1.7,-1.2],[1.7,-1.2],[-1.7,1.2],[1.7,1.2]].forEach(([ox,oz])=>
+      lcy(0.24,0.28,1.1,6, graniteM, sx+ox,0.55,sz+oz));
+    lb(4.4,1.9,3.4, timber, sx,2.00,sz);                       // down onto the staddle heads, not level with them
+    for(let i=0;i<3;i++) lb(4.8-i*0.7,0.5,3.8-i*0.9, i%2?turfDark:turfMat, sx,3.18+i*0.46,sz);
+    addBox(sx,sz,4.4,3.4);
+  });
+  // the rune stone: painted red, as they were, and raised for a man who did not come back from the east
+  (function runestone(rx,rz){
+    lb(2.2,0.44,1.6, graniteM, rx,0.20,rz);
+    const st=new THREE.Mesh(new THREE.BoxGeometry(1.5,3.2,0.44), runeMat);
+    st.position.set(rx,1.98,rz); st.rotation.z=0.035; st.castShadow=true; st.receiveShadow=true; scene.add(st);
+    lco(0.78,0.9,6, runeMat, rx,3.92,rz);
+    for(let i=0;i<7;i++) lb(0.10,0.34,0.03, runePaint, rx-0.56+(i%4)*0.36, 1.50+Math.floor(i/4)*0.62, rz+0.225);
+    const band=new THREE.Mesh(new THREE.TorusGeometry(0.56,0.07,6,18), runePaint);
+    band.position.set(rx,2.72,rz+0.20); band.scale.set(1,1.3,1); scene.add(band);
+    addBox(rx,rz,2.2,1.6);
+  })(-5.6,-12.0);
+  // the well, and the water butt beside it
+  (function well(wx,wz){
+    for(let i=0;i<12;i++){ const a=i/12*Math.PI*2;
+      lb(0.52,0.94,0.42, graniteM, wx+Math.cos(a)*0.98, 0.47, wz+Math.sin(a)*0.98, -a); }
+    lb(2.3,0.2,2.3, ironDark, wx,0.06,wz);                     // the coping ring's shadow on the ground
+    [-1,1].forEach(s=> lcy(0.14,0.16,2.4,6, timber, wx+s*1.05,1.66,wz));
+    lb(0.22,0.22,2.5, timber, wx,2.94,wz);
+    lb(0.66,0.64,0.66, timberPa, wx,2.42,wz);                  // the bucket on its rope
+    lb(0.06,0.86,0.06, timberDk, wx,2.52,wz);
+    addBox(wx,wz,2.4,2.4);
+  })(5.6,-12.0);
+
+  // ================= THE EDGES =================
+  // spruce and birch along the landward sides, so the town ends in forest rather than in nothing
+  // (±9,-23.2) stood inside the hall's own footprint — a spruce growing up through the roof
+  [[-22.6,-21],[22.6,-21],[-23,18],[23,18],[-22.8,-9.5],[22.8,-12.5],[-12.5,-23.2],[12.5,-23.2],[19.5,-23.4],[-19.5,-23.4]]
+    .forEach(([tx,tz],i)=>{
+      const h=5.0+((i*31)%5)*0.55;
+      lcy(0.22,0.30,h,6, timberDk, tx,h/2,tz);
+      for(let k=0;k<4;k++) lco(1.7-k*0.33, 1.8, 7, leafDark, tx, h*0.52+k*0.98, tz);
+      addBox(tx,tz,0.7,0.7);
+    });
+  [[-23.2,13],[23.2,13],[-21.5,-16.5],[21.5,-16.5]].forEach(([tx,tz],i)=>{
+    const h=4.1+((i*23)%4)*0.4;
+    lcy(0.15,0.18,h,6, birchBark, tx,h/2,tz);
+    for(let k=0;k<3;k++) lb(0.11,0.05,0.11, timberDk, tx+0.16,h*0.4+k*0.7,tz);
+    const c=new THREE.Mesh(new THREE.SphereGeometry(1.3,8,6), birchLeaf);
+    c.scale.set(1,0.78,1); c.position.set(tx,h+0.58,tz); c.castShadow=true; scene.add(c);
+    addBox(tx,tz,0.5,0.5);
+  });
+  // a small boat pulled up on the bank west of the quay, and the fish racks beside it
+  (function beached(bx,bz){
+    const H=new THREE.Group(); H.position.set(bx,0,bz); H.rotation.y=0.9; H.rotation.z=0.10; scene.add(H);
+    const hb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; H.add(m); return m; };
+    hb(1.9,0.94,5.4, timber,   0,0.41,0);
+    hb(2.1,0.26,5.6, timberPa, 0,0.96,0);
+    hb(1.6,0.22,4.9, plankMat, 0,0.76,0);
+    [-2.7,2.7].forEach((sz,i)=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(0.4,1.5,0.8), timber);
+      p.position.set(0,0.86,sz); p.rotation.x=(i?1:-1)*0.44; p.castShadow=true; H.add(p); });
+    for(let i=0;i<3;i++) hb(0.14,0.14,2.6, timberDk, -0.5+i*0.5, 1.16, 0.4);   // the oars stowed in her
+    addBox(bx,bz,4.4,4.4);
+  })(-19.6,18.6);
+  [[-16.2,20.4],[-13.0,20.6]].forEach(([fx,fz])=>{
+    [-1.1,1.1].forEach(ox=> lcy(0.11,0.13,2.1,6, timberDk, fx+ox,1.05,fz));
+    lb(2.6,0.14,0.14, timber, fx,2.06,fz);
+    for(let i=0;i<5;i++) lb(0.14,0.62,0.30, clothPale, fx-0.9+i*0.45, 1.70, fz);   // hung over the rail
+    addBox(fx,fz,2.4,0.5);
+  });
+})();
+const ladogaOverworld = new THREE.Group();
+scene.children.slice().forEach(o=>{
+  if(o===sky || o.isLight || o===distantGround || o===horizonHaze) return;
+  if(o===overworld || o===pyramidOverworld || o===greekOverworld || o===romanOverworld ||
+     o===islamicOverworld || o===mexicoOverworld || o===aztecOverworld ||
+     o===aztecMarketOverworld || o===swedenOverworld) return;
+  ladogaOverworld.add(o);
+});
+addTarget = colliders;
+heightZoneTarget = heightZonesOriginal;
+
 // Birka — the Viking Age destination. Same shape as enterAztecWorld(): world, lighting, loadout and
 // garrison all in one call, because arriving at a destination is one move and not a dungeon exit.
 function enterSwedenWorld(banner){
@@ -10890,6 +11377,36 @@ function enterYamenWorld(banner){
   weapons = chinaWeapons;
   selectWeapon(0);
   spawnTripStage();
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
+
+// Aldeigjuborg. Late northern summer, an hour off sunset — the one deliberate break from the arc's
+// palette. Birka is a white noon and the Fjord a blue afternoon, and a third cold daylight map would
+// read as the same water again; the place you come home to should be the warm one. Everything else
+// here is the Aztec Market's shape with a different map under it.
+function enterLadogaWorld(banner){
+  clearWorldGroups();
+  scene.add(ladogaOverworld);
+  sky.visible = true;
+  activeColliders = ladogaColliders;
+  activeHeightZones = heightZonesLadoga;
+  // 20.5, and the bank runs to 21.5: the player is stopped a metre short of the water on every side, so
+  // the waterline is something you look at rather than something you can get wedged on.
+  playClamp = 20.5;
+  scene.background.set(0x8fc9ee); scene.fog.color.set(0xcfe2f0); scene.fog.near=28; scene.fog.far=125;
+  setDistantGround(0x7f8a4e);          // the far bank: summer meadow, not snow and not desert
+  skyTint(0xe4f2ff);
+  // Near-neutral, and bright. The first pass ran a golden-hour hemisphere (0xffdfae at 0.78) over the
+  // whole map, and every cool colour under it turned: the river went olive, the sky went to tan soup.
+  // Ladoga still reads as its own climate against Birka — Birka is a dim white noon, sun 0.70, fog at
+  // 110; this is a bright blue high-summer day with the sun up at 1.05 and the fog pushed back.
+  hemi.intensity=0.95; hemi.color.set(0xdceefc); hemi.groundColor.set(0x6a6a50);
+  sun.intensity=1.05; fill.intensity=0.30; fill.color.set(0xe0ecf6);
+  // On the quay at the head of the centre pier, looking north up the street: the booth on your left, the
+  // two rows either side, the braziers, and the fort gate closing the view. yaw=0 is -z everywhere.
+  camera.position.set(0,1.7,19.6); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  weapons.forEach(w=>w.visible=false);
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
 
@@ -18811,7 +19328,7 @@ function enterAztecWorld(banner){
   // over a lot of water. So the sky goes deeper and colder than the basin's, the haze goes pale blue
   // rather than warm green, and the fog reaches much further — the causeways have to run visibly out over
   // the water before they are lost, which is the whole read of the island as an island.
-  scene.background.set(0x4f9fdc); scene.fog.color.set(0xbcd4e4); scene.fog.near=42; scene.fog.far=210;
+  scene.background.set(0x6ab8ee); scene.fog.color.set(0xbcd4e4); scene.fog.near=42; scene.fog.far=210;
   // the land past the lake is the ring of mountains, not more ground: a cool desaturated slope tone
   setDistantGround(0x6a7486);
   skyTint(0xffffff);          // neutral: the colour here is in the water and the tezontle, not in a wash
@@ -18865,13 +19382,25 @@ function enterIslamicWorld(banner){
 // cells costs about 0.4s, which is a visible freeze when the panel opens but invisible here, behind the
 // map swap and the arrival banner. drawWorldMap() caches the result, so every later open is a straight
 // putImageData.
+// Each hub's own stats-bar label. applyHubChrome() used to call setHubStats(true) with no arguments at
+// all, and its defaults are Cairo's — so standing on the Aztec Market's floor, or Aldeigjuborg's quay,
+// the bar read "🕌 Cairo · 🎟 booth in the bazaar". The hint is written straight into #enemies rather
+// than passed as setHubStats's `hint` argument, because that argument also swaps the 🎟 for a 🛶.
+const HUB_STATS = {
+  cairo:       {icon:'🕌', place:'Cairo',        hint:'booth in the bazaar'},
+  aztecMarket: {icon:'🎪', place:'Aztec Market', hint:'booth by the gate'},
+  ladoga:      {icon:'⚓', place:'Aldeigjuborg',  hint:'booth on the quay'},
+};
 function applyHubChrome(){
   pending = null; betweenTimer = 0;
   setScope(false);
   weapons.forEach(w=>w.visible=false);
   gunGroup.visible = false;
   document.body.classList.add('hub');
-  setHubStats(true);
+  const L = HUB_STATS[currentHub] || HUB_STATS.cairo;
+  setHubStats(true, L.place, undefined, L.icon);
+  const en = document.getElementById('enemies');
+  if(en) en.textContent = L.hint;
   drawWorldMap();
 }
 // Cairo as the between-countries hub: the Islamic map with no wave queued and the wave/enemy counters
@@ -18895,6 +19424,17 @@ function enterAztecMarketHub(banner){
   boothBeacon = AZTEC_MARKET_BOOTH_BEACON;
   tripDest = null; tripLeg = 0;
   enterAztecMarketWorld(banner);
+  applyHubChrome();
+}
+// Aldeigjuborg: the home base once the Sweden trip is done, and the third instance of the same three
+// lines — which map, which booth, then the chrome every hub shares.
+function enterLadogaMarketHub(banner){
+  inHub = true;
+  currentHub = 'ladoga';
+  BOOTH_POS.x = LADOGA_BOOTH_POS.x; BOOTH_POS.z = LADOGA_BOOTH_POS.z;
+  boothBeacon = LADOGA_BOOTH_BEACON;
+  tripDest = null; tripLeg = 0;
+  enterLadogaWorld(banner);
   applyHubChrome();
 }
 // Undone by startGame() when a fresh run begins — see setHubStats(false) there.
@@ -18934,7 +19474,7 @@ function enterHydraArena(){
   // those multiply, so the whole fight rendered through a swamp filter rather than merely being set in a
   // marsh. The reeds, moss and water are already green materials; the light does not need to be green too.
   // Same call as the Giza daylight fix.
-  scene.background.set(0x9aa6ac); scene.fog.color.set(0x9fa8a4); scene.fog.near=26; scene.fog.far=110; // flat overcast
+  scene.background.set(0xc2cdd4); scene.fog.color.set(0xc4ccc9); scene.fog.near=26; scene.fog.far=110; // bright overcast
   distantGround.visible=false; // the arena's own 320x320 marsh water sits lower than this plane and would be hidden under it
   // This function set distantGround directly instead of going through setDistantGround(), which is also
   // where horizonHaze gets updated — so horizonHaze was never touched here at all. It kept whatever
@@ -18943,9 +19483,9 @@ function enterHydraArena(){
   // Boss arenas are enclosed spaces with their own real walls close to the player — the same reasoning
   // dungeons already use to disable it (see enterDungeon()) applies here.
   horizonHaze.visible=false;
-  skyTint(0xb8bfc2); // sunless overcast — neutral grey, not green; without any tint the dome renders bright midday blue
-  hemi.intensity=0.72; hemi.color.set(0xd2dade); hemi.groundColor.set(0x3c4238);
-  sun.intensity=0.55; fill.intensity=0.2; fill.color.set(0xc8ced2);
+  skyTint(0xd4dade); // overcast — neutral grey, not green; without any tint the dome renders bright midday blue
+  hemi.intensity=0.86; hemi.color.set(0xe2e9ee); hemi.groundColor.set(0x4e5449);
+  sun.intensity=0.75; fill.intensity=0.24; fill.color.set(0xd6dce0);
   camera.position.set(0,1.7,17); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
 function enterColosseumArena(){
@@ -18973,12 +19513,15 @@ function enterIfritArena(){
   sky.visible = true;
   activeColliders = ifritColliders;
   activeHeightZones = heightZonesNone;   // flat arena; heightZonesOriginal carries the dead map's towers
-  scene.background.set(0x8a4a2e); scene.fog.color.set(0xa85a34); scene.fog.near=22; scene.fog.far=90; // warm dusk, fire-lit
-  setDistantGround(0x7a4028); // scorched red desert under a burning sky
+  // A burning sky, not a dim one. This was the darkest open-air sky in the game (0x8a4a2e under a 0.55
+  // hemisphere and a 0.5 sun), which read as nightfall rather than as fire. Same hue family, lifted:
+  // the Ifrit King's arena should look like it is lit BY the burning, not like the fire has gone out.
+  scene.background.set(0xf59a5c); scene.fog.color.set(0xf0a066); scene.fog.near=24; scene.fog.far=100;
+  setDistantGround(0xa8603a); // scorched red desert under a burning sky
   horizonHaze.visible=false; // enclosed arena with its own walls — see the note in enterColosseumArena()
-  skyTint(0xc4643a); // burning dusk sky
-  hemi.intensity=0.55; hemi.color.set(0xffb87a); hemi.groundColor.set(0x3a2414);
-  sun.intensity=0.5; fill.intensity=0.3; fill.color.set(0xff8a4a);
+  skyTint(0xefa468); // burning dusk sky
+  hemi.intensity=0.80; hemi.color.set(0xffd2a0); hemi.groundColor.set(0x5a3a20);
+  sun.intensity=0.85; fill.intensity=0.32; fill.color.set(0xffa060);
   camera.position.set(0,1.7,14); yaw=targetYaw=0; pitch=targetPitch=0; vel.set(0,0,0); playerHeight=0; stuckTimer=0;
 }
 // ==========================================================================
@@ -19148,14 +19691,18 @@ const DESTINATIONS = [
      homeHub:enterAztecMarketHub, homeBanner:'🎪 The Aztec Market — a new booth stands ready'}); }},
   // Two maps on one ticket, the same shape as Mexico: the trading town, then the raid out on the
   // water that answers it. See SWEDEN_LEGS.
-  // Sweden still comes home to Cairo — there is no hub out here to sell passage onward, and the
-  // Aztec Market is where you bought this trip. Only the banner is its own: a destination that ends
-  // on a troll's deck should not land you back in the bazaar with the same line the Nile wave uses.
+  // Sweden no longer comes home to Cairo. The Fjord ends on open water with a troll dead on a deck, and
+  // a crew in that position makes port — so clearing it lands the player at Aldeigjuborg, the Rus' river
+  // market up the Volkhov, exactly the way clearing Tenochtitlan lands them in the Aztec Market. That is
+  // also the hub that sells China: the silk and the weighed silver on its quay came up the Volga road,
+  // and the trip bought here goes back down it.
   {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka and the fjord, 800–1050', price:60, ready:true,
    lon: 17, lat: 60,
-   legs:SWEDEN_LEGS, homeBanner:'🏠 Home in Cairo — and the fjord is quiet behind you',
+   legs:SWEDEN_LEGS, homeHub:enterLadogaMarketHub,
+   homeBanner:'⚓ Aldeigjuborg — you make port, and the road east starts on this quay',
    go(){ travelTo({name:'Sweden', legs:SWEDEN_LEGS,
-     homeBanner:'🏠 Home in Cairo — and the fjord is quiet behind you'}); }},
+     homeHub:enterLadogaMarketHub,
+     homeBanner:'⚓ Aldeigjuborg — you make port, and the road east starts on this quay'}); }},
   // China only, for now. Two legs on the exact trip/leg machinery Mexico and Sweden already proved:
   // Xiangyang (the wall, the breach, the Siege Commander) then Yamen (the chained, burning fleet, and
   // the Admiral). The dashed leg toward Kyushu stays on the card — a visible promise of the sea
@@ -21301,10 +21848,12 @@ function respawnPlayer(){
   // with the trip's HUD and a live raft prompt at coordinates that mean nothing there.
   // ...and on the leg you died on, not back at the start of the destination
   if(tripDest){ const leg=curLeg(); if(leg) leg.enter(); placePlayerAt(pickSpawnPoint()); setHUD(); return; }
-  // Respawn back into whichever hub you actually died in -- Cairo and the Aztec Market are both "home".
+  // Respawn back into whichever hub you actually died in -- Cairo, the Aztec Market and Aldeigjuborg are
+  // all "home". A lookup rather than a chain of ternaries, because there are three of them now.
   if(inHub){
-    const enterFn = currentHub==='aztecMarket' ? enterAztecMarketHub : enterHub;
-    const banner  = currentHub==='aztecMarket' ? '💀 you wake in the market' : '💀 you wake in Cairo';
+    const HUBS = {aztecMarket:[enterAztecMarketHub, '💀 you wake in the market'],
+                  ladoga:     [enterLadogaMarketHub, '💀 you wake on the quay']};
+    const [enterFn, banner] = HUBS[currentHub] || [enterHub, '💀 you wake in Cairo'];
     enterFn(banner); placePlayerAt(pickSpawnPoint()); setHUD(); return;
   }
   if(currentEra >= 3) enterIslamicWorld('💀 back to Wave 10');

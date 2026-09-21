@@ -249,11 +249,12 @@ show("dying and respawning on every destination leaves no boss bar or stale bots
 print("\n=== 7. world geometry, every map ===")
 r=run("""
   var names=['overworld','pyramidOverworld','greekOverworld','romanOverworld','islamicOverworld',
-             'mexicoOverworld','aztecOverworld','aztecMarketOverworld','swedenOverworld',
+             'mexicoOverworld','aztecOverworld','aztecMarketOverworld','swedenOverworld','ladogaOverworld',
              'dungeon','pyramidDungeon','greekDungeon','nileWorld','hydraArena','colosseumArena','ifritArena'];
   var groups={overworld:overworld,pyramidOverworld:pyramidOverworld,greekOverworld:greekOverworld,
     romanOverworld:romanOverworld,islamicOverworld:islamicOverworld,mexicoOverworld:mexicoOverworld,
     aztecOverworld:aztecOverworld,aztecMarketOverworld:aztecMarketOverworld,swedenOverworld:swedenOverworld,
+    ladogaOverworld:ladogaOverworld,
     dungeon:dungeon,pyramidDungeon:pyramidDungeon,greekDungeon:greekDungeon,nileWorld:nileWorld,
     hydraArena:hydraArena,colosseumArena:colosseumArena,ifritArena:ifritArena};
   var snow=[]; if(birkaSnow) birkaSnow.grp.traverse(function(o){ if(o.isMesh) snow.push(o); });
@@ -269,7 +270,7 @@ r=run("""
 """)
 if r['ok']:
     print(f"    {'map':22} {'meshes':>7} {'floaters':>9} {'z-fight':>8}")
-    mine={'aztecMarketOverworld','swedenOverworld'}
+    mine={'ladogaOverworld'}
     for m in r['v']:
         tag = "  <- built in this session" if m['map'] in mine else ""
         print(f"    {m['map']:22} {m['meshes']:7} {m['floaters']:9} {m['zfight']:8}{tag}")
