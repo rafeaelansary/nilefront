@@ -10231,47 +10231,54 @@ function enterXiangyangWorld(banner){
 }
 
 // ===================== YAMEN (China, leg 2) =====================
-// The Battle of Yamen, 1279: Song's fleet chained bow-to-stern into one floating fortress in the Pearl
-// River Delta. Structurally the Fjord's INVERSE, the same way the Fjord was once built as the Nile
-// Wave's: that leg's arena GROWS as the player wins, opening one more deck at a time. This one starts
-// with every deck already open — the ships are already chained — and BURNS instead, the rearmost hull
-// dropping out of the walkable floor each time the fire spreads, so the pressure is always from BEHIND
-// rather than from ahead. The player starts on the rear hull and is pushed toward the flagship at the
-// bow, where the boss is.
+// The Battle of Yamen, 1279: the Song fleet chained bow to stern into one floating fortress, and the
+// end of the dynasty. Structurally the Fjord's INVERSE, the way the Fjord was built as the Nile Wave's:
+// that leg's arena GROWS as you win, one deck at a time. This one starts with every deck already open —
+// the ships are chained before the leg begins — and BURNS instead. The rearmost hull drops out of the
+// walkable floor each time the fire spreads, so the pressure is always from BEHIND, and the player is
+// driven forward onto the flagship where the Admiral is.
 //
-// The water is not rebuilt. fjordWaveAt()/FJORD_AMP are the one description of moving water this game
-// has, and Yamen's sea reads off the same function the Fjord's does — a second, slightly different
-// wave function here would be a second thing that could drift out of sync with what the eye already
-// knows "the sea" looks like.
+// Two things follow from "chained", and they are what keep this from being a Fjord reskin:
+//   - there is no plank and no grapple. The decks are already one surface, so nothing is ever HANDED to
+//     the player; the only thing that changes is how much of it is left.
+//   - the hulls do not ride the swell. A fortress that has finished forming up is lashed rigid, which
+//     is also why the Fjord's heaving is conspicuously absent here.
+//
+// The water is not rebuilt: fjordWaveAt()/FJORD_AMP are the one description of moving water this game
+// owns, and a second, slightly different one would be a second thing to drift out of step with what the
+// eye already knows the sea looks like.
 const yamenColliders = [];
-const heightZonesYamen = [];    // a deck is one level; nothing here is climbable
+const heightZonesYamen = [];    // a deck is one level; nothing out here is climbable
 const yamenWorld = new THREE.Group();
 let yamenSea = null;            // {mesh, geo, cols, seg, size} — same shape as fjordSea
-const yamenShips = [];          // every hull: {grp, x, z} — all lashed, none of them ever move
-// Three hulls, chained edge to edge — HULL_HW/HL sized so adjacent decks share an edge exactly (no gap,
-// no plank needed between them: they are already lashed when the leg begins). Centres are 16 apart,
-// which is exactly 2*HULL_HW, so hull 0's bow touches hull 1's stern touches hull 2's stern in turn.
+const yamenShips = [];
+// Three hulls lashed BEAM TO BEAM, which is how a fleet is chained into a fortress: gunwale against
+// gunwale, so the three decks are one surface. The spacing is therefore the hull's own WIDTH, and the
+// walkable rectangle is the hull's own full extent -- both derived here rather than typed, because the
+// first cut of this map had centres 16 apart on hulls only 5.6 wide and walkable rectangles half the
+// length of the decks they were drawn on. That fleet had ten metres of open water between every pair
+// of "chained" ships and nobody could walk from one to the next at all.
 const YAMEN_HULL_HW = 2.8, YAMEN_HULL_HL = 8.0;
+const YAMEN_HULL_GAP = YAMEN_HULL_HW*2;      // beam to beam: adjacent decks share an edge exactly
 const YAMEN_HULLS = [
-  {x:-16, name:'rear'},   // where the player starts
-  {x:0,   name:'mid'},
-  {x:16,  name:'flagship'},   // the boss's own deck
+  {x:-YAMEN_HULL_GAP, name:'outer'},   // where the player starts, and the first to go up
+  {x:0,               name:'middle'},
+  {x: YAMEN_HULL_GAP, name:'flagship'},// the Admiral's own deck, and the one that never burns
 ];
 function yamenDeckRect(i){
   const h = YAMEN_HULLS[i];
-  return {x1:h.x-YAMEN_HULL_HW, z1:-YAMEN_HULL_HL/2, x2:h.x+YAMEN_HULL_HW, z2:YAMEN_HULL_HL/2};
+  return {x1:h.x-YAMEN_HULL_HW, z1:-YAMEN_HULL_HL, x2:h.x+YAMEN_HULL_HW, z2:YAMEN_HULL_HL};
 }
-// Respawn points per hull, clear of each hull's own mast (at local z=-0.4) and cabin (z<-3.4) by a wide
-// margin — the open waist of the deck, the same "clear of your own furniture" rule the Fjord's own
-// spawn points follow.
+// Respawn points per hull, in the open waist of each deck — clear of its mast, its cabin and its own
+// deck furniture, which are all real colliders out here.
 const YAMEN_SPAWNS = YAMEN_HULLS.map(h=> [
-  [h.x-1.5, 2.6], [h.x+1.5, 2.6], [h.x-1.5, -1.0], [h.x+1.5, -1.0], [h.x, 1.2],
+  [h.x-1.5, 5.6], [h.x+1.5, 5.6], [h.x-1.5, -4.4], [h.x+1.5, -4.4], [h.x, 0.6],
 ]);
-// Which hulls are alight. Re-derivable STATE exactly as fjordPlanked/fjordLashed are — set per wave by
-// yamenSetFire(), never toggled by an event, so entry, death, respawin and /tp all agree on how much of
-// the fleet is still standing.
+// Which hulls are alight. Re-derivable STATE, exactly as fjordPlanked/fjordLashed are.
 let yamenFire = [false,false,false];
-let yamenFlames = [];   // {hullIndex, flame, light} — built once per hull, shown/hidden by yamenSetFire()
+let yamenFlames = [];           // one group per hull, shown/hidden by yamenSetFire()
+let yamenCharred = [];          // the scorching that stays once a hull has gone up
+let yamenSmoke = [];            // {mesh, base} — the columns, animated in yamenTick
 
 addTarget = yamenColliders;
 heightZoneTarget = heightZonesYamen;
@@ -10280,16 +10287,25 @@ heightZoneTarget = heightZonesYamen;
   const timberDk = voxMat(0x3a2a1a,{noise:16});
   const timberPa = voxMat(0x7a6242,{noise:14});
   const plankF   = new THREE.MeshLambertMaterial({map:_finish(nileDeckPlankTex(),2)});
-  const hullRed  = voxMat(0x7c2620,{noise:12});      // the painted hull strakes — Song warships ran red
+  const hullRed  = voxMat(0x7c2620,{noise:12});        // Song warships ran red
   const hullDk   = voxMat(0x4a1a16,{noise:10});
-  const sailM    = voxMat(0xc4b088,{noise:14});      // undyed canvas/matting
-  const battenM  = voxMat(0x4a3a24,{noise:12});      // the horizontal battens that name a junk rig
+  const sailM    = voxMat(0xc4b088,{noise:14});        // matting, not canvas
+  const sailDk   = voxMat(0x9a8a62,{noise:12});
+  const battenM  = voxMat(0x4a3a24,{noise:12});
   const ironF    = metalMatP(0x6f757c,55,0xc0c8d0);
+  const ironDk   = voxMat(0x33373c,{noise:12});
   const ropeF    = voxMat(0x6f6047,{noise:14});
-  const goldF    = metalMatP(0xc8a23c,80,0xffeeb0);  // the flagship's own trim
+  const netM     = voxMat(0x8a7a58,{noise:12});
+  const goldF    = metalMatP(0xc8a23c,80,0xffeeb0);
+  const jadeF    = voxMat(0x2f6a5c,{noise:12});
+  const charM    = voxMat(0x1a1714,{noise:18});        // what is left of a hull that has burned
+  const charDk   = voxMat(0x0d0b09,{noise:14});
 
-  // ---- the sea: identical construction to the Fjord's, reading from the same fjordWaveAt() ----
-  const SEA=112, SEG=64;
+  const fb=(w,h,d,mat,x,y,z,grp)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; (grp||yamenWorld).add(m); return m; };
+
+  // ---- the sea, read from the same fjordWaveAt() the Fjord's is ----
+  const SEA=118, SEG=64;
   const seaGeo = new THREE.PlaneGeometry(SEA, SEA, SEG, SEG);
   seaGeo.rotateX(-Math.PI/2);
   const seaCols = new THREE.BufferAttribute(new Float32Array(seaGeo.attributes.position.count*3), 3);
@@ -10298,94 +10314,198 @@ heightZoneTarget = heightZonesYamen;
   seaMesh.position.y = FJORD_SEA_Y; seaMesh.receiveShadow = true;
   yamenWorld.add(seaMesh);
   yamenSea = {mesh:seaMesh, geo:seaGeo, cols:seaCols, seg:SEG, size:SEA};
-  const far = new THREE.Mesh(new THREE.BoxGeometry(540,1,540), voxMat(0x3f6f90,{noise:10}));
+  const far = new THREE.Mesh(new THREE.BoxGeometry(560,1,560), voxMat(0x46708a,{noise:10}));
   far.position.set(0, FJORD_SEA_Y-0.9, 0);
   yamenWorld.add(far);
 
-  function fb(w,h,d,mat,x,y,z,grp){ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; (grp||yamenWorld).add(m); return m; }
-
-  // ---- a junk hull: flat-bottomed, a high transom stern with a windowed cabin, a single mast carrying
-  // a battened lugsail. dress gilds the flagship — the one hull out here that is somebody's own. ----
-  function junk(hull, dress){
-    const K = new THREE.Group(); K.position.set(hull.x,0,0); yamenWorld.add(K);
+  // ---- a junk ----
+  // Flat-bottomed, with the high square transom and battened lugsail that name the type. `dress` gilds
+  // the flagship. Deck furniture is REAL: every cabin, mast, winch and crate below carries a collider,
+  // because the Fjord's own lesson was that cover only counts if it breaks the sightline a bot actually
+  // shoots along — chest at 1.2 to eye at 1.7 — and a deck of walk-through props is a deck with none.
+  function junk(hullX, dress, idx){
+    const K = new THREE.Group(); K.position.set(hullX,0,0); yamenWorld.add(K);
     const kb=(w,h,d,mat,x,y,z,rx)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-      m.position.set(x,y,z); if(rx) m.rotation.x=rx; m.castShadow=true; K.add(m); return m; };
+      m.position.set(x,y,z); if(rx) m.rotation.x=rx; m.castShadow=true; m.receiveShadow=true; K.add(m); return m; };
     const W=YAMEN_HULL_HW*2, L=YAMEN_HULL_HL*2;
-    kb(W,0.34,L, timberDk, 0,-0.90,0);                                // flat bottom
-    for(let i=0;i<3;i++) kb(W-0.6+i*0.30, 0.22, L-0.30-i*0.5, i%2?hullRed:hullDk, 0,-0.62+i*0.22,0);  // strakes, stepped in
-    kb(W+0.30,0.20,L-0.6, timberDk, 0,0.16,0);                         // sheer strake at the rail
-    kb(W,0.18,L, plankF, 0,-0.09,0);                                   // THE DECK — top face at y=0
-    // the high transom stern, square-cut and raised — the single most identifying junk feature
-    kb(W-0.2,1.9,0.5, (dress?goldF:hullDk), 0,0.95,-L/2+0.3);
-    kb(W-0.5,0.9,0.4, timberPa, 0,1.55,-L/2+0.15);                     // the cabin windows band
-    for(let i=0;i<4;i++) kb(0.36,0.5,0.06, timberDk, -W/2+0.7+i*(W-1.4)/3, 1.55, -L/2+0.35+0.02);
-    // the bow, rising and pointed compared with the square stern
-    kb(W-0.3,0.9,1.6, timber, 0,0.30,L/2-0.6).rotation.x=-0.18;
-    kb(0.5,1.3,0.5, timberDk, 0,0.85,L/2-0.1);
-    // one mast, one battened lugsail — battens are what tell a junk sail from a plain triangle
-    kb(0.30,6.4,0.30, timber, 0,3.2,-0.4);
-    const sail = kb(4.6,4.6,0.16, sailM, 1.9,3.4,-0.4); sail.rotation.z=0.05;
-    for(let i=0;i<6;i++) fb(4.5,0.10,0.20, battenM, 1.9,1.3+i*0.72,-0.4-0.09, K);
+    // hull: flat bottom, three stepped strakes, a sheer strake at the rail, and the deck at y=0
+    kb(W,0.36,L, timberDk, 0,-0.92,0);
+    for(let i=0;i<3;i++) kb(W-0.62+i*0.30, 0.24, L-0.32-i*0.52, i%2?hullRed:hullDk, 0,-0.64+i*0.24,0);
+    // NOT wider than the hull. Lashed beam to beam, a strake that overhangs laps its neighbour's and
+    // shares both faces with it; the height is also stepped per hull so two touching ones never agree.
+    kb(W-0.06, 0.22+idx*0.03, L-0.62, timberDk, 0, 0.17+idx*0.015, 0);
+    kb(W,0.18,L, plankF, 0,-0.09,0);
+    // deck planking runs fore-and-aft: a few proud strakes so it is not one blank sheet
+    // sunk INTO the planking rather than laid on it: a strake whose underside is exactly the deck's own
+    // top face is two surfaces fighting for every pixel down the length of the ship
+    for(let i=0;i<4;i++) kb(0.24,0.08,L-1.2, timberPa, -1.9+i*1.27, 0.01, 0);
+    // THE STERN: high, square, with a cabin and a windowed gallery under it
+    kb(W-0.24,2.05,0.55, dress?goldF:hullDk, 0,1.02,-L/2+0.32);
+    kb(W-0.62,1.00,0.46, timberPa, 0,1.62,-L/2+0.12);
+    for(let i=0;i<4;i++) kb(0.38,0.54,0.08, timberDk, -W/2+0.78+i*(W-1.56)/3, 1.62, -L/2+0.30);
+    kb(W-0.34,0.26,0.72, timberDk, 0,2.14,-L/2+0.28);
+    addBox(hullX, -L/2+0.32, W-0.24, 0.9);
+    // the stern cabin proper, which is the one real piece of cover on the deck
+    kb(2.8,1.55,1.9, timberPa, 0,0.78,-L/2+1.95);
+    kb(3.0,0.22,2.1, timberDk, 0,1.62,-L/2+1.95);
+    [-1,1].forEach(sd=> kb(0.16,0.85,0.16, hullRed, sd*1.25, 0.60, -L/2+2.84));
+    addBox(hullX, -L/2+1.95, 2.8, 1.9);
+    // the bow, rising and pointed against the square stern
+    kb(W-0.36,0.95,1.7, timber, 0,0.32,L/2-0.62).rotation.x=-0.20;
+    kb(0.52,1.35,0.52, timberDk, 0,0.88,L/2-0.12);
+    addBox(hullX, L/2-0.4, W-0.5, 1.2);
+    // THE MAST and its battened lugsail. The battens are what tell a junk rig from a triangle.
+    kb(0.32,6.6,0.32, timber, 0,3.3,-0.5);
+    addBox(hullX, -0.5, 0.8, 0.8);
+    const sail = kb(4.8,4.8,0.16, sailM, 2.0,3.5,-0.5); sail.rotation.z=0.045;
+    for(let i=0;i<7;i++) kb(4.7,0.11,0.21, battenM, 2.0,1.35+i*0.66,-0.60);
+    kb(5.0,0.14,0.14, timberDk, 2.0,5.92,-0.5);          // the yard
+    kb(0.14,0.14,1.6, ropeF, 0.9,3.5,-0.5);              // sheets running back to the deck
+    // the winch the sail is worked from, and two cargo crates lashed abaft it — cover, and colliders
+    kb(1.0,0.55,0.8, timberDk, -1.5,0.28,1.9); addBox(hullX-1.5, 1.9, 1.0, 0.8);
+    kb(1.15,0.16,0.95, ironDk, -1.5,0.60,1.9);
+    [[1.55,2.6,1.15],[1.35,4.4,0.95]].forEach(([cx,cz,ch])=>{
+      kb(1.25,ch,1.15, timberPa, cx,ch/2,cz);
+      kb(1.33,0.12,1.23, timberDk, cx,ch-0.02,cz);
+      kb(1.35,0.10,1.25, ropeF, cx,ch*0.45,cz);
+      addBox(hullX+cx, cz, 1.25, 1.15);
+    });
+    // anti-boarding netting slung outboard along both rails — the detail that says this fleet expected
+    // to be boarded, which is exactly what is about to happen to it
+    [-1,1].forEach(sd=>{
+      for(let i=0;i<9;i++){
+        kb(0.06,0.9,0.06, netM, sd*(W/2+0.16), 0.55, -L/2+1.6+i*1.5);
+      }
+      kb(0.10,0.08,L-3.0, netM, sd*(W/2+0.16), 0.95, 0.3);
+      kb(0.10,0.08,L-3.0, netM, sd*(W/2+0.16), 0.20, 0.3);
+    });
+    // rails: solid, so nobody walks off the beam by accident. The walkable rectangle is still what
+    // decides where anyone may stand (see yamenDecks) — these are what you feel when you back into one.
+    fb(0.30,0.40,L, ironF, hullX-W/2-0.05,0.14,0);
+    fb(0.30,0.40,L, ironF, hullX+W/2+0.05,0.14,0);
     if(dress){
-      // the flagship's own colour: a dragon-head figurehead at the bow, and gilded trim down both rails
-      kb(0.7,0.6,0.9, goldF, 0,0.75,L/2+0.2);                          // the head, broad and low
-      kb(0.5,0.3,0.3, hullDk, 0,0.95,L/2+0.55);                        // its brow, dark against the gold
-      [-1,1].forEach(sd=> kb(0.10,0.10,0.30, hullDk, sd*0.28,1.05,L/2+0.55));  // horns
-      [-1,1].forEach(sd=> kb(0.10,0.30,W-0.4, goldF, sd*(W/2-0.1), 0.30, 0));  // gilded rail trim, both sides
+      // the flagship: a gilded dragon's head at the stem, jade rail trim, and the imperial standard
+      kb(0.85,0.70,1.05, goldF, 0,0.86,L/2+0.30);
+      kb(0.58,0.34,0.36, hullDk, 0,1.12,L/2+0.72);
+      [-1,1].forEach(sd=> kb(0.12,0.34,0.12, goldF, sd*0.30,1.34,L/2+0.64));
+      [-1,1].forEach(sd=> kb(0.09,0.09,0.09, jadeF, sd*0.17,1.14,L/2+0.86));
+      [-1,1].forEach(sd=> kb(0.12,0.26,W-0.5, jadeF, sd*(W/2-0.08), 0.34, 0));
+      kb(0.16,3.2,0.16, timberDk, -2.1,1.6,-2.2);
+      kb(1.15,1.5,0.09, voxMat(0x1f3a6a,{noise:10}), -2.1,2.6,-2.28);
+      kb(1.15,0.20,0.11, goldF, -2.1,3.28,-2.28);
+      addBox(hullX-2.1, -2.2, 0.5, 0.5);
     }
-    // rails, running the full length either side, so nobody drifts off the beam by accident
-    fb(0.30,0.34,L, ironF, -W/2-0.05,0.10,0, K);
-    fb(0.30,0.34,L, ironF,  W/2+0.05,0.10,0, K);
-    yamenShips.push({grp:K, x:hull.x, z:0});
+    yamenShips.push({grp:K, x:hullX, z:0});
+
+    // ---- what this hull looks like once it has burned: charring laid over the deck, hidden until then
+    const char = new THREE.Group(); char.visible=false; K.add(char);
+    for(let i=0;i<9;i++){
+      const cz=-L/2+1.2+i*(L-2.4)/8;
+      const c=new THREE.Mesh(new THREE.BoxGeometry(W-0.3-((i%3)*0.4), 0.06, (L-2.4)/8*0.85), i%2?charM:charDk);
+      c.position.set(((i%3)-1)*0.35, 0.035, cz); char.add(c);
+    }
+    for(let i=0;i<5;i++){
+      const s=0.4+((i*7)%3)*0.22;
+      const c=new THREE.Mesh(new THREE.BoxGeometry(s,s*0.7,s*0.9), charDk);
+      c.position.set(-1.6+((i*11)%4)*1.1, s*0.35+0.05, -4.0+i*2.1); c.rotation.y=i*0.8; char.add(c);
+    }
+    yamenCharred.push(char);
     return K;
   }
-  YAMEN_HULLS.forEach((h,i)=> junk(h, i===YAMEN_HULLS.length-1));
+  YAMEN_HULLS.forEach((h,i)=> junk(h.x, i===YAMEN_HULLS.length-1, i));
 
-  // ---- lashing between adjacent hulls: rope and plank bridging the seam, always visible — the ships
-  // are chained from the moment the leg begins, so nothing here is ever hidden or spliced in later. ----
+  // ---- the chains, which are the whole premise ----
+  // Iron, not rope: Zhang Shijie chained the fleet so it could not break formation, and it is the
+  // reason the fire could walk from hull to hull. Laid across every seam, low and heavy.
   for(let i=0;i<YAMEN_HULLS.length-1;i++){
     const seamX = (YAMEN_HULLS[i].x + YAMEN_HULLS[i+1].x)/2;
-    fb(0.30,0.10,YAMEN_HULL_HL*1.6, plankF, seamX, -0.02, 0);
-    [-1,1].forEach(sd=>{
-      const rope=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,1.2), ropeF);
-      rope.position.set(seamX, 0.28, sd*(YAMEN_HULL_HW-0.3)); rope.rotation.y=0.5; rope.castShadow=true; yamenWorld.add(rope);
+    [-5.4,-1.6,2.2,5.8].forEach((sz,k)=>{
+      for(let l=0;l<7;l++){
+        const link=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.17+((l%2)*0.05),0.17+((l%2)*0.05)), ironDk);
+        link.position.set(seamX-0.95+l*0.32, 0.22+((l%2)*0.03), sz);
+        link.rotation.x = (l%2)*0.9;
+        link.castShadow=true; yamenWorld.add(link);
+      }
+      const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.17,0.12,8), ironF);
+      ring.rotation.z=Math.PI/2; ring.position.set(seamX, 0.24, sz); yamenWorld.add(ring);
     });
+    // planking laid over the seam, so the join reads as crossed rather than merely adjacent
+    fb(1.1,0.12,YAMEN_HULL_HL*1.8, plankF, seamX, 0.02, 0.0);
   }
 
-  // ---- the flames: built once per hull, over its own deck, shown/hidden by yamenSetFire() ----
+  // ---- the fire, per hull: flame in the waist, flame climbing the rigging, and a smoke column ----
   YAMEN_HULLS.forEach((h,i)=>{
     const grp = new THREE.Group(); grp.visible=false; yamenWorld.add(grp);
-    [[-h.x*0+h.x-1.6,-2.4],[h.x+1.6,1.8],[h.x-0.6,2.6]].forEach(([fx,fz])=>{
-      const fl = new THREE.Mesh(new THREE.ConeGeometry(0.55,1.9,7),
+    // deck fires
+    [[-1.7,-2.6],[1.7,1.9],[-0.5,2.9],[1.1,-0.8]].forEach(([fx,fz],k)=>{
+      const fl = new THREE.Mesh(new THREE.ConeGeometry(0.52+((k%2)*0.14), 1.8+((k%2)*0.4), 7),
         new THREE.MeshBasicMaterial({color:0xff7a2a, transparent:true, opacity:0.92, fog:false}));
-      fl.position.set(fx, 0.95, fz); grp.add(fl);
-      const li = new THREE.PointLight(0xff8a30, 1.6, 16); li.position.set(fx,1.3,fz); grp.add(li);
+      fl.position.set(h.x+fx, 0.95+((k%2)*0.2), fz); grp.add(fl);
+      const core = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.9, 6),
+        new THREE.MeshBasicMaterial({color:0xffd27a, transparent:true, opacity:0.95, fog:false}));
+      core.position.set(h.x+fx, 0.6, fz); grp.add(core);
+      const li = new THREE.PointLight(0xff8a30, 1.7, 18); li.position.set(h.x+fx,1.4,fz); grp.add(li);
     });
-    // smoke: three soft translucent puffs, rising and widening
-    for(let s=0;s<3;s++){
-      const sm=new THREE.Mesh(new THREE.BoxGeometry(1.2+s*0.9,1.0+s*0.8,1.2+s*0.9),
-        new THREE.MeshBasicMaterial({color:0x2a2824, transparent:true, opacity:0.32-s*0.08, fog:false, depthWrite:false}));
-      sm.position.set(h.x, 2.2+s*1.5, s*0.4); grp.add(sm);
+    // fire up the mast and along the yard — this is what makes it read as a ship burning rather than a
+    // bonfire standing on one
+    for(let k=0;k<4;k++){
+      const rf = new THREE.Mesh(new THREE.ConeGeometry(0.30-k*0.04, 0.95, 6),
+        new THREE.MeshBasicMaterial({color:0xff9a3a, transparent:true, opacity:0.8-k*0.12, fog:false}));
+      rf.position.set(h.x+((k%2)?0.35:-0.2), 1.9+k*1.35, -0.5); grp.add(rf);
     }
+    // the smoke column, wide and rising
+    const col=[];
+    for(let s=0;s<5;s++){
+      const sm=new THREE.Mesh(new THREE.BoxGeometry(1.5+s*1.25+i*0.3, 1.2+s*0.95+i*0.22, 1.7+s*1.1+i*0.3),
+        new THREE.MeshBasicMaterial({color:0x28241f, transparent:true, opacity:0.34-s*0.055, fog:false, depthWrite:false}));
+      sm.position.set(h.x+s*0.5, 2.6+s*2.0+i*0.25, -0.3+s*0.35); grp.add(sm); col.push({mesh:sm, base:2.6+s*2.0+i*0.25});
+    }
+    yamenSmoke.push(col);
     yamenFlames.push({hullIndex:i, group:grp});
   });
 
-  // ---- distant hulls of the rest of the chained fleet, well beyond play — scenery only, the same way
-  // the Fjord's own drifting horizon ship sells the scale of the water without costing a real hull ----
-  [[-40,-26],[42,20],[-8,-34],[30,-30]].forEach(([hx,hz],i)=>{
-    const drift = junk({x:hx}, false); drift.position.set(hx,0,hz); drift.rotation.y = i*0.6;
+  // ---- the rest of the fleet, and the fireships coming in ----
+  // Scenery, well outside play: the fortress the player is standing on is three hulls of a thousand,
+  // and the Mongol fireships are what is about to arrive.
+  [[-44,-30,0.5],[40,26,-0.4],[-14,-40,0.2],[34,-34,1.1],[-38,22,0.8],[8,42,-0.2]].forEach(([hx,hz,rot],i)=>{
+    const D=new THREE.Group(); D.position.set(hx,-0.2,hz); D.rotation.y=rot; yamenWorld.add(D);
+    const db=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); D.add(m); return m; };
+    db(4.4,0.9,12.0, timberDk, 0,0.1,0);
+    db(3.8,0.5,11.0, hullRed, 0,0.6,0);
+    db(3.4,1.6,0.6, hullDk, 0,1.4,-5.2);
+    db(0.30,5.4,0.30, timber, 0,2.9,-0.6);
+    db(4.0,4.0,0.14, i%2?sailM:sailDk, 1.6,3.2,-0.6);
+    for(let b=0;b<5;b++) db(3.9,0.10,0.18, battenM, 1.6,1.6+b*0.78,-0.68);
+  });
+  // two fireships, already alight, standing off the flank
+  [[30,-16,0.3],[26,-24,0.8]].forEach(([hx,hz,rot])=>{
+    const D=new THREE.Group(); D.position.set(hx,-0.2,hz); D.rotation.y=rot; yamenWorld.add(D);
+    const db=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+      m.position.set(x,y,z); D.add(m); return m; };
+    db(3.4,0.8,9.0, charM, 0,0.1,0);
+    db(0.26,4.0,0.26, charDk, 0,2.2,-0.4);
+    for(let k=0;k<4;k++){
+      const fl=new THREE.Mesh(new THREE.ConeGeometry(0.75-k*0.14, 2.2, 7),
+        new THREE.MeshBasicMaterial({color:0xff7a2a, transparent:true, opacity:0.85-k*0.13, fog:false}));
+      fl.position.set(0, 1.2+k*1.3, -2.6+k*1.7); D.add(fl);
+    }
+    for(let s=0;s<4;s++){
+      const sm=new THREE.Mesh(new THREE.BoxGeometry(2.4+s*1.6,1.8+s*1.2,2.4+s*1.6),
+        new THREE.MeshBasicMaterial({color:0x2a2620, transparent:true, opacity:0.3-s*0.06, fog:false, depthWrite:false}));
+      sm.position.set(s*0.8, 3.4+s*2.4, -1.0+s*0.5); D.add(sm);
+    }
+    const li=new THREE.PointLight(0xff7a2a, 1.4, 26); li.position.set(0,2.6,-1.0); D.add(li);
   });
 })();
 addTarget = colliders;
 heightZoneTarget = heightZonesOriginal;
 
-// The walkable floor, exactly the shape fjordDecks() is: every consumer — the player's clamp, the
-// crew's leash — reads the SAME function, so the two can never disagree about where the deck ends.
-// A hull that is on fire is simply not in the list. Nothing else about it changes: its rails, its
-// lashings and its own geometry all stay exactly where they were, which is what makes "walking off
-// the stern into the burning hull behind you" and "walking off the bow into open sea" read as the
-// same kind of edge even though one of them used to be safe.
+// The walkable floor, exactly the shape fjordDecks() is: one function, read by the player's clamp and
+// the crew's leash alike, so the two can never disagree about where the deck ends. A hull that is on
+// fire is simply not in the list — and nothing else about it changes, which is what makes walking off
+// the stern into a burning hull behind you and walking off the bow into open sea read as the same kind
+// of edge. The fire needs no kill condition of its own; it only needs to stop being floor.
 function yamenDecks(){
   const r=[];
   for(let i=0;i<YAMEN_HULLS.length;i++) if(!yamenFire[i]) r.push(yamenDeckRect(i));
@@ -10401,8 +10521,6 @@ function yamenNearestDeck(px, pz, rects){
   }
   return best;
 }
-// Off the walkable floor is off the ship, whether that is the open sea past the bow or a hull that has
-// gone up behind you — the fire does not need its own kill condition, it only needs to stop being floor.
 function yamenClampPlayer(){
   if(!player.alive) return;
   const c = yamenNearestDeck(camera.position.x, camera.position.z, yamenDecks());
@@ -10412,6 +10530,9 @@ function yamenClampPlayer(){
     camera.position.x = c[0]; camera.position.z = c[1];
   }
 }
+const YAMEN_SEA_TROUGH = new THREE.Color(0x27505f);
+const YAMEN_SEA_CREST  = new THREE.Color(0x6a97a8);
+const YAMEN_SEA_FOAM   = new THREE.Color(0xe4e2cf);
 function yamenTick(dt, t){
   if(!yamenSea) return;
   const pos = yamenSea.geo.attributes.position, cols = yamenSea.cols;
@@ -10422,23 +10543,29 @@ function yamenTick(dt, t){
     const w = fjordWaveAt(x,z,t);
     pos.setY(i, w.y);
     const lift=(w.y/FJORD_AMP)*0.5+0.5, steep=Math.min(1, Math.hypot(w.dx,w.dz)*1.9);
-    _fjc.copy(FJORD_TROUGH).lerp(FJORD_CREST, lift).lerp(FJORD_FOAM, steep*steep*lift);
+    _fjc.copy(YAMEN_SEA_TROUGH).lerp(YAMEN_SEA_CREST, lift).lerp(YAMEN_SEA_FOAM, steep*steep*lift);
     cols.setXYZ(i, _fjc.r, _fjc.g, _fjc.b);
   }
   pos.needsUpdate=true; cols.needsUpdate=true;
   yamenSea.geo.computeVertexNormals();
-  // Every hull out here is lashed, so none of them ride the swell — that motion belongs to the Fjord's
-  // still-approaching ships, not to a fortress that has already finished forming up. The drifting scenery
-  // hulls beyond play are static for the same reason nileWorld's furthest scenery is: nobody is ever
-  // close enough to notice.
-  camera.rotation.z = -fjordWaveAt(0, camera.position.z*0.5, t).dx*0.10;
-  // flame flicker, each fire on its own phase so three burning hulls do not pulse in lockstep
-  yamenFlames.forEach((f,i)=>{
-    if(!f.group.visible) return;
+  // A chained fortress is lashed rigid, so no hull out here heaves — that motion belongs to the Fjord's
+  // ships, which are still arriving. The camera keeps a trace of it and nothing else does.
+  camera.rotation.z = -fjordWaveAt(0, camera.position.z*0.5, t).dx*0.09;
+  // flame and smoke: each hull on its own phase, so three burning ships do not pulse in lockstep
+  for(let i=0;i<yamenFlames.length;i++){
+    const f=yamenFlames[i];
+    if(!f.group.visible) continue;
     f.group.children.forEach((c,ci)=>{
-      if(c.isPointLight) c.intensity = 1.6*(0.85+Math.sin(t*(4+ci*0.3)+i*1.7)*0.15);
+      if(c.isPointLight){ c.intensity = 1.7*(0.82+Math.sin(t*(4.2+ci*0.35)+i*1.9)*0.18); return; }
+      if(c.geometry && c.geometry.type==='ConeGeometry')
+        c.scale.set(1, 0.86+Math.sin(t*(5.4+ci*0.7)+i*1.3)*0.16, 1);
     });
-  });
+    const col = yamenSmoke[i];
+    for(let s=0;s<col.length;s++){
+      col[s].mesh.position.y = col[s].base + Math.sin(t*0.55 + s*0.8 + i)*0.55;
+      col[s].mesh.rotation.y = t*0.08 + s*0.4;
+    }
+  }
   if(!gameStarted) return;
   const botRects = yamenDecks();
   for(let i=0;i<bots.length;i++){
@@ -10450,18 +10577,21 @@ function yamenTick(dt, t){
 }
 
 // The fire switch. Re-derivable STATE, exactly as fjordSetPlank()/fjordSetLash() and
-// xiangyangSetBreach() all are: `lit` is the full [bool,bool,bool] the CURRENT wave wants, applied
-// wholesale rather than toggled one hull at a time, so entry, death, respawn and /tp can never leave a
-// hull burning (or safe) for a stage that disagrees with it.
+// xiangyangSetBreach() are: `lit` is the whole [bool,bool,bool] the CURRENT stage wants, applied
+// wholesale rather than toggled one hull at a time, so entering, dying, respawning and /tp can never
+// leave a hull burning for a stage that disagrees with it.
 function yamenSetFire(lit){
   for(let i=0;i<YAMEN_HULLS.length;i++){
     const on = !!lit[i];
     if(yamenFire[i] === on) continue;
     yamenFire[i] = on;
     if(yamenFlames[i]) yamenFlames[i].group.visible = on;
+    if(yamenCharred[i]) yamenCharred[i].visible = on;
     if(on){
-      setBanner('⚠ The ' + YAMEN_HULLS[i].name + ' hull catches — fall back');
-      setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('catches')>=0) setBanner(''); }, 2400);
+      SFX.boss();
+      shakeAmt = Math.max(shakeAmt, 0.35);
+      setBanner('⚠ The ' + YAMEN_HULLS[i].name + ' hull is alight — fall back');
+      setTimeout(()=>{ if(bannerEl && bannerEl.textContent.indexOf('is alight')>=0) setBanner(''); }, 2600);
     }
   }
 }
@@ -10472,20 +10602,18 @@ function enterYamenWorld(banner){
   sky.visible = true;
   activeColliders = yamenColliders;
   activeHeightZones = heightZonesYamen;
-  playClamp = 24;
-  // Late-afternoon haze over the delta — warmer and closer than the Fjord's own bright northern sea,
-  // and the smoke off the burning hulls is meant to sit visibly in this light rather than the clean
-  // blue the Fjord uses.
-  scene.background.set(0xc8b896); scene.fog.color.set(0xd4c2a0);
-  scene.fog.near = 16; scene.fog.far = 92;
-  setDistantGround(0x7a8f74);
-  skyTint(0xe0c8a0);
-  hemi.intensity=0.88; hemi.color.set(0xe4d0a8); hemi.groundColor.set(0x445048);
-  sun.intensity=0.72; fill.intensity=0.38; fill.color.set(0xe8c890);
+  playClamp = 26;
+  // Smoke-light. The delta at Yamen was fought in a haze of burning ships, and the palette says so:
+  // a dirty warm sky, fog closing near, and everything lit slightly orange from below.
+  scene.background.set(0xc0a888); scene.fog.color.set(0xcbb294);
+  scene.fog.near = 14; scene.fog.far = 86;
+  setDistantGround(0x6a7a70);
+  skyTint(0xdcbe94);
+  hemi.intensity=0.82; hemi.color.set(0xd8c098); hemi.groundColor.set(0x40483f);
+  sun.intensity=0.66; fill.intensity=0.42; fill.color.set(0xe8a763);
   camera.position.set(YAMEN_HULLS[0].x, 1.7, 3.0); yaw=targetYaw=0; pitch=targetPitch=0;
   vel.set(0,0,0); playerHeight=0; stuckTimer=0;
-  // force every hull safe on every entry, including a respawn; spawnTripStage() below re-derives the
-  // right fire state for whatever wave this actually is
+  // every hull cold on entry; spawnTripStage() below re-derives what this stage actually wants
   yamenFire = [true,true,true]; yamenSetFire([false,false,false]);
   clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
   weapons.forEach(w=>w.visible=false);
@@ -18134,7 +18262,10 @@ const XIANGYANG_BOSS = {skin:'songcommander', col:0x1c1716, hp:2600, scale:1.55,
 // this leg carries is the burning floor under them, not a new cast of enemies.
 // Both pools point at the SAME array, the flagship's own open deck — the one hull that never burns, so
 // nothing spawned here is ever placed somewhere the fire is about to take back.
-const YAMEN_FLAGSHIP = [[15.0,-2.5],[17.0,-2.5],[15.0,2.5],[17.0,2.5],[14.5,0.8],[17.5,0.8],[15.5,-1.2],[16.5,1.5]];
+// Solved against the flagship's OWN furniture rather than picked by eye — its mast, winch, crates and
+// stern cabin are all real colliders now, and a hand-guessed pool put three of eight points inside
+// them. Every point below is clear at a 0.75 radius and at least 2.0 from its neighbours.
+const YAMEN_FLAGSHIP = [[3.1,-6.25],[3.1,-4.25],[3.1,-1.0],[3.1,3.0],[3.1,5.0],[4.1,0.75],[4.6,-2.75],[4.85,4.0]];
 const YAMEN_WAVES = [
   {songinfantry:3},
   {songinfantry:2, songcrossbowman:2},
@@ -18148,7 +18279,7 @@ const YAMEN_DIFF = 1.35;   // the trip's true finale, and it plays that way
 // THE YAMEN ADMIRAL — the end of the whole China trip. 3700 puts him a shade over the Skerry Troll
 // (3600), which is deliberate: China is the destination bought after Sweden, and its own finale should
 // not read as easier than the one before it.
-const YAMEN_BOSS = {skin:'yamenadmiral', col:0x18201c, hp:3700, scale:1.60, speed:1.10, x:16, z:0, radius:1.10,
+const YAMEN_BOSS = {skin:'yamenadmiral', col:0x18201c, hp:3700, scale:1.60, speed:1.10, x:7.2, z:-3.0, radius:1.10,
   name:'THE YAMEN ADMIRAL', hud:'the admiral',
   call:'⚠ The flagship’s own drum sounds — the admiral comes forward, past the burning hulls…',
   intro:'🐉 THE YAMEN ADMIRAL',

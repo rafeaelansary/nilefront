@@ -425,6 +425,38 @@ ok &= show("Yamen is a real world: enterable, removable, reachable from /tp, all
   return 'enter/leave/tp all clean, all three hulls safe, China loadout equipped';
 """))
 
+# The premise of the whole leg, asserted: a CHAINED fleet is one surface. The first cut of this map had
+# hulls 16 apart that were only 5.6 wide, so there were ten metres of open water between every pair of
+# "chained" ships and no walk from one deck to the next -- and every test still passed, because they all
+# only ever looked at one hull at a time.
+ok &= show("the chained hulls are one continuous floor, walkable end to end", run("""
+  gameStarted = true;
+  enterYamenWorld('t');
+  var rects = yamenDecks();
+  if(rects.length !== YAMEN_HULLS.length) throw new Error('not every hull is walkable on a cold entry');
+  // adjacent decks must share an edge exactly -- no gap, and no overlap either
+  for(var i=0;i<rects.length-1;i++){
+    var gap = rects[i+1].x1 - rects[i].x2;
+    if(Math.abs(gap) > 1e-9)
+      throw new Error('hull '+i+' and '+(i+1)+' are '+gap.toFixed(2)+' apart rather than flush');
+    if(Math.abs(rects[i].z1-rects[i+1].z1) > 1e-9 || Math.abs(rects[i].z2-rects[i+1].z2) > 1e-9)
+      throw new Error('hull '+i+' and '+(i+1)+' do not line up along their length');
+  }
+  // ...and the walkable rectangle has to match the deck that is actually DRAWN: walk the whole span and
+  // confirm the clamp never moves you, from the outer hull's outboard rail across to the flagship's
+  var x0 = rects[0].x1 + 0.3, x1 = rects[rects.length-1].x2 - 0.3;
+  var moved = 0, steps = 0;
+  for(var x=x0; x<=x1; x+=0.25){
+    for(var z=-YAMEN_HULL_HL+0.4; z<=YAMEN_HULL_HL-0.4; z+=1.0){
+      camera.position.set(x,1.7,z); steps++;
+      yamenClampPlayer();
+      if(Math.hypot(camera.position.x-x, camera.position.z-z) > 1e-8) moved++;
+    }
+  }
+  if(moved) throw new Error(moved+' of '+steps+' points across the fleet are not actually walkable');
+  return steps+' points from the outer rail to the flagship, all standable, decks flush at every seam';
+"""))
+
 ok &= show("the fire is re-derivable state: it spreads hull by hull and forces you off a burning deck", run("""
   gameStarted = true;
   enterYamenWorld('test');
@@ -440,8 +472,15 @@ ok &= show("the fire is re-derivable state: it spreads hull by hull and forces y
   yamenTick(0.016, 1.0);
   if(Math.abs(camera.position.x - YAMEN_HULLS[0].x) < 1e-6)
     throw new Error('the burning hull did not push the player off it');
-  if(yamenNearestDeck(camera.position.x, camera.position.z, [yamenDeckRect(0)])[2] <= 1e-8)
-    throw new Error('the player is still standing on the burning hull after the tick');
+  // The hulls are lashed beam to beam, so their rectangles SHARE an edge: a player clamped off a
+  // burning deck lands exactly on that shared line, which is legitimately "on" both. What has to be
+  // true is that they are standing on floor that is still in the walkable set, and no longer inside
+  // the burning hull.
+  if(yamenNearestDeck(camera.position.x, camera.position.z, yamenDecks())[2] > 1e-8)
+    throw new Error('the player was pushed somewhere that is not walkable at all');
+  var r0 = yamenDeckRect(0);
+  if(camera.position.x < r0.x2 - 1e-6)
+    throw new Error('the player is still inside the burning hull at x='+camera.position.x.toFixed(2));
 
   yamenSetFire([true,true,false]);
   if(yamenDecks().length !== 1) throw new Error('two hulls burning should leave exactly one deck');
