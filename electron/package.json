@@ -1,6 +1,6 @@
 {
   "name": "nilefront-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "NILEFRONT — desktop build (Electron wrapper around the browser game in ../index.html)",
   "main": "main.js",
