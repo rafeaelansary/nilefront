@@ -30,6 +30,12 @@ const CDN_TAG = `<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r1
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>`;
 const LOCAL_TAG = `<script src="vendor/three.min.js"></script>`;
 
+// The build number the title screen shows. It is written into index.html by hand, and package.json's
+// version is what actually names the DMG — two strings that mean the same thing and can drift, which
+// is how you get a build whose installer says 1.2.0 and whose start screen says 1.1.0. Same rule as
+// the CDN tag above: catch it here rather than ship it.
+const VER_RE = /<div id="ver">v([0-9]+\.[0-9]+\.[0-9]+)<\/div>/;
+
 function main() {
   if (!fs.existsSync(SRC_HTML)) {
     fail(`Can't find the game at ${SRC_HTML}`);
@@ -49,6 +55,22 @@ function main() {
       `index.html's three.js <script> tag has changed and no longer matches what this build ` +
       `script expects. Update CDN_TAG in electron/scripts/build-app.js (and re-vendor ` +
       `electron/vendor/three.min.js if the version or hash moved) before building.`
+    );
+  }
+
+  const pkgVer = require(path.join(ELECTRON_DIR, 'package.json')).version;
+  const shown = html.match(VER_RE);
+  if (!shown) {
+    fail(
+      `index.html no longer carries the <div id="ver">vX.Y.Z</div> build label on its title screen. ` +
+      `Restore it, or drop VER_RE from electron/scripts/build-app.js if the label is gone for good.`
+    );
+  }
+  if (shown[1] !== pkgVer) {
+    fail(
+      `Version mismatch: the title screen says v${shown[1]}, package.json says ${pkgVer}.\n` +
+      `The DMG is named from package.json, so shipping this would put two different numbers on one ` +
+      `build. Update whichever one is stale before building.`
     );
   }
 
