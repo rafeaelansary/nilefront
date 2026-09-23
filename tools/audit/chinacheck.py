@@ -124,6 +124,101 @@ ok &= show("the China loadout is three weapons, each with a complete userData bl
   return names.join(', ')+' -- all present with complete userData';
 """))
 
+# The crossbow's sight. Two things are being asserted and they fail in different ways: that the scope is
+# wired to the engine's own mechanic at all, and that the spread it borrows while scoped is never left
+# behind. The second is the one worth a test -- a narrowed spread that outlives the scope is invisible
+# (the weapon simply becomes accurate forever) and there is a real path to it, because selectWeapon()
+# only force-unscopes when the weapon you switch TO has no scope of its own.
+ok &= show("the Repeating Crossbow is sighted, and the sight's steadying never outlives it", run("""
+  gameStarted = true;
+  enterXiangyangWorld('t');
+  var xbow = chinaWeapons[1], u = xbow.userData;
+  if(!u.scoped) throw new Error('the crossbow has no scope');
+  if(!(u.scopeFov > 0 && u.scopeFov < DEFAULT_FOV))
+    throw new Error('scopeFov '+u.scopeFov+' is not a zoom (default is '+DEFAULT_FOV+')');
+  if(!(u.scopeSpread > 0 && u.scopeSpread < 1))
+    throw new Error('scopeSpread '+u.scopeSpread+' is not a narrowing multiplier');
+  var base = u.spread;
+
+  // select it, and scope in and out: the FOV has to move and come back
+  weapons = chinaWeapons; selectWeapon(1);
+  setScope(false);
+  if(camera.fov !== DEFAULT_FOV) throw new Error('unscoped fov is '+camera.fov);
+  setScope(true);
+  if(!scoped) throw new Error('setScope(true) did not take on a scoped weapon');
+  if(camera.fov !== u.scopeFov) throw new Error('scoped fov is '+camera.fov+', expected '+u.scopeFov);
+  setScope(false);
+  if(camera.fov !== DEFAULT_FOV) throw new Error('fov did not return, it is '+camera.fov);
+
+  // the spread itself is never written -- it is derived per shot -- so the stored value must be the
+  // authored one at every point, scoped or not
+  if(u.spread !== base) throw new Error('spread was mutated by scoping: '+u.spread+' vs '+base);
+  setScope(true);
+  if(u.spread !== base) throw new Error('spread is written while scoped: '+u.spread);
+
+  // ...and it survives the two routes that would strand it: switching straight to ANOTHER scoped
+  // weapon (which never passes through setScope(false)), and leaving the map mid-scope
+  weapons = swedenWeapons; selectWeapon(1);        // the Hunnish Bow, also scoped
+  if(u.spread !== base) throw new Error('spread stranded after a scoped->scoped switch: '+u.spread);
+  weapons = chinaWeapons; selectWeapon(1); setScope(true);
+  enterYamenWorld('t');
+  if(u.spread !== base) throw new Error('spread stranded across a map change: '+u.spread);
+  if(scoped) throw new Error('still scoped after changing map');
+
+  // ...and the multiplier actually REACHES THE SHOT rather than merely sitting in userData. Measured
+  // off the tracers the weapon really fires: aim down a fixed bearing, empty a magazine each way, and
+  // compare how far the worst bolt strays from that bearing.
+  enterXiangyangWorld('t');
+  weapons = chinaWeapons; selectWeapon(1);
+  camera.position.set(0, 1.7, 22); yaw = targetYaw = 0; pitch = targetPitch = 0;
+  camera.rotation.set(0, 0, 0, 'YXZ');
+  player.alive = true; player.hp = player.maxHp;
+  // Hooked on firstHit(), which is the shot's OWN raycast and takes the bearing after spread has been
+  // applied to it -- not on spawnTracer(), whose calls are dominated by the garrison shooting back.
+  var origHit = firstHit, dirs = [], armed = false;
+  firstHit = function(origin, dir, maxDist){
+    if(armed && maxDist === 300){ dirs.push([dir.x, dir.y, dir.z]); armed = false; }
+    return origHit.apply(null, arguments);
+  };
+  // The spread term is a function of performance.now(), and the harness's clock is a constant zero --
+  // sin(0) is 0, so headlessly EVERY weapon in the game shoots dead straight and a spread test measures
+  // nothing. Driven by hand here, for the length of the measurement only: changing the stub's clock
+  // globally would move the fire-rate gate under every other check in the suite.
+  var realNow = performance.now, tick = 0;
+  performance.now = function(){ tick += 37; return tick; };
+  var worstStray = function(on){
+    setScope(on);
+    clearBots();
+    dirs.length = 0;
+    for(var i=0;i<40;i++){
+      // advance the clock BEFORE arming, so the frame's own raycasts are not mistaken for the shot --
+      // the spread term is a function of time, so the shots have to be spread across frames to vary
+      animate();
+      u.ammo = u.magSize; u.reloading = false; u.reloadT = 0; lastShot = -99;
+      armed = true; fire(); armed = false;
+    }
+    // the bearing is dead -z; stray is how far off it the bolt went, across both other axes
+    var worst = 0;
+    dirs.forEach(function(d){ var s = Math.sqrt(d[0]*d[0] + d[1]*d[1]); if(s > worst) worst = s; });
+    return {n:dirs.length, worst:worst};
+  };
+  var hip = worstStray(false), aimed = worstStray(true);
+  setScope(false);
+  firstHit = origHit;
+  performance.now = realNow;
+  if(!hip.n || !aimed.n) throw new Error('no tracers were fired (hip '+hip.n+', aimed '+aimed.n+')');
+  if(!(aimed.worst < hip.worst * 0.6))
+    throw new Error('scoping did not tighten the cone: worst stray '+hip.worst.toFixed(4)
+                    +' from the hip vs '+aimed.worst.toFixed(4)+' sighted');
+
+  // the sight is really on the model, and attached to it
+  var conn = globalThis.__connectivity ? globalThis.__connectivity(xbow, 1, 0.004) : null;
+  if(conn && conn.orphans.length)
+    throw new Error(conn.orphans.length+' floating part(s) on the crossbow');
+  return 'fov '+DEFAULT_FOV+'->'+u.scopeFov+'; worst stray '+hip.worst.toFixed(4)+' from the hip vs '
+         +aimed.worst.toFixed(4)+' sighted; stored spread still '+base+' everywhere';
+"""))
+
 ok &= show("Xiangyang is a real world: enterable, removable, reachable from /tp", run("""
   gameStarted = true;
   if(typeof xiangyangWorld === 'undefined') throw new Error('xiangyangWorld is not defined');
@@ -706,8 +801,19 @@ ok &= show("the whole trip plays through: Xiangyang hands on to Yamen, and Yamen
   for(var i=0;i<900;i++) animate();
   if(!inHub) throw new Error('clearing the Admiral did not send the player home');
   if(tripDest) throw new Error('the trip did not end on the Admiral');
+  // ...and the booth has to REMEMBER it. `done` was read in three places and written in none, so a
+  // cleared road stayed on sale at full price and buying it again started the trip over. The card is
+  // found by name because tripDest is the literal go() builds, not the DESTINATIONS entry itself.
+  var card = DESTINATIONS.filter(function(d){ return d.name === 'China'; })[0];
+  if(!card) throw new Error('China is not on the board at all');
+  if(!card.done) throw new Error('China still reads as unwalked after the Admiral fell');
+  if(destState(card).cls !== 'done') throw new Error('the card does not show as completed');
+  var before = balance();
+  buyTicket(card);
+  if(balance() !== before) throw new Error('a completed road was sold again, for '+(before-balance())+' stars');
+  if(tripDest) throw new Error('a completed road started a second trip');
   godMode = wasGod;
-  return 'Xiangyang -> Yamen -> home, the whole way through';
+  return 'Xiangyang -> Yamen -> home, and the card reads walked and cannot be re-sold';
 """))
 
 sys.exit(0 if ok else 1)

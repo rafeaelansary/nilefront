@@ -155,25 +155,49 @@ globalThis.__world = {
   // lifts the block once you have already CLIMBED to roof height, which on a ramp you have not.
   getTerrainHeight: typeof getTerrainHeight !== 'undefined' ? getTerrainHeight : null,
   insideCollider:   typeof insideCollider   !== 'undefined' ? insideCollider   : null,
+  // The push-out itself, not just the "am I inside something" test. insideCollider() answers whether a
+  // spot is legal; this answers where the engine MOVES you when it is not — which is the only way to
+  // tell a deck edge that stops you from one that throws you off the roof sideways.
+  resolveCollision: typeof resolveCollision !== 'undefined' ? resolveCollision : null,
   setActive: function(cols, zones){ activeColliders = cols || []; activeHeightZones = zones || []; },
 };
-// Every world group and its collider array, for the whole-game sweep.
+// Every world group, its collider array, and the height zones that go WITH those colliders, for the
+// whole-game sweep. The third entry is whichever array that world's enter*() assigns to
+// activeHeightZones — the two have to be read as a pair, because a collider's roofY only means
+// anything against the zones that say where its roof actually is.
 globalThis.__worlds = {};
-[['overworld','colliders'],['pyramidOverworld','pyramidColliders'],['greekOverworld','greekColliders'],
- ['romanOverworld','romanColliders'],['islamicOverworld','islamicColliders'],
- ['mexicoOverworld','mexicoColliders'],['aztecOverworld','aztecColliders'],
- ['aztecMarketOverworld','aztecMarketColliders'],['swedenOverworld','swedenColliders'],
- ['ladogaOverworld','ladogaColliders'],
- ['fjordWorld','fjordColliders'],['xiangyangWorld','xiangyangColliders'],['yamenWorld','yamenColliders'],
- ['dungeon','dungeonColliders'],['pyramidDungeon','pyramidDungeonColliders'],
- ['greekDungeon','greekDungeonColliders'],['nileWorld','nileColliders'],
- ['hydraArena','hydraColliders'],['colosseumArena','colosseumColliders'],
- ['ifritArena','ifritColliders']].forEach(function(pair){
-  var g=null, c=null;
+[['overworld','colliders','heightZonesOriginal'],
+ ['pyramidOverworld','pyramidColliders','heightZonesPyramid'],
+ ['greekOverworld','greekColliders','heightZonesGreek'],
+ ['romanOverworld','romanColliders','heightZonesRoman'],
+ ['islamicOverworld','islamicColliders','heightZonesIslamic'],
+ ['mexicoOverworld','mexicoColliders','heightZonesMexico'],
+ ['aztecOverworld','aztecColliders','heightZonesAztec'],
+ ['aztecMarketOverworld','aztecMarketColliders','heightZonesAztecMarket'],
+ ['swedenOverworld','swedenColliders','heightZonesSweden'],
+ ['ladogaOverworld','ladogaColliders','heightZonesLadoga'],
+ ['fjordWorld','fjordColliders','heightZonesFjord'],
+ ['xiangyangWorld','xiangyangColliders','heightZonesXiangyang'],
+ ['yamenWorld','yamenColliders','heightZonesYamen'],
+ ['dungeon','dungeonColliders','heightZonesNone'],
+ ['pyramidDungeon','pyramidDungeonColliders','heightZonesNone'],
+ ['greekDungeon','greekDungeonColliders','heightZonesNone'],
+ ['nileWorld','nileColliders','heightZonesNone'],
+ ['hydraArena','hydraColliders','heightZonesNone'],
+ ['colosseumArena','colosseumColliders','heightZonesNone'],
+ ['ifritArena','ifritColliders','heightZonesNone']].forEach(function(pair){
+  var g=null, c=null, z=null;
   try { g = eval(pair[0]); } catch(e) {}
   try { c = eval(pair[1]); } catch(e) {}
-  if(g) globalThis.__worlds[pair[0]] = {group:g, colliders:c};
+  try { z = eval(pair[2]); } catch(e) {}
+  if(g) globalThis.__worlds[pair[0]] = {group:g, colliders:c, zones:z};
 });
+// Geometry that is SUPPOSED to hang in mid-air, for the floating-scenery sweep to leave alone. Birka's
+// falling snow is the only case: it is a live particle group, so every flake reads as unsupported
+// scenery. bugcheck.py could always reach it because run() injects INSIDE this IIFE; fullcheck.py
+// evaluates at top level and could not, which is why its Birka floater count was ~130 flakes deep.
+globalThis.__airborne = (typeof birkaSnow !== 'undefined' && birkaSnow && birkaSnow.grp)
+  ? birkaSnow.grp : null;
 globalThis.__loadouts = {};
 ['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons','mexicoWeapons','aztecWeapons','swedenWeapons','chinaWeapons'].forEach(function(n){
   try { globalThis.__loadouts[n] = eval(n); } catch(e) {}
@@ -303,8 +327,15 @@ def check_coplanar(ctx, runs=3):
     for builder, invoke, scale, floor, label in ACTORS:
         for _ in range(runs):
             hits = json.loads(fn(builder, invoke, scale, COPLANAR_EPS, OVERLAP_MIN, floor))
-            if len(hits) >= worst.get(label, (-1, []))[0]:
-                worst[label] = (len(hits), hits[:4])
+            if len(hits) >= worst.get(label, (-1, 0, []))[0]:
+                # Faces at EXACTLY the same coordinate are counted apart from faces merely close to
+                # each other, because they are not the same defect. Coincident surfaces have nothing
+                # in the depth buffer to separate them and flicker at every distance and every scale;
+                # a face held a fraction of a millimetre off another may never flicker at all, and
+                # whether it does depends on how big the model is drawn. Drive the first column to
+                # zero; treat the second as a list of candidates to look at.
+                coincident = sum(1 for h in hits if h["gap"] == 0)
+                worst[label] = (len(hits), coincident, hits[:4])
     return worst
 
 
@@ -353,17 +384,21 @@ def main():
         print(f"{label:24} {total:6d} {orphans:8d}  {'ok' if ok else 'DISCONNECTED'}{note}")
     print(f"\n{cfails} of {len(ACTORS)} actors have floating parts")
 
-    print(f"\n{'model':24} {'z-fight pairs':>14}  worst gaps")
-    print("-" * 62)
+    print(f"\n{'model':24} {'z-fight pairs':>14} {'coincident':>11}  worst gaps")
+    print("-" * 74)
     zfails = 0
-    for label, (n, hits) in check_coplanar(ctx).items():
+    tot_pairs = tot_coin = 0
+    for label, (n, coincident, hits) in check_coplanar(ctx).items():
+        tot_pairs += n
+        tot_coin += coincident
         if n:
             zfails += 1
             note = "  " + ", ".join(f"{h['axis']}@{h['gap']}" for h in hits)
         else:
             note = "  ok"
-        print(f"{label:24} {n:>14}{note}")
-    print(f"\n{zfails} of {len(ACTORS)} actors have near-coplanar faces")
+        print(f"{label:24} {n:>14} {coincident:>11}{note}")
+    print(f"\n{zfails} of {len(ACTORS)} actors have near-coplanar faces "
+          f"({tot_pairs} pairs, {tot_coin} of them exactly coincident)")
 
     return 1 if (fails or cfails or zfails) else 0
 

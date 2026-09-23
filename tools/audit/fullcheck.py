@@ -199,7 +199,15 @@ def main():
       var W = globalThis.__worlds[name];
       var cop = globalThis.__worldCoplanar(W.group, eps, omin, 4, groundY);
       var big = globalThis.__worldBigCoplanar(W.group, eps, BIG_COPLANAR_MIN_AREA, groundY);
-      var flo = globalThis.__worldFloaters(W.group, groundY, minGap, touchEps);
+      // Falling snow is SUPPOSED to hang in mid-air. Birka's is a live particle group, so every flake
+      // in it counted as floating scenery and this map reported ~130 faults that are the weather doing
+      // its job -- a false positive big enough to bury anything real underneath it. bugcheck.py has
+      // subtracted them by count for a while; passed to the sweep instead, they are also barred from
+      // holding anything else up, which snow should not be doing either.
+      var flake = [];
+      if(globalThis.__airborne)
+        globalThis.__airborne.traverse(function(o){ if(o.isMesh) flake.push(o); });
+      var flo = globalThis.__worldFloaters(W.group, groundY, minGap, touchEps, flake);
       var n = 0; W.group.traverse(function(o){ if(o.isMesh) n++; });
       return JSON.stringify({meshes:n, coplanar:cop.slice(0,6), coplanarN:cop.length,
                              big:big.slice(0,6), bigN:big.length,
@@ -261,6 +269,57 @@ def main():
         }
         if(bad) out.push({bad:bad, tot:tot, at:first, rect:[zn.x1, zn.z1, zn.x2, zn.z2]});
       });
+      return JSON.stringify(out);
+    })
+    """)
+
+    # Roof decks that throw you off sideways instead of stopping you at the edge.
+    #
+    # A collider carrying a roofY is skipped for anyone whose terrain height already matches that roof
+    # -- that is what makes a deck walkable. The skip is decided by sampling the terrain AT THE ACTOR,
+    # so it lasts exactly as far as the plateau zone reaches. Where the collider's footprint is WIDER
+    # than its plateau there is a rim of deck that the roof rule does not cover, and an actor who steps
+    # into it is judged to be buried inside the box. resolveStep() then ejects him along the box's
+    # SHORTEST axis out -- and on a thin rim the shortest way out is the outside face, so he is fired
+    # off the roof horizontally, several units, in mid-air.
+    #
+    # This is not the same thing as walking off an edge, which is fine and which every roof allows. The
+    # test is the outcome: step off the plateau while still inside the footprint, resolve, and ask where
+    # the engine put you. Landing somewhere with floor under it at roof height = you were stopped (the
+    # Great Pyramid's terraces do this correctly, pushing you back onto the summit). Landing somewhere
+    # with nothing under it = you were thrown.
+    deck_fn = ctx.eval("""
+    (function(name, radius){
+      var W = globalThis.__worlds[name];
+      globalThis.__world.setActive(W.colliders, W.zones || []);
+      var gth = globalThis.__world.getTerrainHeight, rc = globalThis.__world.resolveCollision;
+      var out = [];
+      (W.colliders || []).forEach(function(c){
+        if(c.roofY === null || c.roofY === undefined) return;
+        var stands = function(x,z){ return gth(x, z, c.roofY) >= c.roofY - 0.4; };
+        // keep the sample count sane on the big footprints
+        var step = Math.max(0.1, Math.min((c.x2-c.x1), (c.z2-c.z1)) / 40);
+        var thrown = 0, tot = 0, first = null, worst = 0;
+        for(var x=c.x1+step/2; x<c.x2; x+=step){
+          for(var z=c.z1+step/2; z<c.z2; z+=step){
+            if(stands(x,z)) continue;                 // on the deck: nothing to answer for
+            // reachable only if there is real deck within a stride of here
+            if(!(stands(x-step,z)||stands(x+step,z)||stands(x,z-step)||stands(x,z+step))) continue;
+            tot++;
+            var r = rc(x, z, radius, c.roofY);
+            if(stands(r[0], r[1])) continue;          // pushed back onto the deck -- correct
+            var d = Math.sqrt((r[0]-x)*(r[0]-x) + (r[1]-z)*(r[1]-z));
+            thrown++;
+            if(d > worst) worst = d;
+            if(!first) first = [Math.round(x*100)/100, Math.round(z*100)/100,
+                                Math.round(r[0]*100)/100, Math.round(r[1]*100)/100];
+          }
+        }
+        if(thrown) out.push({thrown:thrown, tot:tot, at:first, roofY:c.roofY,
+                             worst:Math.round(worst*100)/100,
+                             rect:[c.x1, c.z1, c.x2, c.z2]});
+      });
+      out.sort(function(a,b){ return b.worst - a.worst; });
       return JSON.stringify(out);
     })
     """)
@@ -381,9 +440,13 @@ def main():
         if zones:
             ramp_hits = json.loads(ramp_fn(name, HEIGHT_ZONES.get(name, ""), 0.45))
 
+        # 0.45 is the player's radius. A bot's is 0.85 and fares worse, but the player is the one who
+        # has to be able to hold a rampart.
+        deck_hits = json.loads(deck_fn(name, 0.45))
+
         if not dead:
             problems += (bool(ov) + bool(bad_spawns) + bool(r["coplanarN"])
-                         + bool(r["floatersN"]) + bool(ramp_hits))
+                         + bool(r["floatersN"]) + bool(ramp_hits) + bool(deck_hits))
 
         def report(title, n, rows):
             if not n:
@@ -407,6 +470,11 @@ def main():
                [f"ramp x[{h['rect'][0]:.1f},{h['rect'][2]:.1f}] z[{h['rect'][1]:.1f},{h['rect'][3]:.1f}] "
                 f"blocked at {h['bad']}/{h['tot']} points, first at "
                 f"({h['at'][0]}, {h['at'][1]}) y={h['at'][2]}" for h in ramp_hits])
+        report("roof decks that throw you off", len(deck_hits),
+               [f"deck y={h['roofY']} x[{h['rect'][0]:.1f},{h['rect'][2]:.1f}] "
+                f"z[{h['rect'][1]:.1f},{h['rect'][3]:.1f}]: {h['thrown']}/{h['tot']} rim points fire "
+                f"you off, worst {h['worst']}u — ({h['at'][0]}, {h['at'][1]}) lands at "
+                f"({h['at'][2]}, {h['at'][3]})" for h in deck_hits[:6]])
         report("floating scenery", r["floatersN"],
                [f"underside y={f['y']} at ({f['x']}, {f['z']})" for f in r["floaters"]])
 

@@ -1067,11 +1067,17 @@ global.__worldBigCoplanar = function(group, eps, minArea, groundY){
 };
 
 // Scenery that floats: a mesh whose underside is well above the ground and which touches nothing else.
-global.__worldFloaters = function(group, groundY, minGap, eps){
+// `exclude` is an optional array of meshes to leave out of the sweep entirely — for geometry that is
+// SUPPOSED to hang in mid-air, of which the only case so far is falling snow. Left out of the boxes
+// rather than filtered from the results, so a flake also cannot count as something holding another
+// mesh up: snow supports nothing.
+global.__worldFloaters = function(group, groundY, minGap, eps, exclude){
   // Exclude only the genuinely enormous: ground slabs (60-400 units) and the 1400-unit backing planes.
   // The threshold was 40, which also excluded things that legitimately hold other things up — a boss
   // chamber's 46-unit roof panels, for one — so everything hanging from them reported as floating.
+  const skip = exclude && exclude.length ? exclude : null;
   const boxes = global.__worldBoxes(group).filter(b=>{
+    if(skip && skip.indexOf(b.mesh) >= 0) return false;
     const s=b.box.max.x-b.box.min.x, t=b.box.max.z-b.box.min.z, h=b.box.max.y-b.box.min.y;
     // Wide AND FLAT is a ground slab or a backing plane. Width alone is not: Popocatepetl is a 60-unit
     // cone, so excluding it by width alone left its own snow cap reported as floating in mid-air.

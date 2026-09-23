@@ -258,7 +258,11 @@ ok &= show("clearing the Fjord comes home here, and this hub sells China", run("
   returnToHub();
   if(currentHub !== 'ladoga') throw new Error('the trip came home to '+currentHub);
   if(tripDest) throw new Error('came home with the trip still live');
-  var china = DESTINATIONS.filter(function(d){ return d.name === 'China' && d.ready; })[0];
+  // `ready` is gone: every card on the board is now a built destination by construction, so what makes
+  // one buyable is that it has a road to walk and a way to start walking it.
+  var china = DESTINATIONS.filter(function(d){
+    return d.name === 'China' && d.legs && d.legs.length && typeof d.go === 'function' && !d.done;
+  })[0];
   if(!china) throw new Error('China is not buyable from here');
   return 'home at Aldeigjuborg, and China is on the board at '+china.price;
 """))

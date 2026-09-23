@@ -2,6 +2,21 @@
 <html>
 <head>
 <meta charset="utf-8">
+<!-- Without this a phone lays the page out at its default ~980px and scales the result down, which
+     shrinks the touch controls in #mobile to about two-thirds size and puts them nowhere near the
+     thumbs. user-scalable=no because pinch-zoom on a pointer-locked FPS is only ever an accident,
+     and viewport-fit=cover so the notch does not letterbox the canvas. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="description" content="A voxel FPS that walks Egypt's history and then buys passage out of it — Olmec Mexico, Viking Sweden, Song China.">
+<meta name="theme-color" content="#87CEEB">
+<!-- iOS standalone: keep the status bar dark over the sky so it does not sit white-on-white. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:title" content="NILEFRONT">
+<meta property="og:description" content="A voxel FPS that walks Egypt's history and then buys passage out of it — Olmec Mexico, Viking Sweden, Song China.">
+<meta property="og:type" content="website">
+<!-- Inline so the single-file property holds: a pyramid on the sky the game opens on. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2387CEEB'/%3E%3Cpath d='M16 5 L29 27 H3 Z' fill='%23d9b26f'/%3E%3Cpath d='M16 5 L16 27 H3 Z' fill='%23b98f4e'/%3E%3C/svg%3E">
 <title>NILEFRONT</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#87CEEB;font-family:sans-serif;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
@@ -43,6 +58,10 @@
     box-shadow:0 5px 0 #1a4a68,0 8px 18px rgba(0,0,0,0.5);transition:transform 0.08s,box-shadow 0.08s;font-family:sans-serif}
   #startbtn:hover{filter:brightness(1.08)}
   #startbtn:active{transform:translateY(4px);box-shadow:0 1px 0 #7a0f16,0 3px 8px rgba(0,0,0,0.5)}
+  /* The build, on the one screen every player sees. A bug report that does not say which build it came
+     from cannot be matched to a commit; this is the cheapest possible way to stop that. */
+  #ver{margin-top:22px;font-size:12px;letter-spacing:1px;color:#eaf6ff;opacity:0.55;
+    text-shadow:0 1px 2px rgba(0,0,0,0.6);font-family:sans-serif}
   /* hide all in-game UI until the game starts (title screen shows only logo + START + background) */
   body:not(.playing) #hud,
   body:not(.playing) #stats,
@@ -131,8 +150,6 @@
   .pin.buyable:hover .pdot{transform:scale(1.35)}
   .pin.buyable:hover .plabel{background:#c9a13a;color:#1a1209}
   .pin.done .pdot{background:#4fbf73;border-color:#d8f5e2}
-  .pin.soon{opacity:0.72}
-  .pin.soon .pdot{background:#5a4a34}
   .pin.short .pdot{background:#8a3a2a}
   @keyframes pinpulse{0%,100%{box-shadow:0 0 0 3px rgba(0,0,0,0.55),0 0 0 0 rgba(255,207,94,0.65)}
                       50%{box-shadow:0 0 0 3px rgba(0,0,0,0.55),0 0 0 17px rgba(255,207,94,0)}}
@@ -271,7 +288,7 @@
     placeholder="/help"></div>
   <div id="chathint">↑ ↓ history · [Esc] to close</div>
 </div></div>
-<div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button></div>
+<div id="lock"><div id="title">NILE<span>FRONT</span></div><button id="startbtn">START</button><div id="ver">v1.1.0</div></div>
 <div id="mobile">
   <div id="stick"><div id="knob"></div></div>
   <div id="wbtns"><div class="wbtn" data-w="0">1</div><div class="wbtn sel" data-w="1">2</div><div class="wbtn" data-w="2">3</div><div class="wbtn" data-w="3">4</div></div>
@@ -284,6 +301,28 @@
 <script>
 (function(){
 'use strict';
+
+// ---- the two ways this page fails before it is a game at all ----
+// Both used to present identically: a flat blue screen with a START button that did nothing, and no
+// hint anywhere on it about what went wrong. Say which one it was instead.
+function fatal(head, body){
+  const el = document.getElementById('lock');
+  if(!el) return;
+  el.innerHTML = '<div id="title">NILE<span>FRONT</span></div>'
+    + '<div style="max-width:30em;margin:0 auto;padding:0 1.5em;text-align:center;color:#fff;'
+    + 'text-shadow:0 1px 3px #000;line-height:1.5"><p style="font-size:17px;font-weight:bold">'
+    + head + '</p><p style="font-size:14px;opacity:0.85">' + body + '</p></div>';
+  el.style.display = 'flex';
+}
+// three.js comes off a CDN (the desktop build swaps in a vendored copy — see electron/scripts/build-app.js),
+// so a blocked host, a dead network or a failed subresource-integrity check all land here.
+if(typeof THREE === 'undefined'){
+  fatal('three.js did not load.',
+        'The game pulls its 3D library from cdnjs.cloudflare.com on first run. Check the connection, '
+      + 'or whether something on this network blocks that host, and reload.');
+  return;
+}
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8fd6f2);
 scene.fog = new THREE.Fog(0x9fdcf0, 40, 220);
@@ -291,11 +330,41 @@ scene.fog = new THREE.Fog(0x9fdcf0, 40, 220);
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
 camera.position.set(0, 1.7, 10);
 
-const renderer = new THREE.WebGLRenderer({antialias:false, powerPreference:'high-performance'});
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({antialias:false, powerPreference:'high-performance'});
+} catch(e){
+  fatal('This browser cannot open WebGL.',
+        'NILEFRONT needs hardware 3D. Check that WebGL is enabled and not blocked by a driver '
+      + 'blacklist, then reload. (' + (e && e.message ? e.message : 'no detail') + ')');
+  return;
+}
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.5)); // retina displays were rendering 4x the pixels — this was the #1 cause of choppy look/movement
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// ---- losing the GL context ----
+// Backgrounding a tab on mobile, a driver reset, or the OS reclaiming GPU memory all take the context
+// away. Unhandled, the canvas freezes on its last frame forever and animate() keeps calling render() on
+// a dead context: a black screen with no way back but a reload. preventDefault() is what makes the
+// context restorable at all — without it the browser never fires contextrestored — and three.js
+// re-uploads its own textures and buffers when it does. All we have to do is not draw in between.
+let ctxLost = false;
+const ctxMsg = document.createElement('div');
+ctxMsg.style.cssText = 'position:absolute;inset:0;display:none;align-items:center;justify-content:center;'
+  + 'background:rgba(8,14,22,0.88);color:#fff;font:15px sans-serif;text-align:center;padding:2em;z-index:9';
+ctxMsg.textContent = 'Graphics context lost — waiting for the GPU to come back…';
+document.body.appendChild(ctxMsg);
+renderer.domElement.addEventListener('webglcontextlost', e=>{
+  e.preventDefault();
+  ctxLost = true;
+  ctxMsg.style.display = 'flex';
+}, false);
+renderer.domElement.addEventListener('webglcontextrestored', ()=>{
+  ctxLost = false;
+  ctxMsg.style.display = 'none';
+}, false);
 
 // ---- one global dial for how hot the whole game reads ----
 // Three lights stack on every outdoor map (hemi 0.85 + sun 0.95 + fill 0.25), on top of voxel textures
@@ -1892,8 +1961,17 @@ function sniperTower(x,z,size,height,wallColor,rampDir){
 
   // one collider for the whole footprint, with roofY so the deck stays walkable. The old version placed a
   // collider per wall and left the interior open, which a fast diagonal move could slip into.
+  //
+  // The plateau has to cover that SAME footprint, not the shaft's. The cornice above carries the deck
+  // 0.35 out past the shaft on every side (see the two corbel courses and the deck block), and the
+  // plateau used `half` — the shaft — so the outer 0.35 of visible deck was floor you could see, walk
+  // onto, and not stand on. The roof rule skips this collider only where the terrain already reads as
+  // its roof, so that rim read as solid rock with a man buried in it, and resolveStep() ejected him
+  // along the box's shortest axis out: off the tower, sideways, from seven units up. Deck mesh,
+  // collider and plateau are one rectangle now, which is what the comment above always claimed.
+  const deck = half + 0.35;
   addBox(x, z, size+0.7, size+0.7, height);
-  heightZoneTarget.push({type:'plateau', x1:x-half,z1:z-half,x2:x+half,z2:z+half, y:height});
+  heightZoneTarget.push({type:'plateau', x1:x-deck,z1:z-deck,x2:x+deck,z2:z+deck, y:height});
 
   // ---- exterior staircase up one side (rampDir: 'n'|'s'|'e'|'w' — which face it climbs) ----
   const steps=Math.max(6,Math.round(height/0.45));
@@ -7607,7 +7685,11 @@ heightZoneTarget = heightZonesAztec;
   });
   const TM_TOP = ty;                                   // 12.4
   lb(12.6, 0.32, 9.0, plaster, TM_X, TM_TOP+0.10, TM_Z);   // the summit deck's own paving, bedded in
-  heightZoneTarget.push({type:'plateau', x1:TM_X-5.9, z1:TM_Z-4.2, x2:TM_X+5.9, z2:TM_Z+4.2, y:TM_TOP});
+  // One pair of half-extents for the deck, read by the plateau here AND by the collider split below, so
+  // the two cannot drift apart. Where they drift you get thrown off the summit — see the note there.
+  const TM_DECK_HW = 5.9, TM_DECK_HD = 4.2;
+  heightZoneTarget.push({type:'plateau', x1:TM_X-TM_DECK_HW, z1:TM_Z-TM_DECK_HD,
+                         x2:TM_X+TM_DECK_HW, z2:TM_Z+TM_DECK_HD, y:TM_TOP});
 
   // ---- the double stair, running SOUTH off the deck and down into the precinct ----
   const ST_Z0 = TM_Z+4.2, ST_Z1 = TM_Z+13.8;           // from the deck edge out to the precinct floor
@@ -7619,7 +7701,19 @@ heightZoneTarget = heightZonesAztec;
   // near 12.4, so the box slammed shut a third of the way to the top. An invisible wall on a stair
   // you can see continuing, and a shove out of it that could drop you inside the pyramid. Three
   // boxes instead, leaving the stair corridor open the whole way down.
-  addBox(TM_X, (TM_Z-10 + ST_Z0)/2, 26, ST_Z0-(TM_Z-10), TM_TOP);        // everything north of the stair
+  // ...and NOT across its own summit deck either, for the same reason one step further up. A roofY box
+  // is skipped only where the terrain already reads as that roof, which is exactly the deck plateau and
+  // not one centimetre more. Covering the deck with this box meant that stepping off the plateau's west
+  // edge — still 7 units deep inside a 26x14 footprint — counted as buried, and resolveStep() ejects
+  // along the box's SHORTEST way out, which from up there is the pyramid's north face six units behind
+  // you. You left the deck sideways and landed off the back of the temple.
+  // So the deck gets left open the way the stair is, and the three pieces below ring it. Stepping off
+  // any edge now meets the near face of the piece beside it and puts you back on the deck, which is what
+  // the Great Pyramid in La Venta already does correctly.
+  const TM_N = TM_Z-10, TM_HW = 13;
+  addBox(TM_X, (TM_N + TM_Z-TM_DECK_HD)/2, TM_HW*2, (TM_Z-TM_DECK_HD)-TM_N, TM_TOP);   // north of the deck
+  [-1,1].forEach(sd=> addBox(TM_X + sd*(TM_DECK_HW+TM_HW)/2, TM_Z,
+                             TM_HW-TM_DECK_HW, TM_DECK_HD*2, TM_TOP));                 // beside the deck
   [-1,1].forEach(sd=> addBox(TM_X + sd*(ST_HW+13)/2, (ST_Z0 + TM_Z+10)/2,
                              13-ST_HW, (TM_Z+10)-ST_Z0, TM_TOP));        // the flanks either side of it
   // The central balustrade is a real wall down the middle, and it has to be: the two ramp zones stop
@@ -10076,6 +10170,10 @@ const XY_WALL_X0 = -26, XY_WALL_X1 = 26;        // how far the wall runs, east a
 const XY_BREACH_X0 = 8.5, XY_BREACH_X1 = 15.5;
 let xiangyangBreached = false;
 let xyBreachWall = null, xyBreachRubble = null, xyBreachCollider = null, xyBreachZone = null;
+// The walk across the top of the breach bay, and the leash rectangle that goes with it. Both live only
+// while the bay is WHOLE, which is why they are held here rather than pushed once at build time: when
+// the bay comes down there is no longer anything up there to stand on.
+let xyBreachWalk = null, xyBreachLeash = null;
 let xyGateShut = false, xyGateDoor = null, xyGateCollider = null;
 let xyGateLeaves = [], xyGateOpenColliders = [];
 let xyGateSwing = 1, xyGateSnapNext = false;   // 0 = shut across the passage, 1 = swung fully open
@@ -10202,10 +10300,21 @@ heightZoneTarget = heightZonesXiangyang;
       xb(w-0.05, 0.22, XY_WALL_T-0.5, stoneM, cx, XY_WALL_H+0.11, XY_WALL_Z);
       addBox(cx, XY_WALL_Z, w, XY_WALL_T, XY_WALL_H);
       if(!skipZone){
-        const zn = {type:'plateau', x1:x0, z1:XY_WALL_Z-XY_WALL_T/2+0.25,
-                    x2:x1, z2:XY_WALL_Z+XY_WALL_T/2-0.25, y:XY_WALL_H};
-        heightZoneTarget.push(zn);
-        xyWalkRects.push(zn);        // the same rectangle the leash in xiangyangTick() clamps to
+        // TWO rectangles, deliberately, where this used to push one object into both lists.
+        //
+        // The plateau is what the ENGINE stands you on, and it has to match the collider above it
+        // exactly. Inset by 0.25 it left a lip of wall-top that the roof rule did not cover, so
+        // anyone who reached it counted as buried in the wall and resolveStep() fired them off the
+        // parapet sideways — 0.7 of a unit, from 5.4 up. That is the whole of the wall wave: a
+        // garrison that walks itself off its own rampart in under a second, and a player who cannot
+        // stand at the edge to shoot over it.
+        heightZoneTarget.push({type:'plateau', x1:x0, z1:XY_WALL_Z-XY_WALL_T/2,
+                               x2:x1, z2:XY_WALL_Z+XY_WALL_T/2, y:XY_WALL_H});
+        // The leash rectangle keeps the 0.25 inset it always had. That one is about DISCIPLINE, not
+        // physics: it is where xiangyangTick() holds the garrison so they stand on the walk rather
+        // than in the crenellations. The player is not leashed and can walk to the true edge.
+        xyWalkRects.push({x1:x0, z1:XY_WALL_Z-XY_WALL_T/2+0.25,
+                          x2:x1, z2:XY_WALL_Z+XY_WALL_T/2-0.25, y:XY_WALL_H});
       }
       // crenellations along the outer lip: merlon, gap, merlon. The gaps are what the garrison shoots
       // through, so they are wide enough to read as openings rather than as a dotted line.
@@ -10282,6 +10391,17 @@ heightZoneTarget = heightZonesXiangyang;
       // the collider that seals the bay while it is whole, and is spliced out when it is not
       xyBreachCollider = {x1:x0, z1:XY_WALL_Z-XY_WALL_T/2, x2:x1, z2:XY_WALL_Z+XY_WALL_T/2, roofY:XY_WALL_H};
       xiangyangColliders.push(xyBreachCollider);
+      // ...and the rampart ACROSS it, for as long as it is whole. That collider carries roofY, which is
+      // the engine's word for "you may stand on this" — but the bay laid its walk stone like every other
+      // bay and never registered a plateau to match, so the walk was severed here: a run of paving you
+      // could see, could not stand on, and got fired off the wall for touching. The wall is whole for the
+      // first two waves, and the second of those is fought up here.
+      xyBreachWalk  = {type:'plateau', x1:x0, z1:XY_WALL_Z-XY_WALL_T/2,
+                       x2:x1, z2:XY_WALL_Z+XY_WALL_T/2, y:XY_WALL_H};
+      xyBreachLeash = {x1:x0, z1:XY_WALL_Z-XY_WALL_T/2+0.25,
+                       x2:x1, z2:XY_WALL_Z+XY_WALL_T/2-0.25, y:XY_WALL_H};
+      heightZoneTarget.push(xyBreachWalk);
+      xyWalkRects.push(xyBreachLeash);
     })();
 
     // ---- the gate tower ----
@@ -10692,6 +10812,14 @@ function xiangyangSetBreach(open){
   const ci = xiangyangColliders.indexOf(xyBreachCollider);
   if(open){ if(ci >= 0) xiangyangColliders.splice(ci,1); }
   else if(ci < 0){ xiangyangColliders.push(xyBreachCollider); }
+  // The walk over the bay goes with the bay. It is the exact inverse of the rubble ramps below: whole
+  // means a rampart across the top and no way through; breached means a way through and nothing on top.
+  const wi = heightZonesXiangyang.indexOf(xyBreachWalk);
+  if(open){ if(wi >= 0) heightZonesXiangyang.splice(wi,1); }
+  else if(wi < 0){ heightZonesXiangyang.push(xyBreachWalk); }
+  const li = xyWalkRects.indexOf(xyBreachLeash);
+  if(open){ if(li >= 0) xyWalkRects.splice(li,1); }
+  else if(li < 0){ xyWalkRects.push(xyBreachLeash); }
   xyBreachZone.forEach(zn=>{
     const zi = heightZonesXiangyang.indexOf(zn);
     if(open){ if(zi < 0) heightZonesXiangyang.push(zn); }
@@ -11813,7 +11941,11 @@ function makeVoxelBot(color, weaponType, skinName){
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.56,0.66,0.32), voxMat(armorDark,{noise:12})); torso.position.y=1.08; g.add(torso);
   const chestPlate = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.42,0.36), voxMat(armor,{noise:16,pattern:'plate'})); chestPlate.position.y=1.195; g.add(chestPlate);   // 1.195: at 1.2 its top face landed on exactly the torso's
   const belt = new THREE.Mesh(new THREE.BoxGeometry(0.58,0.12,0.34), voxMat(0x2b2b2b,{noise:8})); belt.position.y=0.82; g.add(belt);
-  const padGeo = new THREE.BoxGeometry(0.18,0.18,0.36); const padMat = voxMat(armor,{noise:10,pattern:'plate'});
+  // 0.39 deep, not the chest plate's 0.36: a pauldron sits PROUD of the breastplate, and at an equal
+  // depth its front and back faces were the same two planes as the plate's, over the whole width of the
+  // shoulder. The line above already moved this plate off the torso's top face for exactly this reason
+  // — 1.195 rather than 1.2 — and the z it shares with the pads is the same fault seen end-on.
+  const padGeo = new THREE.BoxGeometry(0.18,0.18,0.39); const padMat = voxMat(armor,{noise:10,pattern:'plate'});
   const padL = new THREE.Mesh(padGeo, padMat); padL.position.set(-0.38,1.4,0); g.add(padL);
   const padR = new THREE.Mesh(padGeo, padMat); padR.position.set(0.38,1.4,0); g.add(padR);
   if(cfg.metal){ const cl=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.05,0.02),new THREE.MeshBasicMaterial({color:cfg.glow,fog:false})); cl.position.set(0,1.22,0.19); g.add(cl); }
@@ -17218,8 +17350,13 @@ function makeKhopesh(){
   eyePlane.position.set(0,0.0,0.076); g.add(eyePlane);
   const pommelCollar=new THREE.Mesh(new THREE.CylinderGeometry(0.037,0.045,0.020,8), goldDeep); pommelCollar.position.set(0,0.028,0.04); g.add(pommelCollar);
   // ribbed leather-wrapped grip: stacked matte segments alternating tones, not shiny gold
+  // 0.040 tall on a 0.040 pitch, so the segments BUTT rather than lap. At 0.042 each one ran 2mm into
+  // its neighbour, and since every segment is turned to the same radius that lap put two identical
+  // cylindrical surfaces in the same place — not near each other, in the same place, which is the one
+  // case the depth buffer cannot resolve at any distance. The grip reads identically; the seam between
+  // two tones is where it always was.
   for(let i=0;i<5;i++){
-    const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.042,8), i%2?leatherDark:leatherLight);
+    const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.040,8), i%2?leatherDark:leatherLight);
     seg.position.set(0,0.04+i*0.04,0.04); g.add(seg);
     if(i<4){ const wire=new THREE.Mesh(new THREE.CylinderGeometry(0.0335,0.0335,0.007,8), goldDeep); wire.position.set(0,0.06+i*0.04,0.04); g.add(wire); }
   }
@@ -18229,12 +18366,32 @@ function makeDaneAxe(){
   }
   // the bearded hook — the lower horn dropping below and behind the edge, the feature that names the axe
   ab(0.052,0.10,0.034, steel, 0,0.345,0.115);
-  ab(0.040,0.075,0.028, steel, 0,0.285,0.155);
-  // the edge itself: a bright continuous bevel standing proud of the whole crescent's front
+  // 0.145, not 0.155: the hook's root ends at z=0.132 and this tip began at 0.141, so the beard was a
+  // detached chip sitting 9mm off the horn it hangs from.
+  ab(0.040,0.075,0.028, steel, 0,0.285,0.145);
+  // the edge itself: a bright continuous bevel standing proud of the whole crescent's front.
+  //
+  // Measured off the face the slice ACTUALLY presents, not off `0.035 + reach`. That expression is
+  // where the front would be if each slice ran `reach` deep; it does not — the slice is `thick` deep
+  // and centred on 0.035 + reach/2, so its face sits half a reach nearer than this assumed. Placed
+  // out past the end of the blade, three of these bevels touched no part of the axe at all and hung
+  // in the air beside the head, and near the horns — where `reach` changes fastest from slice to
+  // slice — the horn slice they should have been anchoring floated off with them. Six shards on a
+  // weapon that is on screen every frame you carry it.
   for(let i=0;i<N;i++){
     const u=i/(N-1), s=Math.sin(u*Math.PI);
     const y=0.78-u*0.40, reach=0.055+s*0.150;
-    ab(0.020, 0.042, (i%2?0.020:0.026), silver, 0, y, 0.035 + reach + 0.008);
+    const thick=(i%2 ? 0.030 : 0.042)*(0.45+0.55*s);   // the same slice thickness the loop above lays down
+    // 0.012 x 0.030, not 0.020 x 0.042. A bevel has to be NARROWER than the blade it is sharpening on
+    // both axes or its faces are the blade's faces: at 0.042 it matched the slice height exactly, top
+    // and bottom, and 0.020 crossed `thick` somewhere along the crescent so the sides met too. That
+    // cost nothing while the bevels floated out in space — nothing can fight for pixels with geometry
+    // it does not touch — and would have cost 36 new fighting faces the moment they were seated.
+    // 0.012 clears even the thinnest slice (0.0135 at the horns), so the silver always sits proud of
+    // steel rather than flush with it. The height is 0.030 rather than 0.034 for the same reason one
+    // step finer: centred in a 0.042 slice, 0.034 leaves 0.004 of step top and bottom, and 0.004 is
+    // inside the 0.005 at which two faces start trading pixels. 0.030 leaves 0.006 and reads the same.
+    ab(0.012, 0.030, (i%2?0.020:0.026), silver, 0, y, 0.035 + reach/2 + thick/2 + 0.008);
   }
   // runic inlay worked into the flat of the blade, in silver wire — the one decorative note
   for(let i=0;i<4;i++) ab(0.014,0.030,0.008, silver, 0, 0.66-i*0.055, 0.115);
@@ -18361,7 +18518,10 @@ function makeHunnishBow(){
   // At 0.62 it stood 170% of the screen's height dead in the middle of the view.
   g.scale.setScalar(0.42);
   g.rotation.z = 0.30; g.rotation.y = 0.10;
-  g.userData={muzzleZ:-0.48,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.36),recoil:0.16,name:'Hunnish Bow',
+  // -0.75, not -0.48: the nocked arrow's head is out at z=-0.736 and -0.48 is halfway back along its
+  // own shaft, so every shot started inside the arrow it was supposedly loosing. Same fault the Naft
+  // Pot and the Tecpatl were both corrected for — the muzzle goes past the point, not behind it.
+  g.userData={muzzleZ:-0.75,muzzleY:0,pos:new THREE.Vector3(0.22,-0.22,-0.36),recoil:0.16,name:'Hunnish Bow',
     damage:70, fireRate:0.30, auto:false, spread:0.010, tracer:0xd8d0c0, scoped:true, scopeFov:48,
     magSize:8, ammo:8, reloadTime:1.6, reloading:false, reloadT:0, sfx:'bowLoose',
     // ---- the charge. chargeTime is how long a FULL draw takes; a shot loosed early scales between
@@ -18428,7 +18588,9 @@ function makeThrowingSeax(){
   });
   sb(0.20,0.05,0.09, leather, 0,-0.20,0.03);         // the belt strip they are drawn from
   for(let i=0;i<4;i++) sb(0.022,0.062,0.03, leather, -0.066+i*0.044,-0.205,0.062);  // its retaining loops
-  g.userData={muzzleZ:-0.30,muzzleY:0,pos:new THREE.Vector3(0.23,-0.26,-0.38),recoil:0.06,name:'Throwing Seax',
+  // -0.36, not -0.30: the blade's point is at z=-0.351, so the thrown seax spawned 5cm back inside its
+  // own blade. Out past the point, on the same rule as the Naft Pot and the Tecpatl.
+  g.userData={muzzleZ:-0.36,muzzleY:0,pos:new THREE.Vector3(0.23,-0.26,-0.38),recoil:0.06,name:'Throwing Seax',
     damage:46, fireRate:0.13, auto:true, spread:0.020, tracer:0xd0d8e0, sfx:'knifeThrow',
     magSize:14, ammo:14, reloadTime:1.5, reloading:false, reloadT:0,
     // the close-range slash, on the same dual-mode mechanic the Atlatl uses: inside hybridRange the click
@@ -18631,6 +18793,28 @@ function makeRepeatingCrossbow(){
   bh.rotation.x=-Math.PI/2; bh.position.set(0,0.068,-0.41); g.add(bh);
   part(g,0.072,0.052,0.088, steelDk, 0,0.044,-0.015);      // the nut housing
 
+  // ---- the wangshan (望山): the graduated rear sight, and the reason this weapon can be aimed ----
+  // A Han and Song crossbow carried a bronze sight standing off the back of the stock, notched so the
+  // shooter could hold over at range. It goes at z=0.19 — behind the magazine, which ends at 0.10, and
+  // under the rocking lever, whose arm swings through y≈0.17 and up. Two uprights either side of the
+  // bolt groove with a bar across them: the notch is the gap, which is how the real ones read.
+  //
+  // Every piece here is sized so no face of it lands on a face of anything it touches — the uprights
+  // sink 4mm into the comb rather than sitting on it, and the bar is cut wider and deeper than the
+  // uprights it spans. This model already carries 39 fighting faces; a new part on it should not add
+  // a fortieth.
+  // ONE plate, which is what a wangshan is — not two posts and a bar. The pair version had to thread a
+  // gap between the bolt groove at x±0.013 and the stock's own sides at x±0.031, and there is no post
+  // thickness that clears both by the 5mm at which faces stop trading pixels; it ended up 3mm inside
+  // the stock on each side. A single blade standing ON the groove has neither problem: 0.040 wide
+  // clears the groove by 7mm, the stock by 11mm, and it starts at y=0.050, a millimetre above the
+  // stock's top face, so the two never meet at all.
+  part(g,0.040,0.070,0.014, brass, 0,0.085,0.19);
+  // and the bead at the muzzle end that it lines up against. Seated 10mm into the nose block, not the
+  // 2mm it first had: an overlap that thin is under the connectivity sampler's own step, so the bead
+  // read as a bronze speck floating above the stock — the exact fault just cleaned off the Dane Axe.
+  part(g,0.010,0.026,0.010, brass, 0,0.038,-0.47);
+
   // ---- the lath: three chained segments per arm, each placed along the PREVIOUS segment's own rotated
   // direction. A naive linear x-step with a separately applied rotation renders as disconnected shards —
   // this file has hit that bug on the Qaws, the Saif and the bow limbs, and it is written down each time.
@@ -18669,6 +18853,16 @@ function makeRepeatingCrossbow(){
     // bolts rather than one heavy one, which is the only ranged FEEL this game does not already have:
     // every other bow, sling and gun in it fires one projectile per click.
     damage:34, fireRate:0.11, auto:true, spread:0.028, tracer:0xd8d0c0,
+    // Sighted, on the engine's own scope (the Bow, Sling, Blowgun and Hunnish Bow all use it). 50 is
+    // the loosest zoom in the game, the Sling's — this is the least precise thing you can shoulder and
+    // the sight should not pretend otherwise.
+    //
+    // scopeSpread is the part that matters. At 0.028 this weapon has the widest cone in the game, on
+    // purpose, and a zoom on its own would only let you watch the bolts miss in more detail — magnified
+    // scatter is not aim. Steadied to a third of that while the sight is up, it becomes two weapons: a
+    // wall of bolts from the hip, and aimed bursts down the wangshan. Nothing else changes — 12 bolts,
+    // the same rate, the same soft hit.
+    scoped:true, scopeFov:50, scopeSpread:0.36,
     magSize:12, ammo:12, reloadTime:1.7, reloading:false, reloadT:0};
   return g;
 }
@@ -19666,21 +19860,21 @@ function spendScore(n){
 }
 
 // ---- destinations ----
-// One era per country (Egypt is the exception — it is the campaign you played to get here). Nothing but
-// Egypt is built yet, so every other entry is priced and listed but not travellable; `ready:false` is the
-// single flag that gates that. Adding a country later means flipping ready and pointing `go` at its
-// enter*World() function — no UI work.
+// One era per country (Egypt is the exception — it is the campaign you played to get here). Every entry
+// here is built and travellable: there used to be a `ready` flag that listed unbuilt countries at a price
+// nobody could pay, and a "— COMING SOON —" state in destState() to render them, but the booth only ever
+// sells what exists now. A country that is not finished does not get a card until it is.
 // China and Japan are ONE destination, not two: Kublai Khan's Yuan fleet launched from China to invade
 // Kyushu, so the arc runs three waves in Yuan China, then the sea crossing, then a single samurai wave on
 // the Japanese shore. That crossing is the same mid-arc map swap Egypt already does three times.
 const DESTINATIONS = [
-  {flag:'🇪🇬', name:'Egypt',         era:'Pharaohs to Mamluks · the road so far', price:0,  ready:true, done:true,
+  {flag:'🇪🇬', name:'Egypt',         era:'Pharaohs to Mamluks · the road so far', price:0,  done:true,
    lon: 31, lat: 27},
   // The first destination actually built. La Venta is Olmec, not Aztec — the Olmec are the older
   // civilisation the Aztec inherited from, and its colossal heads and earthen pyramid are far more
   // distinctive to build than another stepped-stone city.
   // Two maps on one ticket: the Olmec basin, then Aztec Tenochtitlan. See MEXICO_LEGS.
-  {flag:'🗿', name:'Mexico',        era:'Olmec La Venta to Tenochtitlan · 1200 BC–1521', price:50, ready:true,
+  {flag:'🗿', name:'Mexico',        era:'Olmec La Venta to Tenochtitlan · 1200 BC–1521', price:50,
    lon:-94, lat: 18,
    // legs/homeHub/homeBanner also live here (not just inside go()) so the admin wave-jump panel can list
    // and jump to this destination from anywhere, without needing to actually buy passage first.
@@ -19696,7 +19890,7 @@ const DESTINATIONS = [
   // market up the Volkhov, exactly the way clearing Tenochtitlan lands them in the Aztec Market. That is
   // also the hub that sells China: the silk and the weighed silver on its quay came up the Volga road,
   // and the trip bought here goes back down it.
-  {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka and the fjord, 800–1050', price:60, ready:true,
+  {flag:'🛡️', name:'Sweden',        era:'Viking Age · Birka and the fjord, 800–1050', price:60,
    lon: 17, lat: 60,
    legs:SWEDEN_LEGS, homeHub:enterLadogaMarketHub,
    homeBanner:'⚓ Aldeigjuborg — you make port, and the road east starts on this quay',
@@ -19709,7 +19903,7 @@ const DESTINATIONS = [
   // crossing to Japan that completes this trip later, the same way Sweden was once sold from the Aztec
   // Market before the Fjord or Uppsala existed. Not `& Japan` in the name yet: that waits until the
   // trip actually goes there.
-  {flag:'🐉', name:'China',          era:'Yuan China · 1267–1279',       price:70, ready:true,
+  {flag:'🐉', name:'China',          era:'Yuan China · 1267–1279',       price:70,
    lon:116, lat: 39, leg:{lon:133, lat:33},
    legs:CHINA_LEGS, homeBanner:'🏠 Home in Cairo — and the delta is quiet behind you',
    go(){ travelTo({name:'China', legs:CHINA_LEGS,
@@ -19908,7 +20102,6 @@ function updateBoothMarker(){
 
 function destState(d){
   if(d.done) return {cls:'done', label:'✓ COMPLETED', note:'You have already walked this road.'};
-  if(!d.ready) return {cls:'soon', label:'— COMING SOON —', note:'Not yet built. Passage cannot be sold.'};
   if(!canAfford(d.price)) return {cls:'short', label:'⭐ ' + d.price,
     note:'Short by ' + (d.price - balance()) + ' ⭐. Come back with more.'};
   return {cls:'buyable', label:'⭐ ' + d.price, note:'Click to buy passage.'};
@@ -19956,7 +20149,7 @@ function renderBooth(){
   });
 }
 function buyTicket(d){
-  if(!d.ready || d.done || !spendScore(d.price)) return;
+  if(d.done || !spendScore(d.price)) return;
   closeBooth();
   setBanner('🎟 Passage bought — ' + d.name);
   if(typeof d.go === 'function') d.go();
@@ -19990,6 +20183,14 @@ function advanceTripLeg(){
     return;
   }
   tripCleared = true;
+  // ...and the card in the booth remembers it. `done` was read in three places (destState's ✓ COMPLETED,
+  // the pin label, buyTicket's guard) and written in none, so only Egypt — which carries done:true in the
+  // literal — ever showed as walked. Every other road stayed for sale at full price after you had cleared
+  // it, and buying it again started the trip over.
+  // Matched by name rather than by identity because `tripDest` is the object literal each go() builds and
+  // hands to travelTo(), not the DESTINATIONS entry it was built from.
+  const card = DESTINATIONS.find(d => d.name === tripDest.name);
+  if(card) card.done = true;
   setTripHUD();
   pending='triphome'; betweenTimer=4.6;
 }
@@ -21531,7 +21732,17 @@ function fire(){
   muzzleTimer = 0.05;
   // shot direction from camera center + small spread
   camera.getWorldDirection(_fwd);
-  if(w.spread){ _fwd.x += (Math.sin(now*97.1)%1)*w.spread; _fwd.y += (Math.sin(now*57.7)%1)*w.spread; _fwd.normalize(); }
+  // `scopeSpread` is a multiplier a weapon may carry to shoot tighter while it is scoped — applied
+  // HERE, at the one point spread is ever read, rather than by writing w.spread on the way into the
+  // scope and restoring it on the way out. Written, it would leak: selectWeapon() only force-unscopes
+  // when the weapon you switch TO has no scope, so going from one scoped weapon straight to another
+  // never passes through setScope(false), and a narrowed spread would have stayed narrowed for the
+  // rest of the run. Derived per shot, there is no state to leave behind — across a weapon switch, a
+  // death, or a map change alike.
+  if(w.spread){
+    const sp = w.spread * (scoped && w.scopeSpread ? w.scopeSpread : 1);
+    _fwd.x += (Math.sin(now*97.1)%1)*sp; _fwd.y += (Math.sin(now*57.7)%1)*sp; _fwd.normalize();
+  }
   const origin = camera.position.clone();
   const hit = firstHit(origin, _fwd, 300);
   const mw = new THREE.Vector3(); muzzle.getWorldPosition(mw);
@@ -21912,6 +22123,9 @@ ground.castShadow = false;
 const clock = new THREE.Clock();
 function animate(){
   requestAnimationFrame(animate);
+  // The rAF chain stays alive through a context loss so play resumes by itself on restore; we just do
+  // not touch the dead context, and we swallow the delta that built up while it was gone.
+  if(ctxLost){ clock.getDelta(); return; }
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = performance.now()*0.001;
   // Re-derived from the authored colours every frame rather than hooked onto each of the fifteen enter*()
