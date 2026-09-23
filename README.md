@@ -22,7 +22,7 @@ desktop build in [`electron/`](electron/) vendors it and runs fully offline.)
 - **WASD** — move, **Space** — jump
 - **Mouse** — look (click to lock the pointer)
 - **Click** — shoot, **right-click** — scope where the weapon has one
-- **1 / 2 / 3 / 4** or **mouse wheel** — switch weapon, **F** — reload
+- **1 / 2 / 3 / 4** or **mouse wheel** — switch weapon, **R** — reload
 - **E** — open the travel booth when you are standing at it
 - **P** or **Esc** — pause
 

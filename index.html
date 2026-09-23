@@ -101,7 +101,7 @@
   #scopeoverlay::before{width:2px;height:100%;transform:translate(-50%,-50%)}
   #scopeoverlay::after{width:100%;height:2px;transform:translate(-50%,-50%)}
   #scopering{position:absolute;top:50%;left:50%;width:29vmin;height:29vmin;transform:translate(-50%,-50%);border-radius:50%;border:3px solid rgba(20,20,20,0.85);box-sizing:border-box}
-  #adsbtn{position:absolute;right:30px;bottom:172px;width:74px;height:74px;border-radius:50%;background:rgba(40,90,150,0.55);border:3px solid rgba(255,255,255,0.85);color:#fff;font-weight:800;font-size:12px;display:none;align-items:center;justify-content:center;pointer-events:auto;user-select:none;text-align:center}
+  #adsbtn{position:absolute;left:64px;bottom:186px;width:74px;height:74px;border-radius:50%;background:rgba(40,90,150,0.55);border:3px solid rgba(255,255,255,0.85);color:#fff;font-weight:800;font-size:12px;display:none;align-items:center;justify-content:center;pointer-events:auto;user-select:none;text-align:center}
   #adsbtn.show{display:flex}
   #adsbtn.active{background:rgba(80,160,255,0.85)}
   /* ---- interact prompt: sits just under the crosshair so it reads as "the thing you are looking at" ---- */
@@ -239,7 +239,7 @@
 </style>
 </head>
 <body>
-<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Space] jump · [F] reload · right-click or hold [Shift] to scope (bow/sling)</div>
+<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Space] jump · [R] reload · right-click or hold [Shift] to scope (bow/sling)</div>
 <div id="pausebtn" title="Pause">❚❚ PAUSE</div>
 <div id="pauseoverlay"><div id="pausetitle">PAUSED</div><button id="resumebtn">RESUME</button><div id="pausehint">Press P or Esc to resume</div></div>
 <div id="stats">🔫 <span id="weap">Rifle</span> &nbsp; ⭐ <span id="score">0</span> &nbsp; 🌊 Wave <span id="wave">1</span> &nbsp; 👾 <span id="enemies">0</span></div>
@@ -20900,7 +20900,7 @@ document.addEventListener('keydown', e => {
   // play — so findIndex always returned -1, and selectWeapon(-1) wrapped to weapons.length-1: the LAST
   // weapon in whatever loadout was active (the Naft Pot in Cairo), not a special weapon at all. Z is
   // intentionally a no-op now rather than a broken alias for "select weapon 3".
-  if (e.code==='KeyF' && player.alive) reloadWeapon(currentWeapon);
+  if (e.code==='KeyR' && player.alive) reloadWeapon(currentWeapon);
 });
 document.addEventListener('keyup', e => {
   keys[e.code]=false;
