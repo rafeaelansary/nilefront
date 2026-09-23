@@ -114,5 +114,11 @@ python3 tools/audit/chinacheck.py    # one destination, end to end
 
 ## Known gaps
 
-- No save: ⭐ and cleared destinations do not survive a reload.
 - No ending: clearing China returns you to Cairo. There is no completion state yet.
+
+## Not gaps
+
+- **No save, by design.** Progress lives in the session. Dying rolls you back to the start of
+  the current era and no further, keeps credit for bosses already beaten, respawns you on the
+  leg you died on if you were away on a trip, and never touches your banked ⭐ — so nothing is
+  lost inside a run. A reload starts a new one, the way an arcade cabinet does.
