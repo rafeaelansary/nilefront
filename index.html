@@ -75,7 +75,7 @@
   body:not(.playing) #mobile{ display:none !important; }
   #mobile{display:none;position:absolute;inset:0;z-index:5;pointer-events:none;touch-action:none}
   #mobile.on{display:block}
-  #stick{position:absolute;left:26px;bottom:26px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.4);pointer-events:auto}
+  #stick{position:absolute;left:26px;bottom:56px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.4);pointer-events:auto}
   #knob{position:absolute;left:45px;top:45px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.55);border:2px solid rgba(255,255,255,0.8)}
   #firebtn{position:absolute;right:30px;bottom:40px;width:120px;height:120px;border-radius:50%;background:rgba(220,40,40,0.55);border:3px solid rgba(255,255,255,0.85);color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;pointer-events:auto;user-select:none}
   #firebtn:active{background:rgba(255,80,80,0.8)}
@@ -101,7 +101,7 @@
   #scopeoverlay::before{width:2px;height:100%;transform:translate(-50%,-50%)}
   #scopeoverlay::after{width:100%;height:2px;transform:translate(-50%,-50%)}
   #scopering{position:absolute;top:50%;left:50%;width:29vmin;height:29vmin;transform:translate(-50%,-50%);border-radius:50%;border:3px solid rgba(20,20,20,0.85);box-sizing:border-box}
-  #adsbtn{position:absolute;left:64px;bottom:186px;width:74px;height:74px;border-radius:50%;background:rgba(40,90,150,0.55);border:3px solid rgba(255,255,255,0.85);color:#fff;font-weight:800;font-size:12px;display:none;align-items:center;justify-content:center;pointer-events:auto;user-select:none;text-align:center}
+  #adsbtn{position:absolute;left:64px;bottom:216px;width:74px;height:74px;border-radius:50%;background:rgba(40,90,150,0.55);border:3px solid rgba(255,255,255,0.85);color:#fff;font-weight:800;font-size:12px;display:none;align-items:center;justify-content:center;pointer-events:auto;user-select:none;text-align:center}
   #adsbtn.show{display:flex}
   #adsbtn.active{background:rgba(80,160,255,0.85)}
   /* ---- interact prompt: sits just under the crosshair so it reads as "the thing you are looking at" ---- */
@@ -20996,11 +20996,14 @@ if(isTouch && mobileEl) mobileEl.classList.add('on');
   }
   function endStick(){ moveId=null; moveVec.x=0; moveVec.z=0; knob.style.left='45px'; knob.style.top='45px'; }
 
-  // global touch routing for look-drag (any touch not on a control, on the right side)
+  // global touch routing for look-drag (any touch not on a control, on the right side).
+  // A melee weapon also swings on this touch: its range is too short for the FIRE button to matter, so
+  // any tap doubles as both the look-drag start and the swing, same as tapping FIRE would.
   document.addEventListener('touchstart', e=>{
     if(!touchPlaying || paused) return;
     for(const t of e.changedTouches){
-      if(t.target.closest('#stick')||t.target.closest('#firebtn')||t.target.closest('.wbtn')) continue;
+      if(t.target.closest('#stick')||t.target.closest('#firebtn')||t.target.closest('.wbtn')||t.target.closest('#adsbtn')) continue;
+      if(weapons[currentWeapon] && weapons[currentWeapon].userData.melee) fire();
       if(lookId===null){ lookId=t.identifier; lookX=t.clientX; lookY=t.clientY; }
     }
   }, {passive:false});
