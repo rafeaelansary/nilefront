@@ -4730,7 +4730,9 @@ heightZoneTarget = heightZonesGreek;
       const col=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.38,5.6,10), marbleTrim); col.position.set(x+cx,3,z-d/2-0.9); col.castShadow=true; scene.add(col);
       addBox(x+cx, z-d/2-0.9, 0.76, 0.76);
     }
-    const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.55,0.6,0.4), stuccoMat); pediment.position.set(x,6.2,z-d/2-0.9); scene.add(pediment);
+    // 6.05, not 6.2: the colonnade under it tops out at 5.8 and the pediment's underside was 5.9, so it
+    // floated a tenth of a unit clear of the columns it is supposed to rest on. It now beds 0.05 into them.
+    const pediment=new THREE.Mesh(new THREE.BoxGeometry(w*0.55,0.6,0.4), stuccoMat); pediment.position.set(x,6.05,z-d/2-0.9); scene.add(pediment);
     // Poseidon statue on its own plinth, out front
     // 1.6 out, not 3.2: at 3.2 the statue landed on the stoa's podium next door, and its collider
     // swallowed the stoa's northernmost inner column.
@@ -4763,7 +4765,9 @@ heightZoneTarget = heightZonesGreek;
     const shead=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), statueMat); shead.position.set(x,2.15,sz); scene.add(shead);
     const beard2=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.26,0.12), voxMat(0x8a8074,{noise:10})); beard2.position.set(x,1.98,sz+0.2); scene.add(beard2);
     const modius=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.22,0.28,8), voxMat(0xd8b040,{noise:10})); modius.position.set(x,2.5,sz); scene.add(modius);
-    const scepter=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,1.6,6), bronzeMat); scepter.position.set(x+0.42,1.5,sz); scene.add(scepter);
+    // x+0.32, not x+0.42: the robe is 0.6 wide, so at 0.42 the staff stood 0.09 clear of the statue and
+    // touched nothing — a bronze rod hovering beside a god.
+    const scepter=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,1.6,6), bronzeMat); scepter.position.set(x+0.32,1.5,sz); scene.add(scepter);
     addBox(x,z,1.6,1.6); addBox(x,sz,1.1,1.1);
   }
   altar(7,-20);
@@ -5647,7 +5651,15 @@ heightZoneTarget = heightZonesGreek;
     const x=Math.cos(a)*r, z=Math.sin(a)*r;
     if(z>6) continue;
     for(let k=0;k<3;k++){
-      far(1.5, 5+Math.sin((i+k)*2.7)*1.8, 1.5, farGreen, x+k*2.2-2.2, 2.7, z+Math.sin(i+k)*2);
+      // Planted by the BASE, not centred on a fixed y. The height varies 3.2..6.8 about a centre pinned
+      // at 2.7, so every tree shorter than 5.4 hung in the air — five of them across the far field, up to
+      // a metre off the ground. Deriving y from the height keeps every trunk in the soil whatever it
+      // rolls, and -0.2 buries the base rather than resting it exactly on y=0.
+      const th = 5+Math.sin((i+k)*2.7)*1.8;
+      // ...and the burial depth varies too. A flat -0.2 planted every trunk correctly but gave them all
+      // one shared underside, so any two clusters that overlap out here traded that plane instead.
+      far(1.5, th, 1.5, farGreen, x+k*2.2-2.2,
+          th/2-0.18-Math.abs(Math.sin((i+k)*4.1))*0.14, z+Math.sin(i+k)*2);
     }
   }
   // ---- boundary barrier. animate() hard-clamps the player to +/-29, and nothing marked that line, so you
@@ -5702,13 +5714,24 @@ heightZoneTarget = heightZonesGreek;
     function lump(x,z,seed){
       if(Math.sin(seed*12.9)>-0.1) return;                       // roughly 45% kept, so it reads ragged
       const h=0.45+Math.abs(Math.sin(seed*5.3))*0.7;
-      far(1.3+Math.sin(seed*3.1)*0.5, h, 1.2+Math.cos(seed*2.7)*0.45, soil, x, h/2-0.12, z);
+      // The mound's own footprint, kept in variables: the scrub below is offset from its centre and has
+      // to land ON it, which means the offset must be scaled to the mound rather than to a flat 0.9.
+      const lw=1.3+Math.sin(seed*3.1)*0.5, ld=1.2+Math.cos(seed*2.7)*0.45;
+      far(lw, h, ld, soil, x, h/2-0.12, z);
       if(Math.sin(seed*7.7)>0.3){
         const r=0.3+Math.abs(Math.cos(seed*4.1))*0.28;
         far(r*2, r*1.6, r*2, rubble, x+Math.sin(seed)*0.8, h*0.85, z+Math.cos(seed)*0.8);
       }
       if(Math.cos(seed*9.1)>0.55){
-        far(0.7, 0.6, 0.7, scrub, x-Math.cos(seed)*0.9, h*0.7, z+Math.sin(seed*2)*0.9);
+        // 0.44 across on offsets of lw/ld * 0.12, not 0.7 across on a flat 0.9. Two separate faults:
+        // the mound rolls as narrow as 0.75 deep, so a 0.9 offset put the tuft clean off the back of it,
+        // perched half a unit up on nothing — and at 0.7 across it was wide enough that its own sides
+        // could land on the mound's sides instead. These numbers are chosen so the tuft is strictly
+        // inside the mound's footprint for EVERY seed: half the tuft (0.22) plus the largest offset
+        // (lw*0.12) stays clear of the smallest half-width (lw/2) by more than the 6mm at which faces
+        // start trading pixels, and the same holds in z. Its height is left alone — dropping it to sit
+        // lower instead put its top face on the mound's top for any mound near h=0.6.
+        far(0.44, 0.6, 0.44, scrub, x-Math.cos(seed)*lw*0.12, h*0.7, z+Math.sin(seed*2)*ld*0.12);
       }
     }
     for(let z=-34;z<=17;z+=3.4){ lump(-34.4,z,z*1.7); lump(34.4,z,z*2.3+11); }  // west and east edges
