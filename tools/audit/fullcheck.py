@@ -156,8 +156,12 @@ def main():
           var cop  = globalThis.__coplanar(w, 1, xeps, xomin);
           var b    = globalThis.__modelBounds(w, 1);
           var ud   = w.userData || {};
+          // Split, the way audit.py's actor check already splits: coincident faces are the defect,
+          // near ones are candidates. See the note over the header below for why the line is here.
+          var exact = 0;
+          for(var q=0;q<cop.length;q++) if(cop[q].gap === 0) exact++;
           out.push({loadout:ln, name: ud.name || '?', meshes:b.count,
-                    orphans:conn.orphans.length, coplanar:cop.length,
+                    orphans:conn.orphans.length, coplanar:cop.length, exact:exact,
                     frontZ: Math.round(b.min.z*1000)/1000,
                     muzzleZ: ud.muzzleZ === undefined ? null : ud.muzzleZ,
                     melee: !!ud.melee});
@@ -167,22 +171,44 @@ def main():
     })
     """)
     weapons = json.loads(wfn(CONNECT_EPS, COPLANAR_EPS, HELD_OVERLAP_MIN))
-    hdr = f"{'weapon':16} {'loadout':18} {'meshes':>7} {'orphans':>8} {'z-fights':>9}  verdict"
+    # Two columns, and only the first one fails the run — the same policy audit.py states for actors
+    # ("drive the first column to zero; treat the second as a list of candidates"), applied here too.
+    #
+    # The reason the line sits at exactly zero rather than anywhere inside COPLANAR_EPS: a viewmodel is
+    # drawn 0.3-0.5 units from a camera whose near plane is 0.1, and depth precision there is enormous.
+    # One step of a 24-bit buffer at 0.4 units is 9.5e-8 units; even a 16-bit buffer resolves 2.4e-5. A
+    # pair held 0.001 apart is tens to tens of thousands of steps apart and cannot fight, at any of the
+    # scales these models are drawn at. A pair at 0.000 has nothing between it at any precision and
+    # always fights. There is no third case on a held weapon, so `near` is reported and not enforced.
+    #
+    # It is still worth reading. A part that ended up a hair off another is usually a part that was MEANT
+    # to be flush with it, and that is often a modelling mistake even when it does not shimmer. Use
+    # `python3 tools/audit/zfdetail.py --under=0.002` to see the closest of them.
+    #
+    # The ACTORS table above deliberately does NOT do this, and the difference is not an oversight. An
+    # actor is seen across a map, and precision falls off with the square of the distance: at 60 units a
+    # 0.005 gap is two depth steps, and by 120 units the buffer cannot resolve it at all and the pair
+    # really does fight. So for anything standing in the world, near-coplanar is a live defect and stays
+    # enforced. For something held 0.4 from the eye, it is not one. Same check, same epsilon, different
+    # verdict, because the distance the thing is drawn at is what decides.
+    hdr = (f"{'weapon':16} {'loadout':18} {'meshes':>7} {'orphans':>8} "
+           f"{'coincident':>11} {'near':>6}  verdict")
     print(hdr)
     print("-" * len(hdr))
     for w in weapons:
         bad = []
         if w["orphans"]:
             bad.append(f"{w['orphans']} FLOATING PARTS")
-        if w["coplanar"]:
-            bad.append(f"{w['coplanar']} Z-FIGHTS")
+        if w["exact"]:
+            bad.append(f"{w['exact']} COINCIDENT FACES")
         # a ranged weapon's tracer should not spawn inside its own model
         if not w["melee"] and w["muzzleZ"] is not None and w["muzzleZ"] > w["frontZ"] + 0.02:
             bad.append(f"MUZZLE INSIDE MODEL (muzzleZ {w['muzzleZ']} vs tip {w['frontZ']})")
         if bad:
             problems += 1
+        near = w["coplanar"] - w["exact"]
         print(f"{w['name']:16} {w['loadout'].replace('Weapons',''):18} {w['meshes']:>7} "
-              f"{w['orphans']:>8} {w['coplanar']:>9}  {'; '.join(bad) if bad else 'ok'}")
+              f"{w['orphans']:>8} {w['exact']:>11} {near:>6}  {'; '.join(bad) if bad else 'ok'}")
 
     # ------------------------------------------------------------------ maps
     print()

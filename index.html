@@ -17195,7 +17195,9 @@ function makeGrenadeLauncher(){
   const body=metalMatP(0x3a4a34,60,0x8a9a80), dark=metalMatP(0x1c211a,40), drumMat=metalMatP(0x2b3226,50,0x777);
   part(g,0.16,0.17,0.34,body,0,0,-0.1);            // stubby launcher body
   part(g,0.14,0.14,0.16,dark,0,0,-0.32);           // muzzle bell
-  const drum=part(g,0.16,0.16,0.16,drumMat,0,-0.02,0.08); drum.rotation.x=Math.PI/2; // revolving drum magazine
+  // 0.176 across, not 0.16: the launcher body is 0.16 wide too, so the drum's sides were the body's sides.
+  // A revolving magazine standing a little proud of the receiver is also what one actually looks like.
+  const drum=part(g,0.176,0.16,0.16,drumMat,0,-0.02,0.08); drum.rotation.x=Math.PI/2; // revolving drum magazine
   part(g,0.09,0.22,0.1,dark,0,-0.22,0.14).rotation.x=0.16; // grip
   part(g,0.08,0.16,0.3,dark,0,-0.14,0.32);         // stock
   part(g,0.04,0.05,0.05,metalMatP(0xe0a63a,50),0,0.1,-0.28); // sight
@@ -17344,7 +17346,9 @@ function makeKhopesh(){
   part(g,0.09,0.06,0.07,goldDeep,0,0.0,0.04);
   const eyePlane=new THREE.Mesh(new THREE.PlaneGeometry(0.08,0.08), new THREE.MeshBasicMaterial({map:eyeOfHorusTex(), transparent:true}));
   eyePlane.position.set(0,0.0,0.076); g.add(eyePlane);
-  const pommelCollar=new THREE.Mesh(new THREE.CylinderGeometry(0.037,0.045,0.020,8), goldDeep); pommelCollar.position.set(0,0.028,0.04); g.add(pommelCollar);
+  // 0.039 at the base, not 0.045: the pommel box below it is 0.09 across, so a collar turned to 0.045
+  // radius met it exactly on both sides — the widest pair of coincident faces on the hilt.
+  const pommelCollar=new THREE.Mesh(new THREE.CylinderGeometry(0.037,0.039,0.020,8), goldDeep); pommelCollar.position.set(0,0.028,0.04); g.add(pommelCollar);
   // ribbed leather-wrapped grip: stacked matte segments alternating tones, not shiny gold
   // 0.040 tall on a 0.040 pitch, so the segments BUTT rather than lap. At 0.042 each one ran 2mm into
   // its neighbour, and since every segment is turned to the same radius that lap put two identical
@@ -17399,8 +17403,17 @@ function makeKhopesh(){
     // A khopesh is sharpened on the OUTER edge of the curve only; the inner edge is a blunt back. That
     // asymmetry is what gives the blade a direction instead of reading as a symmetrical gold arc. Kept
     // inside the segment's own width so it cannot add a second set of protruding corners.
-    const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.30,0.118,segD+0.024), bronzeBack);
-    back.position.set(-b.w*0.33,0,0); seg.add(back);
+    // +0.020, not +0.024. The first segment's back came out 0.064 deep, and the grip cylinders are turned
+    // to 0.032 radius on the same z centre — so that back's two faces were the top grip segment's two
+    // faces, which the blade's lowest back reaches down far enough to meet. Stepping the offset down by
+    // 4mm moves all three depths off every half-extent the hilt uses. The back is still proud of its
+    // segment, by 0.010 a side rather than 0.012, which is not a difference the eye has to resolve.
+    const back=new THREE.Mesh(new THREE.BoxGeometry(b.w*0.30,0.118,segD+0.020), bronzeBack);
+    // Inset to 0.20w, not 0.33w. Keeping it inside the segment was right; keeping it inside by 0.02w was
+    // not. The blade is only 0.036-0.05 wide, so 0.02w is eight tenths of a millimetre — the back's outer
+    // face ran a hair inside the segment's own, down all eleven segments, which is a hair the depth buffer
+    // cannot see. At 0.20w the margin is 0.15w, over 5mm even on the narrowest segment.
+    back.position.set(-b.w*0.20,0,0); seg.add(back);
   });
   // point, carried on along the last segment's own direction so it meets the blade rather than floating
   const last=bladeCtrl[bladeCtrl.length-1];
@@ -17438,7 +17451,9 @@ function makeWasScepter(){
   [0.24,0.02,-0.30].forEach(z=>{ const ring=new THREE.Mesh(new THREE.CylinderGeometry(0.033,0.033,0.035,8), goldMat);
     ring.rotation.x=Math.PI/2; ring.position.set(0,0,z); g.add(ring); });
   // lapis inlay band down the middle section — colour against all that brown and gold
-  part(g,0.012,0.05,0.20,lapisMat,0,0.001,-0.10);
+  // 0.034 tall, not 0.05: an inlay is let INTO the shaft, so it must sit inside the shaft's own top and
+  // bottom. At 0.05 its underside was exactly the fore-section's underside, the length of the band.
+  part(g,0.012,0.034,0.20,lapisMat,0,0.001,-0.10);
 
   // ---- forked base: two prongs splaying back and apart, joined by a collar. This is the end that rests
   // on the ground when the sceptre is planted, and half of what identifies the object. ----
@@ -17467,7 +17482,10 @@ function makeWasScepter(){
   });
   // the channelled magic: a glowing core seated INSIDE the open jaw, plus a wisp ahead of it
   const core=new THREE.Mesh(new THREE.SphereGeometry(0.038,8,6),glowMat); core.position.set(0,-0.025,-0.60); g.add(core);
-  const wisp=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.09,6),glowMat); wisp.position.set(0,-0.035,-0.66); wisp.rotation.x=-Math.PI/2; g.add(wisp);
+  // 0.022, not 0.028: the snout tip it streams from is 0.055 across, so a 0.028 cone matched its sides to
+  // within half a millimetre. 0.022 also clears the 0.038 core behind it, and a wisp tapering ahead of the
+  // core is the right way round.
+  const wisp=new THREE.Mesh(new THREE.ConeGeometry(0.022,0.09,6),glowMat); wisp.position.set(0,-0.035,-0.66); wisp.rotation.x=-Math.PI/2; g.add(wisp);
   const emit=new THREE.PointLight(0x5fe8c9,0.6,2.4); emit.position.set(0,-0.03,-0.62); g.add(emit);
 
   g.userData={muzzleZ:-0.74,muzzleY:-0.035,pos:new THREE.Vector3(0.24,-0.24,-0.4),recoil:0.05,name:'Was Scepter',
@@ -17502,7 +17520,10 @@ function makeHarpoon(){
     lash.rotation.x=Math.PI/2; lash.position.set(0,0,-0.48+i*0.026); g.add(lash); }   // lashing at the socket
   const shank=new THREE.Mesh(new THREE.BoxGeometry(0.030,0.030,0.14), metalDark); shank.position.set(0,0,-0.64); g.add(shank);
   const blade=new THREE.Mesh(new THREE.BoxGeometry(0.075,0.022,0.18), metal); blade.position.set(0,0,-0.76); g.add(blade);
-  const point=new THREE.Mesh(new THREE.ConeGeometry(0.038,0.14,4), metal); point.position.set(0,0,-0.90); point.rotation.x=-Math.PI/2; g.add(point);
+  // 0.030, not 0.038: at 0.038 the cone's base was 0.076 across against the leaf blade's 0.075, so the two
+  // sides matched to half a millimetre — and it made the point fractionally WIDER than the blade it
+  // finishes, which is backwards. A leaf is widest at the leaf and tapers into the point.
+  const point=new THREE.Mesh(new THREE.ConeGeometry(0.030,0.14,4), metal); point.position.set(0,0,-0.90); point.rotation.x=-Math.PI/2; g.add(point);
   [-1,1].forEach(sd=>{
     // two barbs a side, angled back toward the shaft
     const b1=new THREE.Mesh(new THREE.ConeGeometry(0.024,0.11,4), metal);
@@ -17545,7 +17566,9 @@ function makeSling(){
   const leatherMat = voxMat(0x2a1c12,{noise:10});
   const stoneMat = metalMatP(0x8a8a86,40,0x555555);
 
-  part(g,0.06,0.2,0.07,woodDark,0,-0.1,0.1+Z);   // grip, near the hand
+  // 0.072 wide, not 0.06: the fork base above it is 0.06 too, so the two shared both side planes down the
+  // whole length they overlap. A hand-filling grip under a narrower fork is the right way round anyway.
+  part(g,0.072,0.2,0.07,woodDark,0,-0.1,0.1+Z);  // grip, near the hand
   part(g,0.06,0.12,0.06,woodDark,0,0.04,0.05+Z); // fork base, bridging the grip up to where the prongs split
 
   // two diverging prongs (dark wood + a lighter grain band + dark tip), and each prong's tip position computed
@@ -17741,7 +17764,10 @@ function makeGreekFire(){
     m.rotation.x=Math.PI/2; m.position.set(0,0,z); g.add(m); return m; };
   // ---- barrel: the pressure vessel, from the pump housing forward to the nozzle
   tube(0.062,0.062,0.46,-0.16,bronze);
-  [0.02,-0.14,-0.3].forEach(z=> tube(0.075,0.075,0.035,z,bright));   // reinforcing bands
+  // 0.081, not 0.075: the fuel drum slung underneath is turned to exactly 0.075 too, and the two overlap
+  // in y and z where the drum passes under the barrel — so band and drum presented the same pair of side
+  // planes, on two parts of quite different sizes that happened to share one radius.
+  [0.02,-0.14,-0.3].forEach(z=> tube(0.081,0.081,0.035,z,bright));   // reinforcing bands
   tube(0.052,0.078,0.12,-0.45,soot);                                  // flared nozzle, blackened by use
   tube(0.084,0.084,0.03,-0.505,bright);                               // its lip ring
   // stopcock: a valve body on top of the barrel with a lever you throw to open the fuel line
@@ -17770,8 +17796,12 @@ function makeGreekFire(){
   const pilot=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.11,6), new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false}));
   pilot.position.set(0,0.085,-0.5); g.add(pilot);
   const pilotCore=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.06,6), new THREE.MeshBasicMaterial({color:0xffe08a,fog:false}));
-  pilotCore.position.set(0,0.07,-0.5); g.add(pilotCore);
-  part(g,0.02,0.07,0.02,bright,0,0.03,-0.5);                          // the pilot's little standpipe
+  // -0.494 rather than -0.5 for the core and the standpipe both. At -0.5 the core's back face landed on
+  // the nozzle lip ring's back face, and the standpipe's two faces landed on the nozzle's front and the
+  // lip ring's back — three coincident pairs clustered at the muzzle, which is the brightest, closest
+  // and most-looked-at corner of the whole model. 6mm forward clears all three; the flame does not move.
+  pilotCore.position.set(0,0.07,-0.494); g.add(pilotCore);
+  part(g,0.02,0.07,0.02,bright,0,0.03,-0.494);                        // the pilot's little standpipe
   const L=new THREE.PointLight(0xff8a2a,1.0,1.6); L.position.set(0,0.09,-0.52); g.add(L);
   // muzzleZ moved out past the nozzle lip (-0.52); at -0.42 the jar spawned inside the weapon's own barrel.
   // Damage, splash, rate, magazine and reload are untouched.
@@ -17873,8 +17903,11 @@ function makePugio(){
   // Midrib and bevels stand clearly proud of the plates and of each other: at 0.036 and 0.030 against the
   // plates' 0.026 they were 0.005 and 0.002 apart, which is the flicker, not a raised detail.
   const midrib=new THREE.Mesh(new THREE.BoxGeometry(0.018,0.3,0.056), steelDark); midrib.position.y=0.36; g.add(midrib);
+  // Set in to 0.022, not 0.028: at 0.028 the bevel's outer edge landed on 0.036, which is exactly the
+  // half-width of the shoulder plate it runs across — a bevel ground into a blade cannot end on the
+  // blade's own edge, or the two are the same plane.
   [-1,1].forEach(sd=>{ const bev=new THREE.Mesh(new THREE.BoxGeometry(0.016,0.27,0.044), steelDark);
-    bev.position.set(sd*0.028,0.35,0); g.add(bev); });
+    bev.position.set(sd*0.022,0.35,0); g.add(bev); });
   // balance untouched
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.22,-0.24,-0.42),recoil:0.1,name:'Pugio',
     melee:true, range:1.6, damage:95, fireRate:0.22};
@@ -17902,7 +17935,9 @@ function makeCrossbow(){
   part(g,0.12,0.06,0.14,woodDark,0,0.005,-0.47);     // nose block — wide enough for the stirrup legs to actually meet it
   [-1,1].forEach(s=>{ part(g,0.006,0.05,0.34,bone,s*0.031,0.01,-0.02); }); // bone inlay panels down both sides
   // ---- rail groove + a bolt sitting in it ----
-  part(g,0.026,0.022,0.7,dark,0,0.052,-0.08);        // cut groove
+  // 0.69 at -0.074, not 0.70 at -0.08: a groove is cut INTO the tiller, so it must not end exactly where
+  // the tiller does. Both ran out at z=-0.43 and shared that front plane over the groove's full section.
+  part(g,0.026,0.022,0.69,dark,0,0.052,-0.074);      // cut groove
   part(g,0.016,0.016,0.4,woodDark,0,0.068,-0.26);    // bolt shaft
   const bhead=new THREE.Mesh(new THREE.ConeGeometry(0.019,0.075,4), iron); bhead.rotation.x=-1.5708; bhead.position.set(0,0.068,-0.48); g.add(bhead); // -0.48 so it meets the shaft, which ends at -0.46
   [-1,1].forEach(s=>{ const fl=new THREE.Mesh(new THREE.BoxGeometry(0.005,0.038,0.07), bone); fl.position.set(s*0.012,0.078,-0.09); fl.rotation.z=s*0.25; g.add(fl); }); // fletching
@@ -17938,9 +17973,14 @@ function makeCrossbow(){
   part(g,0.018,0.015,0.17,iron,0,-0.135,0.13);
   part(g,0.018,0.055,0.016,iron,0,-0.1,0.205);
   // ---- iron stirrup at the nose (foot goes through it to span the bow) — a very identifying crossbow cue ----
+  // The foot bar is a strap riveted ACROSS the front of the two legs, not a third piece milled flush into
+  // them. Built flush it was: same 0.116 span as the legs' outer faces, same 0.016 depth at the same z —
+  // which put its ends in the legs' own side planes and both its faces in their front and back planes, six
+  // pairs of coincident surfaces on a part that sits dead centre of the view. It now stops 6mm inside each
+  // leg and stands 6mm proud of them, still overlapping both by enough to read as one welded loop.
   part(g,0.016,0.11,0.016,iron,-0.05,-0.06,-0.5);
   part(g,0.016,0.11,0.016,iron, 0.05,-0.06,-0.5);
-  part(g,0.116,0.016,0.016,iron,0,-0.115,-0.5);
+  part(g,0.096,0.016,0.016,iron,0,-0.115,-0.494);
 
   g.userData={muzzleZ:-0.56,muzzleY:0.068,pos:new THREE.Vector3(0.24,-0.24,-0.4),recoil:0.2,name:'Qaws',
     damage:156, fireRate:1.3, auto:false, spread:0.002, tracer:0xd8d0c0,
@@ -17979,8 +18019,17 @@ function makeScimitar(){
     seg.position.set(0, by+dy*s.len/2, bz+dz*s.len/2);
     seg.rotation.x = -t;
     g.add(seg);
-    // bright edge strip along the cutting side, mounted just proud of the blade face
-    const edge=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.22,s.len,0.017), steel);
+    // bright edge strip along the cutting side, mounted just proud of the blade face.
+    //
+    // Run LONGER than the segment it rides, not equal to it. At exactly s.len the strip's two ends were
+    // the same two planes as the segment's own, over the whole width of the edge — seven segments, two
+    // faces each, fourteen pairs of surfaces with nothing at all between them in the depth buffer, which
+    // is the one case that flickers at every distance. Overrunning by 6mm at each end puts those ends
+    // inside the neighbouring segments instead, where nothing is coplanar with them, and it is the
+    // overrun rather than a shortening because consecutive strips have to meet: trimmed back, the
+    // cutting edge would have read as a dashed line down the blade. Consecutive strips now overlap by
+    // 12mm, share a material, and the joint does not show.
+    const edge=new THREE.Mesh(new THREE.BoxGeometry(s.w*0.22,s.len+0.012,0.017), steel);
     edge.position.set(s.w*0.36, by+dy*s.len/2, bz+dz*s.len/2);
     edge.rotation.x = -t; g.add(edge);
     by += dy*s.len; bz += dz*s.len; t += 0.155;
@@ -18116,7 +18165,9 @@ function makeBlowgun(){
   // a few spare darts in a quiver band, fletched with down
   [-1,1].forEach(sd=>{
     bcy(0.008,0.008,0.20,5, bone, sd*0.045,-0.03,-0.10);
-    bb(0.018,0.018,0.03, bone, sd*0.045,-0.03,-0.02);
+    // -0.032, not -0.02: the fifth cane node ring sits at -0.02 and is also 0.03 deep, so the dart's
+    // band and the ring shared both faces. Slid back along its own shaft, which is 0.20 long.
+    bb(0.018,0.018,0.03, bone, sd*0.045,-0.03,-0.032);
   });
   g.userData={muzzleZ:-0.95,muzzleY:0,pos:new THREE.Vector3(0.20,-0.18,-0.30),recoil:0.02,name:'Blowgun',
     damage:46, fireRate:0.5, auto:false, spread:0.0015, tracer:0xe8e0c0, scoped:true, scopeFov:32,
@@ -18137,7 +18188,9 @@ function makeAtlatl(){
     m.position.set(x,y,z); m.rotation.x=Math.PI/2; g.add(m); return m; };
   // the thrower board itself, held in the hand, with its finger loops and the spur the dart butts against
   ab(0.07,0.035,0.46, iron, 0,-0.03,-0.12);
-  ab(0.075,0.02,0.10, ironDark, 0,-0.048,0.06);                   // the spur end
+  // 0.09 at 0.055, not 0.10 at 0.06: the board it caps runs out at z=0.11 and so did this, sharing that
+  // end plane across the spur's full section.
+  ab(0.075,0.02,0.09, ironDark, 0,-0.048,0.055);                  // the spur end
   [-1,1].forEach(sd=> acy(0.022,0.022,0.05,6, cord, sd*0.042,-0.03,-0.02));   // finger loops
   ab(0.055,0.045,0.07, obsidian, 0,-0.03,0.10);                   // spiked obsidian pommel
   // the loaded dart, running the length of the board and out past it
@@ -18247,9 +18300,12 @@ function makeChimalli(){
     f.rotation.z = (i-3)*0.05;
   }
   // the arm straps behind it, and the fist gripping the inner one
+  // Two straps CROSSING, so one has to lie over the other. Cut to the same depth on the same z they were
+  // one plane front and back over the whole 0.06 square where they meet, and the fist behind them topped
+  // out at exactly the horizontal strap's own top face.
   cb(0.06,0.30,0.035, wood, 0,0,-0.075);
-  cb(0.30,0.06,0.035, wood, 0,0,-0.075);
-  cb(0.10,0.10,0.08,  hide, 0,-0.02,-0.115);
+  cb(0.30,0.06,0.035, wood, 0,0,-0.085);
+  cb(0.10,0.10,0.08,  hide, 0,-0.028,-0.115);
   g.userData={muzzleZ:0,muzzleY:0,pos:new THREE.Vector3(0.26,-0.22,-0.46),recoil:0.10,name:'Chimalli',
     melee:true, range:2.1, damage:105, fireRate:0.40,
     // raising it cuts incoming damage by this fraction — read in damagePlayer()
@@ -18298,7 +18354,9 @@ function makeSmokingMirror(){
     s.rotation.z=(i%2?1:-1)*0.3;
   }
   // a bone flint set at the base of the frame, the mirror's own tecpatl
-  mb(0.05,0.09,0.03, bone, 0,-0.13,-0.05);
+  // 0.038 wide, not 0.05: the jade handle it is lashed to is 0.05, so the flint's sides were the
+  // handle's sides over the whole length of it.
+  mb(0.038,0.09,0.03, bone, 0,-0.13,-0.05);
   g.userData={muzzleZ:-0.12,muzzleY:0.04,pos:new THREE.Vector3(0.23,-0.28,-0.40),recoil:0.03,name:'Smoking Mirror',
     damage:19, fireRate:0.07, auto:true, spread:0.002, tracer:0x8f6fd0,
     magSize:90, ammo:90, reloadTime:2.4, reloading:false, reloadT:0};
@@ -18551,7 +18609,9 @@ function makeThrowingSeax(){
   // ---- the knife in hand, held point-forward for the throw ----
   sb(0.040,0.045,0.19, haftMat, 0,0,0.10);           // handle
   sb(0.046,0.051,0.05, boneM,   0,0,0.185);          // bone pommel cap
-  sb(0.044,0.049,0.03, bronze,  0,0,0.02);           // the bolster where blade meets grip
+  // Runs back to -0.007 rather than starting at 0.005, which is exactly where the handle starts: a
+  // bolster bridges blade and grip, so ending flush with the grip's own end plane was wrong twice over.
+  sb(0.044,0.049,0.042, bronze, 0,0,0.014);          // the bolster where blade meets grip
   // The seax's single edge: a straight back and an angled edge running to the point. Alternating depth
   // down the run for the same reason every other blade in this file does it — coplanar faces on a
   // viewmodel 0.4 from the camera are the most visible z-fight there is.
@@ -18763,7 +18823,9 @@ function makeRepeatingCrossbow(){
   const MX=0, MY=0.138, MZ=-0.07, MW=0.092, ML=0.34;
   part(g,0.012,0.092,ML, bambooDk, MX-MW/2, MY, MZ);      // far wall
   part(g,0.012,0.062,ML, bambooDk, MX+MW/2, MY+0.015, MZ); // near wall, SHORTER — this is the slot
-  part(g,MW,0.014,ML,    bambooDk, MX, MY-0.046, MZ);      // floor, with the feed gap ahead of it
+  // ML-0.014, not ML: a floor sits INSIDE the box it floors, so it must not run out flush with the walls.
+  // At the full length its two ends were the far wall's own end planes, over the whole width they share.
+  part(g,MW,0.014,ML-0.014, bambooDk, MX, MY-0.046, MZ);   // floor, with the feed gap ahead of it
   part(g,MW+0.012,0.016,ML+0.02, bamboo, MX, MY+0.054, MZ);// lid, proud of the walls all round
   [-1,1].forEach(sd=> part(g,MW+0.016,0.012,0.016, brass, MX, MY+0.006, MZ+sd*(ML/2-0.02)));  // two bands
   // the stack itself: five bolts lying in the box, each one stepped in y and alternating in depth so no
@@ -18784,7 +18846,10 @@ function makeRepeatingCrossbow(){
 
   // ---- the groove, and the one bolt already in it ----
   part(g,0.026,0.020,0.66,woodDk, 0,0.052,-0.06);
-  part(g,0.014,0.014,0.30,boltWood,0,0.068,-0.24);
+  // 0.32 at -0.245, not 0.30 at -0.24: the bolt's tail ended at z=-0.39, which is exactly where the
+  // groove it lies in does. Lengthening rather than shifting keeps the 24mm the head cone needs to sit
+  // on — trimming the other way would have left the head a floating speck.
+  part(g,0.014,0.014,0.32,boltWood,0,0.068,-0.245);
   const bh=new THREE.Mesh(new THREE.ConeGeometry(0.016,0.058,4), steel);
   bh.rotation.x=-Math.PI/2; bh.position.set(0,0.068,-0.41); g.add(bh);
   part(g,0.072,0.052,0.088, steelDk, 0,0.044,-0.015);      // the nut housing
@@ -18838,11 +18903,16 @@ function makeRepeatingCrossbow(){
   });
   // ---- trigger, guard, and the iron stirrup the foot goes through to span it ----
   part(g,0.026,0.078,0.028,steel, 0,-0.082,0.10).rotation.x=-0.18;
+  // 0.028 wide, not 0.016: the guard's rear post and the bar it rises from were cut from the same
+  // section and centred on the same x, so both their sides were one pair of planes down the whole post.
   part(g,0.016,0.014,0.16, steel, 0,-0.126,0.13);
-  part(g,0.016,0.052,0.016,steel, 0,-0.094,0.20);
+  part(g,0.028,0.052,0.016,steel, 0,-0.094,0.20);
+  // The stirrup, on the same rule as the Qaws': a strap riveted across the FRONT of the two legs rather
+  // than milled flush between them. At 0.108 it ended exactly on their outer faces and at the same z it
+  // shared both their front and back planes — six coincident pairs on the part nearest the camera.
   part(g,0.016,0.104,0.016,steel,-0.046,-0.056,-0.47);
   part(g,0.016,0.104,0.016,steel, 0.046,-0.056,-0.47);
-  part(g,0.108,0.016,0.016,steel, 0,-0.104,-0.47);
+  part(g,0.088,0.016,0.016,steel, 0,-0.104,-0.464);
 
   g.userData={muzzleZ:-0.52,muzzleY:0.068,pos:new THREE.Vector3(0.23,-0.22,-0.38),recoil:0.06,name:'Repeating Crossbow',
     // fast and weak — the exact inverse of the Qaws (156 damage, 1.3s, 4 rounds). A stream of light
