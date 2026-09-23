@@ -1,9 +1,16 @@
 # China — Xiangyang and Yamen, the next destination after Sweden
 
 **Date:** 2026-09-20
-**Status:** approved design, not yet implemented
-**Arc:** a new trip, sold from the Cairo booth alongside Mexico and Sweden. China only —
-Kyushu/Japan (the placeholder's dashed leg) is explicitly deferred, not built here.
+**Status:** built and shipped. Superseded in one respect — see below.
+**Arc:** a new trip, sold from the Cairo booth alongside Mexico and Sweden.
+
+> **Kyushu/Japan is cut (2026-09-23).** This spec was written assuming a third leg to Kyushu
+> would follow, and left a dashed leg on the booth's world map as a visible promise of it.
+> That is no longer planned. The dashed leg, the `leg:{lon,lat}` property, the `.pleg`/`.plegend`
+> styles that drew it, and the `ready` flag this document refers to have all been removed from
+> `index.html`. China's trip ends at Yamen and comes home to Cairo. Everything below is kept as
+> the dated record of the design as approved; read any mention of Japan, Kyushu or a third leg
+> as history, not as work outstanding.
 
 ## What this is
 

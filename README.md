@@ -116,4 +116,3 @@ python3 tools/audit/chinacheck.py    # one destination, end to end
 
 - No save: ⭐ and cleared destinations do not survive a reload.
 - No ending: clearing China returns you to Cairo. There is no completion state yet.
-- The dashed leg from China to Kyushu on the world map is a promise, not a built map.

@@ -153,10 +153,6 @@
   .pin.short .pdot{background:#8a3a2a}
   @keyframes pinpulse{0%,100%{box-shadow:0 0 0 3px rgba(0,0,0,0.55),0 0 0 0 rgba(255,207,94,0.65)}
                       50%{box-shadow:0 0 0 3px rgba(0,0,0,0.55),0 0 0 17px rgba(255,207,94,0)}}
-  /* the dashed leg of a two-part journey, e.g. the Yuan crossing from China to Kyushu */
-  .pleg{position:absolute;height:0;border-top:2px dashed rgba(255,207,94,0.75);transform-origin:0 0;pointer-events:none}
-  .plegend{position:absolute;transform:translate(-50%,-50%);width:15px;height:15px;border-radius:50%;
-    border:3px solid rgba(255,207,94,0.85);background:rgba(20,14,6,0.9);pointer-events:none}
   #worldcard{position:absolute;left:12px;bottom:12px;max-width:min(330px,52%);padding:11px 14px;border-radius:10px;
     background:rgba(8,6,3,0.92);border:2px solid #c9a13a;pointer-events:none;opacity:0;transition:opacity 0.12s}
   #worldcard.on{opacity:1}
@@ -19194,9 +19190,8 @@ const TENOCH_BOSS = {skin:'xiuhcoatl', col:0xff8a2a, hp:2900, scale:1.9, speed:1
 // ---- the legs of a trip ----
 // A destination is a LIST of maps, not one map. Each leg carries its own world, garrison, spawn pools and
 // HUD name; clearing one carries the player straight to the next, and clearing the last carries them home
-// to Cairo. Mexico is the first destination built this way, and DESTINATIONS already describes China &
-// Japan as the same shape (Yuan China, the sea crossing, then Kyushu), so this is the general form rather
-// than a Mexico special case.
+// to Cairo. Mexico is the first destination built this way, and Sweden and China both use it unchanged,
+// so this is the general form rather than a Mexico special case.
 const MEXICO_LEGS = [
   {place:'La Venta', icon:'🗿', diff:1, era:'Olmec',
    waves:LA_VENTA_WAVES, stats:LA_VENTA_STATS, west:LA_VENTA_WEST, east:LA_VENTA_EAST, boss:TRIP_BOSS,
@@ -19864,9 +19859,6 @@ function spendScore(n){
 // here is built and travellable: there used to be a `ready` flag that listed unbuilt countries at a price
 // nobody could pay, and a "— COMING SOON —" state in destState() to render them, but the booth only ever
 // sells what exists now. A country that is not finished does not get a card until it is.
-// China and Japan are ONE destination, not two: Kublai Khan's Yuan fleet launched from China to invade
-// Kyushu, so the arc runs three waves in Yuan China, then the sea crossing, then a single samurai wave on
-// the Japanese shore. That crossing is the same mid-arc map swap Egypt already does three times.
 const DESTINATIONS = [
   {flag:'🇪🇬', name:'Egypt',         era:'Pharaohs to Mamluks · the road so far', price:0,  done:true,
    lon: 31, lat: 27},
@@ -19897,14 +19889,11 @@ const DESTINATIONS = [
    go(){ travelTo({name:'Sweden', legs:SWEDEN_LEGS,
      homeHub:enterLadogaMarketHub,
      homeBanner:'⚓ Aldeigjuborg — you make port, and the road east starts on this quay'}); }},
-  // China only, for now. Two legs on the exact trip/leg machinery Mexico and Sweden already proved:
-  // Xiangyang (the wall, the breach, the Siege Commander) then Yamen (the chained, burning fleet, and
-  // the Admiral). The dashed leg toward Kyushu stays on the card — a visible promise of the sea
-  // crossing to Japan that completes this trip later, the same way Sweden was once sold from the Aztec
-  // Market before the Fjord or Uppsala existed. Not `& Japan` in the name yet: that waits until the
-  // trip actually goes there.
+  // Two legs on the exact trip/leg machinery Mexico and Sweden already proved: Xiangyang (the wall, the
+  // breach, the Siege Commander) then Yamen (the chained, burning fleet, and the Admiral). The trip ends
+  // at Yamen and comes home to Cairo; there is no third leg out of it.
   {flag:'🐉', name:'China',          era:'Yuan China · 1267–1279',       price:70,
-   lon:116, lat: 39, leg:{lon:133, lat:33},
+   lon:116, lat: 39,
    legs:CHINA_LEGS, homeBanner:'🏠 Home in Cairo — and the delta is quiet behind you',
    go(){ travelTo({name:'China', legs:CHINA_LEGS,
      homeBanner:'🏠 Home in Cairo — and the delta is quiet behind you'}); }},
@@ -20122,20 +20111,6 @@ function renderBooth(){
   };
   DESTINATIONS.forEach(d => {
     const st = destState(d), pos = lonLatPct(d.lon, d.lat);
-    // a two-part journey draws its second leg dashed, with a small ring at the far end
-    if(d.leg){
-      const to = lonLatPct(d.leg.lon, d.leg.lat);
-      const dx = to.x - pos.x, dy = (to.y - pos.y) * 0.5;   // y is half-weighted: the box is 2:1
-      const leg = document.createElement('div');
-      leg.className = 'pleg';
-      leg.style.left = pos.x + '%'; leg.style.top = pos.y + '%';
-      leg.style.width = Math.hypot(dx, dy) + '%';
-      leg.style.transform = 'rotate(' + (Math.atan2(dy*2, dx) * 180/Math.PI) + 'deg)';
-      pinsEl.appendChild(leg);
-      const end = document.createElement('div');
-      end.className = 'plegend'; end.style.left = to.x + '%'; end.style.top = to.y + '%';
-      pinsEl.appendChild(end);
-    }
     const pin = document.createElement('button');
     pin.className = 'pin ' + st.cls;
     pin.style.left = pos.x + '%'; pin.style.top = pos.y + '%';
