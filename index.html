@@ -12169,7 +12169,7 @@ function makeColossus(){
   function colossusLeg(sd){
     const leg=new THREE.Group(); leg.position.set(sd*0.24,1.02,0);
     const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.44,0.38), stone);      thigh.position.set(0,-0.22,0); leg.add(thigh);
-    const knee =new THREE.Mesh(new THREE.BoxGeometry(0.38,0.10,0.40), stoneDark);  knee.position.set(0,-0.46,0.01); leg.add(knee);
+    const knee =new THREE.Mesh(new THREE.BoxGeometry(0.38,0.10,0.40), stoneDark);  knee.position.set(0,-0.46,0.016); leg.add(knee);  // 0.016: at 0.01 its back face was the thigh's
     const shin =new THREE.Mesh(new THREE.BoxGeometry(0.33,0.42,0.35), stone);      shin.position.set(0,-0.70,0); leg.add(shin);
     const anklet=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.07,0.38), goldMat);   anklet.position.set(0,-0.90,0); leg.add(anklet);
     const foot =new THREE.Mesh(new THREE.BoxGeometry(0.38,0.16,0.52), stoneWorn);  foot.position.set(0,-0.94,0.08); leg.add(foot);
@@ -12190,7 +12190,7 @@ function makeColossus(){
     const pl=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.32,0.05), stoneDark); pl.position.set(-0.34+i*0.113,1.12,0.33); g.add(pl);
   }
   const belt=new THREE.Mesh(new THREE.BoxGeometry(0.90,0.12,0.66), goldMat); belt.position.set(0,1.33,0.02); g.add(belt);
-  const apron=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.30,0.07), goldMat); apron.position.set(0,1.10,0.35); g.add(apron);
+  const apron=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.30,0.07), goldMat); apron.position.set(0,1.106,0.35); g.add(apron);  // 1.106: at 1.10 its hem was exactly the kilt's
   const apronIn=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.22,0.04), lapisMat); apronIn.position.set(0,1.10,0.39); g.add(apronIn);
 
   // ---- torso: a broad slab with almost no waist, the way monumental statuary is cut ----
@@ -12250,9 +12250,12 @@ function makeColossus(){
     const band    =new THREE.Mesh(new THREE.BoxGeometry(0.36,0.08,0.48), goldMat);  band.position.set(0,-0.13,0); arm.add(band);
     const upper   =new THREE.Mesh(new THREE.BoxGeometry(0.28,0.36,0.30), stone);    upper.position.set(0,-0.34,0); arm.add(upper);
     const elbow   =new THREE.Mesh(new THREE.BoxGeometry(0.30,0.10,0.32), stoneDark);elbow.position.set(0,-0.54,0); arm.add(elbow);
-    const fore    =new THREE.Mesh(new THREE.BoxGeometry(0.26,0.34,0.28), stone);    fore.position.set(0,-0.74,0.02); arm.add(fore);
+    // The forearm's front face sat on the elbow's, and the fist's on the cuff's — and fist and cuff were
+    // both 0.30 wide besides, so they shared their sides too. Six of this boss's eleven pairs, on the two
+    // arms it swings at you.
+    const fore    =new THREE.Mesh(new THREE.BoxGeometry(0.26,0.34,0.28), stone);    fore.position.set(0,-0.74,0.026); arm.add(fore);
     const cuff    =new THREE.Mesh(new THREE.BoxGeometry(0.30,0.08,0.32), goldMat);  cuff.position.set(0,-0.92,0.02); arm.add(cuff);
-    const fist    =new THREE.Mesh(new THREE.BoxGeometry(0.30,0.26,0.30), stoneWorn);fist.position.set(0,-1.08,0.03); arm.add(fist);
+    const fist    =new THREE.Mesh(new THREE.BoxGeometry(0.32,0.26,0.30), stoneWorn);fist.position.set(0,-1.08,0.036); arm.add(fist);
     // a crack down the forearm on both sides
     const acr=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.28,0.30), crackMat); acr.position.set(sd*0.11,-0.74,0.02); arm.add(acr);
     if(sd>0){
@@ -12383,7 +12386,12 @@ function makeMummy(){
     const kh_part=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); kh.add(m); return m; };
     kh_part(0.09,0.06,0.07,kDeep,0,0,0);                       // pommel
     for(let i=0;i<4;i++){
-      const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.048,8), i%2?kGrip:voxMat(0x6b4226,{noise:16}));
+      // 0.044 on a 0.046 pitch, so the segments stop short of each other instead of lapping 2mm into
+      // the next. Every one is turned to the same radius, so a lap put two identical cylindrical
+      // surfaces in the same place — twelve of this model's fourteen pairs. Exactly the fault, and
+      // exactly the fix, already applied to the player's own Khopesh grip. The 2mm they now stand apart
+      // is inside the 4mm the connectivity check joins at, so the grip is still one piece.
+      const seg=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.032,0.044,8), i%2?kGrip:voxMat(0x6b4226,{noise:16}));
       seg.position.set(0,0.05+i*0.046,0); kh.add(seg);
     }
     kh_part(0.16,0.03,0.09,kDeep,0,0.225,0).rotation.z=0.05;   // guard
@@ -12416,7 +12424,7 @@ function makeMummy(){
     const thigh=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.34,0.21), wrapDim); thigh.position.set(0,-0.17,0); leg.add(thigh);
     const knee =new THREE.Mesh(new THREE.BoxGeometry(0.19,0.09,0.20), wrapDark); knee.position.set(0,-0.36,0.01); leg.add(knee);
     const shin =new THREE.Mesh(new THREE.BoxGeometry(0.18,0.30,0.19), sd<0?wrapPale:wrapDim); shin.position.set(0,-0.55,0.01); leg.add(shin);
-    const foot =new THREE.Mesh(new THREE.BoxGeometry(0.20,0.13,0.27), wrapPale); foot.position.set(0,-0.68,0.05); leg.add(foot);
+    const foot =new THREE.Mesh(new THREE.BoxGeometry(0.20,0.13,0.27), wrapPale); foot.position.set(0,-0.68,0.058); leg.add(foot);  // 0.058: at 0.05 the heel sat on exactly the shin's back face
     // one leg drags a long loose bandage
     if(sd<0){
       const drag=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.40,0.04), wrapPale); drag.position.set(-0.07,-0.52,-0.06); drag.rotation.z=0.3; leg.add(drag);
@@ -12450,15 +12458,19 @@ function makeJackal(){
   const torso=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.60,0.30), skinMat); torso.position.set(0,1.14,0); g.add(torso);
   const abs  =new THREE.Mesh(new THREE.BoxGeometry(0.42,0.22,0.26), skinMat); abs.position.set(0,0.80,0); g.add(abs);
   const usekh=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.20,0.36), goldMat); usekh.position.set(0,1.42,0.01); g.add(usekh);
-  const usekhRow=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.07,0.38), lapisMat); usekhRow.position.set(0,1.33,0.01); g.add(usekhRow);
+  // 0.48, not 0.50: the torso under it is 0.50 too, so the inlay row's sides were the torso's sides.
+  const usekhRow=new THREE.Mesh(new THREE.BoxGeometry(0.48,0.07,0.38), lapisMat); usekhRow.position.set(0,1.33,0.01); g.add(usekhRow);
   // shendyt: a pleated kilt, the unmistakable Egyptian garment
   const kilt=new THREE.Mesh(new THREE.BoxGeometry(0.48,0.30,0.34), linenMat); kilt.position.set(0,0.62,0.01); g.add(kilt);
   for(let i=0;i<6;i++){
     const pleat=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.28,0.03), voxMat(0xc4b998,{noise:8}));
     pleat.position.set(-0.19+i*0.076,0.62,0.18); g.add(pleat);
   }
-  const beltG=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.09,0.36), goldMat); beltG.position.set(0,0.79,0); g.add(beltG);
-  const apron=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.26,0.05), goldMat); apron.position.set(0,0.60,0.19); g.add(apron);
+  // z -0.008: at 0 the belt's front face landed on exactly the kilt's.
+  const beltG=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.09,0.36), goldMat); beltG.position.set(0,0.79,-0.008); g.add(beltG);
+  // 0.608 / 0.196, not 0.60 / 0.19: the apron's underside sat on the kilt's own, and its back face on the
+  // two pleats it covers.
+  const apron=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.26,0.05), goldMat); apron.position.set(0,0.608,0.196); g.add(apron);
 
   // ---- head: the whole identity. A long wedge snout carried FORWARD on an angled neck, tall ears. ----
   const neck=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.20,0.22), furMat); neck.position.set(0,1.52,0.03); neck.rotation.x=0.25; g.add(neck);
@@ -12466,13 +12478,16 @@ function makeJackal(){
   const cheeks=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.16,0.20), furLit); cheeks.position.set(0,1.71,0.14); g.add(cheeks);   // 1.71: at 1.70 its underside met the skull's
   // snout in three tapering stages, so it narrows to a point instead of ending as a blunt box
   const snout1=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.17,0.20), furMat); snout1.position.set(0,1.70,0.30); g.add(snout1);
-  const snout2=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.13,0.18), furMat); snout2.position.set(0,1.68,0.45); g.add(snout2);
+  const snout2=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.13,0.18), furMat); snout2.position.set(0,1.686,0.45); g.add(snout2);  // 1.686: at 1.68 its underside was snout1's
   const snout3=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.10,0.14), furLit); snout3.position.set(0,1.67,0.57); g.add(snout3);
   const nose  =new THREE.Mesh(new THREE.BoxGeometry(0.08,0.07,0.05), clawMat); nose.position.set(0,1.68,0.65); g.add(nose);
   const jawLine=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.06,0.34), clawMat); jawLine.position.set(0,1.60,0.42); g.add(jawLine);
   [-1,1].forEach(sd=>{
-    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.06,0.04), eyeMat); eye.position.set(sd*0.10,1.79,0.22); g.add(eye);
-    const kohl=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.035,0.04), goldMat); kohl.position.set(sd*0.11,1.74,0.22); g.add(kohl);  // kohl stripe, painted like a statue
+    // z 0.214, not 0.22. At 0.22 both of these ran from 0.20 to 0.24 — which is exactly the cheeks'
+    // front face at one end and snout1's back face at the other, so each eye and each kohl stripe was
+    // tied to the head at both ends. Eight of this model's fifteen pairs, all fixed by 6mm.
+    const eye=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.06,0.04), eyeMat); eye.position.set(sd*0.10,1.79,0.214); g.add(eye);
+    const kohl=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.035,0.04), goldMat); kohl.position.set(sd*0.11,1.74,0.214); g.add(kohl);  // kohl stripe, painted like a statue
     // tall pointed ears, standing straight up — the jackal's other signature
     const earBase=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.20,0.07), furMat); earBase.position.set(sd*0.14,1.98,0.02); earBase.rotation.z=sd*0.16; g.add(earBase);
     const earTip =new THREE.Mesh(new THREE.ConeGeometry(0.06,0.20,4), furMat);   earTip.position.set(sd*0.17,2.16,0.02);  earTip.rotation.z=sd*0.16; g.add(earTip);
@@ -12558,7 +12573,10 @@ function makeScarabUnit(){
   const head=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.11,0.12), chitin); head.position.set(0,0.20,0.32); g.add(head);
   const clypeus=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.05,0.10), goldMat); clypeus.position.set(0,0.19,0.40); g.add(clypeus);
   [-1,1].forEach(sd=>{
-    const rake=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.07), goldMat); rake.position.set(sd*0.09,0.19,0.45); g.add(rake);
+    // 0.036 tall, not 0.05: the clypeus these are the teeth of is 0.05 too, on the same y, so every rake
+    // shared its top and bottom planes with the shovel it notches — four pairs per beetle, twenty across
+    // the swarm, and the swarm is five beetles in your face at once.
+    const rake=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.036,0.07), goldMat); rake.position.set(sd*0.09,0.19,0.45); g.add(rake);
     const eye=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.045,0.04), new THREE.MeshBasicMaterial({color:0xffb02a,fog:false}));
     eye.position.set(sd*0.10,0.23,0.35); g.add(eye);
   });
@@ -12635,8 +12653,11 @@ function makeScorpion(){
   // ---- mesosoma: seven overlapping tergites tapering back, so the body is segmented not a single block ----
   const mesoSegs=[{w:0.38,h:0.19,z:-0.04},{w:0.36,h:0.18,z:-0.18},{w:0.33,h:0.17,z:-0.31},{w:0.29,h:0.15,z:-0.43}];
   mesoSegs.forEach((sg,i)=>{
-    const seg=new THREE.Mesh(new THREE.BoxGeometry(sg.w,sg.h,0.17), i%2?shell:shellDark); seg.position.set(0,0.235,sg.z); g.add(seg);
-    const ridge=new THREE.Mesh(new THREE.BoxGeometry(sg.w*0.55,0.05,0.14), shellLit); ridge.position.set(0,0.325,sg.z); g.add(ridge);
+    // 0.241, not 0.235: the first tergite's underside sat on exactly the prosoma's.
+    const seg=new THREE.Mesh(new THREE.BoxGeometry(sg.w,sg.h,0.17), i%2?shell:shellDark); seg.position.set(0,0.241,sg.z); g.add(seg);
+    // and the ridges taper in height rather than all being 0.05 on one shared y — consecutive ridges
+    // overlap, so at a flat height every neighbouring pair shared its top and bottom planes.
+    const ridge=new THREE.Mesh(new THREE.BoxGeometry(sg.w*0.55,0.05-i*0.006,0.14), shellLit); ridge.position.set(0,0.325,sg.z); g.add(ridge);
   });
 
   // ---- pedipalps: shoulder, upper arm, forearm, then a real two-part claw. This is the silhouette. ----
@@ -12777,7 +12798,7 @@ function makeHippo(){
     const eyeMound=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.14,0.17), hide);   eyeMound.position.set(sd*0.24,0.88,1.06); g.add(eyeMound);
     const eye     =new THREE.Mesh(new THREE.BoxGeometry(0.09,0.08,0.06), eyeMat); eye.position.set(sd*0.24,0.92,1.18); g.add(eye);
     const ear     =new THREE.Mesh(new THREE.BoxGeometry(0.13,0.14,0.10), hide);   ear.position.set(sd*0.24,1.00,0.90); g.add(ear);
-    const earIn   =new THREE.Mesh(new THREE.BoxGeometry(0.07,0.08,0.06), hideDark); earIn.position.set(sd*0.24,1.03,0.94); g.add(earIn);
+    const earIn   =new THREE.Mesh(new THREE.BoxGeometry(0.07,0.08,0.06), hideDark); earIn.position.set(sd*0.24,1.024,0.94); g.add(earIn);  // 1.024: at 1.03 it topped out exactly level with the ear
     const nostril =new THREE.Mesh(new THREE.BoxGeometry(0.11,0.09,0.09), hideDark); nostril.position.set(sd*0.20,0.83,1.60); g.add(nostril);
   });
 
@@ -12811,23 +12832,32 @@ function makeCrocodile(){
   const eyeMat   = new THREE.MeshBasicMaterial({color:0xd8b83a, fog:false});
 
   // ---- body: long, low and flat, with a defined chest and hips ----
-  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.58,0.34,0.60), hide);     chest.position.set(0,0.33,0.42); g.add(chest);
+  // The three masses are each a little wider than the belly plate slung under them, so their undersides
+  // ARE visible from below — and all three used to bottom out on exactly y=0.16, as did the first tail
+  // segment behind them. Staggered to 0.17 / 0.16 / 0.15, which is a centimetre nobody will see and four
+  // pairs of coincident planes gone.
+  const chest = new THREE.Mesh(new THREE.BoxGeometry(0.58,0.34,0.60), hide);     chest.position.set(0,0.34,0.42); g.add(chest);
   const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.54,0.32,0.70), hide);     trunk.position.set(0,0.32,-0.15); g.add(trunk);
-  const hips  = new THREE.Mesh(new THREE.BoxGeometry(0.48,0.30,0.42), hide);     hips.position.set(0,0.31,-0.66); g.add(hips);
+  const hips  = new THREE.Mesh(new THREE.BoxGeometry(0.48,0.30,0.42), hide);     hips.position.set(0,0.30,-0.66); g.add(hips);
   const belly = new THREE.Mesh(new THREE.BoxGeometry(0.50,0.14,1.66), bellyMat); belly.position.set(0,0.17,-0.10); g.add(belly);
   // dorsal scutes: two staggered rows of raised keeled plates down the back — the armour that identifies it
   for(let i=0;i<9;i++){
     const z=0.62-i*0.20;
     [-1,1].forEach(sd=>{
-      const scute=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.10,0.15), scuteMat);
-      scute.position.set(sd*0.14,0.50,z); g.add(scute);
+      // +-0.13 and 0.12 tall, not +-0.14 and 0.10: at +-0.14 the outer edge of the rearmost scutes landed
+      // on 0.21, which is exactly where the first tail segment ends, and at 0.10 their tops landed on
+      // 0.55, which is exactly where that segment's paired crest tops out.
+      const scute=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.15), scuteMat);
+      scute.position.set(sd*0.13,0.50,z); g.add(scute);
       const keel=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.07,0.10), hideDark);
       keel.position.set(sd*0.14,0.57,z); g.add(keel);
     });
   }
 
   // ---- head: a long flat snout, wider at the base, with the teeth interlocking along the closed jawline ----
-  const skull  = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.24,0.34), hide);     skull.position.set(0,0.36,0.86); g.add(skull);
+  // 0.46, not 0.44: the eye sockets bulge out to +-0.22 and a 0.44 skull ends there too, so socket and
+  // skull shared a side plane on each side of the head.
+  const skull  = new THREE.Mesh(new THREE.BoxGeometry(0.46,0.24,0.34), hide);     skull.position.set(0,0.36,0.86); g.add(skull);
   const snout  = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.17,0.52), hide);     snout.position.set(0,0.35,1.26); g.add(snout);
   const snoutTip=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.14,0.16), hide);     snoutTip.position.set(0,0.35,1.58); g.add(snoutTip);
   const lowJaw =new THREE.Mesh(new THREE.BoxGeometry(0.30,0.11,0.60), bellyMat);  lowJaw.position.set(0,0.24,1.28); g.add(lowJaw);
@@ -12849,7 +12879,9 @@ function makeCrocodile(){
     // eyes bulge UP off the skull, the way a crocodile's do so it can see while submerged
     const socket=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.14), hide);     socket.position.set(sd*0.15,0.49,0.86); g.add(socket);
     const eye   =new THREE.Mesh(new THREE.BoxGeometry(0.09,0.07,0.06), eyeMat);   eye.position.set(sd*0.15,0.53,0.93); g.add(eye);
-    const slit  =new THREE.Mesh(new THREE.BoxGeometry(0.02,0.07,0.05), hideDark); slit.position.set(sd*0.15,0.53,0.96); g.add(slit);
+    // 0.05 tall, not 0.07: a pupil cut to the eye's exact height shares its top and bottom planes — the
+    // same fault the Medusa's had.
+    const slit  =new THREE.Mesh(new THREE.BoxGeometry(0.02,0.05,0.05), hideDark); slit.position.set(sd*0.15,0.53,0.96); g.add(slit);
     const ridge =new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.30), hideDark); ridge.position.set(sd*0.13,0.44,1.20); g.add(ridge);
   });
 
@@ -12994,8 +13026,8 @@ function makeMinotaur(){
   const brow    = new THREE.Mesh(new THREE.BoxGeometry(0.50,0.14,0.24), hideDark); brow.position.set(0,0.26,0.24); brow.rotation.x=0.28; head.add(brow);
   const muzzle  = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.30,0.36), hidePale); muzzle.position.set(0,0.02,0.36); head.add(muzzle);
   const nosePad = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.17,0.09), hideDark); nosePad.position.set(0,0.00,0.56); head.add(nosePad);
-  const jaw     = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.13,0.32), hidePale); jaw.position.set(0,-0.13,0.34); head.add(jaw);
-  const teeth   = new THREE.Mesh(new THREE.BoxGeometry(0.23,0.05,0.04), teethMat); teeth.position.set(0,-0.09,0.50); head.add(teeth);
+  const jaw     = new THREE.Mesh(new THREE.BoxGeometry(0.28,0.13,0.32), hidePale); jaw.position.set(0,-0.13,0.346); head.add(jaw);   // 0.346: at 0.34 the jaw's back face was the muzzle's
+  const teeth   = new THREE.Mesh(new THREE.BoxGeometry(0.23,0.05,0.04), teethMat); teeth.position.set(0,-0.096,0.50); head.add(teeth);  // -0.096: at -0.09 they topped out level with the jaw
   [-1,1].forEach(side=>{
     const tusk=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.12,0.05), teethMat); tusk.position.set(side*0.09,-0.15,0.47); tusk.rotation.x=0.35; head.add(tusk);
     const nostril=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,0.04), noseMat); nostril.position.set(side*0.08,0.00,0.60); head.add(nostril);
@@ -13073,8 +13105,12 @@ function makeGriffin(){
   const chest  = new THREE.Mesh(new THREE.BoxGeometry(0.62,0.62,0.52), featherW); chest.position.set(0,0.84,0.40); g.add(chest);
   const keel   = new THREE.Mesh(new THREE.BoxGeometry(0.40,0.44,0.22), featherG); keel.position.set(0,0.70,0.64); g.add(keel);
   // scapular feathers over the shoulder, covering the seam where plumage meets fur
+  // Tapered 0.50 -> 0.41 rather than four at a flat 0.50. Rotation about x does not change a box's x
+  // extent, so four identical widths meant four identical pairs of side planes, and consecutive
+  // scapulars overlap — three pairs of coincident faces down the shoulder. Feathers narrow toward the
+  // tail anyway.
   for(let i=0;i<4;i++){
-    const scap=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.09,0.26), i%2?featherW:featherG);
+    const scap=new THREE.Mesh(new THREE.BoxGeometry(0.50-i*0.03,0.09,0.26), i%2?featherW:featherG);
     scap.position.set(0,1.06+i*0.05,0.30-i*0.20); scap.rotation.x=-0.18; g.add(scap);
   }
 
@@ -13085,7 +13121,9 @@ function makeGriffin(){
   const cere = new THREE.Mesh(new THREE.BoxGeometry(0.20,0.16,0.14), featherG); cere.position.set(0,1.55,0.94); g.add(cere);
   // hooked beak: upper hook plus a lower mandible, not one straight cone
   const beakTop = new THREE.Mesh(new THREE.BoxGeometry(0.17,0.14,0.24), beakMat); beakTop.position.set(0,1.55,1.06); g.add(beakTop);
-  const beakHook= new THREE.Mesh(new THREE.ConeGeometry(0.085,0.20,4), beakMat);  beakHook.position.set(0,1.44,1.14); beakHook.rotation.x=Math.PI; g.add(beakHook);
+  // 0.072, not 0.085: at 0.085 the hook was 0.17 across and so is the beak's upper plate, so the two
+  // shared both side planes. A hook tapering in from the beak above it is also the right shape.
+  const beakHook= new THREE.Mesh(new THREE.ConeGeometry(0.072,0.20,4), beakMat);  beakHook.position.set(0,1.44,1.14); beakHook.rotation.x=Math.PI; g.add(beakHook);
   const beakLow = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.07,0.18), beakMat); beakLow.position.set(0,1.45,1.02); g.add(beakLow);
   [-1,1].forEach(side=>{
     const brow=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.07,0.16), featherG); brow.position.set(side*0.14,1.68,0.88); g.add(brow);
@@ -13133,9 +13171,14 @@ function makeGriffin(){
     const shank=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.34,0.16), beakMat);  shank.position.set(side*0.24,0.32,0.40); g.add(shank);
     const foot =new THREE.Mesh(new THREE.BoxGeometry(0.22,0.11,0.26), beakMat);  foot.position.set(side*0.24,0.10,0.48); g.add(foot);
     // three forward talons plus a hallux behind, all touching the ground
+    // Three IDENTICAL cones in a row, overlapping each other in x, was four shared planes per adjacent
+    // pair and sixteen of the griffin's twenty-four. A raptor's middle toe is the long one and the outer
+    // two are shorter, splayed and set back, so sizing them by |t| fixes the geometry and the anatomy at
+    // once. The middle claw is untouched, which keeps the model's lowest point exactly where it was.
     [-1,0,1].forEach(t=>{
-      const claw=new THREE.Mesh(new THREE.ConeGeometry(0.045,0.16,4), talonMat);
-      claw.position.set(side*0.24+t*0.075,0.05,0.62); claw.rotation.x=-1.35; g.add(claw);
+      const a=Math.abs(t);
+      const claw=new THREE.Mesh(new THREE.ConeGeometry(0.045-a*0.006,0.16-a*0.02,4), talonMat);
+      claw.position.set(side*0.24+t*0.079,0.05+a*0.008,0.62-a*0.014); claw.rotation.x=-1.35; g.add(claw);
     });
     const hallux=new THREE.Mesh(new THREE.ConeGeometry(0.04,0.13,4), talonMat); hallux.position.set(side*0.24,0.05,0.36); hallux.rotation.x=1.35; g.add(hallux);
   });
@@ -13231,8 +13274,11 @@ function makeMedusa(){
     const upper=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.36,0.18), skinMat); upper.position.set(side*0.38,1.38,0.10); upper.rotation.z=side*-0.14; g.add(upper);
     const fore =new THREE.Mesh(new THREE.BoxGeometry(0.14,0.34,0.16), skinMat); fore.position.set(side*0.44,1.06,0.16); fore.rotation.z=side*-0.10; g.add(fore);
     const hand =new THREE.Mesh(new THREE.BoxGeometry(0.14,0.16,0.15), skinMat); hand.position.set(side*0.47,0.88,0.20); g.add(hand);
-    [-1,0,1].forEach(t=>{ const claw=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.11,4), fangMat);
-      claw.position.set(side*0.47+t*0.045,0.78,0.24); claw.rotation.x=0.35; g.add(claw); });
+    // Sized off |t| rather than three identical cones overlapping in a row — the same fault, and the same
+    // sixteen-pair cost, the griffin's talons had. A middle finger longer than the two beside it.
+    [-1,0,1].forEach(t=>{ const a=Math.abs(t);
+      const claw=new THREE.Mesh(new THREE.ConeGeometry(0.028-a*0.004,0.11-a*0.014,4), fangMat);
+      claw.position.set(side*0.47+t*0.048,0.78+a*0.006,0.24-a*0.01); claw.rotation.x=0.35; g.add(claw); });
     const bangle=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.06,0.19), goldMat); bangle.position.set(side*0.45,1.20,0.15); g.add(bangle);
   });
 
@@ -13243,10 +13289,14 @@ function makeMedusa(){
   const browRidge=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.07,0.13), scaleMat2); browRidge.position.set(0,2.20,0.28); browRidge.rotation.x=0.3; g.add(browRidge);
   const nose    = new THREE.Mesh(new THREE.BoxGeometry(0.07,0.15,0.10), skinMat); nose.position.set(0,2.06,0.32); g.add(nose);
   [-1,1].forEach(side=>{
-    const cheek=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.14,0.14), skinMat); cheek.position.set(side*0.19,2.02,0.24); g.add(cheek);
+    // 2.028 / 0.232: at 2.02 / 0.24 the cheek's underside and its front face were the cranium's own,
+    // which is a pair of planes down each side of the face.
+    const cheek=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.14,0.14), skinMat); cheek.position.set(side*0.19,2.028,0.232); g.add(cheek);
     const socket=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.11,0.03), darkMat); socket.position.set(side*0.10,2.12,0.30); g.add(socket);
     const eye=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.08,0.05), eyeMat); eye.position.set(side*0.10,2.12,0.33); g.add(eye);
-    const pupil=new THREE.Mesh(new THREE.BoxGeometry(0.025,0.08,0.05), darkMat); pupil.position.set(side*0.10,2.12,0.36); g.add(pupil);
+    // 0.06 tall, not 0.08: a pupil cut to exactly the eye's own height shares its top and bottom planes.
+    // Inset, it still reads as the full-height slit a serpent's eye wants.
+    const pupil=new THREE.Mesh(new THREE.BoxGeometry(0.025,0.06,0.05), darkMat); pupil.position.set(side*0.10,2.12,0.36); g.add(pupil);
   });
   const mouth=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.05,0.06), darkMat); mouth.position.set(0,1.93,0.32); g.add(mouth);
   [-1,1].forEach(side=>{ const fang=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.15,0.03), fangMat); fang.position.set(side*0.08,1.86,0.33); g.add(fang); });
@@ -13357,21 +13407,26 @@ function makeWarHoundUnit(){
   // ---- neck and head. A Molossian skull is short, broad and deep — the muzzle is a stub, not a snout.
   bx(0.44,0.40,0.36, furDark, 0, 1.12, 0.62);                        // neck
   bx(0.46,0.40,0.44, furDark, 0, 1.24, 0.88);                        // skull
-  bx(0.48,0.11,0.20, furMid,  0, 1.42, 0.96);                        // heavy brow ridge
+  // 0.52 across, not 0.48: the cropped ears sit at +-0.19 and are 0.10 wide, so their outer faces landed
+  // on 0.24, which is exactly where a 0.48 brow ends. Widening the brow is one edit where moving both
+  // ears (and the torn remnant that lines up with one of them) would have been three.
+  bx(0.52,0.11,0.20, furMid,  0, 1.42, 0.96);                        // heavy brow ridge
   [-1,1].forEach(sd=> bx(0.14,0.06,0.10, furPale, sd*0.14, 1.44, 1.02));  // pale brow spots
   bx(0.32,0.22,0.32, furMid,  0, 1.16, 1.14);                        // muzzle
   bx(0.26,0.06,0.24, furDark, 0, 1.28, 1.16);                        // wrinkled bridge
   bx(0.22,0.05,0.20, furDark, 0, 1.335,1.13);
   [-1,1].forEach(sd=> bx(0.13,0.20,0.24, furMid, sd*0.18, 1.06, 1.06));  // jowls, hanging either side
   const jaw=bx(0.28,0.14,0.32, furMid, 0, 1.00, 1.14); jaw.rotation.x=0.18;  // undershot lower jaw, open
-  bx(0.22,0.05,0.20, gumMat, 0, 1.05, 1.20);                         // gums showing between the jaws
+  bx(0.22,0.05,0.20, gumMat, 0, 1.05, 1.185);                        // gums showing between the jaws (1.185: at 1.20 they ended on exactly the muzzle's front face)
   bx(0.16,0.05,0.20, gumMat, 0, 1.03, 1.22);                         // tongue
   bx(0.18,0.11,0.10, noseMat, 0, 1.245,1.315);                       // nose
   [-1,1].forEach(sd=>{
     const f1=new THREE.Mesh(new THREE.ConeGeometry(0.033,0.13,4), fangMat);   // upper canines, pointing down
     f1.position.set(sd*0.10,1.075,1.24); f1.rotation.x=Math.PI; body.add(f1);
     const f2=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.10,4), fangMat);   // lower canines, pointing up
-    f2.position.set(sd*0.11,1.06,1.27); body.add(f2);
+    // 1.068, not 1.06: the upper canine hanging opposite is 0.13 long from 1.075, so both fangs bottomed
+    // out on exactly y=1.01 and the two cones shared that plane where they pass each other.
+    f2.position.set(sd*0.11,1.068,1.27); body.add(f2);
     bx(0.05,0.04,0.05, fangMat, sd*0.045, 1.115, 1.27);              // incisors
     bx(0.09,0.07,0.06, eyeMat, sd*0.155, 1.335, 1.10);               // eyes
   });
@@ -13396,12 +13451,16 @@ function makeWarHoundUnit(){
   bx(0.16,0.05,0.08, bronze,  0, 0.86, 0.74);
 
   // ---- barding: a studded leather back-plate with bronze scale skirts hanging down each flank
-  bx(0.54,0.10,0.50, leather, 0, 1.28, 0.16);
+  // 0.58 x 0.54, not 0.54 x 0.50: the collar's two rims are 0.54 x 0.50 and the plate overlaps them in
+  // y and z, so plate and rim presented the same pair of side planes.
+  bx(0.58,0.10,0.54, leather, 0, 1.28, 0.16);
   for(let i=0;i<3;i++)for(let j=0;j<2;j++)
     bx(0.07,0.05,0.07, bronze, -0.16+i*0.16, 1.345, 0.02+j*0.24);    // studs
   [-1,1].forEach(sd=> { for(let i=0;i<4;i++){
     bx(0.05,0.13,0.11, bronze,  sd*0.30, 1.15, 0.30-i*0.14);
-    bx(0.05,0.11,0.11, bronzeD, sd*0.30, 1.02, 0.30-i*0.14);
+    // 1.012, not 1.02: the second brindle stripe is 0.31 tall on y 0.92 and so tops out at exactly
+    // 1.075, which is where this scale's top face was.
+    bx(0.05,0.11,0.11, bronzeD, sd*0.30, 1.012, 0.30-i*0.14);
   }});
 
   // docked tail — short and carried high, the way a cropped working dog's is
@@ -13582,7 +13641,7 @@ function makeManticore(){
   bx(0.50,0.13,0.26, furDark, 0,HY+0.215,HZ+0.33);       // brow ridge (0.215: at 0.20 its top landed 5mm from the skull's own)
   bx(0.185,0.20,0.20,furMat2, -0.20,HY-0.05,HZ+0.30); bx(0.185,0.20,0.20,furMat2, 0.20,HY-0.05,HZ+0.30);  // cheekbones
   bx(0.32,0.27,0.42, furMat2, 0,HY-0.16,HZ+0.49);        // muzzle
-  bx(0.29,0.11,0.40, furMat,  0,HY-0.015,HZ+0.50);       // nose bridge
+  bx(0.29,0.11,0.40, furMat,  0,HY-0.015,HZ+0.494);      // nose bridge (0.494: at 0.50 it ended on exactly the muzzle's front face)
   // lower jaw, hinged open
   const jaw=new THREE.Group(); jaw.position.set(0,HY-0.235,HZ+0.28); jaw.rotation.x=-0.34; body.add(jaw);
   bx(0.285,0.115,0.36, furDark, 0,-0.045,0.165, jaw);    // mandible
@@ -13609,10 +13668,16 @@ function makeManticore(){
     bx(0.032,0.10,0.055, inkMat,  side*0.145,HY+0.070,hf+0.020);   // vertical cat pupil
     bx(0.215,0.045,0.035,furDark, side*0.150,HY+0.175,hf-0.005);   // a heavy brow over each eye
   });
-  bx(0.245,0.215,0.022, creamMat, 0,HY-0.185,sf);                  // muzzle patch
-  bx(0.145,0.058,0.038, inkMat,   0,HY-0.085,sf+0.014);            // nose, tapering to a point
-  bx(0.098,0.040,0.038, inkMat,   0,HY-0.124,sf+0.014);
-  bx(0.048,0.030,0.038, inkMat,   0,HY-0.156,sf+0.014);
+  bx(0.265,0.215,0.022, creamMat, 0,HY-0.185,sf);                  // muzzle patch (0.265: the upper teeth row is 0.245 too, so at 0.245 they shared both sides)
+  // Depths 0.050 / 0.038 / 0.026, not three at 0.038. Stacked and overlapping down the muzzle at one
+  // shared depth, each pair presented the same front and back planes. A nose deepest at the bridge and
+  // tapering to the tip is the right shape besides.
+  // 0.056 / 0.040 / 0.026. All three sit 0.014 ahead of the cream muzzle patch, which is 0.022 deep, so
+  // a depth of exactly 0.050 puts a nose box's BACK face on the patch's back face — which is what a first
+  // pass at 0.050 did. These three differ from each other and none of them is 0.050.
+  bx(0.145,0.058,0.056, inkMat,   0,HY-0.085,sf+0.014);            // nose, tapering to a point
+  bx(0.098,0.040,0.040, inkMat,   0,HY-0.124,sf+0.014);
+  bx(0.048,0.030,0.026, inkMat,   0,HY-0.156,sf+0.014);
   bx(0.020,0.048,0.038, inkMat,   0,HY-0.196,sf+0.014);            // philtrum
   // whisker spots and whiskers
   [-1,1].forEach(side=>{
@@ -13829,7 +13894,9 @@ function makeBasilisk(){
 
   // ---- head
   const HY=1.22, HZ=0.72;
-  bx(0.36,0.30,0.44, scaleMat,  0, HY, HZ);                        // skull
+  // 0.38, not 0.36: the eye sockets sit at +-0.135 and are 0.09 wide, so they ended on 0.18 — exactly a
+  // 0.36 skull's own side.
+  bx(0.38,0.30,0.44, scaleMat,  0, HY, HZ);                        // skull
   bx(0.42,0.11,0.22, scaleMat2, 0, HY+0.18, HZ+0.10);              // heavy brow ridge
   [-1,1].forEach(sd=> bx(0.07,0.22,0.32, scaleMat3, sd*0.20, HY-0.02, HZ+0.04));   // cheek plates
   bx(0.28,0.22,0.28, scaleMat,  0, HY-0.08, HZ+0.34);              // snout
@@ -13860,14 +13927,18 @@ function makeBasilisk(){
   // a total depth-buffer tie right on top of the head, which is the flicker that was visible up there. Its
   // width, its height and its depth are all off the brow's now, and the dark band above it is off both.
   bx(0.44,0.08,0.46, goldMat, 0, HY+0.15, HZ);                     // circlet
-  bx(0.42,0.05,0.50, goldDark, 0, HY+0.225, HZ);
+  // 0.40, not 0.42: the note above got the circlet off the brow ridge but left this band on it — the brow
+  // is 0.42 too, and the band sits directly over it, so they still shared both side planes.
+  bx(0.40,0.05,0.50, goldDark, 0, HY+0.225, HZ);
   [{x:-0.15,h:0.16},{x:-0.08,h:0.25},{x:0,h:0.34},{x:0.08,h:0.25},{x:0.15,h:0.16}].forEach(pt=>{
     bx(0.06,pt.h,0.06, goldMat, pt.x, HY+0.19+pt.h/2, HZ-0.02);
     bx(0.045,0.045,0.045, goldDark, pt.x, HY+0.19+pt.h, HZ-0.02);  // a bead finishing each point
   });
   // crest down the nape. Three plates, not four: the neck leans forward, so a fourth stepped back and down
   // on the same ramp hung in open air behind the throat with nothing to attach to.
-  [[1.24,0.52],[1.14,0.50],[1.04,0.52]].forEach(([cy,cz],i)=> bx(0.09,0.13-i*0.02,0.10, goldDark, 0, cy, cz));
+  // Widths taper with the heights. Cut at a flat 0.09 the first two plates — which overlap, the third
+  // only touches — presented one pair of side planes down the nape.
+  [[1.24,0.52],[1.14,0.50],[1.04,0.52]].forEach(([cy,cz],i)=> bx(0.09-i*0.012,0.13-i*0.02,0.10, goldDark, 0, cy, cz));
 
   // ---- the flared hood. Both sides are built from IDENTICAL local geometry running out along local +X;
   // the left one is simply swung round by pi, which avoids mirroring with a negative scale.
@@ -13882,10 +13953,13 @@ function makeBasilisk(){
     panel(0.32,0.46,0.07, 0.15, 0.00, scaleMat2);
     panel(0.28,0.38,0.06, 0.40,-0.06, scaleMat2);
     panel(0.22,0.27,0.05, 0.61,-0.14, scaleMat2);
-    // gold rim along the leading edge, in three pieces following the same fan
-    panel(0.32,0.06,0.075, 0.15, 0.25, goldMat);
-    panel(0.28,0.055,0.065,0.40, 0.15, goldMat);
-    panel(0.22,0.05,0.055, 0.61, 0.01, goldMat);
+    // gold rim along the leading edge, in three pieces following the same fan.
+    // Each is 0.02 narrower than the panel it rims and centred on it, so its ends fall inside rather than
+    // on the panel's own. Cut to the same width they were twelve of this model's eighteen coincident
+    // pairs — three per hood, both hoods, two faces each — and the hood is the basilisk's silhouette.
+    panel(0.30,0.06,0.075, 0.15, 0.25, goldMat);
+    panel(0.26,0.055,0.065,0.40, 0.15, goldMat);
+    panel(0.20,0.05,0.055, 0.61, 0.01, goldMat);
     // the eye-spot on the back of the hood — the marking that makes a flared cobra read instantly
     const ring=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.02), scaleMat3); ring.position.set(0.26,0.02,-0.045); hood.add(ring);
     const dot =new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.03), inkMat);    dot.position.set(0.26,0.02,-0.052); hood.add(dot);
@@ -14119,7 +14193,7 @@ function makeWereJaguar(){
   [-1,1].forEach(sd=> b(0.10,0.13,0.16, peltDark, sd*0.17,1.00,0.16));
 
   // ---- head, thrust forward on a short thick neck
-  b(0.26,0.20,0.16, pelt,     0,0.94,0.34);           // neck
+  b(0.26,0.20,0.16, pelt,     0,0.934,0.34);          // neck (0.934: at 0.94 it topped out on exactly the shoulders' top face)
   b(0.34,0.30,0.32, pelt,     0,0.98,0.52);           // skull
   b(0.36,0.09,0.30, peltDark, 0,1.07,0.525);          // the cleft — the were-jaguar's signature brow
   b(0.11,0.14,0.10, peltDark, 0,1.17,0.50);           // the cleft's crest
@@ -14235,7 +14309,8 @@ function makeMonolithVanguard(){
   [-1,1].forEach(sd=> b(0.07,0.90,0.17, stonePale, sd*0.355,0.95,0.36));     // dressed edges
   b(0.62,0.17,0.07, stoneDark, 0,1.22,0.425);        // heavy brow
   b(0.66,0.06,0.05, stonePale, 0,1.33,0.444);        // the brow's upper rim
-  [-1,1].forEach(sd=> b(0.17,0.14,0.06, stoneDark, sd*0.16,1.07,0.43));      // eye sockets
+  // 0.436: at 0.43 each socket ran 0.40..0.46 — the nose's back face at one end, the brow's front at the other.
+  [-1,1].forEach(sd=> b(0.17,0.14,0.06, stoneDark, sd*0.16,1.07,0.436));     // eye sockets
   [-1,1].forEach(sd=> b(0.08,0.07,0.04, jadePale,  sd*0.16,1.07,0.462));     // jade set into each eye
   b(0.17,0.20,0.08, stone,     0,0.92,0.44);         // the flat Olmec nose
   b(0.21,0.06,0.05, stoneDark, 0,0.815,0.445);       // its flared base
@@ -14266,7 +14341,7 @@ function makeMonolithVanguard(){
   cp(0.11,0.26,0.09,  stoneDark,  -0.34, 0);          // the basalt head
   cp(0.13,0.06,0.124, stonePale,  -0.235, -0.03);     // its collar
   cp(0.09,0.05,0.07,  stonePale,  -0.485, 0);         // and its butt
-  for(let i=0;i<3;i++) cp(0.125,0.03,0.14, stonePale, -0.29-i*0.07, 0);   // banding, centred on the head
+  for(let i=0;i<3;i++) cp(0.125,0.03,0.152, stonePale, -0.29-i*0.07, 0);  // banding, centred on the head (0.152: at 0.14 it matched the thigh's own depth behind it)
                                                                           // and clearly deeper than it
 
   return _mexRig(g, legL, legR, armR, armL);
@@ -14518,7 +14593,7 @@ function makeEagleKnight(){
   b(0.32,0.27,0.20, feather,  0,0.98,0);            // belly
   b(0.36,0.25,0.22, feather,  0,1.21,0);            // chest
   b(0.38,0.09,0.246,featherDk,0,1.14,0);            // a band of darker down across the ribs
-  b(0.33,0.07,0.252,quill,    0,1.275,0);           // gold collar
+  b(0.33,0.07,0.252,quill,    0,1.281,0);           // gold collar (1.281: at 1.275 its top face was the upper arms' own, same as the Jaguar Knight's)
   b(0.32,0.17,0.18, feather,  0,1.34,-0.01);        // shoulder yoke
   // ---- the wings: three flight feathers swept back off each shoulder.
   // The wing ROOT first. Without it the outermost feather (i=2) sits at z=-0.17, and nothing else on the
@@ -14536,7 +14611,7 @@ function makeEagleKnight(){
   });
   // ---- dart bundle on the hip
   for(let i=0;i<4;i++) b(0.02,0.34,0.02, cane, -0.155+i*0.032, 0.95, -0.13);
-  b(0.12,0.05,0.10, cloth, -0.10,1.13,-0.13);       // the tie holding them
+  b(0.12,0.05,0.10, cloth, -0.094,1.13,-0.13);      // the tie holding them (-0.094: at -0.10 its outer edge was the belly's own)
 
   b(0.13,0.09,0.13, skinDark, 0,1.44,0);            // neck
   b(0.23,0.22,0.21, skin,     0,1.57,0);            // the face, showing inside the beak
@@ -14607,7 +14682,12 @@ function makeJaguarKnight(){
     for(let i=0;i<n;i++){
       const r1=Math.abs(Math.sin((i+seed)*12.9898)*43758.5453)%1;
       const r2=Math.abs(Math.sin((i+seed)*78.233)*43758.5453)%1;
-      b(0.045,0.045,0.012, spot, cx+(r1-0.5)*w, cy+(r2-0.5)*h, cz);
+      // A third hash, for DEPTH. The scatter put every rosette at one shared cz on one shared thickness,
+      // so any two that happened to overlap on the pelt — and several do — presented the same front and
+      // back planes. Ten of this model's twelve pairs came from that. Jittering z by +-5mm gives every
+      // spot its own pair of planes and reads as rosettes sunk unevenly into fur, which is an improvement.
+      const r3=Math.abs(Math.sin((i+seed)*39.425)*43758.5453)%1;
+      b(0.045,0.045,0.012, spot, cx+(r1-0.5)*w, cy+(r2-0.5)*h, cz+(r3-0.5)*0.01);
     }
   };
 
@@ -14634,7 +14714,7 @@ function makeJaguarKnight(){
   spots(0,1.21,0.113,0.30,0.20,7,1);                // rosettes across the chest
   spots(0,0.98,0.103,0.26,0.20,5,9);                // and the belly
   b(0.38,0.09,0.246,peltDk, 0,1.14,0);
-  b(0.33,0.07,0.252,bone,   0,1.275,0);             // bone collar
+  b(0.33,0.07,0.252,bone,   0,1.281,0);             // bone collar (1.281: at 1.275 its top face was the upper arms' own)
   b(0.32,0.17,0.18, pelt,   0,1.34,-0.01);
   // the pelt's own tail, hanging behind
   for(let i=0;i<5;i++) b(0.075-i*0.008,0.11,0.075-i*0.008, i%2?pelt:peltDk, 0,1.16-i*0.10,-0.155-i*0.012);
@@ -14720,14 +14800,17 @@ function makeCuachic(){
   b(0.40,0.30,0.24, paintY, 0,1.05,0);              // belly — broader than the knights
   b(0.44,0.28,0.26, paintR, 0,1.32,0);              // chest
   b(0.46,0.10,0.286,hide,   0,1.24,0);              // a hide band across the ribs
-  b(0.40,0.08,0.292,bone,   0,1.395,0);             // bone collar
-  b(0.40,0.19,0.21, paintR, 0,1.47,-0.01);          // heavy shoulder yoke
+  // 0.42 and 0.38, not 0.40 and 0.40. Belly, collar, yoke and all four quilting courses were cut to one
+  // shared 0.40, and they overlap each other up the torso, so every such pair presented the same two side
+  // planes — ten pairs, the whole of this model's count, from one repeated number.
+  b(0.42,0.08,0.292,bone,   0,1.395,0);             // bone collar
+  b(0.38,0.19,0.21, paintR, 0,1.47,-0.01);          // heavy shoulder yoke
   // ---- the ichcahuipilli: a quilted cotton cuirass, drawn as stitched courses down the chest.
   // These stand PROUD of the chest on a shallow depth rather than being near-full-depth slabs sharing the
   // torso's own footprint — at depth 0.272 their front and back faces landed within 0.003 of the rib band's
   // and the chest's, which is a z-fight. Quilting sits on top of armour anyway, so this is also the truer
   // shape: they overlap the chest solidly at the back and clear every other face at the front.
-  for(let i=0;i<4;i++) b(0.40,0.045,0.09, cloth, 0, 1.20+i*0.075, 0.13);
+  for(let i=0;i<4;i++) b(0.36,0.045,0.09, cloth, 0, 1.20+i*0.075, 0.13);   // 0.36: see the width note above
 
   b(0.15,0.10,0.15, skinDark,0,1.58,0);             // neck
   b(0.25,0.24,0.23, skin,    0,1.73,0);             // the bare head — no helmet
@@ -15655,7 +15738,7 @@ function makeSongInfantry(){
   [0,1,2].forEach(i=> b(0.40-i*0.04,0.02,0.082, cordRed, 0,1.395-i*0.13,0.16));  // the lacing between them
   b(0.47,0.10,0.30, lamelDk, 0,1.16,0);              // girdle over the tunic
   b(0.48,0.18,0.21, lamel,   0,1.47,-0.005);         // shoulder guards, back
-  [-1,1].forEach(sd=> b(0.15,0.14,0.20, lamel, sd*0.235,1.50,0));
+  [-1,1].forEach(sd=> b(0.15,0.14,0.20, lamel, sd*0.235,1.50,0.006));   // 0.006: at 0 each pauldron's front face was the back guard's own
 
   b(0.15,0.10,0.15, skinDk,  0,1.60,0);
   b(0.25,0.24,0.23, skin,    0,1.74,0);
@@ -15742,7 +15825,7 @@ function makeSongCrossbowman(){
   };
   const legL=mkLeg(1), legR=mkLeg(-1);
 
-  b(0.41,0.15,0.28, lamelDk, 0,0.80,0);
+  b(0.41,0.15,0.28, lamelDk, 0,0.806,0);            // 0.806: at 0.80 its underside sat on exactly the hands' own
   b(0.37,0.28,0.225, wool,   0,1.00,0);              // no cuirass -- a lighter garrison coat, for the draw
   [0,1].forEach(i=> b(0.30-i*0.06,0.06,0.05, lamelDk, 0,1.12-i*0.14,0.137));   // a light chest wrap, not full plate
   b(0.44,0.09,0.28, lamelDk, 0,1.14,0);
@@ -15846,7 +15929,7 @@ function makeSongFireLance(){
   b(0.44,0.07,0.30, ironMat,  0,0.742,0);            // its plate
   b(0.38,0.30,0.23, coat,     0,1.005,0);
   b(0.44,0.33,0.265, coat,    0,1.295,0);            // the padded coat, quilted in rows
-  [0,1,2].forEach(i=> b(0.40-i*0.05,0.055,0.055, coatDk, 0,1.40-i*0.105,0.152));
+  [0,1,2].forEach(i=> b(0.42-i*0.05,0.055,0.055, coatDk, 0,1.40-i*0.105,0.152));   // 0.42 base: at 0.40 the third row came out 0.30, which is the apron's own width
   b(0.30,0.34,0.10, leather,  0,1.06,0.155);         // a leather apron over the front, against sparks
   [0,1].forEach(i=> b(0.26-i*0.06,0.03,0.115, cordRed, 0,1.16-i*0.16,0.16));
   b(0.46,0.17,0.22, coat,     0,1.455,-0.008);
@@ -15880,7 +15963,7 @@ function makeSongFireLance(){
   const lb=(w,h,d,mat,x,y,z)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); m.position.set(x,y,z); lance.add(m); return m; };
   lb(0.040,0.040,1.15, leather, 0,0,-0.18);          // the shaft
   lb(0.054,0.054,0.075, cordRed, 0,0,0.16);          // the grip binding
-  lb(0.050,0.050,0.14, ironMat, 0,0,-0.76);          // the socket
+  lb(0.050,0.050,0.14, ironMat, 0,0,-0.766);         // the socket (-0.766: at -0.76 its front face was the powder tube's own)
   lb(0.032,0.032,0.22, ironMat, 0,0,-0.93);          // the spearhead
   lb(0.066,0.016,0.09, ironMat, 0,0,-0.84);          // its wings
   // THE TUBE: bamboo, lashed under the head, its mouth open toward the target. This is the weapon.
@@ -15955,7 +16038,8 @@ function makeSongMarine(){
   b(0.46,0.26,0.13, strawM,    0,1.30,-0.165);
   // each fringe course has to LAP the one above it, and the first has to lap the panel: cut 0.055 tall
   // at 0.13 spacing they hung with 0.075 of air between them and two of the three touched nothing.
-  [0,1,2].forEach(i=> b(0.40-i*0.08,0.11,0.055, strawDk, 0,1.24-i*0.09,-0.215));
+  // z steps back per course: cut at one shared -0.215 all three presented the same front and back planes.
+  [0,1,2].forEach(i=> b(0.40-i*0.08,0.11,0.055, strawDk, 0,1.24-i*0.09,-0.215-i*0.006));
   [-1,1].forEach(sd=> b(0.135,0.22,0.155, strawM, sd*0.235,1.385,-0.03));
 
   b(0.142,0.095,0.142, skinDk, 0,1.545,0);
@@ -16045,7 +16129,7 @@ function makeSongGuard(){
   b(0.16,0.11,0.16, skinDk,  0,1.71,0);
   b(0.27,0.25,0.25, skin,    0,1.86,0);
   b(0.11,0.065,0.075, skinDk,0,1.84,0.135);
-  [-1,1].forEach(sd=> b(0.075,0.06,0.05, eyeMat, sd*0.068,1.90,0.128));
+  [-1,1].forEach(sd=> b(0.075,0.06,0.05, eyeMat, sd*0.068,1.894,0.128));  // 1.894: at 1.90 the eyes topped out on exactly the visor plate's own top face
   b(0.20,0.13,0.13, skinDk,  0,1.755,0.10);            // a full beard -- an older, senior man
   // a full iron helm with a face-guard, unlike the infantryman's open one -- the clearest single tell
   // at range that this is the one you cannot just walk through
@@ -16137,7 +16221,7 @@ function makeSongCommander(){
   b(0.16,0.11,0.16, skinDk,  0,1.71,0);
   b(0.27,0.25,0.25, skin,    0,1.86,0);
   b(0.11,0.065,0.075, skinDk,0,1.84,0.135);
-  [-1,1].forEach(sd=> b(0.075,0.06,0.05, eyeMat, sd*0.068,1.90,0.128));
+  [-1,1].forEach(sd=> b(0.075,0.06,0.05, eyeMat, sd*0.068,1.894,0.128));  // 1.894: at 1.90 the eyes topped out on exactly the visor plate's own top face
   b(0.20,0.13,0.13, skinDk,  0,1.755,0.10);
   b(0.31,0.16,0.30, gold,    0,2.02,0);                // a gilded helm, not plain iron
   b(0.33,0.07,0.27, lamelDk, 0,1.935,0);
@@ -16161,8 +16245,12 @@ function makeSongCommander(){
     const fw = 0.30 - Math.abs(k)*0.045, fh = 0.42 - Math.abs(k)*0.06;
     const flag = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, 0.02 + Math.abs(k)*0.016), bannerM);
     flag.position.set(0.10+fw*0.5, 0.86 - Math.abs(k)*0.05, k*0.038); flag.castShadow=true; pole.add(flag);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.06, 0.044 + Math.abs(k)*0.016), bannerGold);
-    trim.position.set(0.10+fw*0.5, 0.86 + fh*0.5 - 0.03 - Math.abs(k)*0.05, k*0.038); pole.add(trim);
+    // fw+0.02 and -0.024, not fw and -0.03. Cut to the flag's own width on the flag's own x, and with its
+    // top worked out to exactly the flag's top, the trim shared three planes with the cloth it binds — on
+    // all three poles, so nine pairs per banner, and this banner is carried by both bosses. A bound edge
+    // standing slightly proud of the cloth is what one looks like anyway.
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(fw+0.02, 0.06, 0.044 + Math.abs(k)*0.016), bannerGold);
+    trim.position.set(0.10+fw*0.5, 0.86 + fh*0.5 - 0.024 - Math.abs(k)*0.05, k*0.038); pole.add(trim);
   });
 
   const mkArm=(sd)=>{
@@ -16256,7 +16344,7 @@ function makeYamenAdmiral(){
   b(0.16,0.11,0.16, skinDk,  0,1.71,0);
   b(0.27,0.25,0.25, skin,    0,1.86,0);
   b(0.11,0.065,0.075, skinDk,0,1.84,0.135);
-  [-1,1].forEach(sd=> b(0.075,0.06,0.05, eyeMat, sd*0.068,1.90,0.128));
+  [-1,1].forEach(sd=> b(0.075,0.06,0.05, eyeMat, sd*0.068,1.894,0.128));  // 1.894: at 1.90 the eyes topped out on exactly the visor plate's own top face
   b(0.20,0.13,0.13, skinDk,  0,1.755,0.10);
   b(0.31,0.16,0.30, gold,    0,2.02,0);
   b(0.33,0.07,0.27, lamelDk, 0,1.935,0);
@@ -16279,8 +16367,12 @@ function makeYamenAdmiral(){
     const fw = 0.30 - Math.abs(k)*0.045, fh = 0.42 - Math.abs(k)*0.06;
     const flag = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, 0.02 + Math.abs(k)*0.016), bannerM);
     flag.position.set(0.10+fw*0.5, 0.86 - Math.abs(k)*0.05, k*0.038); flag.castShadow=true; pole.add(flag);
-    const trim = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.06, 0.044 + Math.abs(k)*0.016), bannerGold);
-    trim.position.set(0.10+fw*0.5, 0.86 + fh*0.5 - 0.03 - Math.abs(k)*0.05, k*0.038); pole.add(trim);
+    // fw+0.02 and -0.024, not fw and -0.03. Cut to the flag's own width on the flag's own x, and with its
+    // top worked out to exactly the flag's top, the trim shared three planes with the cloth it binds — on
+    // all three poles, so nine pairs per banner, and this banner is carried by both bosses. A bound edge
+    // standing slightly proud of the cloth is what one looks like anyway.
+    const trim = new THREE.Mesh(new THREE.BoxGeometry(fw+0.02, 0.06, 0.044 + Math.abs(k)*0.016), bannerGold);
+    trim.position.set(0.10+fw*0.5, 0.86 + fh*0.5 - 0.024 - Math.abs(k)*0.05, k*0.038); pole.add(trim);
     // a single gold scale-motif square on the centre flag only, standing proud of its face
     if(k===0){
       const scale = new THREE.Mesh(new THREE.BoxGeometry(0.13,0.13,0.052), bannerGold);
@@ -16293,7 +16385,9 @@ function makeYamenAdmiral(){
   hd(0.16,0.14,0.20, gold, 0,0,0);
   hd(0.10,0.09,0.14, gold, 0,-0.02,0.15);
   [-1,1].forEach(sd=> hd(0.03,0.10,0.03, gold, sd*0.06,0.09,0.02));   // horns
-  [-1,1].forEach(sd=> hd(0.025,0.025,0.02, lamelDk, sd*0.05,0.02,0.09));   // eyes, dark against the gold
+  // z 0.096, not 0.09: the eye ran 0.08..0.10, which is the snout's back face at one end and the
+  // skull's front face at the other.
+  [-1,1].forEach(sd=> hd(0.025,0.025,0.02, lamelDk, sd*0.05,0.02,0.096));  // eyes, dark against the gold
 
   const mkArm=(sd)=>{
     const a=new THREE.Group(); a.position.set(sd*0.30,1.56,0); g.add(a);
@@ -16532,7 +16626,7 @@ function makeIfritKing(){
   for(let i=0;i<5;i++){
     const mx=-0.5+i*0.25;
     const cape=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.7-Math.abs(i-2)*0.1,0.08), i%2?flameOuter:flameMid);
-    cape.position.set(mx,1.95,-0.33); g.add(cape);
+    cape.position.set(mx,1.956,-0.33); g.add(cape);   // 1.956: the two outermost panels are 0.5 tall, so at 1.95 they bottomed out on exactly the chest's underside
   }
   // ---- wide raging flame base (standing IN fire, not wearing a cone skirt) ----
   // Each cone's y is its CENTRE, so a cone of height h centred at y reaches down to y-h/2. The innermost
@@ -16736,7 +16830,9 @@ function makeHydra(){
     [-1,1].forEach(s=>{
       const hood=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.32,0.2), hoodMat); hood.position.set(s*0.22,0.02,-0.1); hood.rotation.z=s*0.55; hood.rotation.y=s*0.3; hd.add(hood);
     });
-    const browRidge=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.08,0.16), crestMat); browRidge.position.set(0,0.15,0.1); hd.add(browRidge);
+    // 0.094, not 0.10: the ridge ran out at z=0.18, which is exactly where the skull does — and this
+    // head is built five times, so that one plane was five of the Hydra's pairs.
+    const browRidge=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.08,0.16), crestMat); browRidge.position.set(0,0.15,0.094); hd.add(browRidge);
     [-1,1].forEach(s=>{   // swept brow horns, rooted in the ridge
       const horn=new THREE.Mesh(new THREE.ConeGeometry(0.035,0.17,4), crestMat);
       horn.position.set(s*0.14,0.24,0.03); horn.rotation.x=-0.42; hd.add(horn);
@@ -16897,7 +16993,7 @@ function makeChampion(){
     bx(0.07,0.09,0.09, inkMat, sd*0.1,2.2,0.25);                  // eyes burning in the helmet's shadow
   });
   bx(0.5,0.13,0.14, armorMat, 0,2.09,-0.23);                      // neck flange at the back
-  bx(0.5,0.06,0.16, armorDark, 0,2.015,-0.235);   // 2.015: at 2.02 its top face landed on exactly the gorget collar's
+  bx(0.48,0.06,0.16, armorDark, 0,2.015,-0.235);  // 2.015: at 2.02 its top face landed on exactly the gorget collar's. 0.48: and at 0.5 its sides were the flange's
   // transverse red crest (centurion style) running side-to-side
   const crestRidge = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.1,0.14), crestMat); crestRidge.position.set(0,2.6,0.02); g.add(crestRidge);
   // Every plume its own depth and its own z. Built to one shared thickness at one shared z they all shared
@@ -16952,7 +17048,7 @@ function makeChampion(){
   blade.position.set(0, guardY+bladeDir.y*bladeLen/2, guardZ+bladeDir.z*bladeLen/2); blade.rotation.x=0.4; armR.add(blade);
   const fuller=new THREE.Mesh(new THREE.BoxGeometry(0.04,bladeLen*0.8,0.06), armorDark);
   fuller.position.set(0, guardY+bladeDir.y*bladeLen/2, guardZ+bladeDir.z*bladeLen/2); fuller.rotation.x=0.4; armR.add(fuller);
-  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.2,4), steelMat);
+  const tip=new THREE.Mesh(new THREE.ConeGeometry(0.052,0.2,4), steelMat);   // 0.052: at 0.06 the tip was exactly as wide as the shaft it caps
   tip.position.set(0, guardY+bladeDir.y*(bladeLen+0.08), guardZ+bladeDir.z*(bladeLen+0.08)); tip.rotation.x=0.4; armR.add(tip);
   g.userData.bossgunAnchor = armR; // AI can wave the sword arm via armR if desired
 
@@ -17009,9 +17105,10 @@ function makeTiger(){
   bx(0.44,0.14,0.44, furMat3, 0,0.79,-0.5);       // sunlit top of the haunch (0.44 deep: at 0.5 it shared both the haunch's z faces)
   bx(0.4,0.14,0.58, furMat3, 0,0.77,0.05);        // and of the ribs
   bx(0.36,0.14,0.9, bellyMat,0,0.36,-0.05);       // belly
-  bx(0.4,0.4,0.3,   furMat,  0,0.56,0.44);        // chest
+  bx(0.42,0.4,0.3,  furMat,  0,0.56,0.44);        // chest (0.42: at 0.40 its sides were the dorsal panel's)
   bx(0.3,0.22,0.26, bellyMat,0,0.44,0.5);         // white chest bib
-  [-1,1].forEach(sd=> bx(0.1,0.26,0.3, furMat2, sd*0.24,0.68,0.22));   // shoulder blades
+  // 0.672, not 0.68: at 0.68 the blade's top face landed on exactly the ribcage's, both sides.
+  [-1,1].forEach(sd=> bx(0.1,0.26,0.3, furMat2, sd*0.24,0.672,0.22));  // shoulder blades
 
   // Real tiger banding: vertical bars down each flank at irregular spacing, a set over the spine, and
   // shorter marks on the haunch — thin and standing proud of the coat, never body-width blocks (the old
@@ -17020,29 +17117,35 @@ function makeTiger(){
     const h=0.30-((i*0.05)%0.09);
     [-1,1].forEach(sd=> bx(0.05,h,0.055+((i*0.03)%0.04), stripeMat, sd*0.255,0.60,sz));
   });
-  [0.26,0.02,-0.28,-0.54].forEach((sz,i)=>
-    bx(0.30-((i*0.06)%0.1),0.05,0.06, stripeMat, 0,0.845-((i*0.01)%0.02),sz));
+  // z -0.265 for the third bar and the whole set lifted to 0.855: at -0.28 that bar ran out exactly where
+  // the haunch does, and at 0.845/0.835 the bars' tops landed on the sunlit haunch panel's own top face.
+  // Lifting them also reads better — a spine bar should stand proud of the coat, not flush into it.
+  [0.26,0.02,-0.265,-0.54].forEach((sz,i)=>
+    bx(0.30-((i*0.06)%0.1),0.05,0.06, stripeMat, 0,0.855-((i*0.01)%0.02),sz));
 
   // head: brow ridge, pale muzzle, dark nose, fangs, cheek ruff
   bx(0.38,0.36,0.34, furMat,  0,0.76,0.68);
   bx(0.36,0.07,0.11, furMat2, 0,0.90,0.79);       // brow ridge
   bx(0.28,0.22,0.2,  bellyMat,0,0.655,0.885);     // muzzle
   bx(0.11,0.07,0.05, noseMat, 0,0.735,0.975);     // nose
-  bx(0.06,0.03,0.05, stripeMat,0,0.715,0.982);    // its dark underline
+  bx(0.06,0.03,0.05, stripeMat,0,0.722,0.982);    // its dark underline (0.722: at 0.715 its underside was the nose's own)
   bx(0.2,0.05,0.16,  stripeMat,0,0.60,0.90);      // the dark of the open mouth
   bx(0.24,0.09,0.18, bellyMat,0,0.565,0.885);     // chin
   [-1,1].forEach(sd=>{
     bx(0.13,0.14,0.06, furMat, sd*0.14,0.98,0.63);          // ear
-    bx(0.13,0.05,0.05, stripeMat, sd*0.14,1.03,0.625);      // black ear back
+    // 0.11 wide at z 0.632, not 0.13 at 0.625: cut to the ear's own width on the ear's own x it shared
+    // both side planes, and its back face sat on the ear's back face too — three pairs, twice over.
+    bx(0.11,0.05,0.05, stripeMat, sd*0.14,1.03,0.632);      // black ear back
     bx(0.06,0.05,0.04, bellyMat, sd*0.14,0.995,0.655);      // the white ocellus spot behind it
     bx(0.075,0.065,0.045, eyeMat, sd*0.115,0.80,0.855);     // eye
     bx(0.028,0.05,0.04, stripeMat, sd*0.115,0.80,0.868);    // slit pupil
     bx(0.09,0.03,0.05, stripeMat, sd*0.13,0.845,0.85);      // eye liner above it
     const fang=new THREE.Mesh(new THREE.ConeGeometry(0.03,0.14,4), fangMat);
-    fang.position.set(sd*0.075,0.585,0.955); fang.rotation.x=Math.PI; g.add(fang);
+    // 0.948, not 0.955: the fang's outer face landed on exactly the muzzle's front plane.
+    fang.position.set(sd*0.075,0.585,0.948); fang.rotation.x=Math.PI; g.add(fang);
     bx(0.055,0.16,0.05, stripeMat, sd*0.115,0.90,0.71);     // forehead bars
     bx(0.045,0.13,0.05, stripeMat, sd*0.055,0.925,0.70);
-    bx(0.04,0.11,0.14, stripeMat, sd*0.185,0.73,0.78);      // cheek bars
+    bx(0.04,0.11,0.14, stripeMat, sd*0.185,0.73,0.772);     // cheek bars (0.772: at 0.78 they ended on the head's own front face)
     bx(0.04,0.08,0.12, stripeMat, sd*0.19,0.63,0.73);
     bx(0.09,0.20,0.16, bellyMat, sd*0.20,0.66,0.72);        // the pale cheek ruff a tiger's face carries
     for(let i=0;i<3;i++){                                   // whiskers
