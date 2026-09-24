@@ -75,13 +75,26 @@
   body:not(.playing) #mobile{ display:none !important; }
   #mobile{display:none;position:absolute;inset:0;z-index:5;pointer-events:none;touch-action:none}
   #mobile.on{display:block}
-  #stick{position:absolute;left:26px;bottom:56px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.4);pointer-events:auto}
+  /* The stick is a FLOATING joystick: it has no fixed home, so it carries no pointer-events of its own —
+     the touch that drives it is caught by a document-level listener over the whole left zone, which then
+     plants the ring wherever the thumb actually came down and fades it back out on release. */
+  #stick{position:absolute;left:0;top:0;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,0.12);border:2px solid rgba(255,255,255,0.4);pointer-events:none;opacity:0;transition:opacity 0.1s}
+  #stick.active{opacity:1}
   #knob{position:absolute;left:45px;top:45px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.55);border:2px solid rgba(255,255,255,0.8)}
   #firebtn{position:absolute;right:30px;bottom:40px;width:120px;height:120px;border-radius:50%;background:rgba(220,40,40,0.55);border:3px solid rgba(255,255,255,0.85);color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;pointer-events:auto;user-select:none}
   #firebtn:active{background:rgba(255,80,80,0.8)}
+  #jumpbtn{position:absolute;right:170px;bottom:70px;width:80px;height:80px;border-radius:50%;background:rgba(40,150,90,0.5);border:3px solid rgba(255,255,255,0.8);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;pointer-events:auto;user-select:none}
+  #jumpbtn:active{background:rgba(70,200,120,0.8)}
+  #interactbtn{position:absolute;left:50%;bottom:230px;transform:translateX(-50%);padding:10px 22px;border-radius:24px;background:rgba(40,150,90,0.65);border:3px solid rgba(255,255,255,0.85);color:#fff;font-weight:800;font-size:14px;display:none;align-items:center;justify-content:center;pointer-events:auto;user-select:none;white-space:nowrap}
+  #interactbtn.show{display:flex}
   #wbtns{position:absolute;right:36px;bottom:180px;display:flex;flex-direction:column;gap:10px;pointer-events:auto}
   .wbtn{width:52px;height:52px;border-radius:10px;background:rgba(0,0,0,0.45);border:2px solid rgba(255,255,255,0.6);color:#fff;font-weight:800;font-size:22px;display:flex;align-items:center;justify-content:center;user-select:none}
   .wbtn.sel{background:rgba(80,150,255,0.7);border-color:#fff}
+  #rotateoverlay{display:none;position:absolute;inset:0;z-index:20;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(4,6,12,0.94);color:#fff;text-align:center;padding:20px 30px;font-size:16px;font-weight:700}
+  #rotateoverlay span{font-size:44px}
+  @media (orientation:portrait){ body.touch.playing #rotateoverlay{ display:flex; } }
+  #sensrow{display:none;align-items:center;gap:10px;margin-top:18px;font-size:13px;color:#cfe0ea}
+  body.touch #sensrow{display:flex}
   #pausebtn{position:absolute;top:8px;left:50%;transform:translateX(-50%);padding:6px 16px;border-radius:8px;background:rgba(0,0,0,0.45);border:2px solid rgba(255,255,255,0.7);color:#fff;font-size:14px;font-weight:700;letter-spacing:1px;display:flex;align-items:center;justify-content:center;z-index:6;cursor:pointer;user-select:none}
   #pausebtn:hover{background:rgba(0,0,0,0.65)}
   body:not(.playing) #pausebtn, body.paused #pausebtn{ display:none !important; }
@@ -241,7 +254,9 @@
 <body>
 <div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Space] jump · [R] reload · right-click or hold [Shift] to scope (bow/sling)</div>
 <div id="pausebtn" title="Pause">❚❚ PAUSE</div>
-<div id="pauseoverlay"><div id="pausetitle">PAUSED</div><button id="resumebtn">RESUME</button><div id="pausehint">Press P or Esc to resume</div></div>
+<div id="pauseoverlay"><div id="pausetitle">PAUSED</div><button id="resumebtn">RESUME</button>
+  <div id="sensrow"><label for="sensSlider">Look sensitivity</label><input type="range" id="sensSlider" min="50" max="200" value="100"></div>
+  <div id="pausehint">Press P or Esc to resume</div></div>
 <div id="stats">🔫 <span id="weap">Rifle</span> &nbsp; ⭐ <span id="score">0</span> &nbsp; 🌊 Wave <span id="wave">1</span> &nbsp; 👾 <span id="enemies">0</span></div>
 <div id="ammoBig"></div>
 <div id="bossbar"><div id="bosslabel">☠ BOSS</div><div id="bosstrack"><div id="bossfill"></div></div></div>
@@ -289,8 +304,11 @@
   <div id="stick"><div id="knob"></div></div>
   <div id="wbtns"><div class="wbtn" data-w="0">1</div><div class="wbtn sel" data-w="1">2</div><div class="wbtn" data-w="2">3</div><div class="wbtn" data-w="3">4</div></div>
   <div id="adsbtn">SCOPE</div>
+  <div id="jumpbtn">JUMP</div>
+  <div id="interactbtn">🎟️ BOOTH</div>
   <div id="firebtn">FIRE</div>
 </div>
+<div id="rotateoverlay"><span>🔄</span>Rotate your device to landscape for the best experience</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
         integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -20233,12 +20251,14 @@ function nearBooth(){
 // There is no nearRaft(). A trip has no return interactable at all now: the arc moves the player on its
 // own when a leg is cleared, so the only thing [E] ever opens is the booth back in Cairo.
 // Called once per frame from the animate loop.
+const interactBtnEl = document.getElementById('interactbtn');
 function updateInteract(){
+  const booth = nearBooth() && !boothOpen && !paused;
   if(promptEl){
-    const booth = nearBooth() && !boothOpen && !paused;
     promptEl.textContent = booth ? '\u{1F39F} Travel Booth — press [E]' : '';
     promptEl.style.opacity = booth ? '1' : '0';
   }
+  if(interactBtnEl) interactBtnEl.classList.toggle('show', booth);
   updateBoothMarker();
 }
 
@@ -20951,7 +20971,10 @@ function releaseAllInput(){
 let touchPlaying = false;            // mobile "playing" flag (no pointer lock on touch)
 const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints>0) || matchMedia('(pointer: coarse)').matches;
 const mobileEl = document.getElementById('mobile');
-if(isTouch && mobileEl) mobileEl.classList.add('on');
+if(isTouch && mobileEl){ mobileEl.classList.add('on'); document.body.classList.add('touch'); }
+// Touch look sensitivity: a user-adjustable multiplier on the drag-to-look constant below, persisted so
+// it survives a reload. Desktop mouse sensitivity is unaffected — this only scales the touch path.
+let touchSensMult = parseFloat(localStorage.getItem('nf_touchSens')) || 1;
 
 (function setupTouch(){
   if(!mobileEl) return;
@@ -20976,33 +20999,65 @@ if(isTouch && mobileEl) mobileEl.classList.add('on');
     }, {passive:false});
   }
 
+  // jump button — mirrors the Space-bar jump condition exactly
+  const jumpBtn = document.getElementById('jumpbtn');
+  if(jumpBtn){
+    jumpBtn.addEventListener('touchstart', e=>{ e.preventDefault(); e.stopPropagation(); if(paused) return;
+      if(player.alive && jumpY<=0 && jumpV===0) jumpV = JUMP_V;
+    }, {passive:false});
+  }
+
+  // travel-booth interact button — only visible near the booth (toggled in updateInteract()), mirrors [E]
+  const interactBtn = document.getElementById('interactbtn');
+  if(interactBtn){
+    interactBtn.addEventListener('touchstart', e=>{ e.preventDefault(); e.stopPropagation(); if(paused) return;
+      if(nearBooth()) openBooth();
+    }, {passive:false});
+  }
+
+  // look sensitivity slider (pause menu, touch-only per its CSS gate)
+  const sensSlider = document.getElementById('sensSlider');
+  if(sensSlider){
+    sensSlider.value = Math.round(touchSensMult*100);
+    sensSlider.addEventListener('input', ()=>{
+      touchSensMult = sensSlider.value/100;
+      localStorage.setItem('nf_touchSens', touchSensMult);
+    });
+  }
+
   // fire button (hold to auto-fire; tap to single-fire) — track the touch id
   function releaseFire(){ firing=false; fireId=null; releaseCharge(); }
   fireBtn.addEventListener('touchstart', e=>{ e.preventDefault(); e.stopPropagation(); if(paused) return; fireId=e.changedTouches[0].identifier; firing=true; fire(); }, {passive:false});
   fireBtn.addEventListener('touchend',    e=>{ e.preventDefault(); e.stopPropagation(); releaseFire(); }, {passive:false});
   fireBtn.addEventListener('touchcancel', e=>{ e.preventDefault(); e.stopPropagation(); releaseFire(); }, {passive:false});
 
-  // joystick
-  const R=55;
-  stick.addEventListener('touchstart', e=>{ e.preventDefault(); e.stopPropagation(); if(paused) return;
-    const t=e.changedTouches[0]; moveId=t.identifier; const r=stick.getBoundingClientRect();
-    moveOx=r.left+r.width/2; moveOy=r.top+r.height/2; updateStick(t.clientX,t.clientY);
-  }, {passive:false});
+  // ---- floating joystick ----
+  // The stick has no fixed home (see its CSS): it plants itself wherever a touch starting in the left
+  // zone of the screen comes down, the way most mobile shooters do it, so the thumb never has to hunt
+  // for a fixed circle. moveOx/moveOy is that touch-down point, not the element's own rect.
+  const R=55, STICK_ZONE=0.55; // left 55% of the screen can spawn the stick
   function updateStick(cx,cy){
     let dx=cx-moveOx, dy=cy-moveOy; const d=Math.hypot(dx,dy)||1;
     const cl=Math.min(d,R); dx=dx/d*cl; dy=dy/d*cl;
     knob.style.left=(45+dx)+'px'; knob.style.top=(45+dy)+'px';
     moveVec.x = dx/R; moveVec.z = dy/R;
   }
-  function endStick(){ moveId=null; moveVec.x=0; moveVec.z=0; knob.style.left='45px'; knob.style.top='45px'; }
+  function endStick(){ moveId=null; moveVec.x=0; moveVec.z=0; stick.classList.remove('active'); knob.style.left='45px'; knob.style.top='45px'; }
 
-  // global touch routing for look-drag (any touch not on a control, on the right side).
-  // A melee weapon also swings on this touch: its range is too short for the FIRE button to matter, so
-  // any tap doubles as both the look-drag start and the swing, same as tapping FIRE would.
+  // global touch routing: spawns the joystick on a left-zone touch, otherwise treats the touch as look-drag.
+  // A melee weapon also swings on a look-drag touch: its range is too short for the FIRE button to matter,
+  // so any tap outside the joystick zone doubles as both the look-drag start and the swing.
   document.addEventListener('touchstart', e=>{
     if(!touchPlaying || paused) return;
     for(const t of e.changedTouches){
-      if(t.target.closest('#stick')||t.target.closest('#firebtn')||t.target.closest('.wbtn')||t.target.closest('#adsbtn')) continue;
+      if(t.target.closest('#firebtn')||t.target.closest('.wbtn')||t.target.closest('#adsbtn')||t.target.closest('#jumpbtn')||t.target.closest('#interactbtn')) continue;
+      if(moveId===null && t.clientX < window.innerWidth*STICK_ZONE){
+        moveId = t.identifier; moveOx = t.clientX; moveOy = t.clientY;
+        stick.style.left=(moveOx-75)+'px'; stick.style.top=(moveOy-75)+'px';
+        stick.classList.add('active');
+        updateStick(t.clientX,t.clientY);
+        continue;
+      }
       if(weapons[currentWeapon] && weapons[currentWeapon].userData.melee) fire();
       if(lookId===null){ lookId=t.identifier; lookX=t.clientX; lookY=t.clientY; }
     }
@@ -21013,7 +21068,7 @@ if(isTouch && mobileEl) mobileEl.classList.add('on');
     for(const t of e.changedTouches){
       if(t.identifier===moveId) updateStick(t.clientX,t.clientY);
       else if(t.identifier===lookId){
-        targetYaw -= (t.clientX-lookX)*0.008; targetPitch -= (t.clientY-lookY)*0.008;
+        targetYaw -= (t.clientX-lookX)*0.008*touchSensMult; targetPitch -= (t.clientY-lookY)*0.008*touchSensMult;
         targetPitch=Math.max(-1.2,Math.min(1.2,targetPitch)); lookX=t.clientX; lookY=t.clientY;
       }
     }
@@ -21123,13 +21178,17 @@ function showBossBar(show, name){
 }
 function setBossBar(bd){ if(bossFill && bd) bossFill.style.width = Math.max(0,bd.hp)/bd.maxHp*100+'%'; }
 
+// touch haptics: a short pulse standing in for the recoil/impact feedback a phone otherwise has none of.
+// Guarded on isTouch so desktop, which has no vibration motor to speak of, never calls the API at all.
+function vibrate(ms){ if(isTouch && navigator.vibrate) navigator.vibrate(ms); }
+
 // hit feedback DOM
 const hitmark = document.getElementById('hitmark');
 let hitmarkTimer = 0;
-function showHitmarker(){ if(hitmark){ hitmark.style.opacity='1'; } hitmarkTimer=0.12; }
+function showHitmarker(){ if(hitmark){ hitmark.style.opacity='1'; } hitmarkTimer=0.12; vibrate(15); }
 const dmgVignette = document.getElementById('dmg');
 let dmgTimer = 0;
-function showDamage(){ if(dmgVignette){ dmgVignette.style.opacity='0.55'; } dmgTimer=0.4; }
+function showDamage(){ if(dmgVignette){ dmgVignette.style.opacity='0.55'; } dmgTimer=0.4; vibrate(40); }
 const bannerEl = document.getElementById('banner');
 function setBanner(txt){ if(bannerEl){ bannerEl.textContent=txt||''; bannerEl.style.opacity = txt?'1':'0'; } }
 
@@ -21916,6 +21975,21 @@ function fire(){
   if(w.spread){
     const sp = w.spread * (scoped && w.scopeSpread ? w.scopeSpread : 1);
     _fwd.x += (Math.sin(now*97.1)%1)*sp; _fwd.y += (Math.sin(now*57.7)%1)*sp; _fwd.normalize();
+  }
+  // touch aim assist: a finger dragging the look axis cannot land the precision a mouse can, so within a
+  // narrow cone (~3°) and reasonable range, pull the shot half way toward the nearest living bot. Runs
+  // after the spread jitter above so it also steadies that wobble a little, not just a raw aim error.
+  if(touchPlaying && bots.length){
+    let bestDir=null, bestAng=THREE.MathUtils.degToRad(3);
+    for(const b of bots){
+      if(!b.alive || !b.mesh) continue;
+      const toB = b.mesh.position.clone(); toB.y += 1.0; toB.sub(camera.position);
+      const dist = toB.length(); if(dist>70) continue;
+      toB.normalize();
+      const ang = Math.acos(THREE.MathUtils.clamp(_fwd.dot(toB),-1,1));
+      if(ang<bestAng){ bestAng=ang; bestDir=toB; }
+    }
+    if(bestDir) _fwd.lerp(bestDir,0.5).normalize();
   }
   const origin = camera.position.clone();
   const hit = firstHit(origin, _fwd, 300);
