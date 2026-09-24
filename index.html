@@ -20863,6 +20863,7 @@ document.addEventListener('mouseup', e => { if(e.button===2) setAim(false); });
 
 const keys = {};
 document.addEventListener('keydown', e => {
+  if (!inPlay()) return;          // the START screen is up: no key touches the world
   // the booth panel owns Esc/E while it is open, so closing it can't also toggle pause
   if (boothOpen){
     if (e.code==='Escape' || e.code==='KeyE'){ e.preventDefault(); closeBooth(); }
@@ -20930,7 +20931,7 @@ document.addEventListener('keyup', e => {
 // so switching weapons on every single event flew through the whole loadout in one swipe — debounce it instead
 let lastWheelSwitch = 0;
 window.addEventListener('wheel', e => {
-  if(paused) return;
+  if(paused || !inPlay()) return;
   const now = performance.now();
   if(now - lastWheelSwitch < 350) return;
   lastWheelSwitch = now;
@@ -20970,6 +20971,18 @@ function releaseAllInput(){
 }
 let touchPlaying = false;            // mobile "playing" flag (no pointer lock on touch)
 const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints>0) || matchMedia('(pointer: coarse)').matches;
+// ---- the one gate: is the player actually IN the game? ----
+// Behind the START screen the world is live and rendering, and every input handler used to run against it:
+// WASD walked the camera off the title view, Space jumped, the digits switched weapons, and C,C opened the
+// console before a run existed at all. Nothing may reach the world until START is pressed. The condition is
+// deliberately the SAME one that decides whether the START overlay is shown (see the pointerlockchange
+// handler): on a mouse that is the pointer lock, plus the overlays that release it on purpose — the booth,
+// the admin panel, the console — which are in-play states with their own key handling, not title-screen
+// ones. On touch there is no lock to hold, so beginTouchPlay()'s flag is the whole answer.
+function inPlay(){
+  if(isTouch) return touchPlaying;
+  return document.pointerLockElement === renderer.domElement || boothOpen || adminOpen || chatOpen;
+}
 const mobileEl = document.getElementById('mobile');
 if(isTouch && mobileEl){ mobileEl.classList.add('on'); document.body.classList.add('touch'); }
 // Touch look sensitivity: a user-adjustable multiplier on the drag-to-look constant below, persisted so
@@ -22465,11 +22478,16 @@ function animate(){
   if(player.alive){
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)).negate();
     const right = new THREE.Vector3(-forward.z, 0, forward.x); // true camera-right (+X at yaw 0)
-    // desired direction from keys + joystick
+    // desired direction from keys + joystick — read only while in play, so a key held down as the pointer
+    // lock is lost (or anything left set before START) cannot keep walking the camera behind the overlay.
+    // Only the INPUT is gated: gravity, the ground climb and collision below still run every frame, which
+    // is what keeps the title-screen view standing on the terrain rather than frozen at a stale height.
     let dx=0, dz=0;
-    if (keys['KeyW']) dz+=1; if (keys['KeyS']) dz-=1;
-    if (keys['KeyD']) dx+=1; if (keys['KeyA']) dx-=1;
-    dx += moveVec.x; dz += -moveVec.z;
+    if (inPlay()){
+      if (keys['KeyW']) dz+=1; if (keys['KeyS']) dz-=1;
+      if (keys['KeyD']) dx+=1; if (keys['KeyA']) dx-=1;
+      dx += moveVec.x; dz += -moveVec.z;
+    }
     const want = new THREE.Vector3();
     want.addScaledVector(forward, dz).addScaledVector(right, dx);
     if (want.lengthSq()>1) want.normalize();
