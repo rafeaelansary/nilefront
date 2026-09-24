@@ -68,6 +68,9 @@ globalThis.__tenochtitlanSpawns = (typeof TENOCH_WEST!=='undefined' && typeof TE
 globalThis.__birkaSpawns = (typeof SWEDEN_WEST!=='undefined' && typeof SWEDEN_EAST!=='undefined')
   ? SWEDEN_WEST.concat(SWEDEN_EAST).concat(typeof SWEDEN_SOUTH!=='undefined' ? SWEDEN_SOUTH : []) : null;
 globalThis.__builders = {
+  // Not a model builder: the game's only InstancedMesh, exported so instancecheck.py can
+  // measure one wall on its own and prove the stub still sees per-instance transforms.
+  brickWall: typeof brickWall==='function' ? brickWall : null,
   makeVoxelBot: typeof makeVoxelBot==='function' ? makeVoxelBot : null,
   makeMinotaur: typeof makeMinotaur==='function' ? makeMinotaur : null,
   makeGriffin: typeof makeGriffin==='function' ? makeGriffin : null,
@@ -185,19 +188,31 @@ globalThis.__worlds = {};
  ['nileWorld','nileColliders','heightZonesNone'],
  ['hydraArena','hydraColliders','heightZonesNone'],
  ['colosseumArena','colosseumColliders','heightZonesNone'],
- ['ifritArena','ifritColliders','heightZonesNone']].forEach(function(pair){
+ ['ifritArena','ifritColliders','heightZonesNone'],
+ ['nileBankWorld','nileBankColliders','heightZonesNone'],
+ ['agesArena','agesArenaColliders','heightZonesNone']].forEach(function(pair){
   var g=null, c=null, z=null;
   try { g = eval(pair[0]); } catch(e) {}
   try { c = eval(pair[1]); } catch(e) {}
   try { z = eval(pair[2]); } catch(e) {}
   if(g) globalThis.__worlds[pair[0]] = {group:g, colliders:c, zones:z};
 });
-// Geometry that is SUPPOSED to hang in mid-air, for the floating-scenery sweep to leave alone. Birka's
-// falling snow is the only case: it is a live particle group, so every flake reads as unsupported
-// scenery. bugcheck.py could always reach it because run() injects INSIDE this IIFE; fullcheck.py
+// Geometry that is SUPPOSED to hang in mid-air, for the floating-scenery sweep to leave alone. Two
+// live particle sets qualify: Birka's falling snow, and the smoke puffs drifting above the town's
+// chimneys -- animate() moves both every frame, so every flake and every puff reads as unsupported
+// scenery (32 of them, four per chimney, in the town alone).
+// A flat list of meshes rather than one node: the snow is a THREE.Group, but the puffs are loose
+// meshes added straight to the scene and tracked in an array, so nothing covers both.
+// bugcheck.py could always reach the snow because run() injects INSIDE this IIFE; fullcheck.py
 // evaluates at top level and could not, which is why its Birka floater count was ~130 flakes deep.
-globalThis.__airborne = (typeof birkaSnow !== 'undefined' && birkaSnow && birkaSnow.grp)
-  ? birkaSnow.grp : null;
+globalThis.__airborne = (function(){
+  var out = [];
+  if(typeof birkaSnow !== 'undefined' && birkaSnow && birkaSnow.grp)
+    birkaSnow.grp.traverse(function(o){ if(o.isMesh) out.push(o); });
+  if(typeof smokePuffs !== 'undefined' && smokePuffs && smokePuffs.forEach)
+    smokePuffs.forEach(function(p){ if(p && p.mesh) out.push(p.mesh); });
+  return out.length ? out : null;
+})();
 globalThis.__loadouts = {};
 ['originalWeapons','pyramidWeapons','nileWeapons','greekWeapons','romanWeapons','islamicWeapons','mexicoWeapons','aztecWeapons','swedenWeapons','chinaWeapons'].forEach(function(n){
   try { globalThis.__loadouts[n] = eval(n); } catch(e) {}
@@ -209,6 +224,9 @@ globalThis.__loadouts = {};
 # Scales and floor tops are read off spawnBossFight()/spawnWave() and the arena builders.
 ACTORS = [
     ("makeVoxelBot", "b=>b(0x808080,'pistol',null)",        1.00, 0.00, "grunt (town/pyramid)"),
+    # The final boss. Not its own builder: it is a SKINS entry driven through makeVoxelBot, the way ammit is,
+    # so what the audit measures here is that skin's flag combination (colossus face, cracks, goldTrim, bossgun).
+    ("makeVoxelBot", "b=>b(0x2b2f4a,'pistol','ages')",      1.85, 0.00, "Sum of Ages (FINAL)"),
     ("makeColossus", "b=>b()",                              3.10, 0.00, "Colossus  (Boss I)"),
     ("makeHydra",    "b=>b()",                              2.40, 0.00, "Hydra     (Boss II)"),
     ("makeChampion", "b=>b()",                              2.30, 0.00, "Champion  (Boss III)"),

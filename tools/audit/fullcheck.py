@@ -225,14 +225,13 @@ def main():
       var W = globalThis.__worlds[name];
       var cop = globalThis.__worldCoplanar(W.group, eps, omin, 4, groundY);
       var big = globalThis.__worldBigCoplanar(W.group, eps, BIG_COPLANAR_MIN_AREA, groundY);
-      // Falling snow is SUPPOSED to hang in mid-air. Birka's is a live particle group, so every flake
-      // in it counted as floating scenery and this map reported ~130 faults that are the weather doing
-      // its job -- a false positive big enough to bury anything real underneath it. bugcheck.py has
-      // subtracted them by count for a while; passed to the sweep instead, they are also barred from
-      // holding anything else up, which snow should not be doing either.
-      var flake = [];
-      if(globalThis.__airborne)
-        globalThis.__airborne.traverse(function(o){ if(o.isMesh) flake.push(o); });
+      // Snow and chimney smoke are SUPPOSED to hang in mid-air. Both are live particle sets, so every
+      // flake and puff counted as floating scenery -- Birka reported ~130 faults that are the weather
+      // doing its job, and the town 32 that are its chimneys smoking. A false positive big enough to
+      // bury anything real underneath it. bugcheck.py has subtracted the snow by count for a while;
+      // passed to the sweep instead, they are also barred from holding anything else up, which
+      // neither snow nor smoke should be doing. __airborne is a flat mesh list -- see audit.py.
+      var flake = globalThis.__airborne ? globalThis.__airborne.slice() : [];
       var flo = globalThis.__worldFloaters(W.group, groundY, minGap, touchEps, flake);
       var n = 0; W.group.traverse(function(o){ if(o.isMesh) n++; });
       return JSON.stringify({meshes:n, coplanar:cop.slice(0,6), coplanarN:cop.length,

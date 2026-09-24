@@ -4,7 +4,7 @@
   "private": true,
   "description": "NILEFRONT — desktop build (Electron wrapper around the browser game in ../index.html)",
   "main": "main.js",
-  "author": "",
+  "author": "Rafea el Ansary",
   "license": "UNLICENSED",
   "scripts": {
     "build:app": "node scripts/build-app.js",
@@ -22,6 +22,7 @@
   "build": {
     "appId": "com.nilefront.desktop",
     "productName": "NILEFRONT",
+    "copyright": "Copyright © 2026 Rafea el Ansary. All rights reserved.",
     "asar": true,
     "files": [
       "main.js",

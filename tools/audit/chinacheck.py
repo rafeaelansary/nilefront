@@ -778,6 +778,12 @@ ok &= show("Yamen fields its own marines, not the wall garrison in a boat", run(
 
 ok &= show("the whole trip plays through: Xiangyang hands on to Yamen, and Yamen sends you home", run("""
   gameStarted = true; var wasGod = godMode; godMode = true;
+  // China is now the road that opens the endgame: the Admiral falling normally arms 'agesgate' and takes the
+  // player straight to the Sum of Ages instead of home to Cairo. That handoff is finalcheck.py's subject, and
+  // letting it fire in here would spawn the final boss inside this test's own kill loop. campaignComplete
+  // suppresses it -- a real, supported state (the ending has been seen) in which Yamen does come home -- so
+  // this test keeps testing what it is named for: that China's two legs chain and the card remembers.
+  var wasComplete = campaignComplete; campaignComplete = true;
   var d = {name:'China', legs:CHINA_LEGS};
   jumpToDestStage(d, 0, 0);
   for(var w=0; w<XIANGYANG_WAVES.length+1; w++){
@@ -812,7 +818,7 @@ ok &= show("the whole trip plays through: Xiangyang hands on to Yamen, and Yamen
   buyTicket(card);
   if(balance() !== before) throw new Error('a completed road was sold again, for '+(before-balance())+' stars');
   if(tripDest) throw new Error('a completed road started a second trip');
-  godMode = wasGod;
+  godMode = wasGod; campaignComplete = wasComplete;
   return 'Xiangyang -> Yamen -> home, and the card reads walked and cannot be re-sold';
 """))
 

@@ -468,6 +468,8 @@ const romanColliders = [];       // Roman overworld colliders (map built, not ye
 const hydraColliders = [];       // Greek boss arena colliders (Boss II — the Hydra; an open-air marsh arena, not a dungeon)
 const colosseumColliders = [];   // Roman boss arena colliders (Boss III — the Colosseum Champion; a full arena)
 const ifritColliders = [];       // Islamic boss arena colliders (Boss IV — the Ifrit King; the Citadel courtyard)
+const nileBankColliders = [];    // the Nile bank: the last map in the game, and the only one with nothing to fight
+const agesArenaColliders = [];   // the Gate of Ages: where the final boss is fought
 const islamicColliders = [];     // Islamic/Mamluk Cairo overworld colliders (waves 10-12)
 const mexicoColliders = [];      // La Venta basin colliders (Olmec Mexico — the first booth destination)
 const aztecColliders = [];       // Tenochtitlan colliders (the Mexico trip's second leg, reached from La Venta)
@@ -1800,7 +1802,11 @@ function cottage(x,z,w,d,floors,wallColor,roofColor){
     }
   }
   for (let f=1; f<floors; f++){
-    block(w*0.9,0.3,d*0.9,0x6b5d4d,x,f*3,z,{noise:12});
+    // w-0.3, not w*0.9: the side walls stand at +/-w/2 and are 0.4 thick, so their inner faces are
+    // at w/2-0.2. A 10% inset leaves (0.05w - 0.2) of air between slab edge and wall -- nothing at
+    // w=4, a quarter of a unit on the 9-wide cabin, so the bigger a cottage got the further its
+    // upper floor hung unattached. Off the wall thickness instead, it beds 0.05 into them at any size.
+    block(w-0.3,0.3,d-0.3,0x6b5d4d,x,f*3,z,{noise:12});
   }
   // shingle roof: two angled slabs meeting at a ridge
   const smat = shingleMat(roofColor);
@@ -1809,9 +1815,13 @@ function cottage(x,z,w,d,floors,wallColor,roofColor){
   const roofR = new THREE.Mesh(new THREE.BoxGeometry(w*0.78,0.3,d*0.7), smat);
   roofR.position.set(x+w*0.2,h+0.95,z); roofR.rotation.z=-0.42; scene.add(roofR);
   block(0.45,0.45,d*0.72,0x3a3128,x,h+1.55,z,{noise:8}); // ridge beam
-  // gable end fills (triangular-ish caps)
-  block(w*0.5,1.1,0.35,wallColor,x,h+0.6,z-d/2,{noise:16});
-  block(w*0.5,1.1,0.35,wallColor,x,h+0.6,z+d/2,{noise:16});
+  // Gable end fills (triangular-ish caps). 1.3 tall from h-0.15, not 1.1 from h+0.05: the top is
+  // the same, but the old base cleared the wall it sits on -- and brickWall's bricks are inset 6%,
+  // so the wall tops out at ~h-0.014 and the real slit was nearer 0.065. A gable is masonry carried
+  // on past the eaves, so it now runs down INTO the wall's top, where its 0.35 thickness is hidden
+  // inside the wall's 0.4 and nothing of the overlap shows.
+  block(w*0.5,1.3,0.35,wallColor,x,h+0.5,z-d/2,{noise:16});
+  block(w*0.5,1.3,0.35,wallColor,x,h+0.5,z+d/2,{noise:16});
   chimney(x+w*0.28, h+1.0, z-d*0.28);
 }
 
@@ -3304,10 +3314,265 @@ let dungeonWasPyramid = true; // records which dungeon/overworld pairing enterDu
 // once ("fused" — reported after an idle/unattended play session, exactly the kind of timing edge case this
 // can happen in). clearWorldGroups() sweeps every possible world group unconditionally before any add, so
 // the invariant "at most one world group in the scene" holds no matter what state the flags are in.
+// ===================== THE NILE BANK: THE LAST MAP =====================
+// Where the game ends. There is nothing to fight here and nothing to buy — no roster, no waves, no booth, no
+// gate onward. It exists to be stood in, which is why it is the smallest map in the game (a 40x40 bank
+// against a river that runs off past the fog) rather than another 60-unit world with a hub's worth of
+// furniture in it.
+//
+// It is also the one place the game's own name finally pays off literally. The roadmap says no forced Nile
+// geography in a map where it isn't believable — Giza is nowhere near the river, so the pyramid map never got
+// one. This is not that map. This is the end of everything, it is allowed to be the river itself, and the
+// only thing standing on the bank is a stele with the name of every boss the player put down.
+const nileBankWorld = new THREE.Group();
+addTarget = nileBankColliders;
+(function buildNileBank(){
+  const R = 20;                                  // the walkable bank, +/-R; playClamp comes in at 19
+  const siltMat  = voxMat(0x9c8156,{noise:18,pattern:'plate'});
+  const stoneMat = voxMat(0x8d7f6b,{noise:14,pattern:'plate'});
+  const graniteMat = voxMat(0x5a4a52,{noise:12});
+  const goldMat  = voxMat(0xd9a93f,{noise:8});
+  const darkMat  = voxMat(0x241c14,{noise:10});
+  const reedMat  = voxMat(0x4a6b33,{noise:20});
+  function nb(w,h,d,mat,x,y,z){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+    m.position.set(x,y,z); m.castShadow=true; m.receiveShadow=true; nileBankWorld.add(m); return m;
+  }
+  // the bank itself, its top face at y=0 like every other map's ground
+  nb(R*2, 0.4, R*2, siltMat, 0, -0.2, 0);
+
+  // THE RIVER. One wide slab running north past the fog, its surface a hair under the bank's lip so the
+  // waterline is a line you look at rather than a step you can get wedged on (the Ladoga rule).
+  // A proper river blue, with the emissive carrying enough of it that the colour does not depend entirely on
+  // whatever light the map happens to be under — see the lighting note in enterNileBankWorld().
+  const waterMat = new THREE.MeshPhongMaterial({color:0x1f7fc4, shininess:120, specular:0xbfefff,
+    transparent:true, opacity:0.9, emissive:0x0d3e63});
+  const water = new THREE.Mesh(new THREE.BoxGeometry(260, 1.2, 200), waterMat);
+  // Rest top at -0.05, and the ripple's +/-0.03 takes it between -0.08 and -0.02 — which stays strictly under
+  // the bank slab's own top face at y=0 for the whole cycle. That matters because the water box and the bank
+  // box overlap for the last unit before the kerb, and a surface rising through the shore would z-fight the
+  // sand. The distant plane it does cross is painted this same blue — see enterNileBankWorld().
+  water.position.set(0, -0.65, -115);
+  water.userData.isWater = true; water.userData.baseY = -0.65;
+  nileBankWorld.add(water);
+  // Registered for the ripple sweep on first entry, not here: `const waterSurfaces` is declared further down
+  // the file, so at this point in top-level execution it is still in its temporal dead zone and touching it
+  // throws. Every other map that pushes to it does so from inside a function that runs long after. See
+  // enterNileBankWorld().
+  nileBankWorld.userData.water = water;
+
+  // The revetment along the waterline: a low kerb with a collider, so the last map cannot be walked into the
+  // river and drowned in on the one screen that is supposed to be a reward.
+  nb(R*2, 0.55, 0.7, stoneMat, 0, 0.18, -15);
+  addBox(0, -15, R*2, 0.7);
+
+  // reeds, thickest at the water and thinning inland
+  for(let i=0;i<34;i++){
+    const rx = -R + Math.random()*R*2, rz = -14.6 + Math.random()*3.2;
+    const h = 0.9 + Math.random()*0.8;
+    const t = nb(0.09, h, 0.09, reedMat, rx, h/2, rz);
+    t.rotation.z = (Math.random()-0.5)*0.22; t.castShadow = false;
+  }
+
+  // THE STELE. Granite, gold-capped, and the only thing on the bank with anything written on it. Its text is
+  // drawn in the HUD when the player walks up to it (see nearStele()) rather than painted into a texture,
+  // because the list it carries is the run's own history and not a fixed decal.
+  nb(2.8, 4.6, 0.8, graniteMat, 0, 2.3, -6);
+  nb(3.2, 0.34, 1.1, goldMat,   0, 4.72, -6);     // cap
+  nb(3.6, 0.4,  1.4, stoneMat,  0, 0.2,  -6);     // plinth
+  addBox(0, -6, 3.6, 1.4);
+
+  // braziers flanking it, lit — the same three-part brazier the Citadel courtyard uses
+  [[-3.4,-6],[3.4,-6]].forEach(([x,z])=>{
+    const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,1.1,8), darkMat);
+    stand.position.set(x,0.55,z); nileBankWorld.add(stand);
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.24,0.24,8), darkMat);
+    bowl.position.set(x,1.15,z); nileBankWorld.add(bowl);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.24,0.5,7),
+      new THREE.MeshBasicMaterial({color:0xff9a3a, fog:false}));
+    flame.position.set(x,1.5,z); nileBankWorld.add(flame);
+    const light = new THREE.PointLight(0xff9a3a, 1.2, 10); light.position.set(x,1.7,z); nileBankWorld.add(light);
+    addBox(x, z, 0.5, 0.5);
+  });
+
+  // palms along the bank, clear of the stele's plinth and the kerb
+  function palmTree(x,z){
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.21,3.6,6), voxMat(0x7a5a38,{noise:14}));
+    trunk.position.set(x,1.8,z); trunk.rotation.z = (Math.random()-0.5)*0.16; nileBankWorld.add(trunk);
+    const leafMat = voxMat(0x4f7a3a,{noise:14});
+    for(let i=0;i<6;i++){
+      const a = i/6*Math.PI*2;
+      const leaf = new THREE.Mesh(new THREE.BoxGeometry(1.5,0.13,0.42), leafMat);
+      leaf.position.set(x+Math.cos(a)*0.55, 3.5, z+Math.sin(a)*0.55);
+      leaf.rotation.y = a; leaf.rotation.z = 0.26; nileBankWorld.add(leaf);
+    }
+    addBox(x,z,0.6,0.6);
+  }
+  [[-13,-11],[13,-11],[-16.5,-2],[16.5,-2],[-9,6],[9,6],[-15,13],[15,13]].forEach(([x,z])=>palmTree(x,z));
+
+  // Near-neutral and low, for the same reason the hemisphere is: a warm ambient washes the river green.
+  nileBankWorld.add(new THREE.AmbientLight(0xdfe9f6, 0.30));
+})();
+addTarget = colliders;   // restore the reset this block sits on top of — see the note above ifritArena
+
+// ===================== THE GATE OF AGES: THE FINAL ARENA =====================
+// Where the Sum of Ages is fought. It was ifritArena for a while — the Mamluk Citadel courtyard, built for a
+// Boss IV that Cairo's promotion to a hub orphaned — relit dark and handed to the finale. That was cheap and it
+// read as cheap: the last fight in the game happened in a sandstone courtyard the player had never seen.
+//
+// This is the arena the boss is actually about. Four monuments stand around the ring, one for each age on its
+// back and in the same order it walks down through them: the Old Kingdom's stepped pyramid, a Greek colonnade,
+// an Aztec serpent platform, and the burnt prow of a ship. You fight the thing that remembers them, standing
+// in the middle of them.
+//
+// Two construction rules everywhere, both learned from the audit:
+//   * Nothing butts. Every part is sunk into what it sits on, because two boxes that meet exactly share a
+//     plane and a shared plane flickers. Corners are handled by PYLONS that are taller and wider than the
+//     walls, with the wall runs ending inside them — a square of four equal walls has no way to meet at a
+//     corner without their top faces coinciding over the whole overlap.
+//   * The middle stays empty. The boss spawns at (0,-8) and the player walks in at (0,12), so the monuments
+//     stand on the diagonals with their nearest faces 8 units off the boss's ground. Their colliders do reach
+//     inward past the ring the minions are clamped into, the same way every wave-bearing map in this game has
+//     cover inside its spawn area — resolveCollision is what answers a body that lands against one.
+const agesArena = new THREE.Group();
+addTarget = agesArenaColliders;
+(function buildAgesArena(){
+  const R = 17;                                  // walls at +/-R; playClamp comes in at 15.5
+  const basalt   = voxMat(0x1b1d28,{noise:13,pattern:'plate'});
+  const basaltLt = voxMat(0x2b2f4a,{noise:15,pattern:'plate'});
+  const granite  = voxMat(0x3a3d52,{noise:16});
+  const goldMat  = metalMatP(0xd9a93f,90,0xfff2c8);
+  const seamMat  = new THREE.MeshBasicMaterial({color:0xffd873,fog:false});
+  const sandMat  = voxMat(0xc9a671,{noise:18,pattern:'plate'});
+  const marbleMat= voxMat(0xd8d3c4,{noise:10,pattern:'plate'});
+  const jadeMat  = voxMat(0x2e6b3a,{noise:16});
+  const timberMat= voxMat(0x2a2320,{noise:16});
+  function ab(w,h,d,mat,x,y,z,rotY){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+    m.position.set(x,y,z); if(rotY) m.rotation.y = rotY;
+    m.castShadow = true; m.receiveShadow = true; agesArena.add(m); return m;
+  }
+  // ---- the floor, and a broken ring of gold inlay set INTO it (bottom buried, top proud) ----
+  ab(R*2, 0.4, R*2, basalt, 0, -0.2, 0);
+  for(let i=0;i<24;i++){
+    const a = (i/24)*Math.PI*2;
+    const seg = ab(1.7, 0.09, 0.55, goldMat, Math.cos(a)*12, -0.015, Math.sin(a)*12, -a);
+    seg.receiveShadow = false;
+  }
+  // four short gold spokes running in from the ring toward the middle, one per age
+  [0,1,2,3].forEach(q=>{
+    const a = Math.PI/4 + q*Math.PI/2;
+    ab(3.6, 0.08, 0.34, seamMat, Math.cos(a)*9.4, -0.02, Math.sin(a)*9.4, -a);
+  });
+  // ---- corner pylons: taller and wider than the walls, so the wall runs die inside them ----
+  [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sz])=>{
+    ab(2.6, 5.9, 2.6, granite,  sx*R, 2.95, sz*R);
+    ab(2.9, 0.34, 2.9, goldMat, sx*R, 6.02, sz*R);          // cap, sunk into the pylon's top
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.5, 5), basaltLt);
+    spire.position.set(sx*R, 6.75, sz*R); agesArena.add(spire);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.6, 5), seamMat);
+    tip.position.set(sx*R, 7.4, sz*R); agesArena.add(tip);
+    addBox(sx*R, sz*R, 2.6, 2.6);
+  });
+  // ---- the four wall runs. Each ends at +/-16, a unit inside the pylons, so no two walls ever meet ----
+  [[0,-R,32,1.3],[0,R,32,1.3],[-R,0,1.3,32],[R,0,1.3,32]].forEach(([x,z,w,d])=>{
+    ab(w, 4.4, d, basaltLt, x, 2.2, z);
+    // coping: wider than the wall so its sides clear the wall's, and its underside buried 0.1 into it
+    ab(w<d?1.5:w-0.8, 0.32, w<d?d-0.8:1.5, goldMat, x, 4.46, z);
+    // The collider is 0.8 shorter than the mesh along the run. The mesh has to end INSIDE the pylon or their
+    // top faces would coincide across the corner; the collider does not, and overlapping the pylon's box
+    // bought nothing but nine reported overlaps. 31.2 stops at +/-15.6, a tenth clear of the pylon at 15.7.
+    addBox(x, z, w>d ? w-0.8 : w, d>w ? d-0.8 : d);
+  });
+  // merlons along the tops, alternating heights so no two neighbours share a top face
+  for(let i=0;i<15;i++){
+    const t = -15 + i*2.15, h = 0.7 + (i%3)*0.16;
+    [-1,1].forEach(s=>{
+      ab(0.85, h, 0.85, granite, t, 4.6 + h/2 - 0.08, s*R);
+      ab(0.85, h, 0.85, granite, s*R, 4.6 + h/2 - 0.08, t);
+    });
+  }
+  // ---- the four monuments, at radius ~15, one per age on the boss's back ----
+  // OLD KINGDOM — the Colossus' stepped pyramid, each course sunk into the one below, an obelisk beside it
+  (function(){
+    const x = -10.6, z = -10.6;
+    // course 0 sits ON the floor (bottom exactly 0); every course above it drops 0.1 into the one below, so no
+    // two of them share the horizontal plane where they meet
+    [[5.2,1.3,0.65],[4.0,1.2,1.80],[2.9,1.1,2.85],[1.8,1.0,3.80]].forEach(([w,h,cy])=>{
+      ab(w, h, w, sandMat, x, cy, z);
+    });
+    ab(0.9, 0.9, 0.9, goldMat, x, 4.34, z);                  // gilded capstone, sunk into the top course
+    ab(0.55, 4.4, 0.55, sandMat, x+4.2, 2.2, z+1.4);         // obelisk
+    const pyr = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.8, 4), goldMat);
+    pyr.position.set(x+4.2, 4.5, z+1.4); pyr.rotation.y = Math.PI/4; agesArena.add(pyr);
+    addBox(x, z, 5.2, 5.2); addBox(x+4.2, z+1.4, 0.55, 0.55);
+  })();
+  // GREEK — a colonnade with a broken lintel, which is the marsh era's architecture rather than its water
+  (function(){
+    const x = 10.6, z = -10.6;
+    [-2.4,0,2.4].forEach((o,i)=>{
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.52,4.6,10), marbleMat);
+      col.position.set(x+o, 2.3, z); agesArena.add(col);
+      ab(1.25, 0.34, 1.25, marbleMat, x+o, 0.15, z);          // base, buried in the floor and the shaft both
+      ab(1.15, 0.30, 1.15, marbleMat, x+o, 4.52, z);          // capital, sunk into the shaft
+      addBox(x+o, z, 1.25, 1.25);
+    });
+    ab(6.6, 0.62, 1.05, marbleMat, x, 4.92, z);               // architrave over all three
+    ab(3.0, 0.5, 1.15, marbleMat, x-1.6, 5.42, z);            // a broken upper course, only part of it left
+  })();
+  // AZTEC — the Bearer's platform, with a serpent head off the front of the stair
+  (function(){
+    const x = -10.6, z = 10.6;
+    [[5.6,1.1],[4.2,1.0],[2.8,1.0]].forEach(([w,h],i)=>{
+      ab(w, h, w, granite, x, [0.55,1.5,2.4][i], z);
+    });
+    ab(2.0, 0.34, 2.0, jadeMat, x, 2.95, z);                  // jade slab on top, sunk in
+    // the stair down the front, four treads each sunk into the next
+    for(let i=0;i<4;i++) ab(2.2, 0.5, 0.8, granite, x, 0.25+i*0.55, z+2.6-i*0.62);
+    ab(1.5, 0.85, 1.5, jadeMat, x, 0.42, z+3.6);              // serpent head at the foot of the stair
+    ab(0.8, 0.5, 0.9, jadeMat, x, 0.34, z+4.5);               // its snout, forward and lower
+    [-1,1].forEach(s=>{ ab(0.26,0.2,0.2, seamMat, x+s*0.42, 0.62, z+4.3); });   // eyes
+    addBox(x, z, 5.6, 5.6); addBox(x, z+4.0, 1.6, 2.4);
+  })();
+  // THE ADMIRAL — the prow of a burnt ship, driven into the floor, still smoking
+  (function(){
+    const x = 10.6, z = 10.6;
+    ab(2.6, 3.4, 5.4, timberMat, x, 1.7, z, 0.2);             // the hull, canted
+    ab(1.1, 2.2, 2.2, timberMat, x-0.5, 3.4, z-1.9, 0.2);     // the prow rising out of it
+    ab(0.42, 5.2, 0.42, timberMat, x+0.4, 3.6, z+0.6);        // the mast, snapped
+    ab(2.8, 0.3, 0.34, timberMat, x+0.4, 5.2, z+0.6, 0.35);   // a yard still hanging off it
+    for(let i=0;i<5;i++){
+      const em = new THREE.Mesh(new THREE.ConeGeometry(0.3-(i*0.03), 0.8+(i%2)*0.3, 6),
+        new THREE.MeshBasicMaterial({color:i%2?0xff8a2a:0xffb347, fog:false}));
+      em.position.set(x-1.1+i*0.62, 3.2+(i%2)*0.3, z-0.4+(i%3)*0.5); agesArena.add(em);
+    }
+    const emberLight = new THREE.PointLight(0xff8a2a, 1.5, 12);
+    emberLight.position.set(x, 4.0, z); agesArena.add(emberLight);
+    addBox(x, z, 3.0, 5.6);
+  })();
+  // ---- braziers around the ring: the only other light in here ----
+  for(let i=0;i<6;i++){
+    // radius 13.8, not 15.2: the monuments stand on the diagonals and their outer corners reach past 15, so at
+    // 15.2 the brazier at 150 degrees sat on the Aztec platform's corner. 13.8 clears every one of them while
+    // staying outside the gold ring at 12.
+    const a = Math.PI/6 + (i/6)*Math.PI*2, bx = Math.cos(a)*13.8, bz = Math.sin(a)*13.8;
+    const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.28,1.4,8), granite);
+    stand.position.set(bx,0.7,bz); agesArena.add(stand);
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.3,0.32,8), goldMat);
+    bowl.position.set(bx,1.5,bz); agesArena.add(bowl);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.3,0.66,7), seamMat);
+    flame.position.set(bx,1.88,bz); agesArena.add(flame);
+    const bl = new THREE.PointLight(0xffd873, 1.15, 13); bl.position.set(bx,2.1,bz); agesArena.add(bl);
+    addBox(bx, bz, 0.66, 0.66);
+  }
+  agesArena.add(new THREE.AmbientLight(0x3a4880, 0.34));
+})();
+addTarget = colliders;   // as above: hand the default back to the town's array
+
 function clearWorldGroups(){
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   camera.rotation.z = 0;   // the Fjord rolls the camera with its deck; nothing else may inherit that
-  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, ladogaOverworld, fjordWorld, xiangyangWorld, yamenWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena].forEach(g=>{ if(g.parent) scene.remove(g); });
+  [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, ladogaOverworld, fjordWorld, xiangyangWorld, yamenWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena, nileBankWorld, agesArena].forEach(g=>{ if(g.parent) scene.remove(g); });
   clearFieldEffects();
 }
 // Ground effects — the bosses' AoE telegraphs and the Colossus's quake cracks — are added to the SCENE,
@@ -11545,6 +11810,41 @@ function enterYamenWorld(banner){
   setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
 }
 
+// THE GATE OF AGES — where the Sum of Ages is fought, and the only new fight in the endgame.
+//
+// This used to borrow ifritArena, the orphaned Mamluk courtyard. It has its own map now — see buildAgesArena,
+// which rings the floor with one monument per age the boss carries on its back. ifritArena goes back to being
+// what it was before the finale borrowed it: built, complete, and unreachable in normal play.
+function enterFinalArena(banner){
+  clearWorldGroups();
+  scene.add(agesArena);
+  // No sky dome: the arena has no horizon to sell, and a starless night gradient behind a 4.4-high wall
+  // reads as depth where a daylit sky read as "you are indoors with the roof off".
+  sky.visible = false;
+  activeColliders = agesArenaColliders;
+  activeHeightZones = heightZonesNone;
+  playClamp = 15.5;                     // walls stand at +/-17 and are 1.4 thick, so 15.5 stops you short
+  scene.background.set(0x0a0c18); scene.fog.color.set(0x11162c);
+  scene.fog.near = 10; scene.fog.far = 54;
+  setDistantGround(0x0a0c18);
+  skyTint(0x2a3358);
+  // Lit almost entirely from below and behind by the courtyard's own braziers: a dim lapis hemisphere, a sun
+  // dropped to a rumour, and the fill turned gold and pushed up, so the thing you are fighting is the
+  // brightest object in the map.
+  hemi.intensity=0.42; hemi.color.set(0x3a4880); hemi.groundColor.set(0x0d1020);
+  sun.intensity=0.20; fill.intensity=0.78; fill.color.set(0xffc766);
+  camera.position.set(0, 1.7, 12); yaw=targetYaw=0; pitch=targetPitch=0;
+  vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  // The Mamluk loadout, not China's. This is Egypt's own ending, and the Saif and the naft pot are what
+  // Egypt had left by the end of the campaign the player walked in on.
+  weapons.forEach(w=>w.visible=false);
+  weapons = islamicWeapons;
+  selectWeapon(0);
+  spawnTripStage();
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },3000);
+}
+
 // Aldeigjuborg. Late northern summer, an hour off sunset — the one deliberate break from the arc's
 // palette. Birka is a white noon and the Fjord a blue afternoon, and a third cold daylight map would
 // read as the same water again; the place you come home to should be the warm one. Everything else
@@ -11765,6 +12065,9 @@ const SKINS = {
   // ---- the Greek era's regular enemies (waves 4-6) are all non-humanoid creatures (minotaur/griffin/medusa,
   // dispatched directly in makeVoxelBot like the scarab/scorpion/hippo/crocodile) — no SKINS entry needed ----
   ammit:        { skinC:0x35502e, face:'croc',     hair:false, helmet:false, torso:0x22331e, armor:0x2e4526, pants:0x1c2818, boots:0x141d10, hands:0x35502e, glow:0x8a2fd0, snout:true, tail:true, cracks:true, mane:true, hump:true, bossgun:true, bossgunColor:0x8a2fd0, bossgunColor2:0xc98fff }
+  // ---- No entry for the final boss. It started life here as a skin config and that was the wrong call: a
+  // recoloured grunt silhouette cannot end a game. It has a bespoke builder now, makeSumOfAges(), which
+  // makeVoxelBot dispatches to before it ever reaches this table ----
   // ---- Roman era regular enemies (waves 7-9): war hounds — dispatched directly in makeVoxelBot like the
   // scarab/scorpion/hippo/crocodile/minotaur/griffin/medusa, no SKINS entry needed ----
 };
@@ -11832,6 +12135,7 @@ function makeFace(type, skinHex, glowHex){
 }
 
 function makeVoxelBot(color, weaponType, skinName){
+  if(skinName==='ages') return makeSumOfAges();
   if(skinName==='colossus') return makeColossus();
   if(skinName==='mummy') return makeMummy();
   if(skinName==='jackal') return makeJackal();
@@ -12079,7 +12383,12 @@ function makeVoxelBot(color, weaponType, skinName){
     // -0.50, not -0.52: this ring is the lowest mesh on the whole Colossus (the arm hangs at rest), and at
     // its 3.1x boss scale the extra 0.02 put the glow ring through the dungeon floor.
     const ring=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.07,0.22),new THREE.MeshBasicMaterial({color:cfg.bossgunColor2||0x8fe6ff,fog:false})); ring.position.y=-0.50; heldGrp.add(ring);
-    const grip=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.18,0.11),dark); grip.position.y=0.06; heldGrp.add(grip);
+    // 0.09, not 0.06: at 0.06 the grip's top face landed on exactly the same plane as the top of the fist
+    // holding it, which is a coincident pair at any scale and flickers. Overrun rather than trimmed, the same
+    // answer the Saif's edge strip and the Qaws' stirrup got -- and a pommel standing proud of the hand is
+    // what a held weapon looks like anyway. Surfaced when the Sum of Ages became the first generic bossgun
+    // skin in the audit's ACTORS list; the boss and ammit skins carry the same geometry and are fixed with it.
+    const grip=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.18,0.11),dark); grip.position.y=0.09; heldGrp.add(grip);
   } else {
     const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.34,0.1), voxMat(0x1b1d22,{noise:10})); barrel.position.y=-0.16; heldGrp.add(barrel);
     const slide = new THREE.Mesh(new THREE.BoxGeometry(0.11,0.12,0.28), voxMat(0x2b2f36,{noise:12,pattern:'plate'})); slide.position.set(0,-0.02,-0.02); heldGrp.add(slide);
@@ -16634,6 +16943,127 @@ function makeRoc(){
 // a deliberately DIFFERENT creature: a cooled black-basalt body shot through with molten cracks (instead of
 // the grunt's bright ember red), enormous slab pauldrons, a burning mantle, a real multi-spire crown, and a
 // flame base wide enough to look like it is standing in a bonfire rather than wearing a skirt.
+// THE SUM OF AGES — the final boss, and the only model in the game that is ABOUT the other models.
+//
+// It was first built as a SKINS entry driven through makeVoxelBot, which was a mistake: every other boss here
+// has a bespoke builder, and a recoloured grunt silhouette cannot end anything. It gets its own.
+//
+// What it is: a monument, not a man. Lapis and granite with gold seams burning in the joins, a blank gold mask
+// where a face would be, a nemes headdress — and, the whole point of it, a rack across its back carrying one
+// trophy from each age it remembers, in the order it walks down through them: the Colossus' sandstone, the
+// Hydra's green head, the Champion's bronze helm, the Admiral's ember. The rack is structural rather than
+// decorative: the bar sinks into the chest's back and every trophy sits down into the bar, because the
+// connectivity check counts a detached trophy as a floating shard and it would be right to.
+//
+// Every part is sunk into its neighbour rather than butted against it. Flush faces are the thing the
+// coplanarity check exists to catch, and on a model this size at 1.85 scale they flicker from across the arena.
+function makeSumOfAges(){
+  const g = new THREE.Group();
+  const lapis     = voxMat(0x2b2f4a,{noise:14,pattern:'plate'});
+  const lapisDark = voxMat(0x171a2c,{noise:12});
+  const granite   = voxMat(0x3a3d52,{noise:16});
+  const goldMat   = metalMatP(0xd9a93f,90,0xfff2c8);
+  const seamMat   = new THREE.MeshBasicMaterial({color:0xffd873,fog:false});
+  const eyeMat    = new THREE.MeshBasicMaterial({color:0xfff3c4,fog:false});
+  function m(w,h,d,mat,x,y,z,rz){
+    const o = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+    o.position.set(x,y,z); if(rz) o.rotation.z = rz;
+    o.castShadow = true; g.add(o); return o;
+  }
+  // ---- legs: pillars, not limbs. The feet bottom out at exactly y=0 ----
+  [-1,1].forEach(s=>{
+    m(0.44,0.22,0.64, lapisDark, s*0.34, 0.11, 0.04);          // foot, base on the floor
+    m(0.36,0.80,0.38, granite,   s*0.34, 0.58, 0.00);          // shin, sunk into the foot
+    m(0.30,0.10,0.34, goldMat,   s*0.34, 0.99, 0.00);          // gold band under the knee
+    m(0.40,0.16,0.42, lapisDark, s*0.34, 1.03, 0.00);          // knee block
+    m(0.46,0.84,0.46, lapis,     s*0.34, 1.46, 0.00);          // thigh
+    m(0.07,0.46,0.05, seamMat,   s*0.34, 1.44, 0.235);         // burning seam down the thigh
+  });
+  // ---- hips and torso ----
+  m(0.98,0.44,0.60, lapisDark, 0, 1.84, 0);
+  m(0.30,0.09,0.62, goldMat,   0, 2.03, 0);                    // belt
+  m(0.88,0.54,0.56, granite,   0, 2.22, 0);                    // belly
+  m(1.22,1.00,0.70, lapis,     0, 2.82, 0);                    // chest
+  [[0,0.54,0.06,0],[0,-0.50,0.06,0],[0.46,0.20,0.05,-0.7],[-0.46,0.20,0.05,0.7],
+   [0.44,-0.26,0.05,0.8],[-0.44,-0.26,0.05,-0.8]].forEach(([dx,dy,w,rz])=>{
+    m(w,0.46,0.04, seamMat, dx, 2.86+dy, 0.36, rz);            // seams radiating from the core
+  });
+  const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.20,0.20,0.07,10), goldMat);
+  disc.rotation.x = Math.PI/2; disc.position.set(0,2.86,0.355); g.add(disc);
+  // z=0.40, not 0.365: at 0.365 this glow and the disc behind it started at the same z and shared their back
+  // face. It stands proud of the disc instead, which is also how a lit core should sit in its setting.
+  const discGlow = new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.09,10), seamMat);
+  discGlow.rotation.x = Math.PI/2; discGlow.position.set(0,2.86,0.40); g.add(discGlow);
+  const coreLight = new THREE.PointLight(0xffd873,1.5,7); coreLight.position.set(0,2.86,0.6); g.add(coreLight);
+  // ---- pauldrons: the widest thing on it ----
+  [-1,1].forEach(s=>{
+    m(0.52,0.38,0.76, granite, s*0.80, 3.12, 0, s*-0.20);
+    m(0.54,0.10,0.78, goldMat, s*0.81, 3.32, 0, s*-0.20);
+    for(let i=0;i<3;i++){
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.075,0.30,4), lapisDark);
+      sp.position.set(s*0.83, 3.42, -0.26+i*0.26); sp.rotation.z = s*-0.30; g.add(sp);
+    }
+  });
+  // ---- arms: shoulder down to fist, each part sunk into the one above ----
+  [-1,1].forEach(s=>{
+    m(0.30,0.66,0.30, lapis,     s*0.92, 2.72, 0.04, s*-0.22);
+    m(0.32,0.22,0.32, lapisDark, s*1.02, 2.36, 0.08);          // elbow
+    m(0.28,0.62,0.28, granite,   s*1.06, 2.02, 0.16);
+    m(0.06,0.44,0.04, seamMat,   s*1.06, 2.00, 0.305);
+    // z=0.22, not 0.20: the forearm's front face and the fist's landed on the same plane at 0.20. The fist
+    // sits a little forward of the arm now, which is where a clenched hand actually is.
+    m(0.36,0.34,0.36, lapisDark, s*1.08, 1.70, 0.22);          // fist
+    m(0.38,0.09,0.38, goldMat,   s*1.08, 1.88, 0.20);          // wrist band, sunk into fist and forearm both
+  });
+  // ---- the staff, in the right fist, overrunning it at both ends ----
+  const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,2.5,8), goldMat);
+  staff.position.set(1.08, 2.20, 0.20); g.add(staff);
+  const staffHead = new THREE.Mesh(new THREE.ConeGeometry(0.17,0.34,7), seamMat);
+  staffHead.position.set(1.08, 3.32, 0.20); g.add(staffHead);
+  // ---- neck, head, and a mask where a face would be ----
+  m(0.34,0.22,0.34, granite,   0, 3.34, 0.02);
+  m(0.60,0.58,0.54, lapis,     0, 3.72, 0.02);                 // head
+  m(0.46,0.40,0.06, goldMat,   0, 3.70, 0.30);                 // the blank mask
+  [-1,1].forEach(s=>{ m(0.13,0.07,0.05, eyeMat, s*0.13, 3.78, 0.325); });
+  [-1,1].forEach(s=>{ m(0.16,0.62,0.44, lapisDark, s*0.35, 3.60, 0.00); });   // nemes side panels
+  m(0.68,0.14,0.58, goldMat, 0, 4.00, 0.02);                   // brow band
+  m(0.22,0.34,0.20, goldMat, 0, 4.14, 0.02);                   // uraeus stub
+  // ---- THE RACK OF AGES: one trophy per phase, left to right in the order it remembers them ----
+  m(1.62,0.14,0.16, granite, 0, 3.30, -0.40);                  // the bar, sunk into the chest's back
+  // the Colossus: a block of its own sandstone, cracked
+  m(0.30,0.30,0.30, voxMat(0xc9a671,{noise:18}), -0.60, 3.50, -0.40);
+  // y=3.50, not 3.52: the crack's top ran out flush with the top of the block it is cracking.
+  m(0.06,0.26,0.05, new THREE.MeshBasicMaterial({color:0xe0b040,fog:false}), -0.60, 3.50, -0.24);
+  // the Hydra: one green head, snout forward
+  m(0.26,0.24,0.32, voxMat(0x4a8f2a,{noise:16}), -0.20, 3.48, -0.40);
+  m(0.16,0.14,0.20, voxMat(0x3a7422,{noise:14}), -0.20, 3.44, -0.20);
+  // 0.055 apart, not 0.07: at 0.07 the outer eye's own left face landed on exactly the head's left face
+  // behind it, two unrelated parts sharing a plane across the width of the model.
+  [-1,1].forEach(s=>{ m(0.06,0.05,0.04, new THREE.MeshBasicMaterial({color:0x8fe050,fog:false}), -0.20+s*0.055, 3.52, -0.22); });
+  // the Champion: his bronze helm, crest and all
+  m(0.28,0.26,0.30, metalMatP(0xa8752a,80,0xffe0a0), 0.20, 3.49, -0.40);
+  m(0.07,0.20,0.34, voxMat(0x8a2f2f,{noise:12}), 0.20, 3.64, -0.40);
+  // the Admiral: the ember that took his deck
+  m(0.26,0.22,0.26, voxMat(0x2a2320,{noise:14}), 0.60, 3.46, -0.40);
+  const ember = new THREE.Mesh(new THREE.ConeGeometry(0.15,0.40,6),
+    new THREE.MeshBasicMaterial({color:0xff8a2a,fog:false}));
+  ember.position.set(0.60, 3.68, -0.40); g.add(ember);
+  const emberLight = new THREE.PointLight(0xff8a2a,0.8,4); emberLight.position.set(0.60,3.72,-0.40); g.add(emberLight);
+  // The tell. Every boss AI block flashes ud.botMuzzle when it commits to a hazard, and the generic builder is
+  // what normally supplies one — a bespoke model has to bring its own or the fight has no wind-up at all. Sits
+  // at the head of the staff, which is the hand the hazards come out of. A plane, not a box, so it never
+  // counts as body geometry; opacity 0 and visible:false until a block raises it.
+  const botMuzzle = new THREE.Mesh(new THREE.PlaneGeometry(0.9,0.9),
+    new THREE.MeshBasicMaterial({color:0xffd873, transparent:true, opacity:0, fog:false, side:THREE.DoubleSide}));
+  botMuzzle.position.set(1.08, 3.52, 0.20); botMuzzle.visible = false; g.add(botMuzzle);
+  g.userData.botMuzzle = botMuzzle;
+
+  g.userData.bodyMeshes = [];
+  g.traverse(o=>{ if(o.isMesh) g.userData.bodyMeshes.push(o); });
+  attachEnemyMarker(g);
+  return g;
+}
+
 function makeIfritKing(){
   const g = new THREE.Group();
   const basalt = voxMat(0x2e2422,{noise:14});      // cooled black rock — the key separation from the red grunt
@@ -19608,6 +20038,64 @@ const CHINA_LEGS = [
    onBoss(){ yamenSetFire([true, true, false]); },
    enter(b){ enterYamenWorld(b || '⚓ Yamen — the fleet lies chained, bow to stern'); }},
 ];
+
+// ===================== THE FINAL FIGHT: THE SUM OF AGES =====================
+// The end of the whole game, and the one trip that is not sold at a booth: it is reached through the dark
+// gate that stands in every hub and lights only once Mexico, Sweden and China are all walked. See nearGate().
+//
+// FOUR AGES. Every other boss in this game owns one telegraphed hazard and one capped summon. This one owns
+// four of each and walks down through them as its health falls, quoting at each step a fight the player has
+// already won — the Colossus' heaving ground, the Hydra's venom, the Bearer's fire, the Admiral's burning
+// floor — with that era's own minions coming up beside it. That is what makes the fight mean "you conquered
+// history" without a line of text saying so.
+//
+// One code path, four data rows, and the phase is RE-DERIVED from health every frame rather than latched, so
+// a player who dies mid-fight and comes back resumes the age their damage actually earned. That is the same
+// rule the Admiral's burning deck already follows (`want` off b.hp, never a timer).
+const AGES_BASE_SPEED = 1.05;
+const AGES_PHASES = [
+  {wake:'⚠ IT REMEMBERS THE COLOSSUS',                      cry:'⚠ The ground heaves!',        call:'⚠ The Old Kingdom answers!',
+   every:4.6, callEvery:13,
+   hazard:{ringColor:0x8a7050, fillColor:0xa8895e, impactColor:0xcbb27a, ringR:2.4, impactAt:1.00, dur:1.60, hitRadius:2.4, damage:20},
+   minions:[{skin:'mummy',        hp:120, speed:1.05, scale:1.00, wt:'knife'}]},
+  {wake:'⚠ IT REMEMBERS THE HYDRA',                          cry:'⚠ Venom!',                    call:'⚠ The marshes answer!',
+   every:4.2, callEvery:12,
+   hazard:{ringColor:0x4a8f2a, fillColor:0x6fbf3a, impactColor:0x8fe050, ringR:2.0, impactAt:0.75, dur:1.30, hitRadius:2.0, damage:20},
+   minions:[{skin:'jackal',       hp:110, speed:1.40, scale:1.00, wt:'pistol'}]},
+  {wake:'⚠ IT REMEMBERS THE BEARER',                         cry:'⚠ Fire serpent!',             call:'⚠ The orders answer!',
+   every:3.8, callEvery:11,
+   hazard:{ringColor:0xff6a1a, fillColor:0xff9a3a, impactColor:0xffd06a, ringR:2.1, impactAt:0.70, dur:1.25, hitRadius:2.1, damage:22},
+   minions:[{skin:'jaguarknight', hp:200, speed:2.10, scale:1.00, wt:'knife'},
+            {skin:'eagleknight',  hp:130, speed:1.20, scale:1.00, wt:'pistol'}]},
+  {wake:'⚠ IT REMEMBERS THE ADMIRAL — the floor takes fire', cry:'⚠ Fire catches underfoot!',   call:'⚠ Every age answers at once!',
+   every:3.4, callEvery:10,
+   hazard:{ringColor:0xff7a2a, fillColor:0xffb347, impactColor:0xfff0d8, ringR:2.4, impactAt:0.80, dur:1.30, hitRadius:2.4, damage:26},
+   minions:[{skin:'berserkr',     hp:190, speed:1.70, scale:1.05, wt:'knife'},
+            {skin:'songmarine',   hp:145, speed:1.35, scale:1.00, wt:'knife'}]},
+];
+// 5200 puts it well past the Admiral's 3700, which was the hardest fight in the game until now. The arena is
+// 34x34 with walls at +/-17, so minions clamp to 15 and it spawns at z=-8, far enough that the player gets a
+// look at it before it closes.
+const AGES_CLAMP = 15;
+const SUM_OF_AGES = {skin:'ages', col:0x2b2f4a, hp:5200, scale:1.85, speed:AGES_BASE_SPEED, x:0, z:-8, radius:1.15,
+  name:'THE SUM OF AGES', hud:'the sum of ages',
+  call:'⚠ Every age you buried stands up at once…',
+  intro:'𓂀 THE SUM OF AGES',
+  fell:'𓂀 It falls, and the ages go quiet with it'};
+// A leg with an empty `waves` array. spawnTripStage() reads `tripWave >= leg.waves.length` and goes straight
+// to the boss, so "you arrive and it is already there" needs no special case — 0 >= 0 is the whole of it.
+const FINAL_LEGS = [
+  {place:'The Gate of Ages', icon:'𓂀', diff:1.0, era:'every age at once',
+   waves:[], stats:{}, west:[[0,0]], east:[[0,0]],
+   boss:SUM_OF_AGES,
+   enter(b){ enterFinalArena(b || '𓂀 The gate closes behind you'); }},
+];
+// Not a DESTINATIONS entry, so no card is ever drawn or priced for it. advanceTripLeg() looks its name up in
+// DESTINATIONS to mark a card walked and simply finds nothing, which the existing `if(card)` guard already
+// allows for. The trip's homeHub is the Nile bank, which is where the game ends.
+const FINAL_TRIP = {name:'The Sum of Ages', legs:FINAL_LEGS,
+  homeHub:enterNileBankHub,
+  homeBanner:'🌅 You conquered history'};
 // The leg currently underway. Clamped rather than indexed raw so a stale tripLeg can never return
 // undefined and take the spawn/HUD code down with it.
 function curLeg(){
@@ -19793,7 +20281,13 @@ const HUB_STATS = {
   cairo:       {icon:'🕌', place:'Cairo',        hint:'booth in the bazaar'},
   aztecMarket: {icon:'🎪', place:'Aztec Market', hint:'booth by the gate'},
   ladoga:      {icon:'⚓', place:'Aldeigjuborg',  hint:'booth on the quay'},
+  // the one hub with nothing to sell, so its hint names the stele instead of a booth
+  nilebank:    {icon:'🌅', place:'The Nile',     hint:'read the stele'},
 };
+// Every hub but the last one has a travel booth. Rather than leave BOOTH_POS pointing at the previous hub's
+// counter — which would put a live [E] prompt and a waypoint arrow on an empty stretch of riverbank — the two
+// places that read it ask this first.
+function hubHasBooth(){ return currentHub !== 'nilebank'; }
 function applyHubChrome(){
   pending = null; betweenTimer = 0;
   setScope(false);
@@ -19804,6 +20298,9 @@ function applyHubChrome(){
   setHubStats(true, L.place, undefined, L.icon);
   const en = document.getElementById('enemies');
   if(en) en.textContent = L.hint;
+  // The gate stands in whichever hub this is, if it stands at all — attached here rather than in each map's
+  // builder so there is one gate in the game and it follows the player between hubs.
+  placeAgesGate();
   drawWorldMap();
 }
 // Cairo as the between-countries hub: the Islamic map with no wave queued and the wave/enemy counters
@@ -19838,6 +20335,56 @@ function enterLadogaMarketHub(banner){
   boothBeacon = LADOGA_BOOTH_BEACON;
   tripDest = null; tripLeg = 0;
   enterLadogaWorld(banner);
+  applyHubChrome();
+}
+// THE NILE BANK. An hour before sunset on the river, which is the one palette the game has never used: the
+// campaign is a white desert noon, Mexico a hard blue, Sweden cold, China a burning haze. The last map should
+// not look like anywhere you fought.
+function enterNileBankWorld(banner){
+  clearWorldGroups();
+  scene.add(nileBankWorld);
+  sky.visible = true;
+  activeColliders = nileBankColliders;
+  activeHeightZones = heightZonesNone;
+  playClamp = 19;                        // the bank runs to 20; you are stopped short of every edge
+  scene.background.set(0xf0b070); scene.fog.color.set(0xead0ac);
+  // 40, not 26: the fog colour is a warm one, and at 26 it began repainting the river a dozen steps from the
+  // kerb — most of the water the player can see is further off than that, so the Nile went to tan soup.
+  scene.fog.near = 40; scene.fog.far = 190;
+  // THE FAR FIELD IS THE RIVER, AND IT HAS TO BE THE RIVER'S EXACT COLOUR.
+  // distantGround is a 700-unit plane pinned at y=-0.04 (see its own note), and the ripple sweep bobs every
+  // water surface +/-0.03 about its rest height. With this map's river resting at -0.06 and an olive plane at
+  // -0.04, the surface crossed it twice a cycle and the Nile alternated green and blue at the ripple's own
+  // frequency. No rest height fixes that on its own: clearing the plane needs a top above -0.01, and staying
+  // under the bank's lip needs one below -0.03. So the plane is painted the water's colour instead — which is
+  // also what is actually out there past a delta bank. Whichever surface wins the depth test, it is the same
+  // blue, and there is nothing left to see flicker. Keep these two in step if either changes.
+  setDistantGround(0x1f7fc4);
+  skyTint(0xffd9a8);
+  // NEAR-NEUTRAL LIGHT UNDER A WARM SKY, which is the lesson Aldeigjuborg already learned the hard way: a
+  // golden-hour hemisphere (this map first ran 0xffd0a0 at 0.88, with a 0xffc98a ambient under it) turns every
+  // cool colour beneath it, and the Nile came out olive-green. The sunset lives in the background, the fog and
+  // the sky tint; the light that actually lands on the water is kept close to white so the water stays blue.
+  hemi.intensity=0.92; hemi.color.set(0xdfe9f6); hemi.groundColor.set(0x6a5a40);
+  sun.intensity=0.95; fill.intensity=0.30; fill.color.set(0xe8eef6);
+  camera.position.set(0, 1.7, 12); yaw=targetYaw=0; pitch=targetPitch=0;   // facing the stele, river beyond
+  vel.set(0,0,0); playerHeight=0; stuckTimer=0;
+  clearBots(); bossActive=false; showBossBar(false); pending=null; inNileArea=false;
+  // First entry registers the river with the ripple sweep — see the note in buildNileBank about why it
+  // cannot be pushed at build time. Guarded so re-entering never double-registers it.
+  const w = nileBankWorld.userData.water;
+  if(w && waterSurfaces.indexOf(w) < 0) waterSurfaces.push(w);
+  setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); },4200);
+}
+// The end of the game. Hub-shaped because a hub is already "peaceful map, weapons holstered, no waves
+// queued" and that is exactly what this is — but it is the one hub with no booth, so nearBooth() and the
+// booth marker are both switched off for it by hubHasBooth() rather than by pointing BOOTH_POS at nothing.
+function enterNileBankHub(banner){
+  inHub = true;
+  currentHub = 'nilebank';
+  tripDest = null; tripLeg = 0;
+  campaignComplete = true;
+  enterNileBankWorld(banner);
   applyHubChrome();
 }
 // Undone by startGame() when a fresh run begins — see setHubStats(false) there.
@@ -20243,8 +20790,118 @@ const boothBalEl = document.getElementById('boothbal');
 // the prompt up as you step onto it — at the old 3.2 the radius fell inside the counter, which you cannot
 // walk into, so the prompt only appeared if you approached from a corner.
 const BOOTH_RADIUS = 4.6;
+// ===================== THE GATE OF AGES =====================
+// How the final fight is reached, and deliberately not a fourth card in the booth: the booth sells passage to
+// places that exist on a map, and the last fight is not a place you travel to. It is a dark gate that stands
+// in whichever hub you are in, and it only stands there at all once Mexico, Sweden and China are all walked.
+//
+// ONE GATE, RE-PARENTED. Built once and attached to the active hub's own group on entry rather than built
+// three times into three maps — so it leaves with the map when clearWorldGroups() removes that group, and
+// there is no fourth copy to keep in sync. It carries NO collider: a portal you can walk through reads as a
+// portal, and a runtime-attached collider would have to be pushed into and pulled out of a static array that
+// every other collider in the game is built into once and never touched again.
+const AGES_GATE_POS = {
+  cairo:       {x: 8.0, z: -6.0},    // east of the bazaar booth at (0,-6)
+  aztecMarket: {x: 8.5, z: 16.0},    // the far side of the gate square from the booth at (-8.5,16)
+  ladoga:      {x: 1.0, z: 17.0},    // up the quay from the booth at (-6.5,17), west of the cargo stacks
+};
+const AGES_GATE_HOST = {cairo:'islamic', aztecMarket:'aztecMarket', ladoga:'ladoga'};
+const AGES_GATE_RADIUS = 3.2;
+const agesGate = (function buildAgesGate(){
+  const g = new THREE.Group();
+  const basaltMat = voxMat(0x1b1d28,{noise:12,pattern:'plate'});
+  const goldMat   = voxMat(0xd9a93f,{noise:8});
+  function gb(w,h,d,mat,x,y,z){
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+    m.position.set(x,y,z); m.castShadow=true; g.add(m); return m;
+  }
+  [-1.5,1.5].forEach(x=>{
+    gb(0.8, 4.2, 0.8, basaltMat, x, 2.1, 0);
+    gb(1.0, 0.28, 1.0, goldMat,  x, 4.34, 0);
+  });
+  gb(3.9, 0.7, 0.9, basaltMat, 0, 4.75, 0);          // lintel
+  gb(3.9, 0.22, 1.1, goldMat,  0, 5.21, 0);          // gilded cornice
+  // The threshold itself: an unlit slab of nothing between the pillars, additively bright so it reads as a
+  // hole rather than a panel. fog:false keeps it the same from across a hub as it is up close.
+  const veil = new THREE.Mesh(new THREE.BoxGeometry(2.2, 3.9, 0.12),
+    new THREE.MeshBasicMaterial({color:0x6a5ad8, transparent:true, opacity:0.42,
+                                 blending:THREE.AdditiveBlending, depthWrite:false, fog:false}));
+  veil.position.set(0, 1.95, 0); g.add(veil);
+  g.userData.veil = veil;
+  const light = new THREE.PointLight(0x8a7aff, 1.35, 13); light.position.set(0, 2.4, 0); g.add(light);
+  return g;
+})();
+// ONE ROAD, NOT ALL OF THEM. Gated on China alone: Yamen is the end of the longest arc in the game and the
+// Admiral is the hardest fight before this one, so the burning fleet going quiet is what opens the way. Mexico
+// and Sweden stay optional side-roads that can be walked in any order or skipped outright.
+// Named rather than "the last entry in DESTINATIONS" on purpose — if a fourth road is ever added it should be
+// a deliberate decision whether it moves the ending, not something that shifts because a literal grew.
+const FINAL_ROAD = 'China';
+function agesUnlocked(){
+  const road = DESTINATIONS.find(d => d.name === FINAL_ROAD);
+  return !!(road && road.done);
+}
+// Standing where the gate is. Not while the campaign is already finished: the bank is reached THROUGH the
+// gate, and a gate still standing in a hub afterwards would sell a fight the player has already won.
+function gateHere(){
+  return inHub && !campaignComplete && !!AGES_GATE_POS[currentHub] && agesUnlocked();
+}
+function placeAgesGate(){
+  if(agesGate.parent) agesGate.parent.remove(agesGate);
+  if(!gateHere()) return;
+  const p = AGES_GATE_POS[currentHub];
+  const host = {islamic:islamicOverworld, aztecMarket:aztecMarketOverworld, ladoga:ladogaOverworld}[AGES_GATE_HOST[currentHub]];
+  if(!host) return;
+  agesGate.position.set(p.x, 0, p.z);
+  host.add(agesGate);
+}
+function nearGate(){
+  if(!gateHere() || !player.alive) return false;
+  const p = AGES_GATE_POS[currentHub];
+  const dx = camera.position.x - p.x, dz = camera.position.z - p.z;
+  return (dx*dx + dz*dz) < AGES_GATE_RADIUS*AGES_GATE_RADIUS;
+}
+// Walking in is what starts it. There is no ticket to buy and nothing to confirm, because the gate does not
+// appear until the only condition it has is already met.
+function enterAgesGate(){
+  if(!nearGate()) return;
+  travelTo(FINAL_TRIP);   // already clears inHub, closes the booth and takes the weapons out of the holster
+}
+
+// ---- the stele on the Nile bank ----
+// The only interactable in the last map, and the only way to start again. Two steps on purpose: the first [E]
+// reads the roll, the second begins a new run. Nothing here may be one keypress away from wiping the thing the
+// player just spent a whole game earning — which is the same reason the bank does not set gameWon.
+const STELE_POS = {x:0, z:-6};
+const STELE_RADIUS = 3.4;
+let steleRead = false;
+function nearStele(){
+  return inHub && currentHub === 'nilebank' && player.alive &&
+         ((camera.position.x-STELE_POS.x)**2 + (camera.position.z-STELE_POS.z)**2) < STELE_RADIUS*STELE_RADIUS;
+}
+// Read off the leg data rather than written out, so a destination added later shows up on the stele without
+// anyone remembering to come back here. Egypt is named rather than enumerated: its three bosses belong to the
+// campaign's own wave ladder, not to a leg with a boss field to read.
+function agesRoll(){
+  const names = [];
+  DESTINATIONS.forEach(d=>{ if(d.legs) d.legs.forEach(L=>{ if(L.boss && L.boss.name) names.push(L.boss.name); }); });
+  names.push(SUM_OF_AGES.name);
+  return '𓂀 Egypt fell first — then ' + names.join('  ·  ');
+}
+function readStele(){
+  if(!nearStele()) return;
+  if(!steleRead){
+    steleRead = true;
+    const roll = agesRoll();
+    setBanner(roll);
+    setTimeout(()=>{ if(bannerEl && bannerEl.textContent===roll) setBanner(''); }, 9000);
+    return;
+  }
+  startGame();
+}
+
 function nearBooth(){
-  if(!inHub || !player.alive) return false;
+  if(!inHub || !player.alive || !hubHasBooth()) return false;
   const dx = camera.position.x - BOOTH_POS.x, dz = camera.position.z - BOOTH_POS.z;
   return (dx*dx + dz*dz) < BOOTH_RADIUS*BOOTH_RADIUS;
 }
@@ -20253,12 +20910,23 @@ function nearBooth(){
 // Called once per frame from the animate loop.
 const interactBtnEl = document.getElementById('interactbtn');
 function updateInteract(){
-  const booth = nearBooth() && !boothOpen && !paused;
+  const live  = !boothOpen && !paused;
+  const booth = nearBooth() && live;
+  const gate  = nearGate()  && live;
+  const stele = nearStele() && live;
+  // Walking away from the stele forgets that the roll was read, so the second [E] can never be a leftover from
+  // a previous visit — a new run has to be asked for from a standing start every time.
+  if(!stele && steleRead) steleRead = false;
   if(promptEl){
-    promptEl.textContent = booth ? '\u{1F39F} Travel Booth — press [E]' : '';
-    promptEl.style.opacity = booth ? '1' : '0';
+    const txt = booth ? '\u{1F39F} Travel Booth — press [E]'
+              : gate  ? '\u{13080} The Gate of Ages — press [E]'
+              : stele ? (steleRead ? '\u{1F304} press [E] again to begin a NEW RUN'
+                                   : '\u{1F304} The stele — press [E]')
+              : '';
+    promptEl.textContent = txt;
+    promptEl.style.opacity = txt ? '1' : '0';
   }
-  if(interactBtnEl) interactBtnEl.classList.toggle('show', booth);
+  if(interactBtnEl) interactBtnEl.classList.toggle('show', booth || gate || stele);
   updateBoothMarker();
 }
 
@@ -20274,7 +20942,7 @@ const bmArrow= document.getElementById('bmarrow');
 const _bmVec = new THREE.Vector3();
 function updateBoothMarker(){
   if(!bmEl) return;
-  if(!inHub || boothOpen || paused || !player.alive){ bmEl.style.opacity='0'; return; }
+  if(!inHub || boothOpen || paused || !player.alive || !hubHasBooth()){ bmEl.style.opacity='0'; return; }
   const tgt = BOOTH_POS;
   const dx = camera.position.x - tgt.x, dz = camera.position.z - tgt.z;
   const dist = Math.sqrt(dx*dx + dz*dz);
@@ -20383,6 +21051,21 @@ function advanceTripLeg(){
   const card = DESTINATIONS.find(d => d.name === tripDest.name);
   if(card) card.done = true;
   setTripHUD();
+  // THE LAST ROAD GOES STRAIGHT THROUGH. If clearing this trip is what completed the set, the player is not
+  // sent home to walk across a hub hunting for a gate that has just appeared -- it opens where they are
+  // standing and takes them. The gate still stands in every hub afterwards for anyone who needs to come back
+  // to it (they died in the arena, or they completed the set on a run where they then went travelling), so
+  // this is the express route and not the only one.
+  // Guarded on tripDest: the final trip calls this function too when the Sum of Ages falls, and it must go
+  // home to the Nile bank rather than back into its own arena.
+  // !campaignComplete so that finishing Mexico or Sweden AFTER the game has already been beaten does not haul
+  // the player back into an arena they have cleared — the same guard gateHere() uses.
+  if(tripDest !== FINAL_TRIP && !campaignComplete && agesUnlocked()){
+    pending='agesgate'; betweenTimer=5.2;
+    const b = '𓂀 The delta is quiet — the Gate of Ages opens';
+    setBanner(b); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===b) setBanner(''); },5000);
+    return;
+  }
   pending='triphome'; betweenTimer=4.6;
 }
 // Most trips come home to Cairo; a destination can override this by carrying its own homeHub/homeBanner
@@ -20571,6 +21254,27 @@ function renderWaveJump(){
       }
     });
   });
+  // ---- the endgame ----
+  // FINAL_TRIP is not a DESTINATIONS entry, so the loop above cannot reach it. Without a row here the only
+  // way to see the last fight at all is to walk all three roads, which is a long way to go to check a banner.
+  // The button marks the roads walked on the way in, because that is the state the fight is supposed to
+  // happen in — the stele reads off the same flags, and a half-walked set would print a half-empty roll.
+  if(mkToggle('dest:final', '𓂀 The Sum of Ages', !!(tripDest===FINAL_TRIP))){
+    const ws = mkRow('the ending · Gate of Ages, then the Nile bank');
+    mkBtn(ws, '☠', 'Walk every road and drop straight into the final fight',
+          tripDest===FINAL_TRIP && bossActive, false, ()=>{
+      DESTINATIONS.forEach(d => { if(d.legs) d.done = true; });
+      campaignComplete = false;
+      travelTo(FINAL_TRIP);
+      closeAdmin();
+    });
+    mkBtn(ws, '🌅', 'Skip to the Nile bank, as if the Sum of Ages had just fallen',
+          currentHub==='nilebank', false, ()=>{
+      DESTINATIONS.forEach(d => { if(d.legs) d.done = true; });
+      enterNileBankHub('🌅 You conquered history');
+      closeAdmin();
+    });
+  }
 }
 // ============================ the console ============================
 // A chat, opened with C twice, entirely separate from the admin panel — that panel is untouched and still
@@ -20891,6 +21595,8 @@ document.addEventListener('keydown', e => {
   }
   if (paused) return;
   if (e.code==='KeyE' && nearBooth()){ openBooth(); return; }
+  if (e.code==='KeyE' && nearGate()){  enterAgesGate(); return; }
+  if (e.code==='KeyE' && nearStele()){ readStele(); return; }
   // ==================== ADMIN PANEL UNLOCK ====================
   // The single-key cheats (K kill-all, H skip-to-hub, G god mode) are gone. They fired on a bare keypress,
   // which meant a stray finger during a fight silently altered the run, and they were undiscoverable
@@ -21024,7 +21730,11 @@ let touchSensMult = parseFloat(localStorage.getItem('nf_touchSens')) || 1;
   const interactBtn = document.getElementById('interactbtn');
   if(interactBtn){
     interactBtn.addEventListener('touchstart', e=>{ e.preventDefault(); e.stopPropagation(); if(paused) return;
-      if(nearBooth()) openBooth();
+      // Same three things [E] does, in the same order — touch must not be the input that cannot reach the
+      // ending. The button's own visibility is driven by the same test in updateInteract().
+      if(nearBooth())      openBooth();
+      else if(nearGate())  enterAgesGate();
+      else if(nearStele()) readStele();
     }, {passive:false});
   }
 
@@ -21221,6 +21931,12 @@ const SPAWN_POINTS=[[-6,-6],[9,4],[-4.25,10],[-14,-14],[17,-6.5],[4,16],[-25.5,4
 const WAVES=[3,4,5, 6,7,9, 7,8,10, 9,10,12]; // 12 waves; a boss after wave 3, 6, 9, and 12
 function waveDiff(n){ return 1 + n*n*0.05 + n*0.16; } // accelerating curve: each wave is meaningfully tougher than the last
 let waveIdx=0, betweenTimer=0, pending=null, bossActive=false, bossNum=0, gameWon=false, gameStarted=false;
+// The campaign is finished and the player is standing on the Nile bank. Deliberately NOT gameWon: that flag
+// disables firing and turns the next pointer-lock click into a whole new run, which is why Cairo refuses to
+// set it (see the bossNum===3 branch). The bank has the same problem and more of it — it is a place to stand
+// in, and a stray click must not wipe it — so completion gets its own flag, and starting again is a thing the
+// player asks for at the stele rather than something a mouse button does to them.
+let campaignComplete=false;
 // era system: dying always respawns at the START of the CURRENT era, never an earlier one (e.g. dying in a
 // later Greek/Roman/Islamic era must not roll back into the Egyptian/pyramid era). currentEra indexes into
 // ERA_START_WAVE; extend both when a new era arc is added later, incrementing currentEra at that era's
@@ -21423,6 +22139,7 @@ function startGame(){
   document.body.classList.add('playing');
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
+  campaignComplete=false;   // a new run has not conquered anything yet
   jumpY = 0; jumpV = 0;
   inHub=false; tripDest=null; tripLeg=0; closeBooth(); setHubStats(false); exitHubChrome();  // fresh run: wave HUD and weapon back
   clearFieldEffects();   // no telegraph or quake from the last run may fire into the fresh one
@@ -21551,6 +22268,9 @@ function updateWaves(dt){
       else if(pending==='legcross'){ const leg=curLeg(); if(leg) leg.enter(); }
       // the last leg is clear: that IS the way home, in place of the raft that used to be
       else if(pending==='triphome'){ returnToHub(); }
+      // ...unless that last leg completed the last road, in which case the way on is the gate — see
+      // advanceTripLeg(). travelTo() clears inHub and the holster itself, so there is nothing to undo here.
+      else if(pending==='agesgate'){ travelTo(FINAL_TRIP); }
       pending=null;
     }
     // !tripCleared: onAllDead() returns without arming `pending` when a destination is finished, so
@@ -23390,6 +24110,55 @@ function animate(){
         b.swing = 1;
         SFX.boss();
         setBanner('⚠ Fire catches underfoot!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='⚠ Fire catches underfoot!') setBanner(''); },650);
+      }
+    }
+
+    // THE SUM OF AGES (the final boss, and the end of the game). See AGES_PHASES for what the four ages are
+    // and why the phase is derived from health rather than latched. Everything below is one pass over the
+    // current age's data row, so adding or retuning an age is a data edit and never a new code path.
+    if(b.boss && b.skin==='ages' && player.alive){
+      const ph = b.hp > b.maxHp*0.75 ? 0 : b.hp > b.maxHp*0.50 ? 1 : b.hp > b.maxHp*0.25 ? 2 : 3;
+      const A = AGES_PHASES[ph];
+      if(b.agesPhase === undefined) b.agesPhase = ph;
+      // Only ever announces going DOWN the ladder. Healing is not a thing in this game, but deriving the
+      // phase from health means a re-entry after death could otherwise re-announce an age already passed.
+      if(ph > b.agesPhase){
+        b.agesPhase = ph;
+        b.speed = AGES_BASE_SPEED * (1 + ph*0.12);
+        SFX.boss();
+        shakeAmt = Math.max(shakeAmt, 0.30 + ph*0.06);
+        setBanner(A.wake);
+        setTimeout(()=>{ if(bossActive) setBanner(''); }, 2000);
+      }
+      b.agesCd = b.agesCd===undefined ? 2.6 : b.agesCd - dt;
+      if(b.agesCd <= 0 && distToPlayer < 30){
+        b.agesCd = A.every + Math.random()*1.2;
+        spawnAoeTelegraph(camera.position.x, camera.position.z, A.hazard);
+        // The last age throws a second circle off to one side, so standing still is punished without taking
+        // away somewhere to stand -- the Bearer's enraged rule, applied to the whole final age.
+        if(ph === 3){
+          const a = Math.random()*Math.PI*2;
+          spawnAoeTelegraph(camera.position.x + Math.cos(a)*3.4, camera.position.z + Math.sin(a)*3.4, A.hazard);
+        }
+        if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
+        b.swing = 1;
+        SFX.boss();
+        setBanner(A.cry); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===A.cry) setBanner(''); },700);
+      }
+      // Capped at 3 live adds exactly as the ammit's, the Shaman's and the Bearer's summons are, so four ages
+      // of minions still cannot spiral into a crowd the player has no way through. The last age gets 4,
+      // which is the whole of its extra pressure beyond the faster hazard.
+      b.agesSummonCd = b.agesSummonCd===undefined ? 5 : b.agesSummonCd - dt;
+      if(b.agesSummonCd <= 0 && bots.filter(o=>!o.boss && o.alive).length < (ph===3 ? 4 : 3)){
+        b.agesSummonCd = A.callEvery + Math.random()*3;
+        A.minions.forEach(mn=>{
+          const ang = Math.random()*Math.PI*2, r = 8 + Math.random()*4;
+          const sx = Math.max(-AGES_CLAMP, Math.min(AGES_CLAMP, b.mesh.position.x + Math.cos(ang)*r));
+          const sz = Math.max(-AGES_CLAMP, Math.min(AGES_CLAMP, b.mesh.position.z + Math.sin(ang)*r));
+          spawnBot(sx, sz, ENEMY_COLORS[(Math.random()*ENEMY_COLORS.length)|0], [sx-2,0,sz],[sx+2,0,sz],
+                   mn.wt, {skin:mn.skin, hp:mn.hp, diff:1.0, speed:mn.speed, scale:mn.scale});
+        });
+        setBanner(A.call); setTimeout(()=>{ if(bossActive) setBanner(''); },1500);
       }
     }
 

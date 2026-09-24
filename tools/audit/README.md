@@ -22,9 +22,24 @@ dungeons and all four arenas build without error.
   an overlap. Catches z-fighting.
 
 Several builders use `Math.random()`, so the audit runs each model a few times
-and reports the worst case.
+and reports the worst case. Map builders randomise too, which is why
+`nileWorld`'s near-coplanar count moves by a couple between runs.
 
 Exit code is 0 only when every check passes.
+
+## instancecheck.py
+
+Guards the one thing the stub cannot fake by accident: `brickWall()` is the
+game's only `InstancedMesh`, and it places every brick with `setMatrixAt()`. A
+stub that drops those transforms measures the whole wall as ONE brick at the
+wall's centre — mid-air — so every wall reads as floating scenery, and anything
+resting on a wall loses its support and reads as floating too. That was worth
+160 phantom faults in `overworld` on its own.
+
+    python3 tools/audit/instancecheck.py
+
+Builds three walls (plain, smaller, and turned 45°) and asserts each measures at
+its true extent with its base on the ground.
 
 ## Adding a model
 

@@ -318,8 +318,15 @@ class Mesh extends Object3D {
   raycast(){}
 }
 class InstancedMesh extends Mesh {
-  constructor(geometry, material, count){ super(geometry, material); this.count=count||0; this.instanceMatrix={needsUpdate:false}; this.isInstancedMesh=true; }
-  setMatrixAt(){} getMatrixAt(){} setColorAt(){}
+  constructor(geometry, material, count){ super(geometry, material); this.count=count||0; this.instanceMatrix={needsUpdate:false}; this.isInstancedMesh=true; this.__inst=[]; }
+  // The per-instance matrices are the ONLY record of where an instanced mesh's geometry is. One
+  // InstancedMesh is cols*rows bricks spread across a whole wall, while the mesh's own matrixWorld
+  // sits at the wall's centre -- so discarding these (they used to be no-ops) made every brickWall
+  // in the game measure as one brick hanging in mid-air. See instancecheck.py.
+  // dummy.matrix is a raw 16-element array in this stub and a Matrix4 in real three.js; take either.
+  setMatrixAt(i, m){ if(m) this.__inst[i] = (m.elements ? m.elements : m).slice(); }
+  getMatrixAt(i, m){ const e = this.__inst[i]; if(e && m && m.elements) m.elements = e.slice(); return m; }
+  setColorAt(){}
 }
 class Sprite extends Object3D { constructor(material){ super(); this.material=material||{}; this.isSprite=true; } raycast(){} }
 class Points extends Object3D { constructor(g,m){ super(); this.geometry=g; this.material=m; } }
@@ -717,9 +724,18 @@ global.confirm = function(){ return true; };
 global.__meshWorldBox = function(mesh){
   const h = mesh.geometry && mesh.geometry._half ? mesh.geometry._half : {x:0,y:0,z:0};
   const off = mesh.geometry && mesh.geometry._offset ? mesh.geometry._offset : {x:0,y:0,z:0};
-  const m = mesh.matrixWorld;
+  // An InstancedMesh's geometry is one brick and its matrixWorld is the wall's centre; the wall is
+  // where the INSTANCES are. Union them, so the box is the wall a player walks into rather than a
+  // single brick floating at its middle. Non-instanced meshes keep the one-matrix path exactly.
+  const mats = [];
+  if(mesh.isInstancedMesh && mesh.__inst && mesh.__inst.length){
+    for(let k=0;k<mesh.__inst.length;k++){
+      if(mesh.__inst[k]) mats.push(matMul(mesh.matrixWorld, mesh.__inst[k]));
+    }
+  }
+  if(!mats.length) mats.push(mesh.matrixWorld);
   let min={x:Infinity,y:Infinity,z:Infinity}, max={x:-Infinity,y:-Infinity,z:-Infinity};
-  for(let i=0;i<8;i++){
+  for(const m of mats) for(let i=0;i<8;i++){
     const p = applyMat(m,
       off.x + (i&1 ? h.x : -h.x),
       off.y + (i&2 ? h.y : -h.y),
