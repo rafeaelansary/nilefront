@@ -4236,14 +4236,17 @@ function spawnBoatHole(x,z){
   explosions.push({mesh:flash, light, t:0, dur:0.5});
 }
 function spawnNileWave(){
-  // crocodiles and hippos spawn out in the open water, ringed around the boat, and swim in to attack
-  const ring=[[-14,10],[14,10],[-16,-8],[16,-8],[0,16],[-9,-14],[9,-14]];
-  ring.slice(0,5).forEach(([x,z])=>{
-    spawnBot(x,z,0x3e5c2e,[x*0.3,0,z*0.3],[x,0,z],'knife',{skin:'crocodile', hp:130, diff:1.2, speed:1.5});
-  });
-  spawnBot(0,-16,0x7a7a82,[0,0,-4],[0,0,-16],'knife',{skin:'hippo', hp:420, diff:1.3, speed:0.9, scale:1.3});
-  spawnBot(0,16,0x7a7a82,[0,0,4],[0,0,16],'knife',{skin:'hippo', hp:420, diff:1.3, speed:0.9, scale:1.3});
+  // crocodiles and hippos spawn out in the open water, ringed around the boat, and swim in to attack.
+  // They come in pods rather than all at once: all seven converging together was the "they just swarm"
+  // wall. A pod waits out on the far ring (nileWaitT) until its timer runs out, or until every animal
+  // already in close is dead — so a player who clears a pod quickly is never left waiting on a clock.
+  const croc = (x,z,wait)=>{ const m=spawnBot(x,z,0x3e5c2e,[x*0.3,0,z*0.3],[x,0,z],'knife',{skin:'crocodile', hp:110, diff:1.2, speed:1.5}); m.userData.data.nileWaitT=wait; };
+  const hippo = (x,z,wait)=>{ const m=spawnBot(x,z,0x7a7a82,[x*0.25,0,z*0.25],[x,0,z],'knife',{skin:'hippo', hp:360, diff:1.3, speed:0.9, scale:1.3}); m.userData.data.nileWaitT=wait; };
+  croc(-14,10,0); croc(14,10,0);                    // pod 1: two crocs
+  croc(-16,-8,12); croc(16,-8,12); hippo(0,-16,12);  // pod 2: two crocs and a hippo
+  croc(0,16,26); hippo(0,-18,26);                    // pod 3: a croc and the last hippo
 }
+const NILE_POD_RING = 17;   // how far out a waiting pod holds, beyond the standoff ring of the ones in close
 function enterNileWave(){
   inNileArea = true;
   boatHoles = 0;
@@ -23589,15 +23592,25 @@ function animate(){
   // ----- bot AI + animation -----
   const _dir = new THREE.Vector3(); const _chest = new THREE.Vector3();
   let nileEngageCount = 0; // caps how many crocs/hippos can be actively biting the player at once (see below)
-  // Nile: designate the (up to 2) NEAREST attackers as the ones allowed to press in and bite this frame.
+  // Nile: designate the NEAREST attacker (one, not two — two biters on a deck this small out-damaged
+  // regen with no way to back off, which is most of why the wave read as impossible) as the ones allowed to press in and bite this frame.
   // The rest hold a standoff ring out in the water instead of piling into and clipping through the boat's
   // sides — that pile-up (5 crocs + 2 hippos all chasing to the hull) was the "glitch into the sides".
   let nileBiters = null;
   if(inNileArea){
-    nileBiters = bots.filter(o=>o.alive && (o.skin==='crocodile'||o.skin==='hippo'))
+    const nileAll = bots.filter(o=>o.alive && (o.skin==='crocodile'||o.skin==='hippo'));
+    nileAll.forEach(o=>{ if(o.nileWaitT>0) o.nileWaitT -= dt; });
+    // nothing left in close: call the next pod in now instead of making the player wait out its timer
+    const waiting = nileAll.filter(o=>o.nileWaitT>0);
+    if(waiting.length && waiting.length===nileAll.length){
+      const next = Math.min(...waiting.map(o=>o.nileWaitT));
+      waiting.forEach(o=>{ if(o.nileWaitT <= next+0.01) o.nileWaitT = 0; });
+      setBanner('More in the water!'); setTimeout(()=>{ if(bannerEl && bannerEl.textContent==='More in the water!') setBanner(''); },1200);
+    }
+    nileBiters = nileAll.filter(o=>!(o.nileWaitT>0))
       .sort((p,q)=> (Math.hypot(p.mesh.position.x-camera.position.x, p.mesh.position.z-camera.position.z))
                   - (Math.hypot(q.mesh.position.x-camera.position.x, q.mesh.position.z-camera.position.z)))
-      .slice(0,2);
+      .slice(0,1);
   }
   bots.forEach(b => {
     const ud = b.mesh.userData;
@@ -23659,11 +23672,12 @@ function animate(){
     const isJavelin = b.weaponType==='javelin';
     const meleeNow = isKnife || (isJavelin && distToPlayer < 3.4);
     let canEngage = player.alive && los && (meleeNow ? distToPlayer < 3.4 : distToPlayer < 30);
-    // Nile Wave: only let 2 crocs/hippos actively bite at once instead of the whole pack piling on simultaneously
+    // Nile Wave: only let 1 croc/hippo actively bite at once instead of the whole pack piling on simultaneously
     // (the boat is small enough that all of them could otherwise reach melee range together) — the rest keep
     // closing in and lingering near the hull instead, which is also what lets the boat-chew timer above matter
     if(inNileArea && (b.skin==='crocodile' || b.skin==='hippo')){
-      if(canEngage){ if(nileEngageCount>=2) canEngage=false; else nileEngageCount++; }
+      if(b.nileWaitT>0) canEngage=false;   // a pod still holding out on the far ring never bites
+      if(canEngage){ if(nileEngageCount>=1) canEngage=false; else nileEngageCount++; }
     }
 
     // ---- movement & facing (walk toward where you go; only face the player when engaging) ----
@@ -23693,7 +23707,7 @@ function animate(){
       // (centre = origin) rather than pressing into its sides. Drift out if too close, in if too far, else
       // strafe around the ring.
       b.moving=1;
-      const cx=b.mesh.position.x, cz=b.mesh.position.z, distC=Math.hypot(cx,cz)||0.001, standoff=6.5;
+      const cx=b.mesh.position.x, cz=b.mesh.position.z, distC=Math.hypot(cx,cz)||0.001, standoff=b.nileWaitT>0 ? NILE_POD_RING : 6.5;
       if(distC < standoff-0.6) moveActor(b.mesh, cx, cz, 2.0*dt, R, b.groundY);
       else if(distC > standoff+1.6) moveActor(b.mesh, -cx, -cz, 2.0*dt, R, b.groundY);
       else moveActor(b.mesh, -cz, cx, 1.6*dt, R, b.groundY);
@@ -24217,8 +24231,11 @@ function animate(){
       if(meleeNow){
         // melee stab — scales a little with wave difficulty; the medusa's bite/claws hit noticeably harder
         b.swing = 1.0; SFX.knife(distToPlayer);
-        damagePlayer(Math.round((b.skin==='medusa'?14:7)*b.diff));
-        b.fireCd = Math.max(1.0, 1.5/b.diff);
+        // Nile animals bite slower than a knife stabs: a croc's snap or a hippo's crush every ~1.8s, so a
+        // player who is taking one lands two harpoons in the gap instead of just trading until dead
+        const nileBite = inNileArea && (b.skin==='crocodile'||b.skin==='hippo');
+        damagePlayer(nileBite ? (b.skin==='hippo'?9:6) : Math.round((b.skin==='medusa'?14:7)*b.diff));
+        b.fireCd = nileBite ? 1.8 : Math.max(1.0, 1.5/b.diff);
       } else {
         // pistol shot, or a griffin's dive-screech at range — accuracy/damage/rate ramp with wave difficulty
         spawnTracer(_chest.clone(), camera.position.clone(), isJavelin?0xd7c49a:0xff8a3a);
