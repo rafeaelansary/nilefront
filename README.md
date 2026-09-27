@@ -92,6 +92,12 @@ cannot fire by accident mid-run.
 runs with no network. See [`electron/README.md`](electron/README.md). Current build: **1.1.0**, macOS
 arm64 only.
 
+## Portal build
+
+`tools/portal/build-portal.js` produces a self-contained zip for uploading to CrazyGames or a similar
+portal — three.js vendored locally the same way the desktop build does it, so the game doesn't depend
+on a CDN inside a sandboxed iframe. See [`tools/portal/README.md`](tools/portal/README.md).
+
 ## Geometry audit
 
 `tools/audit/` runs the game's whole script headlessly inside py_mini_racer against a stubbed three.js
