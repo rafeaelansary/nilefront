@@ -421,11 +421,9 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.5)); // retina dis
 renderer.setSize(innerWidth, innerHeight);
 
 // ---- adaptive resolution ----
-// Every map carries ~50 point lights (each map's own plus the ones every other map left in the scene,
-// which light it too and are part of how it looks), and three shades every one of them for every pixel.
-// Measured on an M1 at a Retina window: Birka, Xiangyang, Yamen and the Nile took 37-39ms a frame at
-// 1.5x pixel density and 20-22ms at 1x, with every light and colour unchanged. So resolution is the one
-// dial that buys frame rate without touching the look, and it is set from the frame rate actually being
+// Most of the frame used to be ~50 live point lights; those are baked now (see BAKED LIGHT), and every
+// map measured 7-15ms at 1.5x on an M1 at a Retina window. Weaker GPUs still exist, and resolution is the
+// one dial that buys frame rate without touching the look, so it is set from the frame rate actually being
 // achieved: one step down whenever a second of play runs under ~50fps, and back up after five clean
 // seconds. A map that had to step down stays there until the next map, so it cannot see-saw.
 const RS_LEVELS = [1.5, 1.25, 1, 0.85, 0.7];
@@ -3686,6 +3684,8 @@ addTarget = colliders;   // as above: hand the default back to the town's array
 function clearWorldGroups(){
   setNileRenderScale(false);   // every map change goes through here; only enterNileWave() turns it back on
   rsMapChanged();
+  // bake whatever the next map brings in before it is drawn, and again once its first props have spawned
+  bakeDirty = true; setTimeout(() => { bakeDirty = true; }, 1000); setTimeout(() => { bakeDirty = true; }, 4000);
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   camera.rotation.z = 0;   // the Fjord rolls the camera with its deck; nothing else may inherit that
   [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, ladogaOverworld, fjordWorld, xiangyangWorld, yamenWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena, nileBankWorld, agesArena].forEach(g=>{ if(g.parent) scene.remove(g); });
@@ -22110,7 +22110,7 @@ function killFx(bd){
     debrisPool = [];
     for(let i=0;i<48;i++){
       const m = new THREE.Mesh(debrisGeo, new THREE.MeshLambertMaterial({color:0xffffff}));
-      m.visible = false; m.userData.v = new THREE.Vector3(); m.userData.life = 0;
+      m.visible = false; m.userData.v = new THREE.Vector3(); m.userData.life = 0; m.userData.noBake = true;
       scene.add(m); debrisPool.push(m);
     }
   }
@@ -23228,6 +23228,310 @@ const explosions = [];
 // swept into a map group; three covers two explosions landing together with room to spare.
 const explosionLights = [0,1,2].map(()=>{ const l=new THREE.PointLight(0xff8a2a, 0, 12); scene.add(l); return l; });
 let explosionLightIdx = 0;
+
+// ===================== BAKED LIGHT =====================
+// Measured on an M1 at a Retina window, every map rendered under 53-64 point lights, and they were most
+// of its frame: Birka took 44ms with them and 11ms without. 51 of them hang off the scene root rather than
+// off a map's own group, so they are live on every map at once — and since every map is built around the
+// same origin, each one lands somewhere on every other map's ground. That spill is part of how every map
+// looks, which is why moving the lights into their maps' groups was tried once and reverted.
+//
+// So they are kept, and stop costing anything: the light each of them throws onto the static world is
+// worked out once per vertex and stored on the geometry, and then they are switched off. For the Lambert
+// materials the whole world is built from this is not an approximation — three lights a Lambert surface
+// per VERTEX, summing every point light into vLightFront, which the fragment shader then multiplies by the
+// sun's shadow. The stored value is added into that same sum, so a baked vertex comes out the same colour
+// the live lights gave it, shadowed the same way. Phong (the water and the glass) is lit per pixel, and
+// gets the same diffuse light per vertex; what it loses is those lights' specular glints.
+//
+// What does not get them: anything that moves. Enemies, the weapon in your hand and debris are not baked
+// and so are no longer lit by these 51 — the lights a map owns in its own group (Birka's fires, Yamen's
+// burning decks, every dungeon) and the explosion pool stay live and light everything as before.
+var bakeDirty;                 // `var`: clearWorldGroups() sets it, and runs at load before this line does
+let bakeLights = null;         // [{x,y,z, r,g,b (colour x intensity x PI), dist, decay}]
+// bakedLight is a vec4 whose w says whether the vertex was baked: 0 on baked geometry, and — because an
+// attribute a geometry does not carry reads as WebGL's default (0,0,0,1) — 1 on everything that was not.
+// Things that move therefore pick up the live stand-ins below and baked things do not, from one shader.
+// Up to 22 of the baked lights reach the spot the player stands on (the Fjord's deck); 24 stand-ins cover it.
+const BK_N = 24;
+const BAKE_DECL = `
+#define BK_N ${BK_N}
+#ifdef USE_INSTANCING
+attribute vec3 bkPX; attribute vec3 bkNX; attribute vec3 bkPY; attribute vec3 bkNY; attribute vec3 bkPZ; attribute vec3 bkNZ;
+#else
+attribute vec4 bakedLight;
+#ifdef DOUBLE_SIDED
+attribute vec3 bakedLightB;
+#endif
+#endif
+uniform vec3 bkDynPos[BK_N]; uniform vec3 bkDynCol[BK_N]; uniform vec2 bkDynFall[BK_N];
+`;
+// A brick wall is one InstancedMesh of translated boxes, so its bricks cannot carry per-vertex values of
+// their own: each brick instead carries the light on each of its six faces, picked by the face's normal.
+const BAKE_PICK = `
+#ifdef USE_INSTANCING
+  vec3 bkF = objectNormal.x > 0.5 ? bkPX : objectNormal.x < -0.5 ? bkNX : objectNormal.y > 0.5 ? bkPY
+           : objectNormal.y < -0.5 ? bkNY : objectNormal.z > 0.5 ? bkPZ : bkNZ;
+  vec3 bkB = bkF;
+  float bkW = 0.0;
+#else
+  vec3 bkF = bakedLight.xyz;
+  float bkW = bakedLight.w;
+  #ifdef DOUBLE_SIDED
+  vec3 bkB = bakedLightB;
+  #endif
+#endif
+`;
+// The falloff three itself uses (punctualLightIntensityToIrradianceFactor, non-physical branch).
+const BK_LM_SCALE = 8.0;     // the light map stores irradiance / 8 in a byte: 0..8 in steps of 0.03
+const BAKE_FALL = `
+#define BK_LM_SCALE ${BK_LM_SCALE.toFixed(1)}
+float bkAtt(float d, vec2 f){ return (f.x > 0.0 && f.y > 0.0) ? pow(saturate(1.0 - d/f.x), f.y) : 1.0; }
+`;
+// The live stand-ins: the BK_N baked lights that reach furthest into where the player is, re-picked every
+// frame, positions in view space. Colours carry intensity and PI, like the baked values.
+const BK_U = {
+  bkDynPos:  {value: Array.from({length:BK_N}, () => new THREE.Vector3())},
+  bkDynCol:  {value: Array.from({length:BK_N}, () => new THREE.Vector3())},
+  bkDynFall: {value: Array.from({length:BK_N}, () => new THREE.Vector2())},
+};
+// One function object for every material, so every patched material shares one program cache key.
+function bakePatch(shader){
+  Object.assign(shader.uniforms, BK_U);
+  let v = shader.vertexShader, f = shader.fragmentShader;
+  if(v.indexOf('#include <lights_lambert_vertex>') >= 0){
+    v = v.replace('#include <common>', '#include <common>\n' + BAKE_DECL + BAKE_FALL)
+         .replace('#include <lights_lambert_vertex>', '#include <lights_lambert_vertex>\n' + BAKE_PICK + `
+  vLightFront += bkF;
+  #ifdef DOUBLE_SIDED
+  vLightBack += bkB;
+  #endif
+  for(int i = 0; i < BK_N; i++){
+    vec3 lv = bkDynPos[i] - geometry.position; float d = max(length(lv), 1e-4);
+    vec3 c = bkDynCol[i] * bkAtt(d, bkDynFall[i]) * bkW;
+    float ndl = dot(geometry.normal, lv/d);
+    vLightFront += saturate(ndl) * c;
+    #ifdef DOUBLE_SIDED
+    vLightBack += saturate(-ndl) * c;
+    #endif
+  }
+`);
+  } else if(v.indexOf('#define PHONG') >= 0){
+    v = v.replace('#include <common>', '#include <common>\nvarying vec3 vBaked; varying float vBkW;\n'
+                  + '#ifdef BK_LIGHTMAP\nvarying vec2 vBkXZ;\n#endif\n' + BAKE_DECL)
+         .replace('#include <fog_vertex>', '#include <fog_vertex>\n' + BAKE_PICK + '  vBaked = bkF; vBkW = bkW;\n'
+                  + '#ifdef BK_LIGHTMAP\n  vBkXZ = (modelMatrix * vec4(transformed, 1.0)).xz;\n#endif\n');
+    if(this && this.userData && this.userData.bkTex){
+      shader.uniforms.bkLightTex = {value: this.userData.bkTex};
+      shader.uniforms.bkLightRect = {value: this.userData.bkRect};
+    }
+    // baked lights add their diffuse; the live stand-ins go through three's own Blinn-Phong, glints and all
+    f = f.replace('#include <common>', '#include <common>\nvarying vec3 vBaked; varying float vBkW;\n'
+                  + '#ifdef BK_LIGHTMAP\nvarying vec2 vBkXZ; uniform sampler2D bkLightTex; uniform vec4 bkLightRect;\n#endif\n'
+                  + '#define BK_N ' + BK_N + '\nuniform vec3 bkDynPos[BK_N]; uniform vec3 bkDynCol[BK_N]; uniform vec2 bkDynFall[BK_N];\n' + BAKE_FALL)
+         .replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+  vec3 bkD = vBaked;
+  #ifdef BK_LIGHTMAP
+  vec2 bkUV = (vBkXZ - bkLightRect.xy) / bkLightRect.zw;
+  if(bkUV.x >= 0.0 && bkUV.x <= 1.0 && bkUV.y >= 0.0 && bkUV.y <= 1.0) bkD = texture2D(bkLightTex, bkUV).rgb * BK_LM_SCALE;
+  #endif
+  reflectedLight.directDiffuse += bkD * BRDF_Diffuse_Lambert( diffuseColor.rgb );
+  for(int i = 0; i < BK_N; i++){
+    vec3 lv = bkDynPos[i] - geometry.position; float d = max(length(lv), 1e-4);
+    IncidentLight bkL; bkL.direction = lv/d; bkL.visible = true;
+    bkL.color = bkDynCol[i] * (bkAtt(d, bkDynFall[i]) * RECIPROCAL_PI);
+    if(vBkW > 0.5){
+      RE_Direct(bkL, geometry, material, reflectedLight);
+    } else {
+      // baked water and glass already have these lights' diffuse; give back their glints near the player
+      vec3 irr = saturate(dot(geometry.normal, bkL.direction)) * bkL.color * PI;
+      reflectedLight.directSpecular += irr * BRDF_Specular_BlinnPhong(bkL, geometry, material.specularColor,
+                                       material.specularShininess) * material.specularStrength;
+    }
+  }
+`);
+  }
+  shader.vertexShader = v; shader.fragmentShader = f;
+}
+function bakePatchMats(o){
+  const mats = Array.isArray(o.material) ? o.material : [o.material];
+  mats.forEach(mt => { if(mt && (mt.isMeshLambertMaterial || mt.isMeshPhongMaterial) && mt.onBeforeCompile !== bakePatch){
+    mt.onBeforeCompile = bakePatch; mt.needsUpdate = true; } });
+}
+// Pick this frame's stand-ins: the baked lights whose falloff is strongest where the camera stands.
+let _bkScore = null;
+function bakeDynUpdate(){
+  if(!bakeLights || !bakeLights.length) return;
+  camera.updateMatrixWorld();
+  const cx = camera.matrixWorld.elements[12], cy = camera.matrixWorld.elements[13], cz = camera.matrixWorld.elements[14];
+  if(!_bkScore) _bkScore = bakeLights.map(L => ({L, s:0}));
+  for(const e of _bkScore){
+    const L = e.L, d = Math.hypot(L.x-cx, L.y-cy, L.z-cz);
+    // reach a little past the camera, so a weapon held out in front and an enemy a few steps off still count
+    e.s = (L.dist > 0 && L.decay > 0) ? Math.max(0, 1 - Math.max(0, d-4)/L.dist) * (L.r+L.g+L.b) : (L.r+L.g+L.b);
+  }
+  _bkScore.sort((a,b) => b.s - a.s);
+  const inv = camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+  for(let i=0;i<BK_N;i++){
+    const e = _bkScore[i], on = e && e.s > 0;
+    BK_U.bkDynPos.value[i].set(on ? e.L.x : 0, on ? e.L.y : 0, on ? e.L.z : 0).applyMatrix4(inv);
+    BK_U.bkDynCol.value[i].set(on ? e.L.r : 0, on ? e.L.g : 0, on ? e.L.b : 0);
+    BK_U.bkDynFall.value[i].set(on ? e.L.dist : 0, on ? e.L.decay : 0);
+  }
+}
+function bakeInit(){
+  bakeLights = [];
+  scene.children.forEach(o => {
+    if(!o.isPointLight || explosionLights.indexOf(o) >= 0) return;
+    o.updateMatrixWorld(true);
+    const p = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld), k = o.intensity * Math.PI;
+    bakeLights.push({x:p.x, y:p.y, z:p.z, r:o.color.r*k, g:o.color.g*k, b:o.color.b*k, dist:o.distance, decay:o.decay});
+    o.visible = false;   // three counts only visible lights, so this is what takes them out of every shader
+  });
+  bakeDirty = true;
+}
+// The light every baked source throws on one point (px,py,pz) with normal (nx,ny,nz): exactly the sum
+// lights_lambert_vertex takes, front face into out[0..2] and back face into out[3..5].
+function bakeAt(lights, px,py,pz, nx,ny,nz, out){
+  out[0]=out[1]=out[2]=out[3]=out[4]=out[5]=0;
+  for(const L of lights){
+    const dx=L.x-px, dy=L.y-py, dz=L.z-pz, d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(d < 1e-6) continue;
+    let a = 1;
+    if(L.dist > 0 && L.decay > 0){ const q = 1 - d/L.dist; if(q <= 0) continue; a = Math.pow(q, L.decay); }
+    const ndl = (nx*dx + ny*dy + nz*dz)/d;
+    if(ndl > 0){ out[0]+=ndl*a*L.r; out[1]+=ndl*a*L.g; out[2]+=ndl*a*L.b; }
+    else if(ndl < 0){ out[3]-=ndl*a*L.r; out[4]-=ndl*a*L.g; out[5]-=ndl*a*L.b; }
+  }
+}
+// Scratch objects built on first bake, not at load: tools/audit's stubbed THREE has no Sphere or Matrix3.
+let _bkSph, _bkM, _bkN, _bkV, _bkW;
+const _bkOut = new Float32Array(6);
+function bakeCandidates(sph){
+  return bakeLights.filter(L => !(L.dist > 0) ||
+    Math.hypot(L.x-sph.center.x, L.y-sph.center.y, L.z-sph.center.z) < L.dist + sph.radius);
+}
+function bakeMesh(m){
+  const mats = Array.isArray(m.material) ? m.material : [m.material];
+  if(!mats.some(mt => mt && (mt.isMeshLambertMaterial || mt.isMeshPhongMaterial))) return;
+  const g = m.geometry, pos = g && g.attributes.position, nor = g && g.attributes.normal;
+  if(!pos || !pos.array || !nor) return;
+  bakePatchMats(m);
+  if(m.isInstancedMesh){ bakeInstanced(m); return; }
+  // A geometry can be shared with things that move, and the light stored on it would ride along with every
+  // one of them. So a baked mesh always gets a copy of its own.
+  const own = g.clone(); m.geometry = own;
+  if(!own.boundingSphere) own.computeBoundingSphere();
+  _bkSph.copy(own.boundingSphere).applyMatrix4(m.matrixWorld);
+  const lights = bakeCandidates(_bkSph);
+  const n = pos.count, front = new Float32Array(n*4);   // w stays 0: this vertex is baked
+  const dbl = mats.some(mt => mt && mt.side === THREE.DoubleSide), back = dbl ? new Float32Array(n*3) : null;
+  if(lights.length){
+    _bkN.getNormalMatrix(m.matrixWorld);
+    for(let i=0;i<n;i++){
+      _bkV.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+      _bkW.fromBufferAttribute(nor, i).applyMatrix3(_bkN).normalize();
+      bakeAt(lights, _bkV.x,_bkV.y,_bkV.z, _bkW.x,_bkW.y,_bkW.z, _bkOut);
+      front[i*4]=_bkOut[0]; front[i*4+1]=_bkOut[1]; front[i*4+2]=_bkOut[2];
+      if(back){ back[i*3]=_bkOut[3]; back[i*3+1]=_bkOut[4]; back[i*3+2]=_bkOut[5]; }
+    }
+  }
+  own.setAttribute('bakedLight', new THREE.BufferAttribute(front, 4));
+  // a large, flat, per-pixel surface — water — keeps its baked light in a texture instead
+  const mt0 = mats[0];
+  if(mats.length === 1 && mt0.isMeshPhongMaterial && !mt0.userData.bkTex){
+    const bb = new THREE.Box3().setFromObject(m);
+    if(bb.max.y - bb.min.y < 3 && Math.max(bb.max.x - bb.min.x, bb.max.z - bb.min.z) > 12) bakeLightmap(m, mt0);
+  }
+  if(back) own.setAttribute('bakedLightB', new THREE.BufferAttribute(back, 3));
+}
+// Water is a flat box, and the Nile's is 400 units across with four corners on its top face — per-vertex
+// light has nowhere to live on it. So a large flat Phong surface gets its baked light as a texture over its
+// top instead, one texel every 0.8 units, which is what the pools of torchlight on the river were.
+function bakeLightmap(m, mat){
+  const box = new THREE.Box3().setFromObject(m);
+  const sx = box.max.x - box.min.x, sz = box.max.z - box.min.z, y = box.max.y;
+  const W = Math.min(512, Math.max(16, Math.ceil(sx/0.8))), H = Math.min(512, Math.max(16, Math.ceil(sz/0.8)));
+  const acc = new Float32Array(W*H*3);
+  const clampI = (v, n) => Math.max(0, Math.min(n-1, v|0));
+  for(const L of bakeLights){
+    const dy = L.y - y;
+    if(dy <= 0 || (L.dist > 0 && dy >= L.dist)) continue;      // under the water, or out of reach of it
+    const r = L.dist > 0 ? Math.sqrt(L.dist*L.dist - dy*dy) : 1e9;
+    const i0 = clampI((L.x-r-box.min.x)/sx*W, W), i1 = clampI((L.x+r-box.min.x)/sx*W, W);
+    const j0 = clampI((L.z-r-box.min.z)/sz*H, H), j1 = clampI((L.z+r-box.min.z)/sz*H, H);
+    for(let j=j0;j<=j1;j++) for(let i=i0;i<=i1;i++){
+      const dx = L.x - (box.min.x + (i+0.5)/W*sx), dz = L.z - (box.min.z + (j+0.5)/H*sz);
+      const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      let a = 1;
+      if(L.dist > 0 && L.decay > 0){ const q = 1 - d/L.dist; if(q <= 0) continue; a = Math.pow(q, L.decay); }
+      const k = (j*W + i)*3, ndl = dy/d * a;                     // the surface faces straight up
+      acc[k] += ndl*L.r; acc[k+1] += ndl*L.g; acc[k+2] += ndl*L.b;
+    }
+  }
+  const data = new Uint8Array(W*H*3);
+  for(let k=0;k<acc.length;k++) data[k] = Math.min(255, Math.round(acc[k]/BK_LM_SCALE*255));
+  const tex = new THREE.DataTexture(data, W, H, THREE.RGBFormat);
+  tex.magFilter = tex.minFilter = THREE.LinearFilter; tex.needsUpdate = true;
+  mat.userData.bkTex = tex;
+  mat.userData.bkRect = new THREE.Vector4(box.min.x, box.min.z, sx, sz);
+  mat.defines = Object.assign({}, mat.defines, {BK_LIGHTMAP:''});
+  mat.needsUpdate = true;
+}
+const BAKE_FACES = [['bkPX',1,0,0],['bkNX',-1,0,0],['bkPY',0,1,0],['bkNY',0,-1,0],['bkPZ',0,0,1],['bkNZ',0,0,-1]];
+function bakeInstanced(m){
+  const g = m.geometry, n = m.count;
+  if(!g.boundingBox) g.computeBoundingBox();
+  const hx = (g.boundingBox.max.x-g.boundingBox.min.x)/2, hy = (g.boundingBox.max.y-g.boundingBox.min.y)/2,
+        hz = (g.boundingBox.max.z-g.boundingBox.min.z)/2;
+  const arrs = BAKE_FACES.map(() => new Float32Array(n*3));
+  for(let i=0;i<n;i++){
+    m.getMatrixAt(i, _bkM); _bkM.premultiply(m.matrixWorld);
+    _bkN.getNormalMatrix(_bkM);
+    _bkSph.set(_bkV.set(0,0,0).applyMatrix4(_bkM), Math.hypot(hx,hy,hz));
+    const lights = bakeCandidates(_bkSph);
+    if(!lights.length) continue;
+    BAKE_FACES.forEach(([, fx,fy,fz], k) => {
+      _bkV.set(fx*hx, fy*hy, fz*hz).applyMatrix4(_bkM);       // the middle of that face, in the world
+      _bkW.set(fx,fy,fz).applyMatrix3(_bkN).normalize();
+      bakeAt(lights, _bkV.x,_bkV.y,_bkV.z, _bkW.x,_bkW.y,_bkW.z, _bkOut);
+      arrs[k][i*3]=_bkOut[0]; arrs[k][i*3+1]=_bkOut[1]; arrs[k][i*3+2]=_bkOut[2];
+    });
+  }
+  // the brick box is this wall's alone (brickWall() builds one per wall), so it can carry the attributes
+  BAKE_FACES.forEach(([name], k) => g.setAttribute(name, new THREE.InstancedBufferAttribute(arrs[k], 3)));
+}
+function bakeScene(){
+  bakeDirty = false;
+  if(!bakeLights) return;
+  if(!_bkSph){ _bkSph = new THREE.Sphere(); _bkM = new THREE.Matrix4(); _bkN = new THREE.Matrix3();
+    _bkV = new THREE.Vector3(); _bkW = new THREE.Vector3(); }
+  scene.updateMatrixWorld(true);
+  const todo = [];
+  (function walk(o, skip){
+    // enemies (their group carries userData.data), the weapon in your hand, and the debris pool all move
+    if(o === camera || (o.userData && (o.userData.data || o.userData.noBake))) skip = true;
+    if(o.isMesh && !o.userData.baked){ if(skip) bakePatchMats(o); else todo.push(o); }
+    for(const c of o.children) walk(c, skip);
+  })(scene, false);
+  for(const m of todo){ m.userData.baked = true; bakeMesh(m); }
+}
+// Every render call passes through here, so a new map is baked before its first frame is ever drawn.
+{
+  const render = renderer.render.bind(renderer);
+  let n = 0, nb = -1;
+  renderer.render = (s, c) => {
+    if(bakeDirty) bakeScene();
+    // a new wave's enemies are lit by the stand-ins from their first frame; the periodic pass catches a swap
+    if(bakeLights && (bots.length !== nb || ++n % 30 === 0)){
+      nb = bots.length;
+      bots.forEach(b => b.mesh.traverse(o => { if(o.isMesh) bakePatchMats(o); }));
+      camera.traverse(o => { if(o.isMesh) bakePatchMats(o); });
+    }
+    bakeDynUpdate();
+    render(s, c);
+  };
+}
 function borrowExplosionLight(color, distance, pos){
   const l = explosionLights[explosionLightIdx = (explosionLightIdx+1) % explosionLights.length];
   l.color.set(color); l.distance = distance; l.position.copy(pos); l.intensity = 3.2;
@@ -24631,6 +24935,7 @@ function animate(){
   renderer.render(scene, camera);
 }
 animate();
+bakeInit();
 // Every map is built and the first frame is queued: only now can START do anything.
 startBtn.disabled = false; startBtn.textContent = 'PLAY';
 
