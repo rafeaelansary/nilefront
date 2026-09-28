@@ -21572,11 +21572,6 @@ ADMIN_ITEMS.forEach(it => {
   }
 });
 ADMIN_CMDS.push(
-  {name:'fps', help:'toggle the frame-rate readout', run:()=>{
-    fpsOn = !fpsOn; fpsEl().style.display = fpsOn ? 'block' : 'none';
-    chatSay('✓ frame-rate readout ' + (fpsOn ? 'ON' : 'OFF'), 'ok');
-    return true;
-  }},
   {name:'tp', args:'<wave|place> [leg] [wave|boss]', help:'go somewhere', closes:true, run:adminTp},
   {name:'give', args:'<amount>', help:'add to your score', run:(a)=>{
     const n = parseInt(a[0], 10);
@@ -23456,34 +23451,15 @@ ground.castShadow = false;
 })();
 
 const clock = new THREE.Clock();
-// ---- /fps: a frame-rate readout for "the game feels choppy" reports. Reads the RAW frame gap, before
-// animate()'s dt clamp, and shows the worst frame of each half-second alongside the average — a steady
-// 60 with 120ms spikes feels far worse than a steady 45, and an average alone hides exactly that.
-let fpsOn = false, fpsDiv = null, fpsLast = 0, fpsAcc = 0, fpsN = 0, fpsWorst = 0;
-function fpsEl(){
-  if(!fpsDiv){
-    fpsDiv = document.createElement('div');
-    fpsDiv.style.cssText = 'position:fixed;top:6px;left:6px;z-index:50;padding:4px 8px;background:rgba(0,0,0,0.6);'
-      + 'color:#9f9;font:12px monospace;pointer-events:none;white-space:pre;display:none';
-    document.body.appendChild(fpsDiv);
-  }
-  return fpsDiv;
-}
-function fpsTick(){
-  const now = performance.now(), gap = fpsLast ? now - fpsLast : 0; fpsLast = now;
+// The raw gap between frames, before animate()'s dt clamp: what the adaptive resolution judges by.
+let frameLast = 0;
+function frameTick(){
+  const now = performance.now(), gap = frameLast ? now - frameLast : 0; frameLast = now;
   rsTick(gap, gameStarted && !gameWon && !paused && !boothOpen && inPlay());
-  if(!fpsOn || !gap) return;
-  fpsAcc += gap; fpsN++; fpsWorst = Math.max(fpsWorst, gap);
-  if(fpsAcc >= 500){
-    fpsEl().textContent = Math.round(1000*fpsN/fpsAcc) + ' fps  worst ' + Math.round(fpsWorst) + 'ms\n'
-      + renderer.info.render.calls + ' draws  ' + (renderer.info.render.triangles/1000|0) + 'k tris  '
-      + renderer.getPixelRatio() + 'x';
-    fpsAcc = 0; fpsN = 0; fpsWorst = 0;
-  }
 }
 function animate(){
   requestAnimationFrame(animate);
-  fpsTick();
+  frameTick();
   // The rAF chain stays alive through a context loss so play resumes by itself on restore; we just do
   // not touch the dead context, and we swallow the delta that built up while it was gone.
   if(ctxLost){ clock.getDelta(); return; }
