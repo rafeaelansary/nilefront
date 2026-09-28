@@ -1,0 +1,1 @@
+window.__CFG = { cam:[6, 0.8, -149.2], look:[6, 5.0, -110], fov:60, cast:[ ['makeColossus', 6, -131, 3.1], ['makeMummy', 7.25, -143.5, 1.0], ['makeJackal', 4.75, -143.3, 1.0], ['makeJaguarKnight', 8.7, -140.6, 1.0], ['makeMinotaur', 3.2, -140.4, 1.0, true] ], tweak(){ window.__LOOK({center:[6,-138], sunOff:[-22, 16, -34]}); }, };
