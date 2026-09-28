@@ -7,13 +7,13 @@
      thumbs. user-scalable=no because pinch-zoom on a pointer-locked FPS is only ever an accident,
      and viewport-fit=cover so the notch does not letterbox the canvas. -->
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="description" content="A voxel FPS that walks Egypt's history and then buys passage out of it — Olmec Mexico, Viking Sweden, Song China.">
+<meta name="description" content="A voxel FPS that walks Egypt's history and then buys passage out of it — Olmec Mexico, Viking Sweden, Yuan China.">
 <meta name="theme-color" content="#87CEEB">
 <!-- iOS standalone: keep the status bar dark over the sky so it does not sit white-on-white. -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta property="og:title" content="NILEFRONT">
-<meta property="og:description" content="A voxel FPS that walks Egypt's history and then buys passage out of it — Olmec Mexico, Viking Sweden, Song China.">
+<meta property="og:description" content="A voxel FPS that walks Egypt's history and then buys passage out of it — Olmec Mexico, Viking Sweden, Yuan China.">
 <meta property="og:type" content="website">
 <!-- Inline so the single-file property holds: a pyramid on the sky the game opens on. -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2387CEEB'/%3E%3Cpath d='M16 5 L29 27 H3 Z' fill='%23d9b26f'/%3E%3Cpath d='M16 5 L16 27 H3 Z' fill='%23b98f4e'/%3E%3C/svg%3E">
@@ -21979,18 +21979,26 @@ let touchSensMult = parseFloat(store.get('nf_touchSens')) || 1;   // read again 
 
   // weapon buttons
   wbtns.forEach(b=>{
-    b.addEventListener('touchstart', e=>{ e.preventDefault(); e.stopPropagation(); if(paused) return; const w=+b.dataset.w; selectWeapon(w); syncWeaponButtons(); }, {passive:false});
+    // lower the scope or shield first, on the weapon that is raising it, so it cannot be left posed
+    b.addEventListener('touchstart', e=>{ e.preventDefault(); e.stopPropagation(); if(paused) return; const w=+b.dataset.w;
+      if(scoped || guarding) setAim(false); selectWeapon(w); syncWeaponButtons(); }, {passive:false});
   });
   const adsBtn = document.getElementById('adsbtn');
   window.syncWeaponButtons = function(){
     // every loadout carries three weapons and the Nile's carries one: never offer a number that would
     // only wrap round to weapon 1
     wbtns.forEach(b=>{ b.classList.toggle('sel', +b.dataset.w===currentWeapon); b.style.display = +b.dataset.w < weapons.length ? '' : 'none'; });
-    if(adsBtn) adsBtn.classList.toggle('show', !!(weapons[currentWeapon] && weapons[currentWeapon].userData.scoped));
+    // The shield (the Chimalli) goes up on the same input as a scope — right-click/Shift on a desktop — so on
+    // touch it needs this same button, or it can never be raised at all. setAim() picks guard or scope.
+    const w = weapons[currentWeapon] && weapons[currentWeapon].userData;
+    if(adsBtn){
+      adsBtn.classList.toggle('show', !!(w && (w.scoped || w.shieldBlock)));
+      adsBtn.textContent = (w && w.shieldBlock) ? 'SHIELD' : 'SCOPE';
+    }
   };
   if(adsBtn){
     adsBtn.addEventListener('touchstart', e=>{ e.preventDefault(); e.stopPropagation(); if(paused) return;
-      setScope(!scoped); adsBtn.classList.toggle('active', scoped);
+      setAim(!(scoped || guarding)); adsBtn.classList.toggle('active', scoped || guarding);
     }, {passive:false});
   }
 
