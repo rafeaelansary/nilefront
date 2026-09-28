@@ -344,19 +344,19 @@
     <span class="desk"><span class="k"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></span>
     <span class="desk"><span class="k"><kbd>Mouse</kbd></span><span>Aim · <b>Click</b> to shoot</span></span>
     <span class="desk"><span class="k"><kbd>Right-click</kbd> / <kbd>Shift</kbd></span><span>Scope (bow, sling)</span></span>
-    <span class="desk"><span class="k"><kbd>1</kbd>–<kbd>4</kbd> / wheel</span><span>Switch weapon</span></span>
+    <span class="desk"><span class="k"><kbd>1</kbd>–<kbd>3</kbd> / wheel</span><span>Switch weapon</span></span>
     <span class="desk"><span class="k"><kbd>R</kbd> · <kbd>Space</kbd></span><span>Reload · Jump</span></span>
     <span class="desk"><span class="k"><kbd>E</kbd> · <kbd>P</kbd></span><span>Use · Pause</span></span>
     <span class="touch"><span class="k">Left thumb</span><span>Move</span></span>
     <span class="touch"><span class="k">Right thumb</span><span>Aim</span></span>
     <span class="touch"><span class="k">FIRE · JUMP</span><span>Shoot · Jump</span></span>
-    <span class="touch"><span class="k">1 – 4</span><span>Switch weapon</span></span>
+    <span class="touch"><span class="k">1 – 3</span><span>Switch weapon</span></span>
   </div>
   <div id="ver">v1.2.0</div></div>
 <div id="tip"></div>
 <div id="mobile">
   <div id="stick"><div id="knob"></div></div>
-  <div id="wbtns"><div class="wbtn" data-w="0">1</div><div class="wbtn sel" data-w="1">2</div><div class="wbtn" data-w="2">3</div><div class="wbtn" data-w="3">4</div></div>
+  <div id="wbtns"><div class="wbtn" data-w="0">1</div><div class="wbtn sel" data-w="1">2</div><div class="wbtn" data-w="2">3</div></div>
   <div id="adsbtn">SCOPE</div>
   <div id="jumpbtn">JUMP</div>
   <div id="interactbtn">🎟️ BOOTH</div>
@@ -21734,7 +21734,6 @@ document.addEventListener('keydown', e => {
   if (e.code==='Digit1') selectWeapon(0);
   if (e.code==='Digit2') selectWeapon(1);
   if (e.code==='Digit3') selectWeapon(2);
-  if (e.code==='Digit4') selectWeapon(3);
   // KeyZ used to jump to the ultimate weapon via weapons.findIndex(w=>w.userData.ultimate). The Zahra Gun
   // is the only weapon with that flag, and it lives in originalWeapons, which is unreachable in normal
   // play — so findIndex always returned -1, and selectWeapon(-1) wrapped to weapons.length-1: the LAST
@@ -21828,7 +21827,9 @@ let touchSensMult = parseFloat(localStorage.getItem('nf_touchSens')) || 1;
   });
   const adsBtn = document.getElementById('adsbtn');
   window.syncWeaponButtons = function(){
-    wbtns.forEach(b=> b.classList.toggle('sel', +b.dataset.w===currentWeapon));
+    // every loadout carries three weapons and the Nile's carries one: never offer a number that would
+    // only wrap round to weapon 1
+    wbtns.forEach(b=>{ b.classList.toggle('sel', +b.dataset.w===currentWeapon); b.style.display = +b.dataset.w < weapons.length ? '' : 'none'; });
     if(adsBtn) adsBtn.classList.toggle('show', !!(weapons[currentWeapon] && weapons[currentWeapon].userData.scoped));
   };
   if(adsBtn){
@@ -22045,12 +22046,12 @@ function tutSteps(){
   return isTouch ? [
     'Drag your <b>left thumb</b> to move',
     'Drag your <b>right thumb</b> to aim · hold <b>FIRE</b> to shoot',
-    'Tap <b>1 – 4</b> to switch weapons',
+    'Tap <b>1 – 3</b> to switch weapons',
     'Clear every enemy to end the wave',
   ] : [
     '<kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> to move · <kbd>Space</kbd> to jump',
     'Aim with the <b>mouse</b> · <b>Click</b> to shoot',
-    '<kbd>R</kbd> to reload · <kbd>1</kbd>–<kbd>4</kbd> or the wheel to switch weapons',
+    '<kbd>R</kbd> to reload · <kbd>1</kbd>–<kbd>3</kbd> or the wheel to switch weapons',
     'Clear every enemy to end the wave',
   ];
 }
