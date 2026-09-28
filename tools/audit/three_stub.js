@@ -334,7 +334,7 @@ class Line extends Object3D { constructor(g,m){ super(); this.geometry=g; this.m
 class LineSegments extends Line {}
 
 // ---------- materials / textures / lights ----------
-class Material { constructor(p){ Object.assign(this, p||{}); this.color = new Color((p&&p.color)!==undefined?p.color:0xffffff); } dispose(){} clone(){ return new this.constructor(Object.assign({},this)); } }
+class Material { constructor(p){ Object.assign(this, p||{}); this.userData = this.userData || {}; this.color = new Color((p&&p.color)!==undefined?p.color:0xffffff); } dispose(){} clone(){ return new this.constructor(Object.assign({},this)); } }
 class MeshBasicMaterial extends Material {}
 class MeshLambertMaterial extends Material {}
 class MeshPhongMaterial extends Material {}

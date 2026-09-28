@@ -46,6 +46,16 @@
   #bosstrack{width:100%;height:24px;background:rgba(0,0,0,0.55);border:3px solid #ff5566;border-radius:5px;overflow:hidden}
   #bossfill{height:100%;width:100%;background:linear-gradient(#ff7a4d,#d61f2b);transition:width 0.15s linear}
   #hitmark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff5555;font-size:26px;font-weight:bold;z-index:3;opacity:0;transition:opacity 0.05s;text-shadow:0 0 3px #000;pointer-events:none}
+  /* the marker pops in large and settles (driven per frame from hitmarkTimer); a kill paints it gold */
+  #hitmark.kill{color:#ffd54a;font-size:34px}
+  /* ---- damage direction: a red arc on the ring around the crosshair, turned toward whoever hit you ---- */
+  .dmgarc{position:absolute;top:50%;left:50%;width:240px;height:240px;margin:-120px 0 0 -120px;border-radius:50%;
+    border:7px solid transparent;border-top-color:rgba(255,45,45,0.9);box-sizing:border-box;opacity:0;z-index:3;
+    pointer-events:none;filter:drop-shadow(0 0 4px rgba(0,0,0,0.6))}
+  body:not(.playing) .dmgarc{display:none}
+  /* dying drains the colour out of the world until the respawn */
+  body > canvas{transition:filter 0.5s}
+  body.dead > canvas{filter:grayscale(0.85) brightness(0.7)}
   #dmg{position:absolute;inset:0;z-index:2;opacity:0;pointer-events:none;transition:opacity 0.25s;box-shadow:inset 0 0 220px 40px rgba(200,0,0,0.85)}
   #banner{position:absolute;top:42%;left:0;width:100%;text-align:center;color:#fff;font-size:40px;font-weight:800;z-index:3;opacity:0;transition:opacity 0.2s;text-shadow:0 2px 8px #000;pointer-events:none}
   #lock{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -12203,7 +12213,9 @@ function makeVoxelTexture(baseHex, {noise=22, size=64, pattern=null, cell=6} = {
 }
 
 function voxMat(hex, opts){
-  return new THREE.MeshLambertMaterial({map: makeVoxelTexture(hex, opts)});
+  const m = new THREE.MeshLambertMaterial({map: makeVoxelTexture(hex, opts)});
+  m.userData.hex = hex;   // the colour lives in the texture; killFx() needs it back as a number
+  return m;
 }
 
 // ---- enemy skins (each keeps its weapon/AI function; only the look changes) ----
@@ -20651,6 +20663,7 @@ function beginTouchPlay(){
 }
 const startBtn = document.getElementById('startbtn');
 function pressStart(e){ if(e){ e.preventDefault(); e.stopPropagation(); }
+  SFX.init(); SFX.uiClick();   // a user gesture, so this is also what unlocks audio on the first press
   if(isTouch){ beginTouchPlay(); } else { renderer.domElement.requestPointerLock(); }
 }
 startBtn.addEventListener('click', pressStart);
@@ -21821,14 +21834,14 @@ function resumeGame(){
   paused = false;
   document.body.classList.remove('paused');
 }
-if(pauseBtn) pauseBtn.addEventListener('click', pauseGame);
+if(pauseBtn) pauseBtn.addEventListener('click', () => { SFX.uiClick(); pauseGame(); });
 if(pauseOverlay){
   const resumeBtn = document.getElementById('resumebtn');
   // Esc both pauses and drops the pointer lock, so RESUME alone left a second screen (the lock overlay)
   // under the pause one, and a second click to get back in. The click is a user gesture, so take the lock
   // back with it.
   if(resumeBtn) resumeBtn.addEventListener('click', () => {
-    resumeGame();
+    SFX.uiClick(); resumeGame();
     if(!isTouch && document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock();
   });
 }
@@ -22079,7 +22092,95 @@ function vibrate(ms){ if(isTouch && navigator.vibrate) navigator.vibrate(ms); }
 // hit feedback DOM
 const hitmark = document.getElementById('hitmark');
 let hitmarkTimer = 0;
-function showHitmarker(){ if(hitmark){ hitmark.style.opacity='1'; } hitmarkTimer=0.12; vibrate(15); }
+function showHitmarker(kill){
+  // fire() marks every hit AFTER damageBot() has already marked the kill — the kill has to win
+  if(!kill && hitmark && hitmark.classList.contains('kill') && hitmarkTimer > 0.1) return;
+  if(hitmark){ hitmark.style.opacity='1'; hitmark.classList.toggle('kill', !!kill); }
+  hitmarkTimer = kill ? 0.22 : 0.12; vibrate(kill ? 30 : 15);
+}
+
+// ===================== GAME FEEL =====================
+// A kill used to be one frame: the enemy was simply switched off mid-stride, and nothing at all said it
+// had died beyond it not being there. Now it goes over and breaks up into its own voxels. Everything here
+// is built on first use, not at load: every map sweeps the scene's loose children into its own group when
+// it is built, and a pool made at load would be swept into whichever map was built last.
+const dyingBots = [];
+let debrisPool = null, debrisGeo = null, debrisNext = 0;
+const _dcols = [];
+function killFx(bd){
+  const g = bd.mesh;
+  dyingBots.push({g, t:0, s:g.scale.x, spin:(Math.random()<0.5?-1:1)});
+  if(!debrisPool){
+    debrisGeo = new THREE.BoxGeometry(1,1,1);
+    debrisPool = [];
+    for(let i=0;i<48;i++){
+      const m = new THREE.Mesh(debrisGeo, new THREE.MeshLambertMaterial({color:0xffffff}));
+      m.visible = false; m.userData.v = new THREE.Vector3(); m.userData.life = 0;
+      scene.add(m); debrisPool.push(m);
+    }
+  }
+  // the enemy's own colours, read back off its materials
+  _dcols.length = 0;
+  g.traverse(o => {
+    const mt = o.isMesh && o.material;
+    if(!mt || Array.isArray(mt) || mt.transparent) return;
+    const hex = mt.userData.hex !== undefined ? mt.userData.hex : (mt.color && mt.color.getHex() !== 0xffffff ? mt.color.getHex() : null);
+    if(hex !== null && _dcols.indexOf(hex) < 0 && _dcols.length < 6) _dcols.push(hex);
+  });
+  if(!_dcols.length) _dcols.push(0x8a6a4a);
+  const sc = g.scale.x, n = bd.boss ? 22 : 10;
+  for(let i=0;i<n;i++){
+    const m = debrisPool[debrisNext = (debrisNext+1) % debrisPool.length];
+    const sz = (0.1 + Math.random()*0.12) * Math.max(1, sc*0.8);
+    m.scale.setScalar(sz); m.userData.sz = sz;
+    m.material.color.setHex(_dcols[i % _dcols.length]);
+    m.position.set(g.position.x + (Math.random()-0.5)*0.5*sc, g.position.y + (0.5 + Math.random()*1.1)*sc,
+                   g.position.z + (Math.random()-0.5)*0.5*sc);
+    m.userData.v.set((Math.random()-0.5)*4.5, 2.2 + Math.random()*3.2, (Math.random()-0.5)*4.5);
+    m.userData.floor = g.position.y; m.userData.life = 0.8 + Math.random()*0.35;
+    m.rotation.set(Math.random()*3, Math.random()*3, 0);
+    m.visible = true;
+  }
+  if(bd.boss) shakeAmt = Math.max(shakeAmt, 0.3);
+}
+// ---- where the hit came from ----
+const dmgArcs = [];
+let dmgArcNext = 0;
+const _dfwd = new THREE.Vector3();
+function showDamageDir(from){
+  if(!dmgArcs.length){
+    for(let i=0;i<4;i++){ const d = document.createElement('div'); d.className = 'dmgarc'; document.body.appendChild(d); dmgArcs.push({el:d, t:0}); }
+  }
+  camera.getWorldDirection(_dfwd);
+  const dx = from.x - camera.position.x, dz = from.z - camera.position.z;
+  const fx = _dfwd.x, fz = _dfwd.z;                   // forward on the ground plane; right is (-fz, fx)
+  const ang = Math.atan2(dx*(-fz) + dz*fx, dx*fx + dz*fz);
+  const a = dmgArcs[dmgArcNext = (dmgArcNext+1) % dmgArcs.length];
+  a.el.style.transform = 'rotate(' + ang + 'rad)'; a.t = 0.9;
+}
+function updateFeel(dt){
+  for(let i=dyingBots.length-1;i>=0;i--){
+    const d = dyingBots[i]; d.t += dt;
+    const k = Math.min(1, d.t/0.3);
+    d.g.rotation.z = d.spin * 1.35 * k*k;
+    d.g.scale.setScalar(d.s * (1 - 0.85*k*k));
+    if(k >= 1){ d.g.visible = false; d.g.rotation.z = 0; d.g.scale.setScalar(d.s); dyingBots.splice(i,1); }
+  }
+  if(debrisPool) for(const m of debrisPool){
+    if(!m.visible) continue;
+    const u = m.userData;
+    u.life -= dt;
+    if(u.life <= 0){ m.visible = false; continue; }
+    u.v.y -= 14*dt;
+    m.position.addScaledVector(u.v, dt);
+    if(m.position.y < u.floor + u.sz*0.5){ m.position.y = u.floor + u.sz*0.5; u.v.y *= -0.3; u.v.x *= 0.6; u.v.z *= 0.6; }
+    else { m.rotation.x += dt*7; m.rotation.y += dt*5; }
+    if(u.life < 0.25) m.scale.setScalar(u.sz * u.life/0.25);
+  }
+  for(const a of dmgArcs){ if(a.t > 0){ a.t -= dt; a.el.style.opacity = Math.max(0, Math.min(1, a.t/0.5)).toFixed(2); } }
+  if(hitmark && hitmarkTimer > 0) hitmark.style.transform = 'translate(-50%,-50%) scale(' + (1 + hitmarkTimer*2.5).toFixed(2) + ')';
+  document.body.classList.toggle('dead', gameStarted && !player.alive);
+}
 const dmgVignette = document.getElementById('dmg');
 let dmgTimer = 0;
 function showDamage(){ if(dmgVignette){ dmgVignette.style.opacity='0.55'; } dmgTimer=0.4; vibrate(40); }
@@ -22498,6 +22599,7 @@ function updateWaves(dt){
     // !tripCleared: onAllDead() returns without arming `pending` when a destination is finished, so
     // without this the "all dead" condition stays true and re-fires it every single frame.
   } else if(gameStarted && !gameWon && !tripCleared && bots.length>0 && bots.filter(b=>b.alive).length===0){
+    SFX.waveClear();
     onAllDead();
   }
 }
@@ -22648,6 +22750,16 @@ const SFX = (function(){
       tone(t,0.16,'square',170,84,0.30,{drive:7});
       thump(t,0.20,105,32,0.30);
       noise(t+0.03,0.22,'lowpass',700,0.14,0.6,120,true);       // the hollow tube after it
+    },
+    // ---- UI and moments ----
+    uiClick(){ if(!actx)return; const t=actx.currentTime;
+      tone(t,0.06,'square',880,660,0.10); tone(t+0.012,0.05,'sine',1320,1320,0.06);
+    },
+    // two rising notes and a ring: the wave is done, breathe
+    waveClear(){ if(!actx)return; const t=actx.currentTime;
+      tone(t,0.22,'triangle',523,523,0.20,{send:true});
+      tone(t+0.12,0.34,'triangle',784,784,0.20,{send:true});
+      tone(t+0.12,0.50,'sine',1568,1568,0.05,{send:true});
     },
     explosion(){ if(!actx)return; const t=actx.currentTime;
       noise(t,0.020,'highpass',3600,0.50,0.7);                  // the initial rip
@@ -23133,6 +23245,7 @@ function borrowExplosionLight(color, distance, pos){
 // and that find() came back empty and took the whole animate loop down with it.
 function explodeAt(point, stats){
   SFX.explosion();
+  { const d = camera.position.distanceTo(point); if(d < 16) shakeAmt = Math.max(shakeAmt, 0.2*(1 - d/16)); }
   const w = stats || {splashDamage:150, splashRadius:4.2};
   bots.forEach(b=>{
     if(!b.alive) return;
@@ -23236,12 +23349,15 @@ function damageBot(bd, dmg, point){
   if(!bd.noFlinch) bd.flash = 0.12;
   if(bd.boss) setBossBar(bd);
   if(bd.hp <= 0){
-    bd.alive = false; bd.mesh.visible = false;
+    bd.alive = false; killFx(bd);   // goes over and breaks up, then hides itself — see updateFeel()
     player.score += bd.boss ? 10 : 1;
     setHUD(); setEnemyCount(bossActive?'☠':undefined); SFX.death();
+    showHitmarker(true);
   }
 }
-function damagePlayer(dmg){
+// `from` is optional: whatever dealt the hit, as anything with an x and z. A ground hazard has no source
+// worth pointing at — it is under your feet — so the AoE telegraphs leave it out.
+function damagePlayer(dmg, from){
   if(!player.alive || godMode) return;   // godMode is the [G] debug toggle
   // A raised Chimalli takes the hit instead of you. Applied here rather than at each damage source so it
   // covers every one of them — melee, ranged, AoE telegraphs, the bosses' specials — without each having
@@ -23251,6 +23367,8 @@ function damagePlayer(dmg){
     if(w && w.shieldBlock){ dmg = Math.max(1, Math.round(dmg * (1 - w.shieldBlock))); SFX.hitmark(); }
   }
   player.hp -= dmg; player.lastHit = performance.now()*0.001; showDamage(); setHUD(); SFX.hurt();
+  if(from) showDamageDir(from);
+  shakeAmt = Math.max(shakeAmt, Math.min(0.09, 0.015 + dmg*0.003));
   if(player.hp <= 0){
     player.alive = false; player.respawn = 2.5;
     setBanner('YOU DIED — respawning…'); setScope(false);
@@ -23696,6 +23814,7 @@ function animate(){
 
   // ----- HUD timers -----
   if(hitmarkTimer>0){ hitmarkTimer-=dt; if(hitmarkTimer<=0 && hitmark) hitmark.style.opacity='0'; }
+  updateFeel(dt);
   if(dmgTimer>0){ dmgTimer-=dt; if(dmgTimer<=0 && dmgVignette) dmgVignette.style.opacity='0'; }
   tracers.forEach(tr=>{ if(tr.life>0){ tr.life-=dt; tr.mesh.material.opacity=Math.max(0,tr.life/0.08*0.9); if(tr.life<=0) tr.mesh.visible=false; } });
 
@@ -24496,7 +24615,7 @@ function animate(){
         // Nile animals bite slower than a knife stabs: a croc's snap or a hippo's crush every ~1.8s, so a
         // player who is taking one lands two harpoons in the gap instead of just trading until dead
         const nileBite = inNileArea && (b.skin==='crocodile'||b.skin==='hippo');
-        damagePlayer(nileBite ? (b.skin==='hippo'?9:6) : Math.round((b.skin==='medusa'?14:7)*b.diff));
+        damagePlayer(nileBite ? (b.skin==='hippo'?9:6) : Math.round((b.skin==='medusa'?14:7)*b.diff), b.mesh.position);
         b.fireCd = nileBite ? 1.8 : Math.max(1.0, 1.5/b.diff);
       } else {
         // pistol shot, or a griffin's dive-screech at range — accuracy/damage/rate ramp with wave difficulty
@@ -24505,7 +24624,7 @@ function animate(){
         if(ud.botMuzzle){ ud.botMuzzle.visible=true; ud.botMuzzle.material.opacity=0.9; }
         b.swing = 0.5; // recoil kick
         const hitChance = Math.max(0.2, Math.min(0.82, (b.boss?0.8:(0.5+(b.diff-1)*0.2)) - distToPlayer*0.015));
-        if((Math.sin(t*131.7+b.t*13.3)*0.5+0.5) < hitChance) damagePlayer(b.boss ? 11 : Math.round((isJavelin?5:3)*b.diff));
+        if((Math.sin(t*131.7+b.t*13.3)*0.5+0.5) < hitChance) damagePlayer(b.boss ? 11 : Math.round((isJavelin?5:3)*b.diff), b.mesh.position);
         b.fireCd = ((b.boss?0.28:Math.max(0.55,1.1/b.diff)) + (Math.sin(t*53.1+b.t)*0.5+0.5)*(b.boss?0.4:1.0)) * (isJavelin?1.6:1);
       }
     } else if(b.fireCd <= 0){ b.fireCd = 0.4; }
