@@ -252,7 +252,7 @@
 </style>
 </head>
 <body>
-<div id="hud">WASD move · mouse look · click to lock · [1-4 or wheel] switch weapon · [Space] jump · [R] reload · right-click or hold [Shift] to scope (bow/sling)</div>
+<div id="hud" hidden style="display:none"></div>
 <div id="pausebtn" title="Pause">❚❚ PAUSE</div>
 <div id="pauseoverlay"><div id="pausetitle">PAUSED</div><button id="resumebtn">RESUME</button>
   <div id="sensrow"><label for="sensSlider">Look sensitivity</label><input type="range" id="sensSlider" min="50" max="200" value="100"></div>
@@ -3570,6 +3570,7 @@ addTarget = agesArenaColliders;
 addTarget = colliders;   // as above: hand the default back to the town's array
 
 function clearWorldGroups(){
+  setNileRenderScale(false);   // every map change goes through here; only enterNileWave() turns it back on
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   camera.rotation.z = 0;   // the Fjord rolls the camera with its deck; nothing else may inherit that
   [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, ladogaOverworld, fjordWorld, xiangyangWorld, yamenWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena, nileBankWorld, agesArena].forEach(g=>{ if(g.parent) scene.remove(g); });
@@ -3724,6 +3725,40 @@ function waterRippleTex(){
 // themselves as half-extents and carry no vertex buffers, so the `attributes` guard below rejects every
 // mesh and the world stays exactly as authored. That is deliberate — the headless geometry sweeps read
 // this map one authored box at a time, and merging would leave them nothing to read.
+// ---- raycasting a baked mesh ----
+// Baking is a win for the renderer and a disaster for the Raycaster, left alone. three's Mesh.raycast
+// rejects a mesh on its bounding sphere and otherwise tests EVERY triangle in it — and a baked bucket's
+// sphere spans the whole river, so every ray passed that test and walked every triangle in the map. Every
+// living croc and hippo casts one line-of-sight ray per frame (firstHit, in the bot loop): benchmarked
+// against this map's layout with the game's own three.js, a ray went from 0.24ms to 2.75ms, and seven
+// animals' worth came to ~19ms — more than a whole 60fps frame on raycasting alone. That, not the draw
+// count, was the Nile Wave's choppiness. So each baked mesh keeps the bounding box of every box it
+// swallowed, and a ray only walks the triangles of the parts whose box it actually crosses — the same
+// culling the unbaked world got for free from one sphere per box.
+// Scratch objects are built on first use: this only ever runs on a baked mesh, and tools/audit's stubbed
+// THREE (which never bakes anything) has no Ray to build at load time.
+let _mrInv, _mrRay, _mrA, _mrB, _mrC, _mrP;
+function mergedRaycast(raycaster, intersects){
+  if(!_mrRay){ _mrInv = new THREE.Matrix4(); _mrRay = new THREE.Ray();
+    _mrA = new THREE.Vector3(); _mrB = new THREE.Vector3(); _mrC = new THREE.Vector3(); _mrP = new THREE.Vector3(); }
+  _mrInv.copy(this.matrixWorld).invert();
+  _mrRay.copy(raycaster.ray).applyMatrix4(_mrInv);
+  const pos = this.geometry.attributes.position, side = this.material.side;
+  for(const p of this.userData.parts){
+    if(!_mrRay.intersectsBox(p.box)) continue;
+    for(let i=p.start, end=p.start+p.count; i<end; i+=3){
+      _mrA.fromBufferAttribute(pos,i); _mrB.fromBufferAttribute(pos,i+1); _mrC.fromBufferAttribute(pos,i+2);
+      // the same face rules Mesh.raycast applies: front faces only unless the material says otherwise
+      const hit = side===THREE.BackSide ? _mrRay.intersectTriangle(_mrC,_mrB,_mrA,true,_mrP)
+                                        : _mrRay.intersectTriangle(_mrA,_mrB,_mrC,side!==THREE.DoubleSide,_mrP);
+      if(!hit) continue;
+      const point = _mrP.clone().applyMatrix4(this.matrixWorld);
+      const distance = raycaster.ray.origin.distanceTo(point);
+      if(distance < raycaster.near || distance > raycaster.far) continue;
+      intersects.push({distance, point, object:this});
+    }
+  }
+}
 function mergeStatic(root, keep){
   root.updateMatrixWorld(true);
   // Keyed on the material OBJECT, not its uuid. Same grouping in the browser, but it does not quietly
@@ -3761,8 +3796,11 @@ function mergeStatic(root, keep){
     if(b.src.length < 2){ after += b.src.length; return; }   // a bucket of one has nothing to gain
     let n = 0; for(const g of b.geos) n += g.attributes.position.count;
     const pos = new Float32Array(n*3), nor = new Float32Array(n*3), uv = new Float32Array(n*2);
+    const parts = [];   // one box per swallowed mesh, for mergedRaycast() above
     let v = 0;
     for(const g of b.geos){
+      g.computeBoundingBox();
+      parts.push({box:g.boundingBox, start:v, count:g.attributes.position.count});
       pos.set(g.attributes.position.array, v*3);
       if(g.attributes.normal) nor.set(g.attributes.normal.array, v*3);
       if(g.attributes.uv)     uv.set(g.attributes.uv.array,     v*2);
@@ -3775,6 +3813,7 @@ function mergeStatic(root, keep){
     const m = new THREE.Mesh(geo, b.mat);
     m.castShadow = b.cast; m.receiveShadow = b.recv;
     m.matrixAutoUpdate = false;   // the vertices are already in root's space; this local matrix stays identity
+    m.userData.parts = parts; m.raycast = mergedRaycast;
     b.src.forEach(o => { if(o.parent) o.parent.remove(o); });
     root.add(m);
     after++;
@@ -4232,7 +4271,7 @@ function spawnBoatHole(x,z){
   const fMat = new THREE.MeshBasicMaterial({color:0xffd9a0, transparent:true, opacity:0.95, fog:false});
   const flash = new THREE.Mesh(new THREE.SphereGeometry(0.3,8,6), fMat);
   flash.position.set(x,0.5,z); scene.add(flash);
-  const light = new THREE.PointLight(0xffb347, 3.0, 10); light.position.set(x,0.6,z); scene.add(light);
+  const light = borrowExplosionLight(0xffb347, 10, new THREE.Vector3(x,0.6,z));
   explosions.push({mesh:flash, light, t:0, dur:0.5});
 }
 function spawnNileWave(){
@@ -4247,11 +4286,19 @@ function spawnNileWave(){
   croc(0,16,26); hippo(0,-18,26);                    // pod 3: a croc and the last hippo
 }
 const NILE_POD_RING = 17;   // how far out a waiting pod holds, beyond the standoff ring of the ones in close
+// The Nile Wave draws at 1x pixel density instead of the usual (up to) 1.5x. Its full-screen water is the
+// most expensive surface in the game to light — every point light in the scene shades every pixel of it —
+// and measured at a Retina window it held the wave to 23-40fps. At 1x it holds 60, with every light and
+// colour exactly as authored. Everywhere else keeps the sharper 1.5x.
+function setNileRenderScale(on){
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, on ? 1 : 1.5));
+  renderer.setSize(innerWidth, innerHeight);
+}
 function enterNileWave(){
   inNileArea = true;
   boatHoles = 0;
   boatHoleMeshes.forEach(m=>nileWorld.remove(m)); boatHoleMeshes.length = 0; // fresh hull on a replay
-  clearWorldGroups(); scene.add(nileWorld); sky.visible=true;
+  clearWorldGroups(); scene.add(nileWorld); sky.visible=true; setNileRenderScale(true);
   activeColliders = nileColliders; activeHeightZones = heightZonesNone;   // a boat deck has nothing to climb
   // Sky and fog stay the SAME colour — that is what runs the river out to a horizon with no seam in it —
   // but both go up: at 0x4a90b8 the pair rendered at luminance 92 once WORLD_DAMP had taken its 30%,
@@ -4271,6 +4318,7 @@ function enterNileWave(){
 }
 function exitNileWave(){
   inNileArea = false;
+  setNileRenderScale(false);
   clearWorldGroups(); scene.add(pyramidOverworld); sky.visible=true;
   activeColliders = pyramidColliders; activeHeightZones = heightZonesPyramid;
   // this returns you to Giza, so it needs Giza's desert lighting; it used to apply the cool Mediterranean
@@ -21403,6 +21451,11 @@ ADMIN_ITEMS.forEach(it => {
   }
 });
 ADMIN_CMDS.push(
+  {name:'fps', help:'toggle the frame-rate readout', run:()=>{
+    fpsOn = !fpsOn; fpsEl().style.display = fpsOn ? 'block' : 'none';
+    chatSay('✓ frame-rate readout ' + (fpsOn ? 'ON' : 'OFF'), 'ok');
+    return true;
+  }},
   {name:'tp', args:'<wave|place> [leg] [wave|boss]', help:'go somewhere', closes:true, run:adminTp},
   {name:'give', args:'<amount>', help:'add to your score', run:(a)=>{
     const n = parseInt(a[0], 10);
@@ -21957,7 +22010,7 @@ function jumpToWave(n){
   // Leave whatever we are currently inside FIRST — a trip, the hub, the Nile wave, a boss fight — so the
   // era swap below lands in a clean state rather than layering a campaign wave over a destination.
   if(inNileArea){
-    inNileArea=false; scene.remove(nileWorld);
+    inNileArea=false; scene.remove(nileWorld); setNileRenderScale(false);
     weapons.forEach(w=>w.visible=false); weapons=weaponsBeforeNile||weapons; selectWeapon(currentWeaponBeforeNile||0);
   }
   tripDest=null; tripLeg=0; tripWave=0; tripCleared=false;
@@ -22014,7 +22067,7 @@ function jumpToDestStage(dest, leg, wave){
   // Nile wave, a boss fight — so the destination swap below lands in a clean state rather than layering
   // one destination's chrome over another's.
   if(inNileArea){
-    inNileArea=false; scene.remove(nileWorld);
+    inNileArea=false; scene.remove(nileWorld); setNileRenderScale(false);
     weapons.forEach(w=>w.visible=false); weapons=weaponsBeforeNile||weapons; selectWeapon(currentWeaponBeforeNile||0);
   }
   if(inHub){ inHub=false; setHubStats(false); exitHubChrome(); }
@@ -22893,6 +22946,19 @@ function launchGrenade(from, to, w){
                  splashDamage:(w&&w.splashDamage)||150, splashRadius:(w&&w.splashRadius)||4.2});
 }
 const explosions = [];
+// Explosion flashes BORROW one of these rather than each adding a PointLight of its own. three bakes the
+// number of lights into every material's shader, so adding a light to the scene — and removing it again
+// 0.4s later — recompiled every material in the game twice per explosion: a ~0.5s freeze on every grenade,
+// and on every chunk a croc chewed out of the Nile boat. These stay in the scene at intensity 0 between
+// flashes, so the light count never changes. Built here, after every map's sweep, so none of them is
+// swept into a map group; three covers two explosions landing together with room to spare.
+const explosionLights = [0,1,2].map(()=>{ const l=new THREE.PointLight(0xff8a2a, 0, 12); scene.add(l); return l; });
+let explosionLightIdx = 0;
+function borrowExplosionLight(color, distance, pos){
+  const l = explosionLights[explosionLightIdx = (explosionLightIdx+1) % explosionLights.length];
+  l.color.set(color); l.distance = distance; l.position.copy(pos); l.intensity = 3.2;
+  return l;
+}
 // `stats` comes from the grenade itself. This used to be
 //     weapons.find(wp => wp.userData.grenade).userData
 // which returns UNDEFINED for every loadout that has no grenade weapon in it — the pyramid, Greek, Nile,
@@ -22917,7 +22983,7 @@ function explodeAt(point, stats){
   const fMat = new THREE.MeshBasicMaterial({color:0xffa020, transparent:true, opacity:0.95, fog:false});
   const fireball = new THREE.Mesh(new THREE.SphereGeometry(0.4,8,6), fMat);
   fireball.position.copy(point); scene.add(fireball);
-  const light = new THREE.PointLight(0xff8a2a, 3.2, 12); light.position.copy(point); scene.add(light);
+  const light = borrowExplosionLight(0xff8a2a, 12, point);
   explosions.push({mesh:fireball, light, t:0, dur:0.4});
 }
 // colossus quake: the ground actually splits and breaks apart, not just a dust puff — thin cracks snap
@@ -23032,7 +23098,7 @@ function respawnPlayer(){
   pending = null; bossActive = false; showBossBar(false);
   clearFieldEffects();   // a death inside one map swaps no world groups, so nothing else would drain these
   if(inNileArea){ // clean up a mid-Nile-Wave death: same restore steps as exitNileWave()
-    inNileArea=false; scene.remove(nileWorld);
+    inNileArea=false; scene.remove(nileWorld); setNileRenderScale(false);
     weapons.forEach(w=>w.visible=false); weapons=weaponsBeforeNile||weapons; selectWeapon(currentWeaponBeforeNile||0);
   }
   bossNum = currentEra; // keep credit for any boss(es) already defeated in earlier eras
@@ -23105,8 +23171,32 @@ ground.castShadow = false;
 })();
 
 const clock = new THREE.Clock();
+// ---- /fps: a frame-rate readout for "the game feels choppy" reports. Reads the RAW frame gap, before
+// animate()'s dt clamp, and shows the worst frame of each half-second alongside the average — a steady
+// 60 with 120ms spikes feels far worse than a steady 45, and an average alone hides exactly that.
+let fpsOn = false, fpsDiv = null, fpsLast = 0, fpsAcc = 0, fpsN = 0, fpsWorst = 0;
+function fpsEl(){
+  if(!fpsDiv){
+    fpsDiv = document.createElement('div');
+    fpsDiv.style.cssText = 'position:fixed;top:6px;left:6px;z-index:50;padding:4px 8px;background:rgba(0,0,0,0.6);'
+      + 'color:#9f9;font:12px monospace;pointer-events:none;white-space:pre;display:none';
+    document.body.appendChild(fpsDiv);
+  }
+  return fpsDiv;
+}
+function fpsTick(){
+  const now = performance.now(), gap = fpsLast ? now - fpsLast : 0; fpsLast = now;
+  if(!fpsOn || !gap) return;
+  fpsAcc += gap; fpsN++; fpsWorst = Math.max(fpsWorst, gap);
+  if(fpsAcc >= 500){
+    fpsEl().textContent = Math.round(1000*fpsN/fpsAcc) + ' fps  worst ' + Math.round(fpsWorst) + 'ms\n'
+      + renderer.info.render.calls + ' draws  ' + (renderer.info.render.triangles/1000|0) + 'k tris';
+    fpsAcc = 0; fpsN = 0; fpsWorst = 0;
+  }
+}
 function animate(){
   requestAnimationFrame(animate);
+  fpsTick();
   // The rAF chain stays alive through a context loss so play resumes by itself on restore; we just do
   // not touch the dead context, and we swallow the delta that built up while it was gone.
   if(ctxLost){ clock.getDelta(); return; }
@@ -23455,8 +23545,10 @@ function animate(){
     const ex=explosions[i]; ex.t+=dt; const s=Math.min(1,ex.t/ex.dur);
     ex.mesh.scale.setScalar(1 + s*9);
     ex.mesh.material.opacity = 0.95*(1-s);
-    ex.light.intensity = 3.2*(1-s);
-    if(s>=1){ scene.remove(ex.mesh); scene.remove(ex.light); explosions.splice(i,1); }
+    // a newer explosion may already have borrowed this light back — only the latest borrower drives it
+    const newest = !explosions.some((o,j)=>j>i && o.light===ex.light);
+    if(newest) ex.light.intensity = 3.2*(1-s);
+    if(s>=1){ scene.remove(ex.mesh); if(newest) ex.light.intensity = 0; explosions.splice(i,1); }
   }
 
   // ----- quake effects: cracks snap open from the epicenter, debris pops up and tumbles under gravity -----
