@@ -409,6 +409,56 @@ try {
 }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.5)); // retina displays were rendering 4x the pixels — this was the #1 cause of choppy look/movement
 renderer.setSize(innerWidth, innerHeight);
+
+// ---- adaptive resolution ----
+// Every map carries ~50 point lights (each map's own plus the ones every other map left in the scene,
+// which light it too and are part of how it looks), and three shades every one of them for every pixel.
+// Measured on an M1 at a Retina window: Birka, Xiangyang, Yamen and the Nile took 37-39ms a frame at
+// 1.5x pixel density and 20-22ms at 1x, with every light and colour unchanged. So resolution is the one
+// dial that buys frame rate without touching the look, and it is set from the frame rate actually being
+// achieved: one step down whenever a second of play runs under ~50fps, and back up after five clean
+// seconds. A map that had to step down stays there until the next map, so it cannot see-saw.
+const RS_LEVELS = [1.5, 1.25, 1, 0.85, 0.7];
+let rsLevel = 0, rsCap = 1.5, rsNoUp = 0, rsGood = 0, rsCool = 2, rsAcc = 0;
+let rsPrev = 0, rsLastMed = 0, rsNoDown = false;   // the step before the last one, and what it was running at
+const rsGaps = [];
+function rsPR(l){ return Math.min(window.devicePixelRatio||1, rsCap, RS_LEVELS[l]); }
+function rsApply(){
+  const pr = rsPR(rsLevel);
+  if(pr !== renderer.getPixelRatio()){ renderer.setPixelRatio(pr); renderer.setSize(innerWidth, innerHeight); }
+}
+// A new map compiles its shaders over its first frames, so give it a moment before judging it, and let
+// it climb back to full sharpness if the last map had pushed resolution down.
+function rsMapChanged(){ rsNoUp = 0; rsGood = 0; rsCool = 2; rsAcc = 0; rsGaps.length = 0; rsLastMed = 0; rsNoDown = false; }
+function rsTick(gap, active){
+  if(!active || !gap || gap > 250) return;          // title, pause, a tab coming back from the background
+  if(rsCool > 0){ rsCool -= gap/1000; return; }
+  rsGaps.push(gap); rsAcc += gap;
+  if(rsAcc < 1000) return;
+  rsGaps.sort((a,b)=>a-b);
+  const med = rsGaps[rsGaps.length>>1];              // the median, so one hitch does not cost resolution
+  rsGaps.length = 0; rsAcc = 0;
+  const cur = renderer.getPixelRatio();
+  if(med > 20){
+    rsGood = 0;
+    // The last step bought under 10%: pixels are not what is holding this frame back (the AI, a crowd of
+    // draw calls — the CPU). Give the sharpness back, and stop spending it on this map.
+    if(rsLastMed && med > rsLastMed*0.9){
+      rsLevel = rsNoUp = rsPrev; rsApply(); rsLastMed = 0; rsNoDown = true; rsCool = 1;
+      return;
+    }
+    if(rsNoDown) return;
+    let l = rsLevel; while(l < RS_LEVELS.length-1 && rsPR(l) >= cur) l++;
+    if(rsPR(l) < cur){ rsPrev = rsLevel; rsLevel = rsNoUp = l; rsLastMed = med; rsApply(); rsCool = 1; }
+  } else if(med < 17.5){
+    rsLastMed = 0;
+    if(++rsGood >= 5 && rsLevel > rsNoUp){
+      let l = rsLevel; while(l > rsNoUp && rsPR(l) <= cur) l--;
+      if(rsPR(l) > cur){ rsLevel = l; rsApply(); rsCool = 1; }
+      rsGood = 0;
+    }
+  } else rsGood = 0;
+}
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -3625,6 +3675,7 @@ addTarget = colliders;   // as above: hand the default back to the town's array
 
 function clearWorldGroups(){
   setNileRenderScale(false);   // every map change goes through here; only enterNileWave() turns it back on
+  rsMapChanged();
   playClamp = 29; // per-map override is re-applied by whichever enter*/apply* function runs next
   camera.rotation.z = 0;   // the Fjord rolls the camera with its deck; nothing else may inherit that
   [pyramidOverworld, greekOverworld, romanOverworld, islamicOverworld, mexicoOverworld, aztecOverworld, aztecMarketOverworld, swedenOverworld, ladogaOverworld, fjordWorld, xiangyangWorld, yamenWorld, pyramidDungeon, greekDungeon, nileWorld, hydraArena, colosseumArena, ifritArena, nileBankWorld, agesArena].forEach(g=>{ if(g.parent) scene.remove(g); });
@@ -4345,8 +4396,8 @@ const NILE_POD_RING = 17;   // how far out a waiting pod holds, beyond the stand
 // and measured at a Retina window it held the wave to 23-40fps. At 1x it holds 60, with every light and
 // colour exactly as authored. Everywhere else keeps the sharper 1.5x.
 function setNileRenderScale(on){
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, on ? 1 : 1.5));
-  renderer.setSize(innerWidth, innerHeight);
+  rsCap = on ? 1 : 1.5;   // a ceiling on the adaptive resolution above; it can still go lower if it has to
+  rsApply();
 }
 function enterNileWave(){
   inNileArea = true;
@@ -23302,11 +23353,13 @@ function fpsEl(){
 }
 function fpsTick(){
   const now = performance.now(), gap = fpsLast ? now - fpsLast : 0; fpsLast = now;
+  rsTick(gap, gameStarted && !gameWon && !paused && !boothOpen && inPlay());
   if(!fpsOn || !gap) return;
   fpsAcc += gap; fpsN++; fpsWorst = Math.max(fpsWorst, gap);
   if(fpsAcc >= 500){
     fpsEl().textContent = Math.round(1000*fpsN/fpsAcc) + ' fps  worst ' + Math.round(fpsWorst) + 'ms\n'
-      + renderer.info.render.calls + ' draws  ' + (renderer.info.render.triangles/1000|0) + 'k tris';
+      + renderer.info.render.calls + ' draws  ' + (renderer.info.render.triangles/1000|0) + 'k tris  '
+      + renderer.getPixelRatio() + 'x';
     fpsAcc = 0; fpsN = 0; fpsWorst = 0;
   }
 }
