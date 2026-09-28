@@ -153,8 +153,13 @@
   @media (orientation:portrait){ body.touch.playing #rotateoverlay{ display:flex; } }
   #sensrow{display:none;align-items:center;gap:10px;margin-top:18px;font-size:13px;color:#cfe0ea}
   body.touch #sensrow{display:flex}
-  #pausebtn{position:absolute;top:8px;left:50%;transform:translateX(-50%);padding:6px 16px;border-radius:8px;background:rgba(0,0,0,0.45);border:2px solid rgba(255,255,255,0.7);color:#fff;font-size:14px;font-weight:700;letter-spacing:1px;display:flex;align-items:center;justify-content:center;z-index:6;cursor:pointer;user-select:none}
+  #pausebtn{position:absolute;top:8px;left:10px;padding:6px 16px;border-radius:8px;background:rgba(0,0,0,0.45);border:2px solid rgba(255,255,255,0.7);color:#fff;font-size:14px;font-weight:700;letter-spacing:1px;display:flex;align-items:center;justify-content:center;z-index:6;cursor:pointer;user-select:none}
   #pausebtn:hover{background:rgba(0,0,0,0.65)}
+  /* PAUSE sits in the top-left corner, not the middle of the top edge: the stats on the right grow with the
+     weapon's name ("Repeating Crossbow") and ran into it in any frame under ~1000px wide, and a small portal
+     frame (640x360 is a real one) is well under that. On a small frame the stats and health bar shrink too. */
+  @media (max-width:900px){ #pausebtn{padding:5px 12px;font-size:12px}
+    #stats{font-size:15px} #hpbar{width:min(420px,58vw);height:28px} #hptext{font-size:16px} #ammoBig{font-size:36px} }
   body:not(.playing) #pausebtn, body.paused #pausebtn{ display:none !important; }
   #pauseoverlay{position:absolute;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(4,6,12,0.72);color:#fff}
   body.paused #pauseoverlay{ display:flex; }
@@ -20717,6 +20722,18 @@ gunGroup.visible = false; // hidden on the title screen until START
 
 // ---- pointer lock + WASD look/move ----
 const lockEl = document.getElementById('lock');
+// ---- taking the pointer lock ----
+// Chrome refuses a lock for about a second after Esc released one, and inside a portal's iframe it can refuse
+// for reasons of its own. Newer Chrome reports that as a rejected promise, which used to surface as an
+// uncaught error; older browsers fire pointerlockerror instead. Either way the game just stays where it
+// is — on the title or on the pause screen — with its button still there to click, and says so if paused.
+function lockPointer(){
+  try { const p = renderer.domElement.requestPointerLock(); if(p && p.catch) p.catch(() => {}); } catch(e){}
+}
+document.addEventListener('pointerlockerror', () => {
+  const h = document.getElementById('pausehint');
+  if(paused && h) h.textContent = 'Click RESUME to continue';
+});
 // A run starts here and nowhere else: fresh, or picked up from the save the title screen offered.
 let startMode = 'new';
 function beginRun(){
@@ -20743,7 +20760,7 @@ function refreshTitle(){
 function launch(mode){
   SFX.init(); SFX.uiClick();   // a user gesture, so this is also what unlocks audio on the first press
   startMode = mode;
-  if(isTouch){ beginTouchPlay(); } else { renderer.domElement.requestPointerLock(); }
+  if(isTouch){ beginTouchPlay(); } else { lockPointer(); }
 }
 function pressStart(e){ if(e){ e.preventDefault(); e.stopPropagation(); }
   launch(!gameStarted && savedGame ? 'continue' : 'new');
@@ -20774,7 +20791,13 @@ document.addEventListener('pointerlockchange', () => {
   // the overlay lands as a fresh startGame(), and you are left unlocked and unable to move. Any future
   // overlay that drops pointer lock has to be listed here too.
   const overlayUp = boothOpen || adminOpen || chatOpen;
-  lockEl.style.display = (locked || overlayUp) ? 'none' : 'flex';
+  // Mid-run, losing the lock (Esc, alt-tab, a click outside a portal's iframe) PAUSES the game. It used to
+  // raise the title overlay with RESUME on it while the fight went on behind it: the enemies kept coming for
+  // a player who could not move. Now it is the pause screen, and the world is frozen until they are back.
+  const midRun = gameStarted && !gameWon;
+  if(!locked && midRun && !overlayUp) pauseGame();
+  if(locked && paused && resumeOnLock) finishResume();
+  lockEl.style.display = (locked || overlayUp || (midRun && paused)) ? 'none' : 'flex';
   // The same overlay comes back whenever the lock drops mid-run (Esc, alt-tab), so it must not offer to
   // START a game that is already under way — clicking it only takes the lock back.
   if(!locked) refreshTitle();
@@ -21786,7 +21809,7 @@ function closeChat(){
   document.body.classList.remove('chat');
   const inp = document.getElementById('chatinput');
   if(inp) inp.blur();         // or it keeps swallowing keys behind the closed overlay
-  if(!isTouch && !paused) renderer.domElement.requestPointerLock();   // same as closeBooth()
+  if(!isTouch && !paused) lockPointer();   // same as closeBooth()
 }
 // clicking the dimmed area above the box closes it, matching the other overlays
 {
@@ -21806,7 +21829,7 @@ function closeAdmin(){
   if(!adminOpen) return;
   adminOpen = false;
   document.body.classList.remove('admin');
-  if(!isTouch && !paused) renderer.domElement.requestPointerLock();   // same as closeBooth()
+  if(!isTouch && !paused) lockPointer();   // same as closeBooth()
 }
 // clicking the backdrop (not the box) closes it, matching the booth overlay
 {
@@ -21825,7 +21848,7 @@ function closeBooth(){
   if(!boothOpen) return;
   boothOpen = false;
   document.body.classList.remove('booth');
-  if(!isTouch) renderer.domElement.requestPointerLock();
+  if(!isTouch) lockPointer();
 }
 if(boothOverlay) boothOverlay.addEventListener('click', e => { if(e.target === boothOverlay) closeBooth(); });
 document.addEventListener('mousedown', e => {
@@ -21904,13 +21927,16 @@ document.addEventListener('keyup', e => {
 // a touchpad fires dozens of tiny wheel events per physical scroll gesture (unlike a mouse's discrete notches),
 // so switching weapons on every single event flew through the whole loadout in one swipe — debounce it instead
 let lastWheelSwitch = 0;
+// Not passive: inside a portal's iframe an unhandled wheel scrolls THEIR page, so every weapon switch also
+// dragged the game frame up or down. Swallowed only while actually playing; on the title it still scrolls.
 window.addEventListener('wheel', e => {
   if(paused || !inPlay()) return;
+  e.preventDefault();
   const now = performance.now();
   if(now - lastWheelSwitch < 350) return;
   lastWheelSwitch = now;
   selectWeapon(currentWeapon + (e.deltaY>0?1:-1));
-});
+}, {passive:false});
 
 // ===================== PAUSE =====================
 let paused = false;
@@ -21921,10 +21947,24 @@ function pauseGame(){
   paused = true; firing = false;
   document.body.classList.add('paused');
 }
+// On a desktop the game only unpauses once the pointer is locked again: resuming without it would start the
+// world with no way to look or move, which is exactly what P or Esc on the pause screen used to do. So a
+// resume asks for the lock and waits for pointerlockchange to deliver it (see finishResume()).
+let resumeOnLock = false;
 function resumeGame(){
   if(!paused) return;
+  if(!isTouch && gameStarted && !gameWon && document.pointerLockElement !== renderer.domElement
+     && !boothOpen && !adminOpen && !chatOpen){
+    resumeOnLock = true; lockPointer();
+    return;
+  }
+  finishResume();
+}
+function finishResume(){
+  resumeOnLock = false;
   paused = false;
   document.body.classList.remove('paused');
+  const h = document.getElementById('pausehint'); if(h) h.textContent = 'Press P or Esc to resume';
 }
 if(pauseBtn) pauseBtn.addEventListener('click', () => { SFX.uiClick(); pauseGame(); });
 if(pauseOverlay){
@@ -21932,10 +21972,7 @@ if(pauseOverlay){
   // Esc both pauses and drops the pointer lock, so RESUME alone left a second screen (the lock overlay)
   // under the pause one, and a second click to get back in. The click is a user gesture, so take the lock
   // back with it.
-  if(resumeBtn) resumeBtn.addEventListener('click', () => {
-    SFX.uiClick(); resumeGame();
-    if(!isTouch && document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock();
-  });
+  if(resumeBtn) resumeBtn.addEventListener('click', () => { SFX.uiClick(); resumeGame(); });
 }
 
 // ===================== MOBILE TOUCH CONTROLS =====================
@@ -22057,7 +22094,8 @@ let touchSensMult = parseFloat(store.get('nf_touchSens')) || 1;   // read again 
   document.addEventListener('touchstart', e=>{
     if(!touchPlaying || paused) return;
     for(const t of e.changedTouches){
-      if(t.target.closest('#firebtn')||t.target.closest('.wbtn')||t.target.closest('#adsbtn')||t.target.closest('#jumpbtn')||t.target.closest('#interactbtn')) continue;
+      // PAUSE sits in the stick's half of the screen, so a tap on it must not also plant the stick
+      if(t.target.closest('#firebtn')||t.target.closest('.wbtn')||t.target.closest('#adsbtn')||t.target.closest('#jumpbtn')||t.target.closest('#interactbtn')||t.target.closest('#pausebtn')) continue;
       if(moveId===null && t.clientX < window.innerWidth*STICK_ZONE){
         moveId = t.identifier; moveOx = t.clientX; moveOy = t.clientY;
         stick.style.left=(moveOx-75)+'px'; stick.style.top=(moveOy-75)+'px';
@@ -22088,7 +22126,10 @@ let touchSensMult = parseFloat(store.get('nf_touchSens')) || 1;   // read again 
   // tab-out and looses the instant you click back in, which is the same class of bug as the stuck-key
   // one releaseAllInput() exists for.
   window.addEventListener('blur', ()=>{ firing=false; fireId=null; cancelCharge(); releaseAllInput(); });
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden){ firing=false; fireId=null; cancelCharge(); releaseAllInput(); } });
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.hidden){ firing=false; fireId=null; cancelCharge(); releaseAllInput(); pauseGame(); SFX.sleep(); }
+    else SFX.wake();
+  });
 })();
 
 // ===================== GAME / COMBAT =====================
@@ -22849,6 +22890,9 @@ const SFX = (function(){
   const AC = window.AudioContext || window.webkitAudioContext;
   let actx=null, master=null, noiseBuf=null, delayBus=null, muted=false;
   function setMuted(m){ muted = m; if(master) master.gain.value = m ? 0 : 0.55; }
+  // a hidden tab makes no sound: the context is suspended, not just left with nothing new to play
+  function sleep(){ if(actx && actx.state === 'running') actx.suspend(); }
+  function wake(){ if(actx && actx.state === 'suspended') actx.resume(); }
   function makeDistCurve(amount){
     const n=1024, curve=new Float32Array(n), deg=Math.PI/180;
     for(let i=0;i<n;i++){ const x=i*2/n-1; curve[i]=(3+amount)*x*20*deg/(Math.PI+amount*Math.abs(x)); }
@@ -22915,7 +22959,7 @@ const SFX = (function(){
     car.start(t0); mod.start(t0); car.stop(t0+dur+0.02); mod.stop(t0+dur+0.02);
   }
   return {
-    init, setMuted,
+    init, setMuted, sleep, wake,
     // ---- PLAYER weapons: layered body+crack+sub-thump, bright and punchy up front ----
     // Every one of these is built the same way now: a TRANSIENT (the crack, 10-30ms), a BODY (the tone
     // that gives it weight), and a TAIL (the room answering back, a beat later and quieter). The old
