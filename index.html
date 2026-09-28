@@ -71,6 +71,12 @@
      of it runs, the button reads LOADING and cannot be pressed, so the first click never lands on a game
      that is not there yet. */
   #startbtn:disabled{cursor:wait;filter:grayscale(0.6) brightness(0.85);box-shadow:0 5px 0 #1a4a68}
+  /* where CONTINUE will take you, and the way to start over instead */
+  #savewhere{margin-top:10px;font-size:14px;color:#e6f2f8;letter-spacing:0.5px;text-shadow:0 1px 3px rgba(0,0,0,0.7);min-height:1em}
+  #newbtn{margin-top:10px;padding:7px 20px;font-size:14px;font-weight:800;letter-spacing:1px;color:#e6f2f8;
+    background:rgba(4,14,24,0.55);border:1px solid rgba(255,213,74,0.5);border-radius:4px;cursor:pointer;font-family:sans-serif}
+  #newbtn:hover{background:rgba(4,14,24,0.8)}
+  #newbtn.confirm{color:#ffd54a;border-color:#ffd54a}
   #tagline{margin-top:14px;font-size:17px;letter-spacing:1px;color:#d8ecf6;text-align:center;padding:0 16px;
     text-shadow:0 1px 3px rgba(0,0,0,0.7)}
   /* ---- the controls card: every control the game has, on the screen every player sees first ---- */
@@ -84,9 +90,13 @@
   #howto .touch{display:none}
   body.touch #howto .desk{display:none}
   body.touch #howto .touch{display:contents}
-  @media (max-height:520px){ #title{font-size:48px} #tagline{margin-top:8px;font-size:14px}
-    #startbtn{margin-top:16px;padding:11px 44px;font-size:21px} #howto{margin-top:14px;padding:9px 14px;font-size:12px;gap:4px 12px}
-    #ver{margin-top:10px} }
+  /* A landscape phone, or a small portal frame, is under 520px tall: the logo, CONTINUE with its save line,
+     NEW GAME and the controls all have to fit, so the tagline and build stamp go and the card turns into
+     two pairs per row. */
+  @media (max-height:520px){ #title{font-size:44px} #tagline,#ver{display:none}
+    #startbtn{margin-top:12px;padding:9px 40px;font-size:20px} #savewhere{margin-top:6px;font-size:12px}
+    #newbtn{margin-top:6px;padding:5px 16px;font-size:12px}
+    #howto{margin-top:10px;padding:8px 14px;font-size:12px;gap:4px 12px;grid-template-columns:auto auto auto auto} }
   /* ---- first-run tutorial: one instruction at a time, gone once you have done it ---- */
   #tip{position:absolute;left:50%;bottom:84px;transform:translateX(-50%);z-index:6;padding:10px 20px;border-radius:10px;
     background:rgba(4,14,24,0.72);border:2px solid rgba(255,213,74,0.8);color:#fff;font-size:17px;font-weight:700;
@@ -350,6 +360,8 @@
 <div id="lock"><div id="title">NILE<span>FRONT</span></div>
   <div id="tagline">Fight through four thousand years of Egypt — then the wider world</div>
   <button id="startbtn" disabled>LOADING…</button>
+  <div id="savewhere"></div>
+  <button id="newbtn" hidden>NEW GAME</button>
   <div id="howto">
     <span class="desk"><span class="k"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span></span>
     <span class="desk"><span class="k"><kbd>Mouse</kbd></span><span>Aim · <b>Click</b> to shoot</span></span>
@@ -400,6 +412,54 @@ if(typeof THREE === 'undefined'){
       + 'or whether something on this network blocks that host, and reload.');
   return;
 }
+
+// ===================== CRAZYGAMES SDK, AND WHERE SAVES LIVE =====================
+// The portal build adds CrazyGames' SDK <script> ahead of this one; every other build (gh-pages, the
+// desktop app, a file on disk) has no SDK at all, and on any domain but theirs the SDK exists but throws on
+// every call. So nothing below ever touches it directly: CG.call() runs a call only once init() has
+// succeeded on their site (or on localhost, where it simulates), and swallows anything it throws.
+//
+// init() is async, and the whole world is built synchronously below this line, so it cannot resolve until
+// the build is done: that is why there are no loadingStart/loadingStop events (they are optional) — by the
+// time the SDK could hear them, loading is over. If init never answers, the game gives up after six
+// seconds and runs without it, rather than leaving START greyed out forever.
+const CG = (function(){
+  const sdk = window.CrazyGames && window.CrazyGames.SDK;
+  let on = false, settled = false;
+  const ready = new Promise(resolve => {
+    const done = v => { if(!settled){ settled = true; on = v; resolve(v); } };
+    if(!sdk){ done(false); return; }
+    setTimeout(() => done(false), 6000);
+    Promise.resolve().then(() => sdk.init())
+      .then(() => done(sdk.environment === 'crazygames' || sdk.environment === 'local'))
+      .catch(() => done(false));
+  });
+  return {
+    ready,
+    get on(){ return on; },
+    call(fn){ if(!on) return; try { return fn(sdk); } catch(e){} },
+  };
+})();
+// CrazyGames requires progress to go through their Data module: it keeps a guest's save in the browser
+// and carries it onto their account when they log in. It has localStorage's API, so this is the one
+// place that chooses between them. Before the SDK is ready (or off their site) it is plain localStorage.
+// Every access is guarded: a sandboxed iframe or a private window can refuse storage outright, and a
+// refused save must never take the game down with it.
+const store = {
+  get(k){
+    if(CG.on){ try { return window.CrazyGames.SDK.data.getItem(k); } catch(e){} }
+    try { return localStorage.getItem(k); } catch(e){ return null; }
+  },
+  set(k, v){
+    v = String(v);
+    if(CG.on){ try { window.CrazyGames.SDK.data.setItem(k, v); return; } catch(e){} }
+    try { localStorage.setItem(k, v); } catch(e){}
+  },
+  remove(k){
+    if(CG.on){ try { window.CrazyGames.SDK.data.removeItem(k); return; } catch(e){} }
+    try { localStorage.removeItem(k); } catch(e){}
+  },
+};
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8fd6f2);
@@ -20657,17 +20717,54 @@ gunGroup.visible = false; // hidden on the title screen until START
 
 // ---- pointer lock + WASD look/move ----
 const lockEl = document.getElementById('lock');
+// A run starts here and nowhere else: fresh, or picked up from the save the title screen offered.
+let startMode = 'new';
+function beginRun(){
+  startGame();
+  if(startMode === 'continue' && savedGame) restoreSave(savedGame);
+  startMode = 'new';
+}
 function beginTouchPlay(){
   touchPlaying = true; lockEl.style.display='none';
-  if(!gameStarted || gameWon) startGame();
+  if(!gameStarted || gameWon) beginRun();
 }
 const startBtn = document.getElementById('startbtn');
-function pressStart(e){ if(e){ e.preventDefault(); e.stopPropagation(); }
+const newBtn = document.getElementById('newbtn'), saveWhere = document.getElementById('savewhere');
+// What the title screen offers depends on whether a run is under way (RESUME), finished (PLAY AGAIN), or
+// not started — and then on whether there is a save to pick up.
+function refreshTitle(){
+  if(startBtn.disabled) return;
+  const midRun = gameStarted && !gameWon, canContinue = !gameStarted && !!savedGame;
+  startBtn.textContent = midRun ? 'RESUME' : gameWon ? 'PLAY AGAIN' : canContinue ? 'CONTINUE' : 'PLAY';
+  saveWhere.textContent = canContinue ? saveLabel(savedGame) : '';
+  newBtn.hidden = !canContinue;
+  newBtn.classList.remove('confirm'); newBtn.textContent = 'NEW GAME';
+}
+function launch(mode){
   SFX.init(); SFX.uiClick();   // a user gesture, so this is also what unlocks audio on the first press
+  startMode = mode;
   if(isTouch){ beginTouchPlay(); } else { renderer.domElement.requestPointerLock(); }
+}
+function pressStart(e){ if(e){ e.preventDefault(); e.stopPropagation(); }
+  launch(!gameStarted && savedGame ? 'continue' : 'new');
+}
+// Starting over throws the save away (the first checkpoint of the new run overwrites it), so it takes a
+// second press to mean it.
+let newConfirmT = 0;
+function pressNew(e){ if(e){ e.preventDefault(); e.stopPropagation(); }
+  if(!newBtn.classList.contains('confirm')){
+    SFX.init(); SFX.uiClick();
+    newBtn.classList.add('confirm'); newBtn.textContent = 'TAP AGAIN TO ERASE YOUR PROGRESS';
+    clearTimeout(newConfirmT); newConfirmT = setTimeout(refreshTitle, 3500);
+    return;
+  }
+  clearTimeout(newConfirmT);
+  launch('new');
 }
 startBtn.addEventListener('click', pressStart);
 startBtn.addEventListener('touchstart', pressStart, {passive:false});
+newBtn.addEventListener('click', pressNew);
+newBtn.addEventListener('touchstart', pressNew, {passive:false});
 document.addEventListener('pointerlockchange', () => {
   const locked = document.pointerLockElement === renderer.domElement;
   // losing the lock (the booth, the admin panel, Esc) is the third way a keyup never arrives
@@ -20680,8 +20777,8 @@ document.addEventListener('pointerlockchange', () => {
   lockEl.style.display = (locked || overlayUp) ? 'none' : 'flex';
   // The same overlay comes back whenever the lock drops mid-run (Esc, alt-tab), so it must not offer to
   // START a game that is already under way — clicking it only takes the lock back.
-  if(!locked && !startBtn.disabled) startBtn.textContent = (gameStarted && !gameWon) ? 'RESUME' : gameWon ? 'PLAY AGAIN' : 'PLAY';
-  if(locked && !overlayUp && (!gameStarted || gameWon)) startGame();
+  if(!locked) refreshTitle();
+  if(locked && !overlayUp && (!gameStarted || gameWon)) beginRun();
 });
 
 let yaw = 0, pitch = 0;              // actual (smoothed) camera angles
@@ -21870,7 +21967,7 @@ const mobileEl = document.getElementById('mobile');
 if(isTouch && mobileEl){ mobileEl.classList.add('on'); document.body.classList.add('touch'); }
 // Touch look sensitivity: a user-adjustable multiplier on the drag-to-look constant below, persisted so
 // it survives a reload. Desktop mouse sensitivity is unaffected — this only scales the touch path.
-let touchSensMult = parseFloat(localStorage.getItem('nf_touchSens')) || 1;
+let touchSensMult = parseFloat(store.get('nf_touchSens')) || 1;   // read again once the SDK is up — see onGameReady()
 
 (function setupTouch(){
   if(!mobileEl) return;
@@ -21923,7 +22020,7 @@ let touchSensMult = parseFloat(localStorage.getItem('nf_touchSens')) || 1;
     sensSlider.value = Math.round(touchSensMult*100);
     sensSlider.addEventListener('input', ()=>{
       touchSensMult = sensSlider.value/100;
-      localStorage.setItem('nf_touchSens', touchSensMult);
+      store.set('nf_touchSens', touchSensMult);
     });
   }
 
@@ -22210,14 +22307,14 @@ function tutShow(){
 }
 function tutStart(){
   let done = false;
-  try { done = localStorage.getItem('nf_tutDone') === '1'; } catch(e){}
+  done = store.get('nf_tutDone') === '1';
   tutStep = done ? -1 : 0; tutT = 0; tutShow();
 }
 function tutNext(){
   tutStep++; tutT = 0;
   if(tutStep >= tutSteps().length){
     tutStep = -1;
-    try { localStorage.setItem('nf_tutDone', '1'); } catch(e){}
+    store.set('nf_tutDone', '1');
   }
   tutShow();
 }
@@ -22451,12 +22548,93 @@ function spawnBossFight(){
   setEnemyCount('☠'); SFX.boss();
   setBanner('⚠ BOSS FIGHT'); setTimeout(()=>{ if(bossActive) setBanner(''); },1900);
 }
+// ===================== SAVED PROGRESS =====================
+// A save is a checkpoint, and the checkpoints are exactly the places a death already sends you back to:
+// the start of the current era, the hub you are standing in, or the start of the leg you are on. So
+// CONTINUE puts you where dying would have, never mid-wave. Stars are saved as they stood on arriving at
+// that checkpoint — whatever you earned since is earned again — so quitting and continuing can never be
+// used to bank a wave's stars twice.
+const SAVE_KEY = 'nf_save';
+let savedGame = null;     // the save found on the title screen, if any
+let saveSig = '';         // what the last write described, so an unchanged checkpoint is not rewritten
+function readSave(){
+  try {
+    const s = JSON.parse(store.get(SAVE_KEY) || 'null');
+    return (s && s.v === 1 && s.at) ? s : null;
+  } catch(e){ return null; }
+}
+// Where the player is right now, as a checkpoint. The final trip is saved as the hub it left from: its gate
+// is still standing there, and that is the way back in.
+function checkpointNow(){
+  if(!gameStarted || gameWon) return null;
+  if(tripDest && tripDest.name !== FINAL_TRIP.name) return {trip: tripDest.name, leg: tripLeg, from: currentHub};
+  if(inHub || tripDest || currentEra >= 3) return {hub: currentHub};
+  return {era: currentEra};
+}
+function progressPercent(){
+  if(campaignComplete) return 100;
+  const roads = DESTINATIONS.filter(d => d.legs && d.done).length;
+  return Math.min(99, Math.round(currentEra*10 + roads*20));
+}
+function saveTick(){
+  const at = checkpointNow();
+  if(!at) return;
+  const done = DESTINATIONS.filter(d => d.legs && d.done).map(d => d.name);
+  const sig = JSON.stringify([at, done, campaignComplete]);
+  if(sig === saveSig) return;
+  saveSig = sig;
+  savedGame = {v:1, at, stars: player.score, done, complete: campaignComplete, t: Date.now()};
+  store.set(SAVE_KEY, JSON.stringify(savedGame));
+  CG.call(sdk => sdk.game.reportGameCompletedPercentage(progressPercent()));
+}
+function saveLabel(s){
+  const a = s.at;
+  let where = 'Egypt';
+  if(a.trip){
+    const d = DESTINATIONS.find(x => x.name === a.trip), leg = d && d.legs && d.legs[a.leg];
+    where = (leg && leg.place) || a.trip;
+  } else if(a.hub){
+    where = {cairo:'Cairo', aztecMarket:'The Aztec Market', ladoga:'Aldeigjuborg', nilebank:'The Nile bank'}[a.hub] || 'Cairo';
+  } else {
+    where = (ERA_NAMES[a.era] || 'Egypt') + ' · wave ' + (ERA_START_WAVE[a.era] + 1);
+  }
+  return where + ' · ⭐ ' + (s.stars|0);
+}
+// Called straight after startGame(), which has already reset the run and put wave 1 up. Everything here goes
+// through the same functions a death, a trip or the admin jump uses, so a continued run is in the exact state
+// the game would have reached by playing there.
+function restoreSave(s){
+  DESTINATIONS.forEach(d => { if(d.legs) d.done = s.done.indexOf(d.name) >= 0; });
+  campaignComplete = !!s.complete;
+  const a = s.at;
+  let banner = '';
+  if(a.era !== undefined && a.era < 3){
+    jumpToWave(ERA_START_WAVE[a.era]);
+    banner = 'Welcome back — wave ' + (ERA_START_WAVE[a.era] + 1);
+  } else {
+    jumpToWave(ERA_START_WAVE[3]);              // the campaign is behind you: Cairo, with the booth open
+    if(a.trip){
+      const d = DESTINATIONS.find(x => x.name === a.trip && x.legs);
+      if(a.from) currentHub = a.from;
+      if(d){ jumpToDestStage(d, a.leg|0, 0); banner = 'Welcome back — ' + d.legs[a.leg|0].place; }
+    } else if(a.hub && a.hub !== 'cairo'){
+      const enter = {aztecMarket:enterAztecMarketHub, ladoga:enterLadogaMarketHub, nilebank:enterNileBankHub}[a.hub];
+      if(enter) enter('Welcome back');
+    } else banner = 'Welcome back to Cairo';
+  }
+  player.score = s.stars|0;
+  setHUD();
+  tutStep = -1; tipEl.classList.remove('on');   // anyone continuing has played it already
+  if(banner){ setBanner(banner); setTimeout(()=>{ if(bannerEl && bannerEl.textContent===banner) setBanner(''); }, 2600); }
+}
 function startGame(){
   SFX.init();
   document.body.classList.add('playing');
   gunGroup.visible = true;
   gameStarted=true; gameWon=false; bossActive=false; pending=null; betweenTimer=0; waveIdx=0; bossNum=0; currentEra=0;
   campaignComplete=false;   // a new run has not conquered anything yet
+  DESTINATIONS.forEach(d => { if(d.legs) d.done = false; });   // nor walked any road
+  saveSig = '';             // and the first checkpoint it reaches is written, whatever was saved before
   jumpY = 0; jumpV = 0;
   inHub=false; tripDest=null; tripLeg=0; closeBooth(); setHubStats(false); exitHubChrome();  // fresh run: wave HUD and weapon back
   clearFieldEffects();   // no telegraph or quake from the last run may fire into the fresh one
@@ -22595,6 +22773,7 @@ function updateWaves(dt){
     // without this the "all dead" condition stays true and re-fires it every single frame.
   } else if(gameStarted && !gameWon && !tripCleared && bots.length>0 && bots.filter(b=>b.alive).length===0){
     SFX.waveClear();
+    if(bossActive) CG.call(sdk => sdk.game.happytime());   // a boss down is the moment worth celebrating
     onAllDead();
   }
 }
@@ -22660,7 +22839,8 @@ function setBotEmissive(bd, hex){
 // ===================== SOUND (Web Audio, synthesized — no files) =====================
 const SFX = (function(){
   const AC = window.AudioContext || window.webkitAudioContext;
-  let actx=null, master=null, noiseBuf=null, delayBus=null;
+  let actx=null, master=null, noiseBuf=null, delayBus=null, muted=false;
+  function setMuted(m){ muted = m; if(master) master.gain.value = m ? 0 : 0.55; }
   function makeDistCurve(amount){
     const n=1024, curve=new Float32Array(n), deg=Math.PI/180;
     for(let i=0;i<n;i++){ const x=i*2/n-1; curve[i]=(3+amount)*x*20*deg/(Math.PI+amount*Math.abs(x)); }
@@ -22669,7 +22849,7 @@ const SFX = (function(){
   function init(){
     if(actx) { if(actx.state==='suspended') actx.resume(); return; }
     try{ actx=new AC(); }catch(e){ return; }
-    master=actx.createGain(); master.gain.value=0.55; master.connect(actx.destination);
+    master=actx.createGain(); master.gain.value=muted?0:0.55; master.connect(actx.destination);
     const len=Math.floor(actx.sampleRate*0.5); noiseBuf=actx.createBuffer(1,len,actx.sampleRate);
     const d=noiseBuf.getChannelData(0); for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
     // shared short slap-delay bus so a few sounds (ray gun, boss, death) get a bit of space/weight
@@ -22727,7 +22907,7 @@ const SFX = (function(){
     car.start(t0); mod.start(t0); car.stop(t0+dur+0.02); mod.stop(t0+dur+0.02);
   }
   return {
-    init,
+    init, setMuted,
     // ---- PLAYER weapons: layered body+crack+sub-thump, bright and punchy up front ----
     // Every one of these is built the same way now: a TRANSIENT (the crack, 10-30ms), a BODY (the tone
     // that gives it weight), and a TAIL (the room answering back, a beat later and quieter). The old
@@ -23757,9 +23937,19 @@ ground.castShadow = false;
 const clock = new THREE.Clock();
 // The raw gap between frames, before animate()'s dt clamp: what the adaptive resolution judges by.
 let frameLast = 0;
+let saveFrames = 0, cgPlaying = false;
 function frameTick(){
   const now = performance.now(), gap = frameLast ? now - frameLast : 0; frameLast = now;
   rsTick(gap, gameStarted && !gameWon && !paused && !boothOpen && inPlay());
+  if(++saveFrames >= 30){ saveFrames = 0; saveTick(); }
+  // CrazyGames wants to know when the player is actually playing: not on the title, not paused, not in a
+  // menu. Derived from the state every frame rather than called from each place that changes it, so a new
+  // menu cannot forget to report itself.
+  const playingNow = gameStarted && !gameWon && !paused && !boothOpen && !adminOpen && !chatOpen && inPlay();
+  if(playingNow !== cgPlaying){
+    cgPlaying = playingNow;
+    CG.call(sdk => playingNow ? sdk.game.gameplayStart() : sdk.game.gameplayStop());
+  }
 }
 function animate(){
   requestAnimationFrame(animate);
@@ -24936,8 +25126,19 @@ function animate(){
 }
 animate();
 bakeInit();
-// Every map is built and the first frame is queued: only now can START do anything.
-startBtn.disabled = false; startBtn.textContent = 'PLAY';
+// Every map is built and the first frame is queued. START still waits for the SDK (or for giving up on it),
+// because which store the save lives in — and so whether there is one to CONTINUE — depends on it.
+CG.ready.then(onGameReady);
+function onGameReady(){
+  savedGame = readSave();
+  touchSensMult = parseFloat(store.get('nf_touchSens')) || touchSensMult;
+  const ss = document.getElementById('sensSlider'); if(ss) ss.value = Math.round(touchSensMult*100);
+  // the platform's own mute (Full Launch asks for it), both as it stands now and whenever it changes
+  const applyMute = st => { if(st && st.muteAudio !== undefined) SFX.setMuted(!!st.muteAudio); };
+  CG.call(sdk => { applyMute(sdk.game.settings); sdk.game.addSettingsChangeListener(applyMute); });
+  startBtn.disabled = false;
+  refreshTitle();
+}
 
 window.addEventListener('resize', () => {
   camera.aspect = innerWidth/innerHeight;

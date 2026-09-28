@@ -31,7 +31,12 @@ const DIST_DIR = path.join(PORTAL_DIR, 'dist');
 const CDN_TAG = `<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"
         integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ=="
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>`;
-const LOCAL_TAG = `<script src="three.min.js"></script>`;
+// The CrazyGames SDK rides in ahead of three.js. It is the one script this build still fetches from the
+// network, and it has to be: it only works served from CrazyGames' own domain. index.html treats it as
+// optional — if it is blocked or missing, the game runs and saves to localStorage exactly as it does on
+// gh-pages — so it is added here, in the portal build only, and never to the gh-pages page.
+const SDK_TAG = `<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>`;
+const LOCAL_TAG = SDK_TAG + `\n<script src="three.min.js"></script>`;
 
 // The failure message shown if THREE never defines itself. Correct for the CDN build, wrong for this
 // one: if three.min.js fails to load here it's the zip, not cdnjs, and telling a portal reviewer to
@@ -104,7 +109,7 @@ function main() {
   fs.writeFileSync(OUT_HTML, patched);
   fs.copyFileSync(VENDOR_SRC, path.join(OUT_DIR, 'three.min.js'));
 
-  console.log(`Built ${path.relative(ROOT, OUT_HTML)} (${(patched.length / 1024).toFixed(0)} KiB) — three.js now loads from a local file, no network needed.`);
+  console.log(`Built ${path.relative(ROOT, OUT_HTML)} (${(patched.length / 1024).toFixed(0)} KiB) — three.js loads from a local file; the CrazyGames SDK tag is added.`);
 
   // Zipped with index.html AT THE ROOT of the archive, not inside a subfolder -- portals that unpack a
   // zip and look for index.html next to the other files (CrazyGames included) will not find it one

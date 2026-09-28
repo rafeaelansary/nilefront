@@ -24,6 +24,13 @@ build — swaps that one `<script>` tag for a local, vendored copy — reusing
 `electron/vendor/three.min.js` as the source rather than keeping a second copy that could quietly
 drift out of sync with the one already verified against the CDN tag's own integrity hash.
 
+It also adds the **CrazyGames SDK** `<script>` tag (v3, from `sdk.crazygames.com`) ahead of three.js —
+the one thing this build still loads over the network, because the SDK only works served from
+CrazyGames' own domain. The game treats it as optional: through it, progress saves to CrazyGames' Data
+module and the game reports gameplay start/stop, boss kills (`happytime`) and completion; without it (blocked,
+offline, or any other host) the game runs the same and saves to `localStorage`. The gh-pages
+`index.html` never gets this tag.
+
 It also rewrites the "three.js did not load" error message, since the CDN build's version blames
 `cdnjs.cloudflare.com` — which this build never talks to. If `three.min.js` fails to load here, the
 real cause is almost always a bad zip.
