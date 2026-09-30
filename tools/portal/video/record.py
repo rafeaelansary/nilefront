@@ -40,9 +40,9 @@ FPS = 30
 # lasts), the weapon slot, whether the player walks in, and whether to stage the enemies: move the ones
 # still alive onto open ground in an arc ahead, so the clip is the fight and not the walk to it.
 SEGMENTS = [
-    dict(name='giza',         go="chatRun('/tp 3')",              at=(0, 12),   yaw=0,    warm=20, frames=90, insta=False, weapon=0, walk=False, stage=True),
+    dict(name='giza',         go="chatRun('/tp 2')",              at=(0, 12),   yaw=0,    warm=20, frames=90, insta=False, weapon=0, walk=False, stage=True),
     dict(name='nile',         go="chatRun('/tp nile')",           at=(0, -3.4), yaw=None, warm=60, frames=72, insta=True,  weapon=0, walk=False, stage=False, face='nearest'),
-    dict(name='colosseum',    go="chatRun('/tp 9'); bots.forEach(b=>{ if(b.alive) damageBot(b,1e9,b.mesh.position); })",
+    dict(name='colosseum',    go="chatRun('/tp 6'); bots.forEach(b=>{ if(b.alive) damageBot(b,1e9,b.mesh.position); })",
                                                                   at=None,      yaw=None, warm=150, frames=75, insta=False, weapon=0, walk=False, stage=False, standoff=True),
     dict(name='tenochtitlan', go="chatRun('/tp mexico 2 1')",     at=None,      yaw=None, warm=20, frames=72, insta=True,  weapon=0, walk=False, stage=True),
     dict(name='birka',        go="chatRun('/tp sweden 1 1')",     at=None,      yaw=None, warm=20, frames=72, insta=True,  weapon=0, walk=True,  stage=True),

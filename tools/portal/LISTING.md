@@ -68,6 +68,13 @@ v1.3.0 (this upload):
 - Title screen shows the game: a slow camera over the first map instead of a dark overlay
 - Interface redrawn in two embedded typefaces, with drawn icons in the HUD instead of emoji
 - Fixed: a large flat square flashed over the screen on every bow, sling or thrown-weapon shot
+- Faster pacing: two waves before each boss instead of three (Egypt's three eras and both Mexico legs),
+  so the first boss comes a wave sooner
+- The first bow is held further out and canted, so it sits wholly on screen instead of running off the
+  top edge with its string down the side
+- The Giza processional way is laid basalt paving again (a name clash had swapped in a noisy texture)
+- Emoji replaced by drawn icons throughout (warnings, boss bar, booth, stars), so the game looks the same
+  on Windows, macOS, ChromeOS and phones
 - Fixed: pausing with P left the mouse captured, so the pause menu could not be clicked
 - Developer console and admin shortcuts removed from this build (C,C no longer opens anything)
 - Travel booth has a CLOSE button and a touch hint; key captions follow AZERTY layouts
