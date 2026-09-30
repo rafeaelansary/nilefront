@@ -4,3 +4,4 @@ node_modules/
 .claude/
 tools/portal/build/
 tools/portal/dist/
+tools/portal/video/*.mp4

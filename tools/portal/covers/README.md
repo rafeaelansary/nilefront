@@ -18,6 +18,6 @@ on open desert north of the Giza pyramids at dusk. The only text is the name, as
 
     python3 tools/portal/covers/src/make_covers.py
 
-Needs macOS with Google Chrome (rendered headless on the real GPU), Pillow, and Georgia Bold. Each cover's
+Needs macOS with Google Chrome (rendered headless on the real GPU) and Pillow; the logo is set in Cinzel Black from the bundled, OFL-licensed `src/Cinzel-wght.ttf`, the same typeface the game embeds. Each cover's
 camera and cast is in `src/landscape.js`, `src/portrait.js`, `src/square.js`; the dusk lighting is
 `src/look.js`. Re-run after any change to the models or the Egypt map, so the covers keep matching the game.

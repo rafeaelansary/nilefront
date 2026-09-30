@@ -1,11 +1,12 @@
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance, ImageChops
 """Build the three CrazyGames covers (1920x1080, 800x1200, 800x800) from the game's own renders.
 
-usage: python3 tools/portal/covers/src/make_covers.py   (macOS: needs Chrome, Pillow, Georgia Bold)
+usage: python3 tools/portal/covers/src/make_covers.py   (macOS: needs Chrome and Pillow)
 
 Renders each scene at 2x with render.py, scales it down, grades it (contrast, warmth, vignette), darkens the
-ground under the logo, and sets NILEFRONT in the title screen's own lettering: Georgia Bold, NILE gold and
-FRONT teal on a navy outline. CrazyGames allows the game's name and nothing else as text on a cover.
+ground under the logo, and sets NILEFRONT in the title screen's own lettering: Cinzel Black (the typeface the
+game embeds for its logo; the OFL-licensed file sits next to this script), NILE gold and FRONT teal on a navy
+outline. CrazyGames allows the game's name and nothing else as text on a cover.
 """
 import sys, os, subprocess, tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -14,7 +15,11 @@ S = tempfile.mkdtemp()
 for name, w, h in (('landscape', 3840, 2160), ('portrait', 1600, 2400), ('square', 1600, 1600)):
     subprocess.run([sys.executable, os.path.join(HERE, 'render.py'), os.path.join(HERE, name + '.js'), str(w), str(h),
                     os.path.join(S, name + '_raw.png')], check=True)
-FONT='/System/Library/Fonts/Supplemental/Georgia Bold.ttf'
+FONT=os.path.join(HERE, 'Cinzel-wght.ttf')
+def font(size):
+    f = ImageFont.truetype(FONT, size)
+    f.set_variation_by_name('Black')
+    return f
 GOLD=(255,213,74); TEAL=(62,198,217); NAVY=(14,41,66)
 
 def grade(im):
@@ -42,9 +47,9 @@ def logo(im, width_frac, center_y_frac):
     W,H = im.size
     target = W*width_frac
     size = 200
-    f = ImageFont.truetype(FONT, size)
+    f = font(size)
     tw = f.getlength('NILEFRONT') * 1.08   # tracking below
-    size = int(size * target / tw); f = ImageFont.truetype(FONT, size)
+    size = int(size * target / tw); f = font(size)
     track = int(size*0.08)
     parts = [(ch, GOLD if i < 4 else TEAL) for i,ch in enumerate('NILEFRONT')]
     total = sum(f.getlength(c) for c,_ in parts) + track*(len(parts)-1)
@@ -91,4 +96,6 @@ def make(raw, size, width_frac, logo_y, fade_start, out):
 make(S+'/landscape_raw.png', (1920,1080), 0.58, 0.845, 0.55, OUT+'/cover_1920x1080.png')
 make(S+'/portrait_raw.png', (800,1200), 0.90, 0.855, 0.58, OUT+'/cover_800x1200.png')
 make(S+'/square_raw.png',   (800,800),  0.84, 0.845, 0.56, OUT+'/cover_800x800.png')
+# the portrait preview video opens on the portrait cover, at the video's own 1080x1620 (tools/portal/video/)
+make(S+'/portrait_raw.png', (1080,1620), 0.90, 0.855, 0.58, os.path.join(OUT, '..', 'video', 'opening_1080x1620.png'))
 print('ok')

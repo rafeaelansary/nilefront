@@ -5,7 +5,8 @@ Newgrounds — anywhere that runs a game inside its own sandboxed iframe rather 
 your own domain).
 
 ```bash
-node tools/portal/build-portal.js
+node tools/portal/build-portal.js      # or, on a machine without Node:
+python3 tools/portal/build_portal.py   # the same swaps and checks, byte-identical output
 ```
 
 Produces:
@@ -39,6 +40,21 @@ Both swaps are matched against the exact current text and fail loudly if either 
 the same policy `build-app.js` follows — a silently-stale swap is worse than a build that refuses to
 run.
 
+The SDK tag is also what switches the admin panel and the cheat console off: the game checks for the
+SDK, and in this build C,C (which most shooters bind to crouch) does nothing. `#dev` on the URL turns
+them back on, for testing a portal build in place.
+
+## Covers and preview videos
+
+CrazyGames asks for three covers and two preview videos. All five are made from the game itself:
+
+- [`covers/`](covers/) — `cover_1920x1080.png`, `cover_800x1200.png`, `cover_800x800.png`, rendered by
+  `python3 tools/portal/covers/src/make_covers.py` (see its README)
+- [`video/`](video/) — `preview_1920x1080.mp4` (landscape, 16:9) and `preview_1080x1620.mp4` (portrait,
+  2:3): 18 seconds each, silent, no cursor, opening on the cover. `python3 tools/portal/video/record.py`
+  films the current portal build frame by frame in headless Chrome — build first. Its docstring says how,
+  and what each of the seven shots is.
+
 ## Uploading to CrazyGames
 
 At [developer.crazygames.com/submit](https://developer.crazygames.com/submit):
@@ -50,14 +66,15 @@ At [developer.crazygames.com/submit](https://developer.crazygames.com/submit):
   rejects it outright ("Archive files are not supported, please drag and drop the files directly in
   the upload zone"). The zip this script also produces is for portals that *do* want one (itch.io,
   for instance) — check what each target actually accepts before assuming either format.
-- **Does your game save progress:** No — see the README's own "Not gaps" section on why that's
-  intentional
-- **Basic vs Full Launch:** Basic needs no SDK and is the fast path to live; Full requires the
-  CrazyGames SDK (ad hooks, `GameplayStart`/`GameplayStop`, auth, cloud save) and is what unlocks ad
-  revenue. Nothing in this repo wires up that SDK yet — decide separately whether that's worth doing.
+- **Does your game save progress:** Yes — select **Progress Save**. The game saves through the
+  CrazyGames Data module (CrazyGames requires that option when it does).
+- **Basic vs Full Launch:** Basic needs only the SDK's gameplay-start event, which the game sends; Full
+  adds ads, account integration and landing new players straight in gameplay, and is what unlocks ad
+  revenue. The game integrates gameplay start/stop, the Data module, `happytime` and the platform mute;
+  it has no ad calls. The listing text, tags and form answers are in [`LISTING.md`](LISTING.md).
 
 ## Re-running after an update
 
-Every time `index.html` changes, re-run `node tools/portal/build-portal.js` and upload the new zip —
-there's no watch mode, and there shouldn't be; a portal upload is a deliberate step, not something to
-fire on every save.
+Every time `index.html` changes, re-run the build and upload the two new files — there's no watch mode,
+and there shouldn't be; a portal upload is a deliberate step, not something to fire on every save. If the
+change is visible, re-render the covers and the videos too, so the store page still shows the game.
