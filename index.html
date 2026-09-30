@@ -124,7 +124,9 @@
     #titlebtns{margin-top:6px} .secbtn{padding:5px 16px;font-size:12px}
     #howto{margin-top:10px;padding:8px 14px;font-size:12px;gap:4px 12px;grid-template-columns:auto auto auto auto} }
   /* ---- first-run tutorial: one instruction at a time, gone once you have done it ---- */
-  #tip{position:absolute;left:50%;bottom:84px;transform:translateX(-50%);z-index:6;padding:10px 20px;border-radius:10px;
+  /* 30% up, not 84px: at the small portal frames the card sat on the bow's arrowhead. Up here it is between the
+     crosshair and the arrow at every size. Touch keeps its own place, top centre (below). */
+  #tip{position:absolute;left:50%;bottom:30%;transform:translateX(-50%);z-index:6;padding:10px 20px;border-radius:10px;
     background:rgba(4,14,24,0.72);border:2px solid rgba(255,213,74,0.8);color:#fff;font-size:17px;font-weight:700;
     text-align:center;max-width:calc(100vw - 32px);box-sizing:border-box;opacity:0;transition:opacity 0.25s;pointer-events:none}
   #tip.on{opacity:1}
