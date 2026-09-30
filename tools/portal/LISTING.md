@@ -17,7 +17,7 @@ https://developer.crazygames.com/games/a6428cd3-2d80-4229-a847-5c08aa61f72b
 - **Covers:** `tools/portal/covers/cover_1920x1080.png` (landscape), `cover_800x1200.png` (portrait),
   `cover_800x800.png` (square)
 - **Preview videos:** `tools/portal/video/preview_1920x1080.mp4` (landscape) and `preview_1080x1620.mp4`
-  (portrait). Both are required. 18 s, silent, H.264, ~25 MB and ~19 MB (the limit is 50 MB).
+  (portrait). Both are required. Exactly 20 s, silent, H.264, ~25 MB and ~19 MB (the limit is 50 MB).
 - **Orientation (mobile):** landscape
 
 ## Tags (max 5)
@@ -68,10 +68,9 @@ v1.3.0 (this upload):
 - Title screen shows the game: a slow camera over the first map instead of a dark overlay
 - Interface redrawn in two embedded typefaces, with drawn icons in the HUD instead of emoji
 - Fixed: a large flat square flashed over the screen on every bow, sling or thrown-weapon shot
-- Faster pacing: two waves before each boss instead of three (Egypt's three eras and both Mexico legs),
-  so the first boss comes a wave sooner
-- The first bow is held further out and canted, so it sits wholly on screen instead of running off the
-  top edge with its string down the side
+- Faster pacing: two waves before every boss instead of three, in Egypt and on every destination
+- The first bow is redrawn as an Egyptian composite bow (horn-inlaid limbs, gold bindings, leather grip) and
+  held bigger, wholly on screen, clear of the crosshair and the HUD
 - The Giza processional way is laid basalt paving again (a name clash had swapped in a noisy texture)
 - Emoji replaced by drawn icons throughout (warnings, boss bar, booth, stars), so the game looks the same
   on Windows, macOS, ChromeOS and phones

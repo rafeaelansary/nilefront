@@ -5,7 +5,7 @@
     python3 tools/portal/video/record.py          # -> tools/portal/video/preview_1920x1080.mp4
                                                   #    tools/portal/video/preview_1080x1620.mp4
 
-CrazyGames asks for a 15-20 second clip in landscape (1080p, 16:9) and in portrait (1080p, 2:3), silent, with
+CrazyGames asks for a 15-20 second clip (this one is exactly 20 s) in landscape (1080p, 16:9) and in portrait (1080p, 2:3), silent, with
 no cursor, no black bars, no logo cards and no "Play now" text, opening on the cover so the thumbnail flows
 into the preview. This plays the real portal build in headless Chrome on the real GPU and films it:
 
@@ -34,20 +34,21 @@ BUILD = os.path.join(ROOT, 'tools', 'portal', 'build')
 COVERS = os.path.join(ROOT, 'tools', 'portal', 'covers')
 CHROME = os.environ.get('CHROME', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
 FPS = 30
+DURATION = 20   # seconds, exactly: see the assert before ffmpeg runs
 
 # Each segment: how to get there (the game's own /tp), where to stand and which way to face (None keeps the
 # map's own spawn), off-camera warm-up frames, filmed frames, instant kills (off for bosses, so the fight
 # lasts), the weapon slot, whether the player walks in, and whether to stage the enemies: move the ones
 # still alive onto open ground in an arc ahead, so the clip is the fight and not the walk to it.
 SEGMENTS = [
-    dict(name='giza',         go="chatRun('/tp 2')",              at=(0, 12),   yaw=0,    warm=20, frames=90, insta=False, weapon=0, walk=False, stage=True),
-    dict(name='nile',         go="chatRun('/tp nile')",           at=(0, -3.4), yaw=None, warm=60, frames=72, insta=True,  weapon=0, walk=False, stage=False, face='nearest'),
+    dict(name='giza',         go="chatRun('/tp 2')",              at=(0, 12),   yaw=0,    warm=20, frames=100, insta=False, weapon=0, walk=False, stage=True),
+    dict(name='nile',         go="chatRun('/tp nile')",           at=(0, -3.4), yaw=None, warm=60, frames=80, insta=True,  weapon=0, walk=False, stage=False, face='nearest'),
     dict(name='colosseum',    go="chatRun('/tp 6'); bots.forEach(b=>{ if(b.alive) damageBot(b,1e9,b.mesh.position); })",
-                                                                  at=None,      yaw=None, warm=150, frames=75, insta=False, weapon=0, walk=False, stage=False, standoff=True),
-    dict(name='tenochtitlan', go="chatRun('/tp mexico 2 1')",     at=None,      yaw=None, warm=20, frames=72, insta=True,  weapon=0, walk=False, stage=True),
-    dict(name='birka',        go="chatRun('/tp sweden 1 1')",     at=None,      yaw=None, warm=20, frames=72, insta=True,  weapon=0, walk=True,  stage=True),
-    dict(name='xiangyang',    go="chatRun('/tp china 1 1')",      at=None,      yaw=None, warm=40, frames=72, insta=True,  weapon=0, walk=True,  stage=False),
-    dict(name='fjord',        go="chatRun('/tp sweden 2 boss')",  at=None,      yaw=None, warm=80, frames=72, insta=False, weapon=2, walk=False, stage=False, standoff=True),
+                                                                  at=None,      yaw=None, warm=150, frames=85, insta=False, weapon=0, walk=False, stage=False, standoff=True),
+    dict(name='tenochtitlan', go="chatRun('/tp mexico 2 1')",     at=None,      yaw=None, warm=20, frames=80, insta=True,  weapon=0, walk=False, stage=True),
+    dict(name='birka',        go="chatRun('/tp sweden 1 1')",     at=None,      yaw=None, warm=20, frames=80, insta=True,  weapon=0, walk=True,  stage=True),
+    dict(name='xiangyang',    go="chatRun('/tp china 1 1')",      at=None,      yaw=None, warm=40, frames=80, insta=True,  weapon=0, walk=True,  stage=False),
+    dict(name='fjord',        go="chatRun('/tp sweden 2 boss')",  at=None,      yaw=None, warm=80, frames=80, insta=False, weapon=2, walk=False, stage=False, standoff=True),
 ]
 
 LOCK_SHIM = r"""(()=>{ let el=null;
@@ -138,6 +139,15 @@ window.__standOff = function(){
     const dir = chest.clone().sub(eye), d = dir.length(); dir.normalize();
     const h = firstHit(eye, dir, d + 2);
     if(!(h && h.bot === boss)) continue;
+    // ...and keep a clear corridor either side of him, or the few steps he takes during the shot walk him
+    // behind cover and the clip ends on a wall (the Colosseum's sandstone blocks did exactly that)
+    const side = new THREE.Vector3(-dir.z, 0, dir.x);
+    const blocked = [-3.5, -1.75, 1.75, 3.5].some(o => {
+      const tgt = chest.clone().addScaledVector(side, o), dd = tgt.clone().sub(eye), L = dd.length();
+      const hh = firstHit(eye, dd.normalize(), L);
+      return hh && !hh.bot && hh.dist < L - 1;
+    });
+    if(blocked) continue;
     placePlayerAt(new THREE.Vector3(x, 1.7, z));
     yaw = targetYaw = Math.atan2(-(bp.x - x), -(bp.z - z)); pitch = targetPitch = 0;
     return true;
@@ -204,6 +214,8 @@ def ffmpeg():
 
 
 def record(W, H, cover, out_mp4):
+    planned = 15 + sum(sg['frames'] for sg in SEGMENTS)
+    assert STILLS or planned == DURATION * FPS, 'SEGMENTS plan %d frames, not %d' % (planned, DURATION * FPS)
     site = tempfile.mkdtemp()
     src = open(os.path.join(BUILD, 'index.html'), encoding='utf-8').read()
     anchor = "  startBtn.disabled = false;\n  refreshTitle();\n}"
@@ -299,6 +311,9 @@ def record(W, H, cover, out_mp4):
         if i < 9:
             g = Image.blend(cov, g, (i + 1) / 10.0)
         put(g)
+    # CrazyGames takes 15-20 s; the clip is held at exactly 20.0 s — never a frame over — so the cover (15) plus
+    # every segment's frames must come to DURATION * FPS. Change a segment's length and another has to give.
+    assert k == DURATION * FPS, 'clip is %d frames (%.2f s), not %d (%d s): rebalance SEGMENTS' % (k, k / FPS, DURATION * FPS, DURATION)
     subprocess.run([ffmpeg(), '-y', '-loglevel', 'error', '-framerate', str(FPS), '-i', os.path.join(seq, '%05d.png'),
                     '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
                     '-an', out_mp4], check=True)
