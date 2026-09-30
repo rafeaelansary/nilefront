@@ -18225,73 +18225,90 @@ function makeZahraGun(){
 }
 
 // ===================== PYRAMID LOADOUT (waves 1-3 + Boss I) =====================
-// BOW — an Egyptian composite bow: horn on the belly, wood core, gold-bound joints, tips that flick forward.
+// BOW — curved wooden limbs (built from angled segments), taut string, nocked arrow
 function makeBow(){
   const g=new THREE.Group();
-  const wood=voxMat(0x5e3219,{noise:12}), horn=voxMat(0xf3ead2,{noise:6});
-  const gold=metalMatP(0xd9a93a,28,0x9a7a3a), leather=voxMat(0x9c2a1b,{noise:12}), leatherDk=voxMat(0x5c1a12,{noise:10});
-  const tipHorn=metalMatP(0x2a2018,40,0x6a5a44);
-  const stringMat=new THREE.MeshBasicMaterial({color:0xf0e6cc, fog:false});
-  // Each limb is walked out from the grip one segment at a time. theta is the segment's lean from straight up,
-  // toward the archer (+z): shallow near the grip, steepest mid-limb — the angular triangle an Egyptian
-  // composite bow makes when strung — then turning back at the tip, the recurve that flicks it forward.
-  const SEG=[[0.15,0.28],[0.15,0.40],[0.15,0.52],[0.13,0.62],[0.10,0.22],[0.09,-0.38]];
+  const wood=metalMatP(0x6b4a2c,18,0x332211), gold=metalMatP(0xad8730,55,0xffdd99);
+  const leather=voxMat(0x4a2c18,{noise:14}), leatherDark=voxMat(0x33200f,{noise:12});
+  const sinew=voxMat(0xbfae86,{noise:10}), horn=metalMatP(0x2a2018,45,0x6a5a44);
+  const stringMat=new THREE.MeshBasicMaterial({color:0xe8dcc0, fog:false});
+  // each segment is walked along the previous one's own rotated direction (verified against a plotted render),
+  // so the limb is a properly connected curve instead of segments that only touch at one corner.
+  // Kept a single consistent wood color (not alternating per segment) — alternating colors right at the
+  // overlap seams was the likely source of the z-fighting flicker. A small gold tip cap replaces the
+  // per-segment gold accent instead. The function returns the true tip position so the string can be
+  // placed exactly, rather than guessed.
   function limb(dir){
     const grp=new THREE.Group();
-    let y=0.13, z=0.0;
-    SEG.forEach(([L,th],i)=>{
-      const f=i/(SEG.length-1), w=0.078-0.034*f, d=0.050-0.020*f;   // tapers to the tip
-      const dy=Math.cos(th), dz=Math.sin(th);
-      const cy=y+dy*L/2, cz=z+dz*L/2;
-      const core=new THREE.Mesh(new THREE.BoxGeometry(w,L+0.012,d), wood);
-      core.position.set(0,cy*dir,cz); core.rotation.x=th*dir; grp.add(core);
-      // horn belly strip, on the face toward the archer — the face the player actually sees. Narrower than the
-      // core so no side face is shared, and sunk halfway in so its inner face never meets the core's.
-      const ny=-dz, nz=dy;          // the segment's belly normal (upper limb), mirrored in y for the lower
-      const off=d/2+0.001;
-      const belly=new THREE.Mesh(new THREE.BoxGeometry(w*0.26,L+0.004,0.010), horn);
-      belly.position.set(0,(cy+ny*off)*dir,cz+nz*off); belly.rotation.x=th*dir; grp.add(belly);
-      y+=dy*L; z+=dz*L;
-      if(i<SEG.length-1 && i%2===1){   // a gold binding over every other joint, hiding the seam under it
-        const ring=new THREE.Mesh(new THREE.BoxGeometry(w+0.012,0.026,d+0.016), gold);
-        ring.position.set(0,y*dir,z); ring.rotation.x=th*dir; grp.add(ring);
-      }
-    });
-    const nock=new THREE.Mesh(new THREE.BoxGeometry(0.036,0.05,0.036), tipHorn);
-    nock.position.set(0,y*dir,z); grp.add(nock);
-    return {grp, tipY:y*dir, tipZ:z};
+    let y=0.05, z=0.03, theta=0;
+    const dtheta=0.22, L=0.15, overlap=0.01;
+    let tipY=y, tipZ=z;
+    for(let i=0;i<5;i++){
+      const thetaMid = theta + dtheta/2;
+      const dy=Math.cos(thetaMid), dz=Math.sin(thetaMid);
+      const cy=y+(L/2)*dy, cz=z+(L/2)*dz;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(0.032,0.15,0.032), wood);
+      m.position.set(0, cy*dir, cz);
+      m.rotation.x = thetaMid*dir;
+      grp.add(m);
+      tipY = y+L*dy; tipZ = z+L*dz;
+      y = tipY-overlap*dy; z = tipZ-overlap*dz;
+      theta += dtheta;
+    }
+    const tipCap=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,0.05), gold);
+    tipCap.position.set(0, tipY*dir, tipZ); grp.add(tipCap);
+    return {grp, tipY:tipY*dir, tipZ};
   }
-  const up=limb(1), dn=limb(-1);
-  g.add(up.grp); g.add(dn.grp);
-  // grip: the riser the limbs spring from, wrapped in red leather with darker turns
-  part(g,0.070,0.28,0.066,wood,0,0,0);
-  part(g,0.082,0.15,0.078,leather,0,0,0.002);
-  for(let i=0;i<3;i++) part(g,0.090,0.016,0.086,leatherDk,0,-0.05+i*0.05,0.002);
-  part(g,0.088,0.024,0.084,gold,0,0.088,0.001); part(g,0.088,0.024,0.084,gold,0,-0.088,0.001);
-  // string, tip to tip
-  const sl=Math.hypot(up.tipY-dn.tipY, up.tipZ-dn.tipZ);
-  const string=new THREE.Mesh(new THREE.BoxGeometry(0.007,sl,0.007), stringMat);
-  string.position.set(0,0,up.tipZ); g.add(string);
-  // the nocked arrow: reed shaft on the string, resting on the left of the grip, bronze head forward
-  const ax=-0.05, nockZ=up.tipZ, headZ=-0.50;
-  const shaftLen=nockZ-headZ;
-  part(g,0.024,0.024,shaftLen,voxMat(0xe8d6a0,{noise:6}),ax,0,(nockZ+headZ)/2);
-  const head=new THREE.Mesh(new THREE.ConeGeometry(0.055,0.17,4), metalMatP(0xd09a55,40,0xb08a60));
-  head.position.set(ax,0,headZ-0.08); head.rotation.x=-Math.PI/2; head.scale.set(1,1,0.45); g.add(head);
-  part(g,0.022,0.022,0.03,gold,ax,0,headZ+0.01);                    // binding at the head
-  for(let f=0;f<3;f++){                                              // three vanes, red and gold
+  const limbUp=limb(1), limbDown=limb(-1);
+  g.add(limbUp.grp); g.add(limbDown.grp);
+  // riser: a shaped centre section the limbs socket into, rather than the limbs simply meeting in mid-air
+  // Four nested parts on one axis: riser, plate, grip, wrap. Their half-widths were 0.0375 / 0.044 /
+  // 0.030 / 0.033 and their depths just as close, so nearly every pair sat inside the ~0.005 that
+  // flickers. Re-spaced so no two share a face, with the same nesting order and the same silhouette.
+  part(g,0.072,0.30,0.085,wood,0,0,0.03);
+  part(g,0.100,0.10,0.095,gold,0,0,0.03);            // gold riser plate
+  part(g,0.044,0.22,0.070,leather,0,0,0.055);        // wrapped grip over the riser's front face
+  for(let i=0;i<4;i++){                              // grip wrapping turns
+    part(g,0.060,0.022,0.082,leatherDark,0,-0.075+i*0.05,0.055);
+  }
+  // sinew bindings where each limb leaves the riser — real composite bows are bound at exactly these joints
+  [1,-1].forEach(dir=>{
+    part(g,0.05,0.035,0.055,sinew,0,dir*0.155,0.033);
+    part(g,0.046,0.028,0.05,sinew,0,dir*0.30,0.052);
+  });
+  const stringLen=Math.hypot(limbUp.tipY-limbDown.tipY, limbUp.tipZ-limbDown.tipZ);
+  // 0.006 thick, not 0.012: this close to the eye the thicker string drew as a ~10px grey bar straight down
+  // the right side of the screen, which read as a strut rather than as a string
+  const string=new THREE.Mesh(new THREE.BoxGeometry(0.006,stringLen,0.006),stringMat);
+  string.position.set(0,(limbUp.tipY+limbDown.tipY)/2,(limbUp.tipZ+limbDown.tipZ)/2);
+  string.rotation.x = Math.atan2(limbUp.tipZ-limbDown.tipZ, limbUp.tipY-limbDown.tipY);
+  g.add(string);
+  // nocked arrow, tip pointing forward (-Z) to match muzzleZ
+  part(g,0.02,0.02,0.62,metalMatP(0x8a6a42,20),0,0,-0.18);
+  const head=new THREE.Mesh(new THREE.ConeGeometry(0.028,0.09,4),metalMatP(0xaab4be,80,0xffffff)); head.position.set(0,0,-0.52); head.rotation.x=-Math.PI/2; g.add(head);
+  // barbs behind the head — an Egyptian war arrow is barbed, and it is the one detail visible at this scale
+  [-1,1].forEach(sd=>{ const barb=new THREE.Mesh(new THREE.ConeGeometry(0.016,0.05,4),metalMatP(0xaab4be,80,0xffffff));
+    barb.position.set(sd*0.022,0,-0.455); barb.rotation.x=Math.PI/2; barb.rotation.z=sd*0.7; g.add(barb); });
+  part(g,0.026,0.026,0.03,sinew,0,0,-0.43);          // binding at the head socket
+  // three fletches radiating round the shaft, not one crossed card
+  for(let f=0;f<3;f++){
     const a=f*(Math.PI*2/3);
-    const vane=new THREE.Mesh(new THREE.BoxGeometry(0.010,0.056,0.15), voxMat(f===0?0xd8b040:0xa8321f,{noise:6}));
-    vane.position.set(ax+Math.sin(a)*0.024,Math.cos(a)*0.024,nockZ-0.11); vane.rotation.z=-a; g.add(vane);
+    const vane=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.055,0.11), new THREE.MeshLambertMaterial({color:f===0?0xd8b040:0xb5502c}));
+    vane.position.set(Math.sin(a)*0.028,Math.cos(a)*0.028,0.10); vane.rotation.z=-a; g.add(vane);
   }
-  part(g,0.022,0.022,0.024,tipHorn,ax,0,nockZ-0.01);                 // nock on the string
-  // Placed by measurement, not by eye: every vertex of the model was projected at the smallest CrazyGames frame
-  // (907x510) over a grid of poses, and this is the largest one that stays wholly on screen, clear of the
+  part(g,0.03,0.03,0.028,horn,0,0,0.155);            // horn nock at the string end
+  // a small bronze aiming ring mounted just above the grip — a peep sight, not a glass sniper scope, but
+  // wired to the same scoped/scopeFov mechanic (right-click/hold-shift zooms in, same as the sniper rifle)
+  const sightRing=new THREE.Mesh(new THREE.TorusGeometry(0.045,0.009,6,12), gold); sightRing.position.set(-0.05,0.16,0.03); g.add(sightRing);
+  g.scale.setScalar(0.58);
+  // Placed by measurement, not by eye. Upright at z=-0.35 the limbs curved back toward the eye, the top tip cap
+  // ran off the screen as a big gold block and the string became a pole down the right edge; then, pulled back
+  // to 0.42 so it fitted, it was too small. Every vertex of the model was projected at the smallest CrazyGames
+  // frame (907x510) over a grid of poses, and this is the largest that stays wholly on screen, clear of the
   // health bar, the ammo count, the stats chips and the crosshair, with the arrow pointing in toward it. The
-  // old bow stood upright at z=-0.35 and ran off the top edge as a gold block with its string down the side.
-  g.scale.setScalar(0.48);
-  g.userData={muzzleZ:-0.50,muzzleY:-0.12,pos:new THREE.Vector3(0.34,-0.02,-0.70),recoil:0.1,name:'Bow',
-    restRot:{x:-0.25,y:0.22,z:0.35},
+  // muzzle sits just ahead of the arrowhead.
+  g.userData={muzzleZ:-0.50,muzzleY:-0.10,pos:new THREE.Vector3(0.36,-0.06,-0.78),recoil:0.1,name:'Bow',
+    restRot:{x:-0.12,y:0.2,z:0.35},
     damage:80, fireRate:0.5, auto:false, spread:0.008, tracer:0xd9b872, scoped:true, scopeFov:45,
     magSize:6, ammo:6, reloadTime:1.3, reloading:false, reloadT:0};
   return g;

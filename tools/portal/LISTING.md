@@ -69,8 +69,8 @@ v1.3.0 (this upload):
 - Interface redrawn in two embedded typefaces, with drawn icons in the HUD instead of emoji
 - Fixed: a large flat square flashed over the screen on every bow, sling or thrown-weapon shot
 - Faster pacing: two waves before every boss instead of three, in Egypt and on every destination
-- The first bow is redrawn as an Egyptian composite bow (horn-inlaid limbs, gold bindings, leather grip) and
-  held bigger, wholly on screen, clear of the crosshair and the HUD
+- The first bow is held bigger and canted, wholly on screen from tip to tip, clear of the crosshair and the
+  HUD, instead of running off the top edge with its string down the side
 - The Giza processional way is laid basalt paving again (a name clash had swapped in a noisy texture)
 - Emoji replaced by drawn icons throughout (warnings, boss bar, booth, stars), so the game looks the same
   on Windows, macOS, ChromeOS and phones
