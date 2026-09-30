@@ -13,24 +13,31 @@ python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
-Press **START** to play. (Needs an internet connection the first time — three.js loads from a CDN. The
+Press **PLAY** to play. (Needs an internet connection the first time — three.js loads from a CDN. The
 desktop build in [`electron/`](electron/) vendors it and runs fully offline.)
+
+**SETTINGS** (on the title screen and the pause screen) holds mouse or look sensitivity, invert look,
+field of view, master / music / effects volume, and graphics: HIGH, or FAST (no sun shadows, 1x
+resolution ceiling) for weaker machines.
 
 ## Controls
 
 **Desktop**
 - **WASD** — move, **Space** — jump
 - **Mouse** — look (click to lock the pointer)
-- **Click** — shoot, **right-click** — scope where the weapon has one
-- **1 / 2 / 3 / 4** or **mouse wheel** — switch weapon, **R** — reload
-- **E** — open the travel booth when you are standing at it
-- **P** or **Esc** — pause
+- **Click** — shoot, **right-click** or hold **Shift** — scope (bow, sling) or raise a shield
+- **1 / 2 / 3** or **mouse wheel** — switch weapon, **R** — reload
+- **E** — use the travel booth, the gate and the stele when you are standing at one
+- **P** — pause and resume (**Esc** also pauses, by freeing the mouse)
+
+Movement follows the physical keys, so on an AZERTY keyboard it is **ZQSD** — and the on-screen key
+captions say so once the game has seen the layout.
 
 **Mobile / touch**
 - **Left joystick** — move
 - **Drag right side** — look
-- **FIRE** — shoot (hold for automatic weapons), **SCOPE** — aim
-- **1 / 2 / 3 / 4** — switch weapon
+- **FIRE** — shoot (hold for automatic weapons), **JUMP** — jump, **SCOPE** — aim or raise a shield
+- **1 / 2 / 3** — switch weapon, **BOOTH** — use the booth when standing at it, **❚❚** — pause
 
 ## The campaign
 
@@ -83,8 +90,12 @@ close range instead of throwing.
 
 Press **Z · X · X · C · C · C** in order. Toggles god mode, infinite ammo, infinite money, insta-kill
 and flight; jumps to any wave or destination. The same flags are reachable as `/god`, `/fly`, `/tp`
-and friends in the console (three **C** presses). The sequence is deliberately awkward so a cheat
+and friends in the console (two **C** presses in a row). The sequence is deliberately awkward so a cheat
 cannot fire by accident mid-run.
+
+Both are off in the portal build (the copy that carries the CrazyGames SDK): most shooters bind **C** to
+crouch, and a player reaching for it would open a cheat console. Add `#dev` to the URL to turn them back
+on there for testing.
 
 ## Desktop build
 
@@ -94,9 +105,11 @@ arm64 only.
 
 ## Portal build
 
-`tools/portal/build-portal.js` produces a self-contained zip for uploading to CrazyGames or a similar
-portal — three.js vendored locally the same way the desktop build does it, so the game doesn't depend
-on a CDN inside a sandboxed iframe. See [`tools/portal/README.md`](tools/portal/README.md).
+`tools/portal/build-portal.js` (or `build_portal.py`, the same build for a machine without Node) produces
+the self-contained copy for CrazyGames or a similar portal — three.js vendored locally the same way the
+desktop build does it, so the game doesn't depend on a CDN inside a sandboxed iframe, plus the CrazyGames
+SDK. The store covers and the preview videos are rendered from the game itself by scripts beside it. See
+[`tools/portal/README.md`](tools/portal/README.md).
 
 ## Geometry audit
 
@@ -115,7 +128,9 @@ python3 tools/audit/finalcheck.py    # the endgame: gate, boss, and the Nile ban
 ## Tech notes
 
 - Rendering: three.js r128 via CDN, WebGL, dynamic shadows, canvas-generated voxel textures.
-- Audio: Web Audio API, fully synthesized — no audio files.
+- Audio: Web Audio API, fully synthesized — no audio files. That includes the music: each region has its
+  own mode, instruments and two tunes, played at calm, fight or boss intensity as the game goes.
+- Type: Rubik and Cinzel (both SIL OFL), embedded in the page as WOFF2.
 - The world map in the travel booth is a Natural Earth coastline mask baked into the page as base64,
   so the booth needs no network either.
 - Everything is one file: twenty maps, every model, the AI, the HUD and the UI.
@@ -140,16 +155,18 @@ When it falls you land on the **bank of the Nile**: a small, quiet map with a ri
 stele that names every boss you put down. Nothing to fight, nothing to buy. Press **E** at the stele to
 read the roll, and again to begin a new run.
 
-## Not gaps
+## Saving
 
-- **No save, by design.** Progress lives in the session. Dying rolls you back to the start of
-  the current era and no further, keeps credit for bosses already beaten, respawns you on the
-  leg you died on if you were away on a trip, and never touches your banked ⭐ — so nothing is
-  lost inside a run. A reload starts a new one, the way an arcade cabinet does.
+Progress saves by itself at checkpoints — the start of an era, a hub, the start of a trip's leg — and the
+title screen offers **CONTINUE** (and **NEW GAME**, which asks twice). On CrazyGames it is kept in their Data
+module, so it follows a player who logs in; everywhere else in `localStorage`. Dying rolls you back to the
+start of the current era and no further, keeps credit for bosses already beaten, respawns you on the leg
+you died on if you were away on a trip, and never touches your banked ⭐.
 
 ## License
 
 © 2026 Rafea el Ansary. All rights reserved — the source is public to read, not to reuse. See
-[LICENSE](LICENSE), which also carries the notices for the only two third-party pieces in here:
-three.js (MIT) and Natural Earth's coastline data (public domain). Everything else — every model,
-texture and sound — is generated by the code itself.
+[LICENSE](LICENSE), which also carries the notices for the only third-party pieces in here: three.js
+(MIT), Natural Earth's coastline data (public domain), and the Rubik and Cinzel typefaces (SIL OFL 1.1,
+full text in [OFL.txt](OFL.txt)). Everything else — every model, texture, sound and note of music — is
+generated by the code itself.
