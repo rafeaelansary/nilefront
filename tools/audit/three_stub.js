@@ -402,7 +402,7 @@ class WebGLRenderer {
     this.shadowMap={enabled:false,type:0};
     this.capabilities={ getMaxAnisotropy(){ return 16; } };
   }
-  setSize(){} setPixelRatio(){} render(){} setClearColor(){} dispose(){}
+  setSize(){} setPixelRatio(v){ this._pr=v; } getPixelRatio(){ return this._pr||1; } render(){} setClearColor(){} dispose(){}
 }
 // A real ray/box intersector. This used to be a stub that always returned [] -- which silently made every
 // weapon in the game untestable headlessly: firstHit() resolves every shot, swing and jab through
