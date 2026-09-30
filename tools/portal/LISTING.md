@@ -69,6 +69,9 @@ v1.3.0 (this upload):
 - Interface redrawn in two embedded typefaces, with drawn icons in the HUD instead of emoji
 - Fixed: a large flat square flashed over the screen on every bow, sling or thrown-weapon shot
 - Faster pacing: two waves before every boss instead of three, in Egypt and on every destination
+- Shots you can see: arrows, bolts, darts, javelins, harpoons, sling stones, thrown blades and energy bolts
+  now fly from the weapon to what they hit (enemy shots too, and misses fly past); arrows stick in walls
+- Weapons reload themselves when the magazine runs dry (touch had no reload button at all)
 - The first bow is held bigger and canted, wholly on screen from tip to tip, clear of the crosshair and the
   HUD, instead of running off the top edge with its string down the side
 - The Giza processional way is laid basalt paving again (a name clash had swapped in a noisy texture)
